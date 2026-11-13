@@ -16,15 +16,24 @@
 
 import { realpathSync } from "node:fs"
 import { homedir } from "node:os"
-import { posix, win32 } from "node:path"
 import type { Shell } from "electron"
+import {
+  absoluteRoots,
+  acceptedInput,
+  bothForms,
+  CONTROL,
+  flavourOf,
+  inside,
+  isAboveHome,
+  isFilesystemRoot,
+  isSystemPlace,
+  PROTECTED_HOME_PLACES,
+  protectedHomeRoots,
+  type Flavour,
+} from "./path-policy"
 
-/** N7-148: desktop copy of opencode `BypassLists.PROTECTED_HOME` (permission/bypass-lists.ts), pinned equal by N7-084. */
-export const REVEAL_EXCLUDED_HOME_PLACES: readonly string[] = [
-  ".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".netrc", ".git-credentials", ".password-store", ".pgpass",
-  ".swarm-patch-key", ".config/gh", ".config/gcloud", ".config/op", ".local/share/keyrings", "Library/Keychains",
-  "Library/Cookies",
-]
+/** N7-148: the home credential places; since row 47c (M1-10) the one list in path-policy.ts, re-exported here. */
+export const REVEAL_EXCLUDED_HOME_PLACES: readonly string[] = PROTECTED_HOME_PLACES
 
 export type RevealPathDeps = {
   /** Further excluded roots: Swarm's own config, data, state and cache folders, userData, sessionData. */
@@ -37,87 +46,13 @@ export type RevealPathDeps = {
   log?: (level: "warn" | "error", message: string, context?: Record<string, unknown>) => void
 }
 
-// System folders a Mission Control root (a) may not be or lie in. `/private/var` is refused except the user temp
-// folders under `/private/var/folders` (macOS), checked separately below.
-const POSIX_SYSTEM = [
-  "/System", "/Library", "/usr", "/bin", "/sbin", "/private/etc", "/etc", "/cores", "/boot", "/proc", "/sys", "/dev",
-]
-const POSIX_VAR = ["/private/var", "/var"]
-const POSIX_TEMP = ["/private/var/folders", "/var/folders"]
-const WIN_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$|clock\$) *(\..*)?$/i
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/
-
-type Flavour = { path: typeof posix; win: boolean; fold: boolean }
-
-const flavourOf = (platform: NodeJS.Platform): Flavour => ({
-  path: platform === "win32" ? win32 : posix,
-  win: platform === "win32",
-  // macOS and Windows folders compare case-insensitively (default APFS / NTFS), so `~/.SSH` is still `.ssh`.
-  fold: platform === "win32" || platform === "darwin",
-})
-
-function inside(f: Flavour, child: string, root: string) {
-  const c = f.fold ? child.toLowerCase() : child
-  const r = f.fold ? root.toLowerCase() : root
-  if (c === r) return true
-  const rel = f.path.relative(r, c)
-  return rel !== "" && !rel.startsWith("..") && !f.path.isAbsolute(rel)
-}
-
-/** SR7-11 input rule; returns the normalised path or null. */
-function acceptedInput(f: Flavour, input: unknown): string | null {
-  if (typeof input !== "string" || input.length === 0 || CONTROL.test(input)) return null
-  if (f.win) {
-    if (/^[\\/]{2}/.test(input)) return null // UNC `\\host\share`, `\\?\`, `\\.\`, `//host`
-    if (!/^[a-zA-Z]:[\\/]/.test(input)) return null
-    const parts = input.split(/[\\/]/)
-    if (parts.some((p) => p === "..")) return null
-    if (parts.some((p) => WIN_DEVICE.test(p.replace(/[ .]+$/, "")))) return null
-    if (parts.slice(1).some((p) => p.includes(":"))) return null // alternate data streams
-  } else {
-    if (!input.startsWith("/")) return null
-    if (input.split("/").some((p) => p === "..")) return null
-  }
-  const normal = f.path.normalize(input)
-  if (!f.win) {
-    const n = f.fold ? normal.toLowerCase() : normal
-    if (n === "/net" || n.startsWith("/net/") || n === "/network" || n.startsWith("/network/")) return null
-    if (normal === "/Network" || normal.startsWith("/Network/")) return null
-  }
-  return normal
-}
-
-/** A root (a) is refused when it is a filesystem/drive root, a system folder (or inside one), or above home. */
+/** U-2 rule set for a root (a): refused when a filesystem/drive root, a system folder (or inside one), or above home. */
 function acceptedRoot(f: Flavour, root: string, home: string): boolean {
   const normal = acceptedInput(f, root)
   if (!normal) return false
-  if (normal === f.path.parse(normal).root) return false
-  if (inside(f, home, normal) && !inside(f, normal, home)) return false
-  if (f.win) {
-    const env = process.env
-    const system = [env.WINDIR, env.SystemRoot, env.ProgramFiles, env["ProgramFiles(x86)"], env.ProgramW6432, env.ProgramData]
-      .filter((p): p is string => !!p)
-      .concat(["C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)", "C:\\ProgramData"])
-    if (system.some((s) => inside(f, normal, s))) return false
-    if (/^[a-zA-Z]:\\program files/i.test(normal)) return false
-    return true
-  }
-  if (POSIX_SYSTEM.some((s) => inside(f, normal, s))) return false
-  if (normal === "/Volumes" || normal === "/volumes") return false
-  if (POSIX_VAR.some((s) => inside(f, normal, s)) && !POSIX_TEMP.some((t) => inside(f, normal, t) && normal !== t))
-    return false
-  return true
-}
-
-/** Both spellings of a folder: as given (normalised) and resolved, when it resolves. */
-function bothForms(f: Flavour, dir: string, realpath: (p: string) => string): string[] {
-  const normal = f.path.normalize(dir)
-  try {
-    const real = realpath(dir)
-    return real === normal ? [normal] : [normal, real]
-  } catch {
-    return [normal]
-  }
+  if (isFilesystemRoot(f, normal)) return false
+  if (isAboveHome(f, normal, home)) return false
+  return !isSystemPlace(f, normal)
 }
 
 /** The checked realpath to reveal, or null (N7-026 rule). */
@@ -137,9 +72,9 @@ function checkedRealpath(input: unknown, roots: readonly string[], deps: RevealP
   const allowed = roots
     .filter((root) => typeof root === "string" && acceptedRoot(f, root, home))
     .flatMap((root) => bothForms(f, root, realpath))
-  const excluded = [...(deps.excluded ?? []), ...REVEAL_EXCLUDED_HOME_PLACES.map((place) => f.path.join(home, place))]
-    .filter((dir) => typeof dir === "string" && f.path.isAbsolute(dir))
-    .flatMap((dir) => bothForms(f, dir, realpath))
+  const excluded = absoluteRoots(f, [...(deps.excluded ?? []), ...protectedHomeRoots(f, home)]).flatMap((dir) =>
+    bothForms(f, dir, realpath),
+  )
   for (const candidate of [normal, real]) {
     if (!allowed.some((root) => inside(f, candidate, root))) return null
     if (excluded.some((dir) => inside(f, candidate, dir))) return null

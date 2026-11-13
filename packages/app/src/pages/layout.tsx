@@ -1277,10 +1277,12 @@ export default function LegacyLayout(props: ParentProps) {
   function openProject(directory: string, navigate = true): Promise<boolean> {
     const check = platform.checkDirectoryExists
     if (!check || !server.isLocal()) return openFoundProject(directory, navigate)
+    // Row 47c (M1-03): only "missing" is a gone folder. "exists", "refused" (the desktop may not look there: /net,
+    // UNC, system and Swarm state places) and a failed check open the folder exactly as 1.2.6 did.
     return check(directory)
-      .catch(() => true)
-      .then((exists) => {
-        if (exists) return openFoundProject(directory, navigate)
+      .catch(() => "refused" as const)
+      .then((state) => {
+        if (state !== "missing") return openFoundProject(directory, navigate)
         missingFolders.add(directory)
         showFolderMissing(directory, navigate)
         return false

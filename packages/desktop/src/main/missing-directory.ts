@@ -1,33 +1,54 @@
 // Swarm 1.2.7 row 32 (U-8 desktop half, SR7-13, security ruling §3.1 U-8): the `check-directory-exists` (N7-037)
 // and `recreate-directory` (N7-039) channels. ipc.ts registers them with the real ipcMain; this file imports only
 // electron types, so bun tests it through a fake ipcMain and real temp folders (the mission-ipc.ts pattern).
+// Row 47c (M1-03, M1-10): the check answers a tri-state, and the place rules come from the shared path-policy.ts.
 //
-// Rules (SR7-13 1-4; 5-7 are the app's, row 33):
+// Rules (SR7-13 1-4; 5-7 are the app's, rows 33 / 47c):
 //   1 recreate creates the leaf only: the parent must exist as a directory, the leaf must not exist, `mkdir` without
 //     `recursive`; EEXIST or any error is `false`; afterwards realpath(path) must equal realpath(parent)/leaf
-//   2 input as U-2 (string, absolute, no NUL/control character, no `..` segment; Windows: no UNC, `\\?\`, `\\.\`,
-//     device name); refused when the path, or the path resolved through its nearest existing ancestor (a symlinked
-//     parent), is a filesystem root or lies in a system folder, Swarm's config/data/state/cache/userData folders or
-//     a home credential place (REVEAL_EXCLUDED_HOME_PLACES, pinned equal to BypassLists.PROTECTED_HOME)
+//   2 input as U-2 (path-policy acceptedInput). The check refuses to look (answer "refused", no `stat`) when the path,
+//     or the path resolved through its nearest existing ancestor (a symlinked parent), is a filesystem root, a U-2 (a)
+//     system place (`/Volumes` only as the path itself), inside Swarm's config/state/userData/sessionData folders
+//     (`excluded`) or a home credential place (PROTECTED_HOME_PLACES). Everything else is looked at: /opt,
+//     /Applications, /Volumes/<disk>, the home folder and Swarm's data folder (session worktrees) open as in 1.2.6.
+//     Recreate refuses all of that and, in addition, the home folder and its ancestors and `recreateExcluded`
+//     (Swarm's data and cache folders)
 //   3 no `stat` at all on UNC, `/net/...` or `/Network/...` paths (autofs / SMB would open a network connection)
-//   4 recreate accepts only a path for which check returned `false` (missing) for the SAME sender in this run
+//   4 recreate accepts only a path for which check answered "missing" for the SAME sender in this run
+// Answers of the check: "exists" (a directory), "missing" (ENOENT / ENOTDIR, or a non-directory at the path),
+// "refused" (the check was not allowed to look, or the look failed for another reason such as EACCES). The app shows
+// the missing-folder notice for "missing" only and opens "exists" and "refused" exactly as 1.2.6 did.
 // Nothing runs at registration or startup: only an explicit renderer call stats, and only recreate creates.
 
 import { lstat as fsLstat, mkdir as fsMkdir, realpath as fsRealpath, stat as fsStat } from "node:fs/promises"
 import { homedir } from "node:os"
-import { posix, win32 } from "node:path"
 import type { IpcMain, IpcMainInvokeEvent } from "electron"
-import { REVEAL_EXCLUDED_HOME_PLACES } from "./reveal-path"
+import {
+  absoluteRoots,
+  acceptedInput,
+  flavourOf,
+  inside,
+  insideAny,
+  isFilesystemRoot,
+  isSystemPlace,
+  protectedHomeRoots,
+  type Flavour,
+} from "./path-policy"
 
 export const CHECK_DIRECTORY_EXISTS = "check-directory-exists" // N7-037
 export const RECREATE_DIRECTORY = "recreate-directory" // N7-039
+
+/** Row 47c (M1-03): the answer of `check-directory-exists`. */
+export type DirectoryCheck = "exists" | "missing" | "refused"
 
 type StatLike = { isDirectory(): boolean; isSymbolicLink?(): boolean }
 
 export type MissingDirectoryDeps = {
   ipcMain: Pick<IpcMain, "handle">
-  /** Swarm's own folders (config, data, state, cache, userData, sessionData); ipc.ts passes revealExcluded(). */
+  /** Refused for check and recreate: Swarm's config, state, userData and sessionData folders. */
   excluded?: readonly string[]
+  /** Refused for recreate only: Swarm's data and cache folders (the session worktrees live in data). */
+  recreateExcluded?: readonly string[]
   home?: string
   platform?: NodeJS.Platform
   /** Only the app's own renderer may ask; default accepts every sender (tests). */
@@ -42,71 +63,19 @@ export type MissingDirectoryDeps = {
   log?: (level: "info" | "warn" | "error", message: string, context?: Record<string, unknown>) => void
 }
 
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/
-const WIN_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$|clock\$) *(\..*)?$/i
-const POSIX_SYSTEM = [
-  "/System", "/Library", "/usr", "/bin", "/sbin", "/private/etc", "/etc", "/cores", "/boot", "/proc", "/sys", "/dev",
-  "/Applications", "/opt", "/Volumes",
-]
-const POSIX_VAR = ["/private/var", "/var"]
-const POSIX_TEMP = ["/private/var/folders", "/var/folders"]
-
-type Flavour = { path: typeof posix; win: boolean; fold: boolean }
-const flavourOf = (platform: NodeJS.Platform): Flavour => ({
-  path: platform === "win32" ? win32 : posix,
-  win: platform === "win32",
-  fold: platform === "win32" || platform === "darwin",
-})
-
-function inside(f: Flavour, child: string, root: string) {
-  const c = f.fold ? child.toLowerCase() : child
-  const r = f.fold ? root.toLowerCase() : root
-  if (c === r) return true
-  const rel = f.path.relative(r, c)
-  return rel !== "" && !rel.startsWith("..") && !f.path.isAbsolute(rel)
+/** The SR7-13 check rule set on one spelling of the path (no filesystem access). */
+function checkAllowed(f: Flavour, normal: string, excluded: readonly string[]): boolean {
+  if (isFilesystemRoot(f, normal)) return false
+  if (isSystemPlace(f, normal)) return false
+  return !insideAny(f, normal, excluded)
 }
 
-/** Rule 2 + 3 input check; the normalised path or null. Never touches the filesystem. */
-function acceptedInput(f: Flavour, input: unknown): string | null {
-  if (typeof input !== "string" || input.length === 0 || input.length > 4096 || CONTROL.test(input)) return null
-  if (f.win) {
-    if (/^[\\/]{2}/.test(input)) return null
-    if (!/^[a-zA-Z]:[\\/]/.test(input)) return null
-    const parts = input.split(/[\\/]/)
-    if (parts.some((p) => p === "..")) return null
-    if (parts.some((p) => WIN_DEVICE.test(p.replace(/[ .]+$/, "")))) return null
-    if (parts.slice(1).some((p) => p.includes(":"))) return null
-  } else {
-    if (!input.startsWith("/")) return null
-    if (input.split("/").some((p) => p === "..")) return null
-  }
-  const normal = f.path.normalize(input).replace(/[\\/]+$/, "") || f.path.parse(input).root
-  if (!f.win) {
-    const n = normal.toLowerCase()
-    if (n === "/net" || n.startsWith("/net/") || n === "/network" || n.startsWith("/network/")) return null
-  }
-  return normal
-}
-
-/** Rule 2 place check on one spelling of the path (no filesystem access). */
-function placeAllowed(f: Flavour, normal: string, home: string, excluded: readonly string[]): boolean {
-  if (normal === f.path.parse(normal).root) return false
+/** The recreate rule set: the check set plus home and its ancestors and the recreate-only roots. */
+function recreateAllowed(f: Flavour, normal: string, home: string, excluded: readonly string[], recreateOnly: readonly string[]) {
+  if (!checkAllowed(f, normal, excluded)) return false
   // home itself and its ancestors are never "a project folder to recreate"
   if (inside(f, home, normal)) return false
-  if (excluded.some((dir) => inside(f, normal, dir))) return false
-  if (f.win) {
-    const env = process.env
-    const system = [env.WINDIR, env.SystemRoot, env.ProgramFiles, env["ProgramFiles(x86)"], env.ProgramW6432, env.ProgramData]
-      .filter((p): p is string => !!p)
-      .concat(["C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)", "C:\\ProgramData"])
-    if (system.some((s) => inside(f, normal, s))) return false
-    if (/^[a-zA-Z]:\\program files/i.test(normal)) return false
-    return true
-  }
-  if (POSIX_SYSTEM.some((s) => inside(f, normal, s))) return false
-  if (POSIX_VAR.some((s) => inside(f, normal, s)) && !POSIX_TEMP.some((t) => inside(f, normal, t) && normal !== t))
-    return false
-  return true
+  return !insideAny(f, normal, recreateOnly)
 }
 
 const errorCode = (error: unknown) =>
@@ -124,11 +93,9 @@ export function registerMissingDirectoryHandlers(deps: MissingDirectoryDeps) {
   const missing = new WeakMap<object, Set<string>>()
   const key = (p: string) => (f.fold ? p.toLowerCase() : p)
 
-  /** Both literal and resolved spellings of every excluded root (symlinked config folders included). */
-  async function excludedRoots() {
-    const list = [...(deps.excluded ?? []), ...REVEAL_EXCLUDED_HOME_PLACES.map((place) => f.path.join(home, place))]
-      .filter((dir) => typeof dir === "string" && f.path.isAbsolute(dir))
-      .map((dir) => f.path.normalize(dir))
+  /** Both literal and resolved spellings of each root list (symlinked config folders included). */
+  async function spellings(roots: readonly string[]) {
+    const list = absoluteRoots(f, roots)
     const real = await Promise.all(list.map((dir) => realpath(dir).catch(() => dir)))
     return [...new Set([...list, ...real])]
   }
@@ -154,34 +121,43 @@ export function registerMissingDirectoryHandlers(deps: MissingDirectoryDeps) {
     return null
   }
 
-  /** Rules 2 + 3: the normalised path when every spelling is allowed, else null. */
-  async function checkedPath(input: unknown): Promise<string | null> {
-    const normal = acceptedInput(f, input)
-    if (!normal) return null
-    const excluded = await excludedRoots()
-    if (!placeAllowed(f, normal, home, excluded)) return null
+  /**
+   * Rules 2 + 3 for one rule set: the normalised path when the path and its resolved spelling are both allowed, else
+   * null. Only `realpath` on the path's existing ancestors runs here, never on a refused-by-input (network) path.
+   */
+  async function checkedPath(input: unknown, forRecreate: boolean): Promise<string | null> {
+    const accepted = acceptedInput(f, input)
+    if (!accepted) return null
+    const normal = accepted.replace(/[\\/]+$/, "") || f.path.parse(accepted).root
+    const excluded = await spellings([...(deps.excluded ?? []), ...protectedHomeRoots(f, home)])
+    const recreateOnly = forRecreate ? await spellings(deps.recreateExcluded ?? []) : []
+    const allowed = (p: string) =>
+      forRecreate ? recreateAllowed(f, p, home, excluded, recreateOnly) : checkAllowed(f, p, excluded)
+    if (!allowed(normal)) return null
     const resolved = await resolvedThroughAncestor(normal)
     if (resolved === null) return null
     if (resolved !== normal) {
       const again = acceptedInput(f, resolved)
-      if (!again || !placeAllowed(f, again, home, excluded)) return null
+      if (!again || !allowed(again)) return null
     }
     return normal
   }
 
   const trusted = (event: IpcMainInvokeEvent) => (deps.isTrustedSender ? deps.isTrustedSender(event) : true)
 
-  // N7-037: `stat` + `isDirectory`. `false` for a refused path (never stat'ed), a file, or a missing folder.
-  deps.ipcMain.handle(CHECK_DIRECTORY_EXISTS, async (event: IpcMainInvokeEvent, input: unknown) => {
+  // N7-037: `stat` + `isDirectory`, answered as a DirectoryCheck (row 47c, M1-03). "refused" is never stat'ed.
+  deps.ipcMain.handle(CHECK_DIRECTORY_EXISTS, async (event: IpcMainInvokeEvent, input: unknown): Promise<DirectoryCheck> => {
     try {
-      if (!trusted(event)) return false
-      const normal = await checkedPath(input)
+      if (!trusted(event)) return "refused"
+      const normal = await checkedPath(input, false)
       if (normal === null) {
-        log("warn", "check-directory-exists refused a path", { source: "missing-directory.check" })
-        return false
+        log("info", "check-directory-exists did not look at a refused place", { source: "missing-directory.check" })
+        return "refused"
       }
       try {
-        return (await stat(normal)).isDirectory()
+        // a non-directory at the path is not the project folder: missing, but never recorded for Recreate (rule 1
+        // would refuse it anyway, since something is at the leaf)
+        return (await stat(normal)).isDirectory() ? "exists" : "missing"
       } catch (error) {
         const code = errorCode(error)
         if (code === "ENOENT" || code === "ENOTDIR") {
@@ -189,15 +165,16 @@ export function registerMissingDirectoryHandlers(deps: MissingDirectoryDeps) {
           set.add(key(normal))
           missing.set(event.sender, set)
           log("info", "check-directory-exists: project folder missing", { source: "missing-directory.check", code })
-        } else {
-          log("warn", "check-directory-exists stat failed", { source: "missing-directory.check", code })
+          return "missing"
         }
-        return false
+        // EACCES, EPERM, ELOOP, ...: the check could not look, so the app opens the folder as 1.2.6 did
+        log("warn", "check-directory-exists stat failed", { source: "missing-directory.check", code })
+        return "refused"
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error))
       log("error", "check-directory-exists failed", { source: "missing-directory.check", message: err.message, stack_trace: err.stack })
-      return false
+      return "refused"
     }
   })
 
@@ -205,7 +182,7 @@ export function registerMissingDirectoryHandlers(deps: MissingDirectoryDeps) {
   deps.ipcMain.handle(RECREATE_DIRECTORY, async (event: IpcMainInvokeEvent, input: unknown) => {
     try {
       if (!trusted(event)) return false
-      const normal = await checkedPath(input)
+      const normal = await checkedPath(input, true)
       const set = missing.get(event.sender)
       if (normal === null || !set?.has(key(normal))) {
         log("warn", "recreate-directory refused a path this window did not find missing", {

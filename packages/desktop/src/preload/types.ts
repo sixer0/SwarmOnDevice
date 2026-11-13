@@ -16,6 +16,9 @@ export type {
   WslServersState,
 } from "@opencode-ai/app/wsl/types"
 
+/** 1.2.7 row 47c (M1-03): answer of `check-directory-exists`; equal to the app's platform DirectoryCheck. */
+export type DirectoryCheck = "exists" | "missing" | "refused"
+
 export type ServerReadyData = {
   url: string
   username: string | null
@@ -146,8 +149,11 @@ export type ElectronAPI = {
   getDisplayBackend: () => Promise<LinuxDisplayBackend | null>
   setDisplayBackend: (backend: LinuxDisplayBackend | null) => Promise<void>
   checkAppExists: (appName: string) => Promise<boolean>
-  /** 1.2.7 row 32 (U-8, N7-037): `stat` + `isDirectory`; `false` for a missing folder or a refused path. */
-  checkDirectoryExists: (path: string) => Promise<boolean>
+  /**
+   * 1.2.7 row 32 (U-8, N7-037), tri-state since row 47c (M1-03): "exists" (a directory), "missing" (gone: the app's
+   * notice), "refused" (the check may not look there: the app opens the folder as 1.2.6 did).
+   */
+  checkDirectoryExists: (path: string) => Promise<DirectoryCheck>
   /** 1.2.7 row 32 (U-8, N7-039): creates the one missing leaf this window found missing; never parents. */
   recreateDirectory: (path: string) => Promise<boolean>
   resolveAppPath: (appName: string) => Promise<string | null>

@@ -103,7 +103,7 @@ const api: ElectronAPI = {
   getDisplayBackend: () => ipcRenderer.invoke("get-display-backend"),
   setDisplayBackend: (backend) => ipcRenderer.invoke("set-display-backend", backend),
   checkAppExists: (appName) => ipcRenderer.invoke("check-app-exists", appName),
-  // 1.2.7 row 32 (U-8, N7-037/N7-039)
+  // 1.2.7 row 32 (U-8, N7-037/N7-039); the check answers "exists" | "missing" | "refused" since row 47c (M1-03)
   checkDirectoryExists: (path) => ipcRenderer.invoke("check-directory-exists", path),
   recreateDirectory: (path) => ipcRenderer.invoke("recreate-directory", path),
   resolveAppPath: (appName) => ipcRenderer.invoke("resolve-app-path", appName),

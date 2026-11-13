@@ -314,6 +314,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     },
 
     // 1.2.7 row 32 (U-8): row 33's missing-folder notice calls these; recreate only after the user's click.
+    // Row 47c (M1-03): the check is tri-state; only "missing" starts the notice.
     checkDirectoryExists: async (path: string) => {
       return window.api.checkDirectoryExists(path)
     },

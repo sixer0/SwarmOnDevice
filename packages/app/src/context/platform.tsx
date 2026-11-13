@@ -115,8 +115,12 @@ type PlatformBase = {
   /** Check if an editor app exists (desktop only) */
   checkAppExists?(appName: string): Promise<boolean>
 
-  /** Whether a project folder exists as a directory; `stat` only, never creates (desktop only, N7-038, U-8) */
-  checkDirectoryExists?(path: string): Promise<boolean>
+  /**
+   * Whether a project folder exists as a directory; `stat` only, never creates (desktop only, N7-038, U-8). Row 47c
+   * (M1-03): "missing" alone starts the missing-folder notice; "refused" (a place the check may not look at) opens
+   * the folder as 1.2.6 did
+   */
+  checkDirectoryExists?(path: string): Promise<DirectoryCheck>
 
   /** Recreate the one missing project folder after the user's click; never parents (desktop only, N7-040, U-8) */
   recreateDirectory?(path: string): Promise<boolean>
@@ -182,6 +186,9 @@ export type Platform = PlatformBase &
   )
 
 export type DisplayBackend = "auto" | "wayland"
+
+/** 1.2.7 row 47c (M1-03): the answer of the desktop folder check (U-8, SR7-13). */
+export type DirectoryCheck = "exists" | "missing" | "refused"
 
 export const { use: usePlatform, provider: PlatformProvider } = createSimpleContext({
   name: "Platform",

@@ -9,6 +9,9 @@ import { ServerScope } from "@/utils/server-scope"
 // 1.2.7 U-8 (AC-U8, N7-096): the legacy layout's start-up autoselect and its other project openings check the folder
 // first. A missing folder is neither added nor entered; one persistent toast offers Restore / Recreate / Choose under
 // SR7-13 rules 5-7. The desktop half (rules 1-4) is N7-095 in packages/desktop.
+// INTENT (row 47c, M1-03): the desktop check answers "exists" | "missing" | "refused"; only "missing" is a gone folder.
+// The mock answers the tri-state, so at HEAD 5085f42a57 (which read any truthy answer as "exists") the missing-folder
+// cases and the refused case below are red.
 
 // Bun compiles JSX for React. These are the compilers the app's own build uses, reached through its Vite plugin.
 const viteSolid = createRequire(createRequire(import.meta.url).resolve("vite-plugin-solid"))
@@ -47,6 +50,8 @@ const GONE = "/work/gone"
 const HOME = "/home/tester"
 const world = {
   exists: new Set<string>(),
+  refused: new Set<string>(),
+  checkFails: false,
   last: GONE as string | undefined,
   list: [{ worktree: GONE }] as { worktree: string }[],
   checked: [] as string[],
@@ -84,7 +89,8 @@ await override("@/context/platform", {
       draftStore: undefined,
       checkDirectoryExists: async (path: string) => {
         world.checked.push(path)
-        return world.exists.has(path)
+        if (world.checkFails) throw new Error("synthetic check failure")
+        return world.exists.has(path) ? "exists" : world.refused.has(path) ? "refused" : "missing"
       },
       recreateDirectory: async (path: string) => {
         world.recreated.push(path)
@@ -177,6 +183,8 @@ let dispose = () => {}
 
 beforeEach(() => {
   world.exists = new Set()
+  world.refused = new Set()
+  world.checkFails = false
   world.last = GONE
   world.list = [{ worktree: GONE }]
   world.checked = []
@@ -289,6 +297,23 @@ describe("U-8 missing project folder (AC-U8, N7-096)", () => {
     expect(button(dict["toast.project.folderMissing.recreate"])).toBeUndefined()
     expect(button(dict["toast.project.folderMissing.restore"])).toBeDefined()
     expect(button(dict["toast.project.folderMissing.choose"])).toBeDefined()
+  })
+
+  test("M1-03: a folder the desktop refused to look at (/net, system, Swarm state) opens as in 1.2.6, no notice", async () => {
+    world.refused.add(GONE)
+    await mount()
+    expect(world.checked).toContain(GONE)
+    expect(world.opened).toEqual([GONE])
+    expect(world.touched).toEqual([GONE])
+    expect(world.recreated).toEqual([])
+    expect(toastText()).not.toContain(String(dict["toast.project.folderMissing.title"]))
+  })
+
+  test("M1-03: a failed check opens the folder as in 1.2.6, no notice", async () => {
+    world.checkFails = true
+    await mount()
+    expect(world.opened).toEqual([GONE])
+    expect(toastText()).not.toContain(String(dict["toast.project.folderMissing.title"]))
   })
 
   test("CHAR: an existing stored folder opens as before, with no notice", async () => {

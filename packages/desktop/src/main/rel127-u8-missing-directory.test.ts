@@ -4,6 +4,8 @@
 // 01_specs §2.8); the behaviour assertions below then fail for the stated reason. Green: check stats only, recreate
 // makes only the leaf a window found missing, nothing is created without the recreate call, and system, Swarm-state
 // and credential places, UNC and /net paths are refused (the latter without any stat). Synthetic temp folders only.
+// INTENT (row 47c, M1-03): the check answers "exists" | "missing" | "refused" instead of true/false; the home folder
+// and its ancestors are looked at again (SR7-13 lists them for Recreate only), Recreate still refuses them.
 
 import { afterAll, describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
@@ -65,15 +67,15 @@ describe("N7-095 check-directory-exists / recreate-directory (SR7-13 rules 1-4)"
     expect(readdirSync(docs).sort()).toEqual(before)
   })
 
-  test("check: existing folder true, missing folder false, a file false; check never creates", async () => {
+  test("check: existing folder exists, missing folder missing, a file missing; check never creates", async () => {
     const { call, mkdirs } = setup()
     const sender = {}
     const gone = join(docs, "Default Project")
-    expect(await call(CHECK_DIRECTORY_EXISTS, sender, docs)).toBe(true)
-    expect(await call(CHECK_DIRECTORY_EXISTS, sender, gone)).toBe(false)
-    expect(await call(CHECK_DIRECTORY_EXISTS, sender, join(docs, "a-file.txt"))).toBe(false)
+    expect(await call(CHECK_DIRECTORY_EXISTS, sender, docs)).toBe("exists")
+    expect(await call(CHECK_DIRECTORY_EXISTS, sender, gone)).toBe("missing")
+    expect(await call(CHECK_DIRECTORY_EXISTS, sender, join(docs, "a-file.txt"))).toBe("missing")
     // asking again, many times, still creates nothing (startup = stat only)
-    for (let i = 0; i < 3; i++) expect(await call(CHECK_DIRECTORY_EXISTS, sender, gone)).toBe(false)
+    for (let i = 0; i < 3; i++) expect(await call(CHECK_DIRECTORY_EXISTS, sender, gone)).toBe("missing")
     expect(existsSync(gone)).toBe(false)
     expect(mkdirs).toEqual([])
   })
@@ -82,14 +84,14 @@ describe("N7-095 check-directory-exists / recreate-directory (SR7-13 rules 1-4)"
     const { call, mkdirs, logs } = setup()
     const sender = {}
     const gone = join(docs, "Proj One")
-    expect(await call(CHECK_DIRECTORY_EXISTS, sender, gone)).toBe(false)
+    expect(await call(CHECK_DIRECTORY_EXISTS, sender, gone)).toBe("missing")
     expect(existsSync(gone)).toBe(false)
     expect(await call(RECREATE_DIRECTORY, sender, gone)).toBe(true)
     expect(existsSync(gone)).toBe(true)
     expect(realpathSync(gone)).toBe(join(realpathSync(docs), "Proj One"))
     expect(mkdirs).toEqual([gone])
     expect(readdirSync(gone)).toEqual([]) // an empty folder, nothing else
-    expect(await call(CHECK_DIRECTORY_EXISTS, sender, gone)).toBe(true)
+    expect(await call(CHECK_DIRECTORY_EXISTS, sender, gone)).toBe("exists")
     // a second recreate is refused: the path is no longer in this window's missing set
     expect(await call(RECREATE_DIRECTORY, sender, gone)).toBe(false)
     expect(mkdirs).toEqual([gone])
@@ -104,7 +106,7 @@ describe("N7-095 check-directory-exists / recreate-directory (SR7-13 rules 1-4)"
     const never = join(docs, "Never Checked")
     expect(await call(RECREATE_DIRECTORY, a, never)).toBe(false)
     const seenByA = join(docs, "Seen By A")
-    expect(await call(CHECK_DIRECTORY_EXISTS, a, seenByA)).toBe(false)
+    expect(await call(CHECK_DIRECTORY_EXISTS, a, seenByA)).toBe("missing")
     expect(await call(RECREATE_DIRECTORY, b, seenByA)).toBe(false)
     expect(existsSync(never)).toBe(false)
     expect(existsSync(seenByA)).toBe(false)
@@ -115,20 +117,20 @@ describe("N7-095 check-directory-exists / recreate-directory (SR7-13 rules 1-4)"
     const { call, mkdirs } = setup()
     const sender = {}
     const deep = join(docs, "Gone Parent", "Gone Leaf")
-    expect(await call(CHECK_DIRECTORY_EXISTS, sender, deep)).toBe(false)
+    expect(await call(CHECK_DIRECTORY_EXISTS, sender, deep)).toBe("missing")
     expect(await call(RECREATE_DIRECTORY, sender, deep)).toBe(false)
     expect(existsSync(join(docs, "Gone Parent"))).toBe(false)
     expect(mkdirs).toEqual([])
     // the folder came back between check and click: EEXIST path gives false and touches nothing
     const back = join(docs, "Came Back")
-    expect(await call(CHECK_DIRECTORY_EXISTS, sender, back)).toBe(false)
+    expect(await call(CHECK_DIRECTORY_EXISTS, sender, back)).toBe("missing")
     mkdirSync(back)
     writeFileSync(join(back, "keep.txt"), "synthetic")
     expect(await call(RECREATE_DIRECTORY, sender, back)).toBe(false)
     expect(readFileSync(join(back, "keep.txt"), "utf8")).toBe("synthetic")
   })
 
-  test("rule 2: input rules, system, Swarm-state, credential places and home refused (no stat)", async () => {
+  test("rule 2: input rules, system, Swarm-state and credential places refused (no stat); home only for Recreate", async () => {
     const { call, stats, mkdirs } = setup()
     const sender = {}
     const refused: unknown[] = [
@@ -150,14 +152,17 @@ describe("N7-095 check-directory-exists / recreate-directory (SR7-13 rules 1-4)"
       join(home, ".ssh"),
       join(home, ".ssh", "gone"),
       join(home, "Library", "Keychains", "gone"),
-      home,
-      T,
     ]
     for (const p of refused) {
-      expect(await call(CHECK_DIRECTORY_EXISTS, sender, p)).toBe(false)
+      expect(await call(CHECK_DIRECTORY_EXISTS, sender, p)).toBe("refused")
       expect(await call(RECREATE_DIRECTORY, sender, p)).toBe(false)
     }
     expect(stats).toEqual([])
+    // M1-03: home and its ancestors are looked at (they exist), but never recreated
+    for (const p of [home, T]) {
+      expect(await call(CHECK_DIRECTORY_EXISTS, sender, p)).toBe("exists")
+      expect(await call(RECREATE_DIRECTORY, sender, p)).toBe(false)
+    }
     expect(mkdirs).toEqual([])
   })
 
@@ -167,7 +172,7 @@ describe("N7-095 check-directory-exists / recreate-directory (SR7-13 rules 1-4)"
     symlinkSync(swarmConfig, join(docs, "looks-harmless"))
     symlinkSync(join(home, ".ssh"), join(docs, "keys-link"))
     for (const p of [join(docs, "looks-harmless", "gone"), join(docs, "keys-link", "gone")]) {
-      expect(await call(CHECK_DIRECTORY_EXISTS, sender, p)).toBe(false)
+      expect(await call(CHECK_DIRECTORY_EXISTS, sender, p)).toBe("refused")
       expect(await call(RECREATE_DIRECTORY, sender, p)).toBe(false)
     }
     expect(stats).toEqual([])
@@ -178,21 +183,21 @@ describe("N7-095 check-directory-exists / recreate-directory (SR7-13 rules 1-4)"
   test("rule 3: no stat on /net, /Network or UNC paths", async () => {
     const posix = setup()
     for (const p of ["/net/host/share/proj", "/Network/Servers/host/proj", "/NET/host/proj"]) {
-      expect(await posix.call(CHECK_DIRECTORY_EXISTS, {}, p)).toBe(false)
+      expect(await posix.call(CHECK_DIRECTORY_EXISTS, {}, p)).toBe("refused")
     }
     expect(posix.stats).toEqual([])
     const win = setup({ platform: "win32" })
     for (const p of ["\\\\host\\share\\proj", "//host/share/proj", "\\\\?\\C:\\proj", "\\\\.\\C:\\proj", "C:\\proj\\CON"]) {
-      expect(await win.call(CHECK_DIRECTORY_EXISTS, {}, p)).toBe(false)
+      expect(await win.call(CHECK_DIRECTORY_EXISTS, {}, p)).toBe("refused")
       expect(await win.call(RECREATE_DIRECTORY, {}, p)).toBe(false)
     }
     expect(win.stats).toEqual([])
     expect(win.mkdirs).toEqual([])
   })
 
-  test("an untrusted sender gets false and nothing is touched", async () => {
+  test("an untrusted sender gets refused / false and nothing is touched", async () => {
     const { call, stats, mkdirs } = setup({ trusted: false })
-    expect(await call(CHECK_DIRECTORY_EXISTS, {}, docs)).toBe(false)
+    expect(await call(CHECK_DIRECTORY_EXISTS, {}, docs)).toBe("refused")
     expect(await call(RECREATE_DIRECTORY, {}, join(docs, "x"))).toBe(false)
     expect(stats).toEqual([])
     expect(mkdirs).toEqual([])
@@ -205,13 +210,13 @@ describe("N7-095 check-directory-exists / recreate-directory (SR7-13 rules 1-4)"
     expect(preload).toContain(`ipcRenderer.invoke("check-directory-exists", path)`)
     expect(preload).toContain(`ipcRenderer.invoke("recreate-directory", path)`)
     const types = src("../preload/types.ts")
-    expect(types).toContain("checkDirectoryExists: (path: string) => Promise<boolean>")
+    expect(types).toContain("checkDirectoryExists: (path: string) => Promise<DirectoryCheck>")
     expect(types).toContain("recreateDirectory: (path: string) => Promise<boolean>")
     const renderer = src("../renderer/index.tsx")
     expect(renderer).toContain("window.api.checkDirectoryExists(path)")
     expect(renderer).toContain("window.api.recreateDirectory(path)")
     const platform = readFileSync(join(import.meta.dir, "../../../app/src/context/platform.tsx"), "utf8")
-    expect(platform).toContain("checkDirectoryExists?(path: string): Promise<boolean>")
+    expect(platform).toContain("checkDirectoryExists?(path: string): Promise<DirectoryCheck>")
     expect(platform).toContain("recreateDirectory?(path: string): Promise<boolean>")
     // nothing at startup: the main process never calls the handlers itself
     expect(src("index.ts")).not.toContain("check-directory-exists")

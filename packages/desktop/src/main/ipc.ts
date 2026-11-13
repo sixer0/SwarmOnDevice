@@ -77,18 +77,29 @@ type Deps = {
 
 // 1.2.7 row 25 (U-2, SR7-11): Swarm's own folders a reveal never points at (the home credential places are added by
 // reveal-path.ts). Both the inherited XDG folder and its default, since the sidecar may run with either.
-function revealExcluded() {
+// 1.2.7 row 47c (M1-03): split in two, since SR7-13 refuses the folder check only in Swarm's config, state, userData
+// and sessionData folders; the data folder holds the session worktrees, which must open as in 1.2.6.
+function swarmFolders() {
   const home = app.getPath("home")
   const env = process.env
   const xdg = (name: string, fallback: string) => [env[name], join(home, fallback)].filter((p): p is string => !!p)
-  return [
-    app.getPath("userData"),
-    app.getPath("sessionData"),
-    ...xdg("XDG_CONFIG_HOME", ".config").map((p) => join(p, "swarm")),
-    ...xdg("XDG_DATA_HOME", join(".local", "share")).map((p) => join(p, "swarm")),
-    ...xdg("XDG_STATE_HOME", join(".local", "state")).map((p) => join(p, "swarm")),
-    ...xdg("XDG_CACHE_HOME", ".cache").map((p) => join(p, "swarm")),
-  ]
+  return {
+    state: [
+      app.getPath("userData"),
+      app.getPath("sessionData"),
+      ...xdg("XDG_CONFIG_HOME", ".config").map((p) => join(p, "swarm")),
+      ...xdg("XDG_STATE_HOME", join(".local", "state")).map((p) => join(p, "swarm")),
+    ],
+    data: [
+      ...xdg("XDG_DATA_HOME", join(".local", "share")).map((p) => join(p, "swarm")),
+      ...xdg("XDG_CACHE_HOME", ".cache").map((p) => join(p, "swarm")),
+    ],
+  }
+}
+
+function revealExcluded() {
+  const folders = swarmFolders()
+  return [...folders.state, ...folders.data]
 }
 
 export function registerIpcHandlers(deps: Deps) {
@@ -179,7 +190,8 @@ export function registerIpcHandlers(deps: Deps) {
   registerMissingDirectoryHandlers({
     ipcMain,
     home: app.getPath("home"),
-    excluded: revealExcluded(),
+    excluded: swarmFolders().state,
+    recreateExcluded: swarmFolders().data,
     isTrustedSender: (event) => {
       const win = BrowserWindow.fromWebContents(event.sender)
       return !!win && !win.isDestroyed() && event.senderFrame === event.sender.mainFrame && isRendererUrl(event.sender.getURL())
