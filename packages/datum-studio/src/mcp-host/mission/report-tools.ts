@@ -30,6 +30,16 @@ const WORK_REPORT = "agentWorkReport"
 const ROW_RE = new RegExp(ROW_ID_PATTERN)
 const DOCKEY_ROW_RE = /^row-([1-9][0-9]{0,3}[a-z]?)$/
 
+/**
+ * H-N16 (1.2.8 row 34b): every DOC_KEY_MISMATCH message ends with one example payload: a studio_report_submit
+ * argument object that parses as JSON and passes that tool's schema (the mission and row of the call when valid).
+ */
+export function docKeyExample(mission?: string | null, row?: string | null): string {
+  const m = typeof mission === "string" && mission.length > 0 && mission.length <= 120 && [...mission].every((c) => c.charCodeAt(0) > 0x1f) ? mission : "2026-11-14_contoh"
+  const r = typeof row === "string" && ROW_RE.test(row) ? row : "1"
+  return `; contoh: ${JSON.stringify({ mission: m, row: r, docKey: `row-${r}` })}`
+}
+
 export interface MissionIssue {
   code: string
   message: string
@@ -76,12 +86,12 @@ const isOk = (r: CallToolResult) => sc(r).ok === true && r.isError !== true
 export function resolveTarget(facts: Pick<ReportFacts, "mission" | "docKey">, row: string | null): Target {
   if (!facts.mission) throw new MissionToolError("MISSION_REQUIRED", "a work report needs a mission: the mission argument or the `mission:` header line", {})
   if (row !== null && facts.docKey !== null && facts.docKey !== `row-${row}`) {
-    throw new MissionToolError("DOC_KEY_MISMATCH", "docKey must be row-<row> when row is given", { mission: facts.mission, row, docKey: facts.docKey })
+    throw new MissionToolError("DOC_KEY_MISMATCH", `docKey must be row-<row> when row is given${docKeyExample(facts.mission, row)}`, { mission: facts.mission, row, docKey: facts.docKey })
   }
   const docKey = facts.docKey ?? (row !== null ? `row-${row}` : null)
   if (docKey === "delegation") return { mission: facts.mission, kind: "delegation", docKey }
   const m = docKey !== null ? DOCKEY_ROW_RE.exec(docKey) : null
-  if (!m) throw new MissionToolError("DOC_KEY_MISMATCH", "a mission work report has docKey row-<row> or delegation", { mission: facts.mission, docKey })
+  if (!m) throw new MissionToolError("DOC_KEY_MISMATCH", `a mission work report has docKey row-<row> or delegation${docKeyExample(facts.mission, row)}`, { mission: facts.mission, docKey })
   return { mission: facts.mission, kind: "row", row: m[1], docKey: docKey as string }
 }
 
@@ -110,7 +120,7 @@ export function missionIssues(store: MissionHostStore, t: Target, facts: Pick<Re
     out.push(
       facts.taskRef !== null && !known
         ? issue("ROW_UNKNOWN", "TaskRef names no row of the mission; TaskRef must equal the row id", { mission: m.id, row: row.id, taskRef: facts.taskRef })
-        : issue("DOC_KEY_MISMATCH", "TaskRef must equal the row id of docKey", { mission: m.id, row: row.id, docKey: t.docKey, taskRef: facts.taskRef }),
+        : issue("DOC_KEY_MISMATCH", `TaskRef must equal the row id of docKey${docKeyExample(m.id, row.id)}`, { mission: m.id, row: row.id, docKey: t.docKey, taskRef: facts.taskRef }),
     )
   }
   // A non-draft report starts a pending row, and restarts a blocked one unless it is itself blocked (store applyReport).
@@ -217,7 +227,7 @@ export function reportWrappers(store: MissionHostStore, opts: { log: MissionLog 
       const r = got.mission.rows.find((x) => x.id === row)
       if (!r) throw new MissionToolError("ROW_UNKNOWN", "row is not a row of the mission", { mission, row })
       const docKey = argStr(a, "docKey")
-      if (docKey !== null && docKey !== `row-${row}`) throw new MissionToolError("DOC_KEY_MISMATCH", "docKey must be row-<row> when row is given", { mission, row, docKey })
+      if (docKey !== null && docKey !== `row-${row}`) throw new MissionToolError("DOC_KEY_MISMATCH", `docKey must be row-<row> when row is given${docKeyExample(mission, row)}`, { mission, row, docKey })
       const out = await next({ ...vend, docKey: `row-${row}` })
       if (!isOk(out)) return out
       const fill = (t: string) =>
@@ -281,7 +291,7 @@ export function reportWrappers(store: MissionHostStore, opts: { log: MissionLog 
   const submit = wrapper(
     "studio_report_submit",
     "Kirim laporan kerja",
-    "mission wajib (argumen atau baris mission:, MISSION_REQUIRED); misi approved/running/paused; row -> docKey row-<row> (keduanya harus cocok); TaskRef = id baris; dokumen, tautan mission_report dan efek baris (§5.1) dalam satu job antrean tulis; ditolak = tidak ada yang tersimpan.",
+    "mission wajib (argumen atau baris mission:, MISSION_REQUIRED); misi approved/running/paused; row -> docKey row-<row> (harus cocok); TaskRef = id baris; tabel maks 20 kolom, 20 sel per baris; dokumen, tautan mission_report dan efek baris (§5.1) satu job antrean tulis; ditolak = tak ada yang tersimpan.",
     async (a, s, next) => {
       const row = checkRowArg("studio_report_submit", a.row)
       const session = sessionOf(a, s)
@@ -302,9 +312,9 @@ export function reportWrappers(store: MissionHostStore, opts: { log: MissionLog 
         const doc = documentId !== null ? docOf(tx, documentId) : undefined
         if (!doc) abortAfter(next, documentId, saved, refusal("studio_report_submit", "INTERNAL_ERROR", "submit returned no stored document", {}))
         const abort = (c: string, msg: string, d: Record<string, unknown>) => abortAfter(next, doc.id, saved, refusal("studio_report_submit", c, msg, d))
-        if (doc.mission_folder !== t.mission || doc.mission_doc_key !== t.docKey) abort("DOC_KEY_MISMATCH", "the stored document is not the mission + docKey of the report", { mission: t.mission, docKey: t.docKey, stored: { mission: doc.mission_folder, docKey: doc.mission_doc_key } })
-        if (doc.contract_kind !== WORK_REPORT) abort("DOC_KEY_MISMATCH", "the document is not a work report", { documentId: doc.id, contractKind: doc.contract_kind })
-        if (t.kind === "row" && doc.contract_task_ref !== t.row) abort("DOC_KEY_MISMATCH", "TaskRef must equal the row id of docKey", { mission: t.mission, row: t.row, taskRef: doc.contract_task_ref })
+        if (doc.mission_folder !== t.mission || doc.mission_doc_key !== t.docKey) abort("DOC_KEY_MISMATCH", `the stored document is not the mission + docKey of the report${docKeyExample(t.mission, t.row)}`, { mission: t.mission, docKey: t.docKey, stored: { mission: doc.mission_folder, docKey: doc.mission_doc_key } })
+        if (doc.contract_kind !== WORK_REPORT) abort("DOC_KEY_MISMATCH", `the document is not a work report${docKeyExample(t.mission, t.row)}`, { documentId: doc.id, contractKind: doc.contract_kind })
+        if (t.kind === "row" && doc.contract_task_ref !== t.row) abort("DOC_KEY_MISMATCH", `TaskRef must equal the row id of docKey${docKeyExample(t.mission, t.row)}`, { mission: t.mission, row: t.row, taskRef: doc.contract_task_ref })
         const status = (REPORT_STATUSES.includes(doc.contract_status ?? "") ? doc.contract_status : "draft") as ReportStatus
         const effect = guarded(next, doc.id, saved, () => M.recordReport(
           tx,
@@ -348,7 +358,7 @@ export function reportWrappers(store: MissionHostStore, opts: { log: MissionLog 
           return withMission(out, { id: t.mission, kind: t.kind, ...(t.row ? { row: t.row } : {}), revisionNo: Number(after.current_revision_no), changed: false }, `misi ${t.mission}: tidak ada revisi baru, tidak ada efek baris`)
         }
         if (t.kind === "row" && after.contract_task_ref !== t.row) {
-          abortAfter(next, documentId, saved, refusal("studio_report_update", "DOC_KEY_MISMATCH", "TaskRef must equal the row id of the report", { mission: t.mission, row: t.row, taskRef: after.contract_task_ref }))
+          abortAfter(next, documentId, saved, refusal("studio_report_update", "DOC_KEY_MISMATCH", `TaskRef must equal the row id of the report${docKeyExample(t.mission, t.row)}`, { mission: t.mission, row: t.row, taskRef: after.contract_task_ref }))
         }
         const status = (REPORT_STATUSES.includes(after.contract_status ?? "") ? after.contract_status : "draft") as ReportStatus
         const effect = guarded(next, documentId, saved, () => M.applyReport(tx, { documentId, revisionNo: Number(after.current_revision_no), status }, { ...(actor ? { actor } : {}), ...(session ? { session } : {}) }))
