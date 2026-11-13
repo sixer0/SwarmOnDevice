@@ -146,6 +146,10 @@ export type ElectronAPI = {
   getDisplayBackend: () => Promise<LinuxDisplayBackend | null>
   setDisplayBackend: (backend: LinuxDisplayBackend | null) => Promise<void>
   checkAppExists: (appName: string) => Promise<boolean>
+  /** 1.2.7 row 32 (U-8, N7-037): `stat` + `isDirectory`; `false` for a missing folder or a refused path. */
+  checkDirectoryExists: (path: string) => Promise<boolean>
+  /** 1.2.7 row 32 (U-8, N7-039): creates the one missing leaf this window found missing; never parents. */
+  recreateDirectory: (path: string) => Promise<boolean>
   resolveAppPath: (appName: string) => Promise<string | null>
   storeGet: (name: string, key: string) => Promise<string | null>
   storeSet: (name: string, key: string, value: string) => Promise<void>

@@ -33,6 +33,7 @@ import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-
 import { registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
 import { registerDesktopNonceHandler } from "./desktop-nonce"
 import { revealInFolder } from "./reveal-path"
+import { registerMissingDirectoryHandlers } from "./missing-directory"
 import { MISSION_CONTROL_IPC } from "../preload/mission-control-channels"
 import type { MissionControlPlatform } from "../preload/types"
 
@@ -173,6 +174,18 @@ export function registerIpcHandlers(deps: Deps) {
     deps.setDisplayBackend(backend),
   )
   ipcMain.handle("check-app-exists", (_event: IpcMainInvokeEvent, appName: string) => deps.checkAppExists(appName))
+  // 1.2.7 row 32 (U-8, SR7-13): check-directory-exists (stat only) and recreate-directory (leaf only, only a path this
+  // window found missing). Nothing runs here at startup; the app calls them, and recreate only after a user click.
+  registerMissingDirectoryHandlers({
+    ipcMain,
+    home: app.getPath("home"),
+    excluded: revealExcluded(),
+    isTrustedSender: (event) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      return !!win && !win.isDestroyed() && event.senderFrame === event.sender.mainFrame && isRendererUrl(event.sender.getURL())
+    },
+    log: (level, message, context) => getLogger()[level](message, context),
+  })
   ipcMain.handle("resolve-app-path", (_event: IpcMainInvokeEvent, appName: string) => deps.resolveAppPath(appName))
   ipcMain.handle("updater-subscribe", (event) => {
     const id = event.sender.id

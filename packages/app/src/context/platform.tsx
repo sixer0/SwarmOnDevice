@@ -115,6 +115,12 @@ type PlatformBase = {
   /** Check if an editor app exists (desktop only) */
   checkAppExists?(appName: string): Promise<boolean>
 
+  /** Whether a project folder exists as a directory; `stat` only, never creates (desktop only, N7-038, U-8) */
+  checkDirectoryExists?(path: string): Promise<boolean>
+
+  /** Recreate the one missing project folder after the user's click; never parents (desktop only, N7-040, U-8) */
+  recreateDirectory?(path: string): Promise<boolean>
+
   /** Read image from clipboard (desktop only) */
   readClipboardImage?(): Promise<File | null>
 

@@ -315,6 +315,15 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
       return window.api.checkAppExists(appName)
     },
 
+    // 1.2.7 row 32 (U-8): row 33's missing-folder notice calls these; recreate only after the user's click.
+    checkDirectoryExists: async (path: string) => {
+      return window.api.checkDirectoryExists(path)
+    },
+
+    recreateDirectory: async (path: string) => {
+      return window.api.recreateDirectory(path)
+    },
+
     async readClipboardImage() {
       const image = await window.api.readClipboardImage().catch(() => null)
       if (!image) return null
