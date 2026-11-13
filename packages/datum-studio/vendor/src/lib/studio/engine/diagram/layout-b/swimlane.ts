@@ -54,6 +54,43 @@ export interface SwimFrame {
   bottom: number;
   /** Lebar kolom kepala kiri: parit label lajur (horizontal) atau kolom kepala fase (vertikal, 0 tanpa fase). */
   gutter: number;
+  /**
+   * Swarm 1.2.8 row 55b (VIS-2b, 01f §2.3, N8-250): kolam, urutan `pools[]`; hanya ada bila `pools` diberikan.
+   * `lo`..`hi` = rentang lintang kolam (horizontal: y, vertikal: x); `lanes` = indeks pita lajur di `lanes`.
+   */
+  pools?: SwimPool[];
+  /** Row 55b: tepi strip kepala kolam (horizontal: x kanan strip kiri; vertikal: y bawah baris kepala atas). */
+  poolHead?: number;
+}
+
+/** Swarm 1.2.8 row 55b (VIS-2b): satu kolam, pita luar yang memuat lajurnya. */
+export interface SwimPool extends SwimBand {
+  lanes: number[];
+}
+
+/**
+ * Swarm 1.2.8 row 55b (VIS-2b, C12 OP-18-5, N8-481): kode peringatan aliran urutan yang melintasi batas kolam.
+ * Peringatan (REPORT), bukan penolakan: gambar tetap dirakit dan tidak dihitung sebagai cacat.
+ */
+export const POOL_FLOW_CROSSES = "POOL_FLOW_CROSSES";
+
+/**
+ * Row 55b (OP-18-5): satu baris REPORT per sisi yang ujungnya berada di kolam berbeda dan `kind` bukan `control`
+ * (aliran pesan BPMN = `control`). Hanya family swimlane dengan `pools`; selain itu larik kosong. Teks = N8-481.
+ */
+export function poolFlowCrossesNotes(
+  s: Pick<StudioDiagramV1, "family" | "nodes" | "edges" | "pools">,
+): Array<{ checkId: string; status: "REPORT"; detail: string; suggest: string }> {
+  if (s.family !== "swimlane" || !Array.isArray(s.pools) || s.pools.length === 0) return [];
+  const pool = new Map((s.nodes ?? []).map((n) => [n.id, ((n.class ?? {}) as Record<string, unknown>).pool] as const));
+  return (s.edges ?? [])
+    .filter((e) => e.kind !== "control" && pool.get(e.from) !== undefined && pool.get(e.to) !== undefined && pool.get(e.from) !== pool.get(e.to))
+    .map((e) => ({
+      checkId: POOL_FLOW_CROSSES,
+      status: "REPORT" as const,
+      detail: `aliran urutan ${pyStr(e.from)} -> ${pyStr(e.to)} melintasi kolam; antarkolam pakai kind control (aliran pesan)`,
+      suggest: "ubah kind sisi antarkolam menjadi control, atau pindahkan kedua simpul ke kolam yang sama",
+    }));
 }
 
 const NO_LANE = "tanpa lajur";
@@ -86,7 +123,8 @@ export function layoutSwimlane(s: StudioDiagramV1, sheet: DiagramSheet): Swimlan
   const perLane = new Map<string, DiagramNode[]>(lanes.map((ln) => [ln, []]));
   for (const n of specNodes) perLane.get(nodeLane[n.id])!.push(n);
   // Swarm 1.2.8 row 55 (VIS-2a): fase atau lajur vertikal -> tata letak berbingkai; selain itu jalur lama apa adanya.
-  if ((Array.isArray(s.phases) && s.phases.length > 0) || s.lane_orientation === "vertical") {
+  // Row 55b (VIS-2b): kolam juga lewat tata letak berbingkai.
+  if ((Array.isArray(s.phases) && s.phases.length > 0) || s.lane_orientation === "vertical" || (Array.isArray(s.pools) && s.pools.length > 0)) {
     return layoutSwimFramed(s, L, lanes, nodeLane, gutter);
   }
 
@@ -158,17 +196,28 @@ export function layoutSwimlane(s: StudioDiagramV1, sheet: DiagramSheet): Swimlan
  * Simpul tetap di kisi; pemisah (dekorasi) berada di tengah celah 1 kisi antarpita.
  * Kapasitas (`diagramFitCapacity`): hanya mode "time" (01f §2.3; "pack" memecah kolom fase): simpul 3 kisi
  * (label dibungkus, tinggi tumbuh) dan simpul satu sel ditumpuk dalam satu kolom.
+ *
+ * Row 55b (VIS-2b, 01f §2.3, N8-250/N8-251): kolam = pita luar yang memuat lajurnya; identitas lajur = (kolam, lajur),
+ * urutan lajur = urutan `pools[]` lalu kemunculan pertama. Horizontal: strip kepala kolam (lebar parit) di kiri, di
+ * luar kolom label lajur (konten mulai 2 x parit); tepi kolam 1 kisi dari lajur luar (3 bila zona), celah antarkolam 3 kisi
+ * (tempat aliran pesan). Vertikal: baris kepala kolam 2 kisi di atas baris kepala lajur; celah antarkolam 2 kisi.
  */
 function layoutSwimFramed(
   s: StudioDiagramV1,
   L: Lattice,
-  lanes: readonly string[],
-  nodeLane: Readonly<Record<string, string>>,
+  lanesIn: readonly string[],
+  nodeLaneIn: Readonly<Record<string, string>>,
   gutter: number,
 ): SwimlaneLayout {
   const specNodes = s.nodes ?? [];
   const vertical = s.lane_orientation === "vertical";
   const phases = Array.isArray(s.phases) ? s.phases : [];
+  const grouped = Array.isArray(s.pools) && s.pools.length > 0 ? poolLanes(specNodes, s.pools) : undefined;
+  const lanes = grouped ? grouped.lanes : lanesIn;
+  const nodeLane = grouped ? grouped.nodeLane : nodeLaneIn;
+  const laneLabel = (ln: string): string => grouped?.label.get(ln) ?? ln;
+  /** Lajur ke-i membuka kolam baru (bukan lajur pertama). */
+  const poolBreak = (i: number): boolean => grouped !== undefined && i > 0 && grouped.pool.get(lanes[i]) !== grouped.pool.get(lanes[i - 1]);
   const keys = phases.length ? phases.map((p) => String(p.id)) : [""];
   const phaseOf = (n: DiagramNode): string => (phases.length ? pyStr(((n.class ?? {}) as Record<string, unknown>).phase) : "");
   const cap = diagramFitCapacity();
@@ -182,7 +231,7 @@ function layoutSwimFramed(
   }
   /** Simpul fase terbanyak dalam satu lajur (>= 1: fase kosong tetap satu slot agar kepalanya terbaca). */
   const depth = (ph: string): number => Math.max(1, ...lanes.map((ln) => cellOf(ln, ph).length));
-  const startX = vertical ? (phases.length ? gutter : 0) : gutter;
+  const startX = vertical ? (phases.length ? gutter : 0) : grouped ? gutter * 2 : gutter;
   // lebar adil per slot saat fit (kelipatan kisi, >= 3 kisi)
   const slots = vertical ? lanes.length : keys.reduce((a, ph) => a + (cap ? 1 : depth(ph)), 0);
   const share = Math.floor(((L.W - startX) / slots - L.x) / L.x + 1e-9) * L.x;
@@ -201,31 +250,41 @@ function layoutSwimFramed(
   const H = (n: DiagramNode) => size.get(n.id)![1];
   const emptyH = textUnitsHeightMm(3, L);
   const top = L.top;
-  const headBottom = top + L.y * 2;
+  // vertikal dengan kolam: baris kepala kolam (2 kisi) di atas baris kepala lajur (2 kisi)
+  const poolHead = vertical ? top + L.y * 2 : gutter;
+  const headBottom = top + L.y * 2 + (vertical && grouped ? L.y * 2 : 0);
   const nodes: Record<string, DiagramBox> = {};
   const laneBoxes: Record<string, DiagramBox> = {};
   const laneList: DiagramBox[] = [];
   const laneBands: SwimBand[] = [];
   const phaseBands: SwimBand[] = [];
   const labelOf = (ph: string): string => pyStr(phases.find((p) => String(p.id) === ph)?.label ?? ph);
+  // Row 55b: a pool border sits 1 lattice row from its outer lane (the router's stub row, so a connector label at the
+  // stub midpoint stays inside the pool); a zone (group) reaches 2 rows past its members (build/fitlabels.ts zoneGeom),
+  // so a pool whose outer lane holds a zone member keeps 3 rows and the zone stays inside the pool.
+  const zoneLanes = new Set((s.zones ?? []).flatMap((z) => (z.members ?? []).map((m) => nodeLane[m])));
+  const pad = (ln: string): number => (zoneLanes.has(ln) ? L.y * 3 : L.y);
 
   if (!vertical) {
     // fase = pita x
     const xStart = new Map<string, number>();
     const slotW = new Map<string, number>();
-    let x = gutter + L.x;
+    let x = startX + L.x;
     keys.forEach((ph, i) => {
       const members = specNodes.filter((n) => phaseOf(n) === ph);
       const sw = members.length ? Math.max(...members.map(W)) : L.x * 3;
       slotW.set(ph, sw);
       xStart.set(ph, x);
-      phaseBands.push({ key: ph, label: labelOf(ph), lo: i === 0 ? gutter : x - L.x / 2, hi: 0 });
+      phaseBands.push({ key: ph, label: labelOf(ph), lo: i === 0 ? startX : x - L.x / 2, hi: 0 });
       x += (cap ? 1 : depth(ph)) * (sw + L.x);
     });
     phaseBands.forEach((b, i) => (b.hi = i + 1 < phaseBands.length ? phaseBands[i + 1].lo : L.W));
     const laneStep = baselineStepMm(1, L);
-    let y = headBottom;
-    for (const ln of lanes) {
+    // kolam: lajur pertama 1 kisi di bawah kepala fase (tepi kolam di tengahnya); tanpa kolam: tepat di kepala (lama)
+    // kolam: tepi atas kolam pertama di kepala fase (atau tepi atas), lajur pertama pad(lajur) di bawahnya (di kisi)
+    let y = grouped ? (phases.length ? headBottom : top) + pad(lanes[0]) : headBottom;
+    lanes.forEach((ln, li) => {
+      if (poolBreak(li)) y += pad(lanes[li - 1]) + L.y * 3 + pad(ln) - laneStep; // celah antarkolam 3 kisi
       let lh = 0;
       for (const ph of keys) {
         const g = cellOf(ln, ph);
@@ -248,23 +307,30 @@ function layoutSwimFramed(
       const box: DiagramBox = { x: 0, y, w: L.W, h: lh };
       laneBoxes[ln] = box;
       laneList.push(box);
-      laneBands.push({ key: ln, label: ln, lo: y, hi: y + lh });
+      laneBands.push({ key: ln, label: laneLabel(ln), lo: y, hi: y + lh });
       y += lh + laneStep;
-    }
+    });
   } else {
     // lajur = pita x (kolom), fase = pita y
     const xStart = new Map<string, number>();
     const slotW = new Map<string, number>();
+    const ends: number[] = [];
     let x = startX + L.x;
     lanes.forEach((ln, i) => {
+      if (poolBreak(i)) x += L.x * 2; // celah antarkolam 2 kisi
       const members = specNodes.filter((n) => nodeLane[n.id] === ln);
       const sw = members.length ? Math.max(...members.map(W)) : L.x * 3;
       slotW.set(ln, sw);
       xStart.set(ln, x);
-      laneBands.push({ key: ln, label: ln, lo: i === 0 ? startX : x - L.x / 2, hi: 0 });
+      laneBands.push({ key: ln, label: laneLabel(ln), lo: i === 0 && !grouped ? startX : x - L.x / 2, hi: 0 });
+      ends.push(x + sw);
       x += sw + L.x;
     });
-    laneBands.forEach((b, i) => (b.hi = i + 1 < laneBands.length ? laneBands[i + 1].lo : L.W));
+    laneBands.forEach((b, i) => {
+      const last = i + 1 >= laneBands.length;
+      if (grouped) b.hi = last || poolBreak(i + 1) ? ends[i] + L.x / 2 : laneBands[i + 1].lo;
+      else b.hi = last ? L.W : laneBands[i + 1].lo;
+    });
     const gapY = L.y * 2; // rute antarlajur mendatar lewat celah 2 kisi, bukan lewat baris kepala
     let y = headBottom + L.y;
     keys.forEach((ph, i) => {
@@ -294,7 +360,26 @@ function layoutSwimFramed(
       `kurangi simpul per fase atau pecah menjadi 2 diagram (lebar ${L.W.toFixed(0)} mm)`,
     );
   }
-  const bottom = vertical ? laneList[0].y + laneList[0].h : laneList[laneList.length - 1].y + laneList[laneList.length - 1].h;
+  const pools: SwimPool[] = [];
+  if (grouped) {
+    for (const p of s.pools ?? []) {
+      const idx = lanes.flatMap((ln, i) => (grouped.pool.get(ln) === String(p.id) ? [i] : []));
+      const first = laneBands[idx[0]];
+      const last = laneBands[idx[idx.length - 1]];
+      pools.push({
+        key: String(p.id),
+        label: pyStr(p.label),
+        lo: vertical ? first.lo : first.lo - pad(first.key),
+        hi: vertical ? last.hi : last.hi + pad(last.key),
+        lanes: idx,
+      });
+      // the sheet height reads the lane boxes: the last lane of a pool reaches its border
+      const box = laneBoxes[last.key];
+      if (!vertical) laneBoxes[last.key] = { ...box, h: pools[pools.length - 1].hi - box.y };
+    }
+  }
+  const lastBand = vertical ? laneList[0].y + laneList[0].h : laneList[laneList.length - 1].y + laneList[laneList.length - 1].h;
+  const bottom = !vertical && pools.length ? pools[pools.length - 1].hi : lastBand;
   const frame: SwimFrame = {
     orientation: vertical ? "vertical" : "horizontal",
     lanes: laneBands,
@@ -303,16 +388,59 @@ function layoutSwimFramed(
     headBottom,
     bottom,
     gutter: startX,
+    ...(grouped ? { pools, poolHead } : {}),
   };
+  // horizontal dengan kolam: tepi bawah kolam terakhir ikut tinggi lembar
+  const extent = !vertical && pools.length ? [...laneList, { y: pools[pools.length - 1].lo, h: bottom - pools[pools.length - 1].lo }] : laneList;
   return {
     family: "swimlane",
     nodes,
     lanes: laneBoxes,
     laneOrder: [...lanes],
     nodeLane: { ...nodeLane },
-    gutterMm: vertical ? startX : gutter,
+    gutterMm: startX,
     widthMm: L.W,
-    heightMm: sheetHeight(L, Object.values(nodes), laneList),
+    heightMm: sheetHeight(L, Object.values(nodes), extent),
     frame,
   };
+}
+
+/**
+ * Swarm 1.2.8 row 55b (01f §2.2 cause 6): lajur per kolam. Kunci lajur = nama lajur; nama yang berulang di dua kolam
+ * memakai `<kolam>/<lajur>` agar unik. Simpul tanpa `class.lane` = satu lajur tanpa nama di kolamnya (label kosong);
+ * kolam tanpa simpul = satu lajur kosong.
+ */
+function poolLanes(
+  specNodes: readonly DiagramNode[],
+  pools: readonly { id: string; label: string }[],
+): { lanes: string[]; nodeLane: Record<string, string>; label: Map<string, string>; pool: Map<string, string> } {
+  const poolOf = (n: DiagramNode): string => pyStr(((n.class ?? {}) as Record<string, unknown>).pool);
+  const seenIn = new Map<string, Set<string>>();
+  for (const n of specNodes) {
+    const ln = laneName(n);
+    seenIn.set(ln, (seenIn.get(ln) ?? new Set<string>()).add(poolOf(n)));
+  }
+  const lanes: string[] = [];
+  const nodeLane: Record<string, string> = {};
+  const label = new Map<string, string>();
+  const pool = new Map<string, string>();
+  for (const p of pools) {
+    const pid = String(p.id);
+    const members = specNodes.filter((n) => poolOf(n) === pid);
+    for (const n of members) {
+      const ln = laneName(n);
+      const key = seenIn.get(ln)!.size > 1 ? `${pid}/${ln}` : ln;
+      nodeLane[n.id] = key;
+      if (pool.has(key)) continue;
+      lanes.push(key);
+      pool.set(key, pid);
+      label.set(key, ln === NO_LANE ? "" : ln);
+    }
+    if (!members.length) {
+      lanes.push(`${pid}/`);
+      pool.set(`${pid}/`, pid);
+      label.set(`${pid}/`, "");
+    }
+  }
+  return { lanes, nodeLane, label, pool };
 }

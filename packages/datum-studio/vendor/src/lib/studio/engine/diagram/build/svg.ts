@@ -43,8 +43,11 @@ import {
   role,
   Sheet,
   STROKE_HAIR,
+  STROKE_PRIMARY,
+  pyStr,
   svgColourValues,
   svgText,
+  svgTextLines,
   tokenFloorChecks,
   TRACK,
   colourOf,
@@ -63,7 +66,7 @@ import { autoFitDiagram, type DiagramGeometryIssue } from "./autofit";
 import type { EdgeLabelPlan } from "../fit/labels";
 import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneGeom } from "./fitlabels";
 import { placeDiagram, type Placement } from "./place";
-import type { SwimFrame } from "../layout-b/swimlane";
+import { poolFlowCrossesNotes, type SwimFrame, type SwimPool } from "../layout-b/swimlane";
 import { reorderPlaced } from "./order";
 import { capacityRetry, isCapacityReject, withAction } from "./capacity";
 import { crossingHops, routePlaced, routeStyleOfPath, type HoppedEdge } from "./route";
@@ -317,7 +320,8 @@ function swimFrameSvg(f: SwimFrame, W: number): string[] {
     });
     return out;
   }
-  for (const ln of f.lanes) {
+  for (const ln of f.pools ? [] : f.lanes) {
+    // row 55b: with pools the lanes are drawn per pool (swimPoolsSvg)
     if (ln.lo > 1e-6) out.push(lineSvg(ln.lo, f.top, ln.lo, f.bottom, "ink200", STROKE_HAIR));
     out.push(lineSvg(ln.lo, f.headBottom, ln.hi, f.headBottom, "ink200", STROKE_HAIR));
     out.push(text((ln.lo + ln.hi) / 2.0, f.top + hdr, ln.label, "middle"));
@@ -327,6 +331,71 @@ function swimFrameSvg(f: SwimFrame, W: number): string[] {
     out.push(text(0.5, p.lo + hdr, p.label, "start"));
   });
   return out;
+}
+
+/**
+ * Swarm 1.2.8 row 55b (VIS-2b, 01f §2.3): kolam dan lajurnya, tanpa data-mark (G-2). Tepi kolam = kotak garis utama
+ * (STROKE_PRIMARY) berwarna garis tepi simpul (ink700, tanpa warna baru); strip kepala kolam dibatasi garis utama yang
+ * sama. Horizontal: strip kiri selebar parit (label kolam), lalu kolom label lajur (parit kedua, garis rambut), garis
+ * rambut ink200 di antara lajur satu kolam. Vertikal: baris kepala kolam di atas baris kepala lajur, garis rambut di
+ * antara kolom lajur satu kolam. Label kolam dan lajur memakai peran label lajur (table_header, ink400) lewat
+ * `svgText`; label kolam yang lebih lebar dari stripnya dibungkus per kata.
+ */
+function swimPoolsSvg(f: SwimFrame, pools: readonly SwimPool[], W: number): string[] {
+  const hdr = pt2mm(role("table_header").size) + LATTICE_Y / 2.0;
+  const opt = { role: "table_header", colourToken: "ink400" } as const;
+  const edge = (x1: number, y1: number, x2: number, y2: number) => lineSvg(x1, y1, x2, y2, "ink700", STROKE_PRIMARY);
+  const box = (x: number, y: number, w: number, h: number) =>
+    `<rect x="${pyNum(x, 2)}" y="${pyNum(y, 2)}" width="${pyNum(w, 2)}" height="${pyNum(h, 2)}" fill="none" stroke="${colourOf("ink700")}" stroke-width="${pyNum(STROKE_PRIMARY, 2)}"/>`;
+  const label = (x: number, y: number, text: string, width: number, anchor: "start" | "middle") => {
+    const lines = wrapHeader(text, width);
+    return svgTextLines({ x, y, lines, lineMm: pt2mm(role("table_header").size) * 1.25 }, { ...opt, anchor });
+  };
+  const out: string[] = [];
+  const half = STROKE_PRIMARY / 2;
+  if (f.orientation === "horizontal") {
+    const strip = f.poolHead ?? 0;
+    const laneHead = f.gutter;
+    for (const p of pools) {
+      out.push(box(half, p.lo, W - STROKE_PRIMARY, p.hi - p.lo));
+      out.push(edge(strip, p.lo, strip, p.hi));
+      out.push(lineSvg(laneHead, p.lo, laneHead, p.hi, "ink200", STROKE_HAIR));
+      out.push(label(0.5 + half, p.lo + LATTICE_Y / 2.0 + hdr, p.label, strip - 1.0 - half, "start"));
+      p.lanes.forEach((li, j) => {
+        const ln = f.lanes[li];
+        if (j > 0) {
+          const y = (f.lanes[p.lanes[j - 1]].hi + ln.lo) / 2.0;
+          out.push(lineSvg(strip, y, W, y, "ink200", STROKE_HAIR));
+        }
+        if (ln.label) out.push(svgText(strip + 0.5, ln.lo + hdr, ln.label, { ...opt, anchor: "start" }));
+      });
+    }
+    return out;
+  }
+  const head = f.poolHead ?? f.top;
+  for (const p of pools) {
+    out.push(box(p.lo, f.top + half, p.hi - p.lo, f.bottom - f.top - half));
+    out.push(edge(p.lo, head, p.hi, head));
+    out.push(label((p.lo + p.hi) / 2.0, f.top + hdr, p.label, p.hi - p.lo - 1.0, "middle"));
+    p.lanes.forEach((li, j) => {
+      const ln = f.lanes[li];
+      if (j > 0) out.push(lineSvg(ln.lo, head, ln.lo, f.bottom, "ink200", STROKE_HAIR));
+      out.push(lineSvg(ln.lo, f.headBottom, ln.hi, f.headBottom, "ink200", STROKE_HAIR));
+      if (ln.label) out.push(svgText((ln.lo + ln.hi) / 2.0, head + hdr, ln.label, { ...opt, anchor: "middle" }));
+    });
+  }
+  return out;
+}
+
+/** Row 55b: kata-kata label kepala (huruf besar, peran table_header) dibungkus ke lebar `width` mm; >= 1 baris. */
+function wrapHeader(text: string, width: number): string[] {
+  const lines: string[] = [];
+  for (const w of pyStr(text).split(/\s+/).filter(Boolean)) {
+    const cur = lines.length ? `${lines[lines.length - 1]} ${w}` : w;
+    if (lines.length && estTextMm(cur.toUpperCase(), "table_header") <= width) lines[lines.length - 1] = cur;
+    else lines.push(w);
+  }
+  return lines.length ? lines : [""];
 }
 
 // ------------------------------------------------------------------ rute
@@ -417,14 +486,23 @@ export function buildDiagramSvgWith(s: StudioDiagramV1, opts: DiagramBuildOption
     first = buildOnce(s, opts, deps);
   } catch (e) {
     // FIG-02b2 P1-14: penolakan kapasitas -> coba tata letak adaptif; selain itu saran aksi konkret.
-    if (isCapacityReject(e, s)) return capacityRetry(s, e, () => buildOnce(s, opts, deps));
+    if (isCapacityReject(e, s)) return withPoolNotes(s, capacityRetry(s, e, () => buildOnce(s, opts, deps)));
     throw withAction(e, s);
   }
   const out = autoFitDiagram(first, () => buildOnce(s, opts, deps));
   // Swarm 1.2.6 row 47 (T-11, 01e §4.4, N-160): a legacy flow that serialises parallel branches
   // gets one FLOW_SERIALISED REPORT line; layout and SVG bytes unchanged (U3).
   const serial = flowSerialisedNote(s);
-  return serial ? { ...out, report: { ...out.report, geometry: [...(out.report.geometry ?? []), serial] } } : out;
+  return withPoolNotes(s, serial ? { ...out, report: { ...out.report, geometry: [...(out.report.geometry ?? []), serial] } } : out);
+}
+
+/**
+ * Swarm 1.2.8 row 55b (C12 OP-18-5, N8-481): one POOL_FLOW_CROSSES REPORT line per non-control edge across pools,
+ * appended to `report.geometry` (a warning: the figure is drawn, the SVG bytes are unchanged). No pools = as before.
+ */
+function withPoolNotes(s: StudioDiagramV1, r: DiagramSvgResult): DiagramSvgResult {
+  const notes = poolFlowCrossesNotes(s);
+  return notes.length ? { ...r, report: { ...r.report, geometry: [...(r.report.geometry ?? []), ...notes] } } : r;
 }
 
 function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramBuildDeps): DiagramSvgResult {
@@ -554,7 +632,9 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   // Swarm 1.2.8 row 55 (VIS-2a, 01f §2.3): fase dan lajur vertikal dari bingkai layout-b; tanpa bingkai = lama.
   const frame = s.family === "swimlane" ? (place.layout as { frame?: SwimFrame }).frame : undefined;
   if (frame) sheet.addAll(swimFrameSvg(frame, W));
-  for (const lane of frame?.orientation === "vertical" ? [] : sheet.lanes) {
+  // Row 55b (VIS-2b): kolam menggambar lajurnya sendiri (strip kepala kolam + kolom label lajur).
+  if (frame?.pools) sheet.addAll(swimPoolsSvg(frame, frame.pools, W));
+  for (const lane of frame?.orientation === "vertical" || frame?.pools ? [] : sheet.lanes) {
     sheet.add(lineSvg(pyInt(0), lane.y, W, lane.y, "ink200", STROKE_HAIR));
     sheet.add(svgText(0.5, lane.y + pt2mm(role("table_header").size) + LATTICE_Y / 2.0, lane.name, {
       role: "table_header",
@@ -572,12 +652,16 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     const members = (z.members ?? []).map((m) => sheet.nodes.get(m)).filter((m): m is SheetNode => m !== undefined);
     if (!members.length) throw new DiagramDefect(`zona '${String(z.id)}' tanpa anggota dikenal (P5 trust zone)`, { checkId: "P5-zone" });
     const { x: zx, y: zy, w: zw, h: zh, lx, ly } = zoneGeom(z, members, sheet, fitOn); // P2-16: label dijepit saat fit
+    // Swarm 1.2.8 row 55b (VIS-2b, 01f §1 Group, N8-252): style "group" = BPMN group, rounded (rx 1.6 mm) dashdot;
+    // absent or "zone" = today's dashed rect, byte-identical.
+    const group = (z as { style?: unknown }).style === "group";
     sheet.add(
-      `<rect x="${pyNum(zx, 2)}" y="${pyNum(zy, 2)}" width="${pyNum(zw, 2)}" height="${pyNum(zh, 2)}" fill="none" ` +
-        `stroke="${colourOf("ink400")}" stroke-width="${pyNum(STROKE_HAIR, 2)}" stroke-dasharray="${DASH_PATTERNS.dashed}"/>`,
+      `<rect x="${pyNum(zx, 2)}" y="${pyNum(zy, 2)}" width="${pyNum(zw, 2)}" height="${pyNum(zh, 2)}" ${group ? 'rx="1.6" ry="1.6" ' : ""}fill="none" ` +
+        `stroke="${colourOf("ink400")}" stroke-width="${pyNum(STROKE_HAIR, 2)}" stroke-dasharray="${group ? DASH_PATTERNS.dashdot : DASH_PATTERNS.dashed}"/>`,
     );
     const label = z.label !== undefined ? z.label : z.id !== undefined ? z.id : "zona";
-    sheet.add(svgText(lx, ly, label, { role: "table_header", colourToken: "ink400", anchor: "start" }));
+    // row 55b: a group label sits 0.8 mm lower so its capitals clear the rounded top edge (zones: unchanged)
+    sheet.add(svgText(lx, group ? ly + 0.8 : ly, label, { role: "table_header", colourToken: "ink400", anchor: "start" }));
   }
 
   // konektor: semua jalur + busur dulu, baru pita knockout dan label (garis tak menimpa teks)

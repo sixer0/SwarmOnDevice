@@ -125,7 +125,7 @@
   "patched": 164,
   "replaced": 12,
   "added": 30,
-  "bytes": 10120909
+  "bytes": 10132883
  },
  "files": [
   {
@@ -2444,9 +2444,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 36587,
+   "bytes": 41469,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "0adcffb25e2266281835f65bb0ddf0f032b7defe41c45a09735baf3107f3c2fc",
+   "sha256": "9d3f4af2d472ceb1cad56fc73d7ab03e287cb80ce5ef2841a0fa9343bcc87d19",
+   "patch_row55b": {"id": "128-55b-vis2b", "row": "55b", "decision": "1.2.8 row 55b (AC-VIS2b; 01f 2.1-2.3, Group row; C12 OP-18-5; N8-250, N8-251, N8-252, N8-481)", "summary": "NEW swimPoolsSvg draws pools (no data-mark): pool border rect STROKE_PRIMARY ink700 (node outline colour, no new colour), pool header strip (horizontal: left strip of gutter width with a primary rule, lane label column after it, hairline lane rules inside a pool; vertical: header row above the lane header row) with labels via svgText/svgTextLines role table_header ink400 (word-wrapped to the strip); swimFrameSvg and the old lane loop skip their lanes when the frame has pools; zones[].style group = rect rx/ry 1.6 with the dashdot pattern (label 0.8 mm lower), absent or zone = bytes unchanged; NEW withPoolNotes appends poolFlowCrossesNotes (POOL_FLOW_CROSSES REPORT) to report.geometry on the auto-fit and capacity paths (SVG bytes unchanged)", "diff_base": "sha256 before this row", "before_sha256": "0adcffb25e2266281835f65bb0ddf0f032b7defe41c45a09735baf3107f3c2fc", "after_sha256": "9d3f4af2d472ceb1cad56fc73d7ab03e287cb80ce5ef2841a0fa9343bcc87d19", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55b_row55b_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "ab43b3b67515dc2be46e30faa34be3548e9ee1379dda4c2deb4634daf2e9afb1"},
    "patch_row57": {"id": "128-57-harw", "row": "57", "decision": "1.2.8 row 57 (AC-HARW, AC-VIS7; 01f 5.2, 5.3, 7 (a); C10 OP13-5, C12 OP-18-2, C56, C101)", "summary": "arrowsOfPaths (spec edge per drawn path by index, else first unused edge with the same ends and kind); edgePathSvg calls pass arrows, diagramDefs gets use.arrows", "diff_base": "sha256 before this row", "before_sha256": "2a7e5b576e294f14ca9be7fdcded746ff429bac5a297bd5e7dc62470bfcbf711", "after_sha256": "0adcffb25e2266281835f65bb0ddf0f032b7defe41c45a09735baf3107f3c2fc", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57_row57_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "d5cd180d0cef234c2fcf1071650f53dc501358b2ed4fc54cc20944b926a7a8a2"},
    "patch_row55": {"id": "128-55-vis2a", "row": "55", "decision": "1.2.8 row 55 (AC-VIS2a; 01f 2.1-2.3; SR8-23)", "summary": "NEW swimFrameSvg draws the layout-b swimlane frame (no data-mark): horizontal = phase headers centred in the header row + hairline ink200 separators across all lanes (lane rules and labels by the old loop); vertical = lane rules, header-row bottom line and centred lane headers, phase headers start-anchored in the left column + full-width separators (old lane loop skipped); texts via svgText role table_header ink400 (XML-escaped). Without a frame (no phases, not vertical) the bytes are unchanged", "diff_base": "sha256 before this row", "before_sha256": "af8634eff47cc6d6765c0c7732cdce6f0bf45b38a7cba4455cfed19ca9ef5383", "after_sha256": "2a7e5b576e294f14ca9be7fdcded746ff429bac5a297bd5e7dc62470bfcbf711", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55_row55_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "bcecd90c63864fc8f6b33a139805dd949dbdbb7349267cb6f891bca7462045b9"},
    "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "edgePathSvg calls pass route: routeStyleOfPath(p) (both label paths); no other change", "diff_base": "sha256 before this row", "before_sha256": "24ec6c45b053f4bb5418068fd9aa54a48201fa0d0a45aebaffcaa371d69f58d5", "after_sha256": "af8634eff47cc6d6765c0c7732cdce6f0bf45b38a7cba4455cfed19ca9ef5383", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "22206595ec526c63cfba4bfd70ae3102b4267cd57d36881ef283757427662780"},
@@ -2851,9 +2852,10 @@
   {
    "path": "src/lib/studio/engine/diagram/layout-b/swimlane.ts",
    "status": "patched",
-   "bytes": 14044,
+   "bytes": 21136,
    "source_sha256": "2a80d103643d84ae171d961d0c06400dd23a869b619dd5a4809c2cbb98ca5446",
-   "sha256": "417982750285f95d3d4b93957597b090b349af3ed5296ea6f8bda9d851f5cbd7",
+   "sha256": "d6b0838417ca0f434dbed046c4f9dc87b69b8a274fe20dbf3844e825007213a0",
+   "patch_row55b": {"id": "128-55b-vis2b", "row": "55b", "decision": "1.2.8 row 55b (AC-VIS2b; 01f 2.1-2.3; C12 OP-18-5; N8-250, N8-251, N8-481)", "summary": "pools -> layoutSwimFramed with lanes per pool (NEW poolLanes: identity (pool, lane), order pools[] then first appearance, a lane name repeated across pools keyed <pool>/<lane>, no class.lane = one unnamed lane, a pool without nodes = one empty lane); horizontal: content starts at 2 x gutter (pool strip + lane label column), pool border 1 lattice row from its outer lane (3 rows when that lane holds a zone member), 3 rows between pools; vertical: pool header row 2 rows above the lane header row, 2 lattice columns between pools; SwimFrame.pools (NEW SwimPool) and poolHead; NEW POOL_FLOW_CROSSES and poolFlowCrossesNotes (one REPORT per non-control edge whose ends are in different pools, text N8-481). Without pools: unchanged", "diff_base": "sha256 before this row", "before_sha256": "417982750285f95d3d4b93957597b090b349af3ed5296ea6f8bda9d851f5cbd7", "after_sha256": "d6b0838417ca0f434dbed046c4f9dc87b69b8a274fe20dbf3844e825007213a0", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55b_row55b_diffs/engine_diagram_layout-b_swimlane.ts.diff", "diff_sha256": "42eb8a1fe4413d30d1bab1afaa5d40c985c4fdf92c9175b4904c3348dc6330ef"},
    "patch_row55": {"id": "128-55-vis2a", "row": "55", "decision": "1.2.8 row 55 (AC-VIS2a; 01f 2.1-2.3; N8-247, N8-248, N8-249)", "summary": "phases or lane_orientation vertical -> NEW layoutSwimFramed: horizontal = phase bands in phases[] order (band = cell depth x (slot + 1 lattice)), header row 2 lattice rows above the lanes; vertical = transpose (lane columns with a header row, phase rows with a gutter-wide header column, rows 2 lattice apart); nodes on the lattice, separators mid-gap; order in a cell = nodes[] order; capacity uses the time mode only (3-lattice nodes, a cell stacked in one column, CAPACITY_ADAPT suggests fewer nodes per phase); SwimlaneLayout.frame (NEW SwimFrame, SwimBand) for build/svg.ts. Without phases and not vertical: old path, byte-identical", "diff_base": "copied source", "before_sha256": "2a80d103643d84ae171d961d0c06400dd23a869b619dd5a4809c2cbb98ca5446", "after_sha256": "417982750285f95d3d4b93957597b090b349af3ed5296ea6f8bda9d851f5cbd7", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55_row55_diffs/engine_diagram_layout-b_swimlane.ts.diff", "diff_sha256": "717094af719747e05f3d4143741972a34e090d23e897e98f55b64a263676e874"}
   },
   {
@@ -6333,6 +6335,7 @@
   "54b",
   "56b",
   "34d",
-  "57"
+  "57",
+  "55b"
  ]
 }

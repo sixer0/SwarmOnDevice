@@ -86,6 +86,8 @@ export const PREVIEW_ISSUE_CLASS: Readonly<Record<string, "notice" | "defect">> 
   CONTOUR_LABEL_MOVED: "notice",
   VENN_LABEL_WRAP: "notice",
   LABEL_HALO: "notice",
+  // Swarm 1.2.8 row 55b (C12 OP-18-5, N8-481): sequence flow across pools is a warning, never a defect.
+  POOL_FLOW_CROSSES: "notice",
   CAPTION_WRAP: "defect",
   CAPTION_TRUNCATED: "defect",
   LABEL_LEADER: "defect",

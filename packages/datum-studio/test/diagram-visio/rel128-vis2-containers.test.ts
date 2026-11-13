@@ -15,6 +15,7 @@ import * as core from "../../vendor/src/lib/studio/engine/diagram/core"
 import * as fitState from "../../vendor/src/lib/studio/engine/diagram/fit/state"
 import * as layoutB from "../../vendor/src/lib/studio/engine/diagram/layout-b"
 import { lintDiagramGeometry } from "../../vendor/src/lib/studio/engine/diagram/fit/lint"
+import { previewIssueClass } from "../../src/mcp-host/local-api/routes/figure-preview-figure"
 
 type J = Record<string, any>
 type Box = [number, number, number, number]
@@ -222,6 +223,9 @@ describe("phases", () => {
     // 6. a pool whose nodes carry no class.lane is allowed (one unnamed lane in that pool)
     const pool = clone(H.spec)
     pool.pools = [{ id: "k1", label: "Kolam X" }]
+    // row 55b (INTENT): pools are drawn now; pool strip + lane header + 3 phases need more than 166 mm (D55b-1)
+    pool.phases = pool.phases.slice(0, 2)
+    for (const n of pool.nodes) if (n.class.phase === "f3") n.class.phase = "f2"
     for (const n of pool.nodes) {
       delete n.class.lane
       n.class.pool = "k1"
@@ -271,3 +275,177 @@ describe("phases", () => {
   })
 })
 
+
+// Row 55b (AC-VIS2b, 01f §2.3, C12 OP-18-5; N8-250, N8-251, N8-252, N8-481). Fixture vis2_pools_group.json:
+// `spec` = 2 pools, 3 lanes, a group zone, a message flow (kind control) across the pools; `cross` = the cross-pool edge
+// as kind data; `vertical` = `spec` transposed.
+describe("pools", () => {
+  const P = fixture("vis2_pools_group.json")
+  const INK700 = (core as J).colourOf("ink700") as string
+  const INK400 = (core as J).colourOf("ink400") as string
+  const PRIMARY = (core as J).STROKE_PRIMARY as number
+  const DASHDOT = (core as J).DASH_PATTERNS.dashdot as string
+  /** Pool borders: unmarked rects in the node-outline colour at the primary stroke, without radius or dash. */
+  const poolRects = (svg: string): Box[] =>
+    [...svg.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="none" stroke="([^"]+)" stroke-width="([\d.]+)"\/>/g)]
+      .filter((m) => m[5] === INK700 && Math.abs(Number(m[6]) - PRIMARY) < 0.006)
+      .map((m) => [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])])
+  const contains = (o: Box, b: Box, pad = 0) => b[0] >= o[0] + pad - EPS && b[1] >= o[1] + pad - EPS && b[0] + b[2] <= o[0] + o[2] - pad + EPS && b[1] + b[3] <= o[1] + o[3] - pad + EPS
+  const poolOf = (spec: J) => new Map((spec.nodes as J[]).map((n) => [n.id as string, n.class.pool as string]))
+  const geometry = (r: J): J[] => r.report.geometry ?? []
+  const crossing = (r: J) => geometry(r).filter((g) => g.checkId === "POOL_FLOW_CROSSES")
+  /** The preview's notice/defect split (route figure-preview-figure.ts) applied to the build issues. */
+  const previewDefects = (r: J) => [...r.report.issues, ...geometry(r)].filter((i: J) => i.status !== "PASS" && previewIssueClass(i.checkId, i.status) === "defect")
+
+  test("horizontal: each pool band contains its lanes; pool header strip left of the lane headers; 0 defects", () => {
+    const r = buildDiagramSvg(P.spec, O)
+    const box = rects(r.svg)
+    expect(box.size).toBe(6)
+    const pools = poolRects(r.svg)
+    expect(pools.length).toBe(2)
+    const order = (P.spec.pools as J[]).map((p) => p.id as string)
+    const pool = poolOf(P.spec)
+    // pools stacked in pools[] order with a gap; every node inside its own pool, away from the border, outside the other
+    expect(pools[0][1] + pools[0][3]).toBeLessThan(pools[1][1])
+    for (const [id, b] of box) {
+      const i = order.indexOf(pool.get(id)!)
+      expect(contains(pools[i], b, 1.0)).toBe(true)
+      expect(contains(pools[1 - i], b)).toBe(false)
+    }
+    // lane bands nest in the pools: lane rules between the lanes of one pool only
+    const all = texts(r.svg)
+    const poolHeads = all.filter((t) => /^KOLAM [XY]$/.test(t.text))
+    const laneHeads = all.filter((t) => /^LAJUR \d$/.test(t.text))
+    expect(poolHeads.map((t) => t.text)).toEqual(["KOLAM X", "KOLAM Y"])
+    // Kolam Y has one unnamed lane (cause 6): no lane header there
+    expect(laneHeads.map((t) => t.text)).toEqual(["LAJUR 1", "LAJUR 2"])
+    // header strip: a primary vertical rule per pool between the pool label and the lane labels
+    const strip = [...r.svg.matchAll(/<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)" fill="none" stroke="([^"]+)" stroke-width="([\d.]+)"\/>/g)]
+      .filter((m) => m[5] === INK700 && m[1] === m[3] && Math.abs(Number(m[6]) - PRIMARY) < 0.006)
+      .map((m) => Number(m[1]))
+    expect(strip.length).toBe(2)
+    for (const t of poolHeads) {
+      expect(t.anchor).toBe("start")
+      expect(t.x).toBeLessThan(strip[0])
+    }
+    for (const t of laneHeads) expect(t.x).toBeGreaterThan(strip[0])
+    const lanesOfPool = [[0, 1], []]
+    poolHeads.forEach((t, i) => {
+      expect(t.y).toBeGreaterThan(pools[i][1])
+      expect(t.y).toBeLessThan(pools[i][1] + pools[i][3])
+      for (const j of lanesOfPool[i]) expect(laneHeads[j].y).toBeGreaterThan(pools[i][1])
+    })
+    // nodes start right of the lane header column
+    for (const b of box.values()) expect(b[0]).toBeGreaterThan(Math.max(...laneHeads.map((t) => t.x)))
+    expect(r.report.issues.some((i: J) => i.status === "FAIL")).toBe(false)
+    expect(lintDiagramGeometry(r.svg).defects.length).toBe(0)
+    expect(previewDefects(r).length).toBe(0)
+    // decoration carries no data-mark (G-2)
+    expect((r.svg.match(/data-mark="node"/g) ?? []).length).toBe(6)
+  })
+
+  test("group zone: rounded rect (rx 1.6 mm) with the dashdot pattern in the zone colour around its members", () => {
+    const r = buildDiagramSvg(P.spec, O)
+    const m = [...r.svg.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" rx="([\d.]+)" ry="([\d.]+)" fill="none" stroke="([^"]+)" stroke-width="([\d.]+)" stroke-dasharray="([^"]+)"\/>/g)]
+    expect(m.length).toBe(1)
+    const g = m[0]
+    expect(Number(g[5])).toBe(1.6)
+    expect(Number(g[6])).toBe(1.6)
+    expect(g[7]).toBe(INK400)
+    expect(g[9]).toBe(DASHDOT)
+    const zone: Box = [Number(g[1]), Number(g[2]), Number(g[3]), Number(g[4])]
+    const box = rects(r.svg)
+    for (const id of P.spec.zones[0].members as string[]) expect(contains(zone, box.get(id)!)).toBe(true)
+    expect(contains(zone, box.get("a")!)).toBe(false)
+    expect(texts(r.svg).some((t) => t.text === "GRUP G")).toBe(true)
+    // a plain zone keeps today's dashed square rect
+    const plain = clone(P.spec)
+    delete plain.zones[0].style
+    const z = buildDiagramSvg(plain, O).svg
+    expect(z).not.toContain('rx="1.6"')
+    expect(z).toContain(`stroke="${INK400}" stroke-width="${(core as J).STROKE_HAIR}" stroke-dasharray="${(core as J).DASH_PATTERNS.dashed}"/>`)
+  })
+
+  test("POOL_FLOW_CROSSES: a non-control edge across pools is a warning (notice), not a refusal; control gives none", () => {
+    const r = buildDiagramSvg(P.cross, O)
+    const w = crossing(r)
+    expect(w.length).toBe(1)
+    expect(w[0].status).toBe("REPORT")
+    expect(w[0].detail).toBe("aliran urutan d -> f melintasi kolam; antarkolam pakai kind control (aliran pesan)")
+    expect(typeof w[0].suggest).toBe("string")
+    expect(previewIssueClass("POOL_FLOW_CROSSES", "REPORT")).toBe("notice")
+    expect(previewDefects(r).length).toBe(0)
+    expect(lintDiagramGeometry(r.svg).defects.length).toBe(0)
+    // the control twin (message flow) gives none
+    expect(crossing(buildDiagramSvg(P.spec, O)).length).toBe(0)
+    // an edge inside one pool gives none, whatever its kind; every crossing non-control edge is named once
+    const two = clone(P.cross)
+    two.edges.push({ from: "b", to: "e", kind: "data", label: "dua" })
+    expect(crossing(buildDiagramSvg(two, O)).map((g) => g.detail.split(" melintasi")[0])).toEqual(["aliran urutan d -> f", "aliran urutan b -> e"])
+    // no pools: no warning
+    expect(crossing(buildDiagramSvg(H.spec, O)).length).toBe(0)
+  })
+
+  test("vertical: pool header row above the lane header row; lanes as columns inside their pool; 0 defects", () => {
+    const r = buildDiagramSvg(P.vertical, O)
+    const box = rects(r.svg)
+    const pools = poolRects(r.svg)
+    expect(pools.length).toBe(2)
+    expect(pools[0][0] + pools[0][2]).toBeLessThan(pools[1][0])
+    const pool = poolOf(P.vertical)
+    const order = (P.vertical.pools as J[]).map((p) => p.id as string)
+    for (const [id, b] of box) expect(contains(pools[order.indexOf(pool.get(id)!)], b, 1.0)).toBe(true)
+    const all = texts(r.svg)
+    const poolHeads = all.filter((t) => /^KOLAM [XY]$/.test(t.text))
+    const laneHeads = all.filter((t) => /^LAJUR \d$/.test(t.text))
+    expect(poolHeads.length).toBe(2)
+    expect(laneHeads.length).toBe(2)
+    for (const t of poolHeads) for (const l of laneHeads) expect(t.y).toBeLessThan(l.y)
+    poolHeads.forEach((t, i) => {
+      expect(t.anchor).toBe("middle")
+      expect(Math.abs(t.x - (pools[i][0] + pools[i][2] / 2))).toBeLessThan(EPS)
+    })
+    for (const b of box.values()) expect(b[1]).toBeGreaterThan(Math.max(...laneHeads.map((t) => t.y)))
+    expect(lintDiagramGeometry(r.svg).defects.length).toBe(0)
+    expect(previewDefects(r).length).toBe(0)
+  })
+
+  test("cause 6: a pool without class.lane is one unnamed lane; a lane name repeated across pools is two lanes", () => {
+    const s = clone(P.spec)
+    expect((s.nodes as J[]).filter((n) => n.class.pool === "k2").every((n) => n.class.lane === undefined)).toBe(true)
+    const r = buildDiagramSvg(s, O)
+    expect(texts(r.svg).some((t) => /TANPA LAJUR/.test(t.text))).toBe(false)
+    expect(texts(r.svg).filter((t) => /^LAJUR \d$/.test(t.text)).length).toBe(2)
+    expect(poolRects(r.svg).length).toBe(2)
+    const rep = clone(P.spec)
+    for (const n of rep.nodes as J[]) if (n.class.pool === "k2") n.class.lane = "Lajur 1"
+    const lay = (layoutB as J).layoutSwimlane(rep, new (core as J).Sheet(166))
+    expect(lay.frame.lanes.length).toBe(3)
+    expect(lay.frame.lanes.map((b: J) => b.label)).toEqual(["Lajur 1", "Lajur 2", "Lajur 1"])
+    expect(lay.frame.pools.map((p: J) => p.lanes)).toEqual([[0, 1], [2]])
+    const rr = buildDiagramSvg(rep, O)
+    expect(texts(rr.svg).filter((t) => t.text === "LAJUR 1").length).toBe(2)
+  })
+
+  test("SR8-23: a pool label with <, & and \" renders as literal text with the lane-label attributes", () => {
+    const r = buildDiagramSvg(ESC.pools, O)
+    const label = ESC.pools.pools[0].label as string
+    expect(label).toContain("&")
+    expect(texts(r.svg).filter((x) => x.text === label.toUpperCase()).length).toBe(1)
+    expect(r.svg).not.toContain("<X>")
+    expect(r.svg).toContain("KOLAM &lt;X&gt; &amp;")
+    const lane = r.svg.match(/<text[^>]*>LAJUR 1<\/text>/)![0]
+    const pool = r.svg.match(/<text[^>]*>KOLAM &lt;X&gt;[^<]*<\/text>/)![0]
+    const attrs = (el: string) => el.replace(/ x="[^"]*" y="[^"]*"/, "").replace(/ text-anchor="[^"]*"/, "").replace(/>[^<]*</, "><")
+    expect(attrs(pool)).toBe(attrs(lane))
+    expect(lintDiagramGeometry(r.svg).defects.length).toBe(0)
+  })
+
+  test("without pools the engine output is unchanged by row 55b (no pool rect, no warning)", () => {
+    for (const s of [H.spec, V.spec, ESC.spec]) {
+      const r = buildDiagramSvg(s, O)
+      expect(poolRects(r.svg).length).toBe(0)
+      expect(crossing(r).length).toBe(0)
+    }
+  })
+})

@@ -1,5 +1,5 @@
 {
-  "$comment": "Swarm 1.2.8 rows 55/55b (SR8-23, AC-VIS2a, register N8-475). Synthetic labels only. `spec`: a phase label with <, & and \" (row 55 asserts literal text through the lane-label text path). `pools`: the same with a pool label carrying <, & and \" (row 55b draws pools and asserts it).",
+  "$comment": "Swarm 1.2.8 rows 55/55b (SR8-23, AC-VIS2a, register N8-475). Synthetic labels only. `spec`: a phase label with <, & and \" (row 55 asserts literal text through the lane-label text path). `pools`: the same with a pool label carrying <, & and \" (row 55b draws pools and asserts it; 2 phases, 3 cells per phase, so pool strip + lane header + phases fit 166 mm; c -> d labelled \"ke\": it runs up the 1-lattice gap between two occupied cells).",
   "spec": {
     "$schema": "studio.diagram/v1",
     "family": "swimlane",
@@ -129,10 +129,6 @@
       {
         "id": "f2",
         "label": "Fase 2"
-      },
-      {
-        "id": "f3",
-        "label": "Fase 3"
       }
     ],
     "nodes": [
@@ -159,7 +155,7 @@
         "label": "Langkah C",
         "class": {
           "lane": "Lajur 3",
-          "phase": "f2",
+          "phase": "f1",
           "pool": "k1"
         }
       },
@@ -177,7 +173,7 @@
         "label": "Langkah E",
         "class": {
           "lane": "Lajur 2",
-          "phase": "f3",
+          "phase": "f2",
           "pool": "k1"
         }
       },
@@ -186,7 +182,7 @@
         "label": "Langkah F",
         "class": {
           "lane": "Lajur 3",
-          "phase": "f3",
+          "phase": "f2",
           "pool": "k1"
         }
       }
@@ -208,7 +204,7 @@
         "from": "c",
         "to": "d",
         "kind": "control",
-        "label": "kirim"
+        "label": "ke"
       },
       {
         "from": "d",

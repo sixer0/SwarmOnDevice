@@ -1,0 +1,312 @@
+{
+  "$comment": "Swarm 1.2.8 row 55b (AC-VIS2b, AT-V2-pools-group, register N8-374 / N8-475). Synthetic labels only. `spec`: 2 pools, 3 lanes (Kolam X: Lajur 1 + Lajur 2; Kolam Y: one unnamed lane, 01f §2.2 cause 6), 1 group zone around e and f, sequence flows (kind data) between the lanes of Kolam X and two message flows c -> e, d -> f (kind control) across the pools, 166 mm horizontal; no same-lane neighbour edge (a label wider than the 1-lattice gap covers the nodes, row 55 R2). `cross`: the same without the group, d -> f as kind data (POOL_FLOW_CROSSES warning, not a refusal). `vertical`: `spec` without the group, lane_orientation vertical, with one Kolam X flow a -> d across the lane columns (a labelled hand-off between neighbour columns runs 1 lattice, row 55 R2) and the two message flows.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "swimlane",
+    "id": "9.25",
+    "title": "Gambar sintetis dua kolam dengan aliran pesan.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "pools": [
+      {
+        "id": "k1",
+        "label": "Kolam X"
+      },
+      {
+        "id": "k2",
+        "label": "Kolam Y"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "lane": "Lajur 1",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "lane": "Lajur 1",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "c",
+        "label": "Cek C",
+        "class": {
+          "lane": "Lajur 2",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "lane": "Lajur 2",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "e",
+        "label": "Langkah E",
+        "class": {
+          "pool": "k2"
+        }
+      },
+      {
+        "id": "f",
+        "label": "Langkah F",
+        "class": {
+          "pool": "k2"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "data",
+        "label": "cek"
+      },
+      {
+        "from": "c",
+        "to": "b",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "b",
+        "to": "d",
+        "kind": "data",
+        "label": "isi"
+      },
+      {
+        "from": "c",
+        "to": "e",
+        "kind": "control",
+        "label": "minta"
+      },
+      {
+        "from": "d",
+        "to": "f",
+        "kind": "control",
+        "label": "pesan"
+      }
+    ],
+    "zones": [
+      {
+        "id": "g1",
+        "label": "Grup G",
+        "members": [
+          "e",
+          "f"
+        ],
+        "style": "group"
+      }
+    ]
+  },
+  "cross": {
+    "$schema": "studio.diagram/v1",
+    "family": "swimlane",
+    "id": "9.26",
+    "title": "Gambar sintetis aliran urutan melintasi kolam.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "pools": [
+      {
+        "id": "k1",
+        "label": "Kolam X"
+      },
+      {
+        "id": "k2",
+        "label": "Kolam Y"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "lane": "Lajur 1",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "lane": "Lajur 1",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "c",
+        "label": "Cek C",
+        "class": {
+          "lane": "Lajur 2",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "lane": "Lajur 2",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "e",
+        "label": "Langkah E",
+        "class": {
+          "pool": "k2"
+        }
+      },
+      {
+        "id": "f",
+        "label": "Langkah F",
+        "class": {
+          "pool": "k2"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "data",
+        "label": "cek"
+      },
+      {
+        "from": "c",
+        "to": "b",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "b",
+        "to": "d",
+        "kind": "data",
+        "label": "isi"
+      },
+      {
+        "from": "c",
+        "to": "e",
+        "kind": "control",
+        "label": "minta"
+      },
+      {
+        "from": "d",
+        "to": "f",
+        "kind": "data",
+        "label": "serah"
+      }
+    ]
+  },
+  "vertical": {
+    "$schema": "studio.diagram/v1",
+    "family": "swimlane",
+    "id": "9.27",
+    "title": "Gambar sintetis dua kolam tegak.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "pools": [
+      {
+        "id": "k1",
+        "label": "Kolam X"
+      },
+      {
+        "id": "k2",
+        "label": "Kolam Y"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "lane": "Lajur 1",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "lane": "Lajur 1",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "c",
+        "label": "Cek C",
+        "class": {
+          "lane": "Lajur 2",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "lane": "Lajur 2",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "e",
+        "label": "Langkah E",
+        "class": {
+          "pool": "k2"
+        }
+      },
+      {
+        "id": "f",
+        "label": "Langkah F",
+        "class": {
+          "pool": "k2"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "d",
+        "kind": "data",
+        "label": "isi"
+      },
+      {
+        "from": "c",
+        "to": "e",
+        "kind": "control",
+        "label": "minta"
+      },
+      {
+        "from": "d",
+        "to": "f",
+        "kind": "control",
+        "label": "pesan"
+      }
+    ],
+    "lane_orientation": "vertical"
+  }
+}
