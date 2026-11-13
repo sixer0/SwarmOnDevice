@@ -40,6 +40,8 @@ const NEXT: Record<string, string> = {
   DEP_NOT_DONE: "finish the build (:B) dependency first; studio_mission_get shows ready rows in derived.ready. Notes are never gated by dependencies: send the note as its own patch (a note in the refused status patch is kept, results[].noteSaved: true)",
   // 1.2.8 row 39 (MEM-e, N8-013).
   MEMORY_INDEX_MISSING: 'write the mission index entry first: remember {kind: "index", missionId: "<id>", text: "YYYY-MM-DD <id> | <outcome> | triggers: k1, k2 | <report path>"}, then studio_mission_set_status {to: done}',
+  // 1.2.8 row 45 (PROJ-b, N8-145).
+  PLACE_DECISION_UNANSWERED: 'ask the person with studio_mission_request_decision {topic: "project-placement", …} and wait for the answer; only the answer moves a mission',
   OUTPUT_UNVERIFIED: "verify the row's Studio outputs (done gate) or name the check and its result file in the row note, then retry done",
   // 1.2.8 row 31 (H-N12, N8-202).
   SESSION_UNKNOWN: "omit session; Swarm links the calling session itself",

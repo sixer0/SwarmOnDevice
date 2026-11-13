@@ -14,12 +14,12 @@ import { createHash } from "node:crypto"
 import path from "node:path"
 import { BACKUP_DIR_NAME, prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
 import { StoreError, type MissionStore, type StoreTx } from "../../store/index.ts"
-import type { MissionDoc, MissionWriteOptions, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
+import type { MissionDoc, MissionWriteOptions, NewDecisionRequest, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
 import { ROW_RUNNING_DONE_RULE, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
-import { checkMissionSchema, describeAjvError } from "../../store/mission/validate.ts"
+import { checkMissionSchema, describeAjvError, groupNameOk } from "../../store/mission/validate.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 import { readActivityAt, readDeliverables, readMessagesTail, type OutputVerificationSource } from "./deliverables.ts"
 import { EXPORT_PATHS, LEGACY_EXPORT_PATHS, type ExportFileKey } from "./export/render.ts"
@@ -228,6 +228,31 @@ export function writeOptions(args: Record<string, unknown>, s: HostToolSession):
 
 /** 1.2.8 row 39 (N8-014): text of the warning on a done close Swarm's memory did not check. */
 export const MEMORY_INDEX_UNCHECKED_TEXT = "no Swarm memory check on this call; if the mission has a final report, add its index entry"
+
+/** 1.2.8 row 45 (01d §2.1 rules 1-4): `dir` is a real folder directly in its parent (no link) holding a valid `.swarm/group.json`. */
+export function groupMarkerOk(dir: string, nfs: NodeFs): boolean {
+  const file = path.join(dir, ".swarm", "group.json")
+  try {
+    if (nfs.lstat && [dir, path.dirname(file), file].some((p) => nfs.lstat!(p).isSymbolicLink)) return false
+    if (!nfs.exists(file) || !nfs.stat(file).isFile || path.dirname(nfs.realpath(dir)) !== nfs.realpath(path.dirname(dir))) return false
+    const m = JSON.parse(nfs.readFile(file).toString("utf8")) as Record<string, unknown> | null
+    return m?.version === 1 && m.name === path.basename(dir) && ["product", "institution", "theme"].includes(m.kind as string) && typeof m.created === "number"
+  } catch {
+    return false
+  }
+}
+
+/** 1.2.8 row 45 (01d §4): a placement's join names a marked group of the mission's folder; new names a folder that does not exist. */
+function placementGroupIssues(request: NewDecisionRequest, projectDir: string, nfs: NodeFs): Array<{ pointer: string; keyword: string; message: string }> {
+  if (request?.topic !== "project-placement" || !Array.isArray(request.options)) return []
+  return request.options.flatMap((o, i) => {
+    if (typeof o?.group !== "string" || !groupNameOk(o.group)) return []
+    const dir = path.join(projectDir, o.group)
+    if (o.id === "join" && !groupMarkerOk(dir, nfs)) return [{ pointer: `/request/options/${i}/group`, keyword: "c57", message: "join must name a marked group (<group>/.swarm/group.json) of the mission's folder" }]
+    if (o.id === "new" && nfs.exists(dir)) return [{ pointer: `/request/options/${i}/group`, keyword: "c57", message: "new must name a folder that does not exist yet" }]
+    return []
+  })
+}
 
 function str(a: Record<string, unknown>, k: string): string | undefined {
   return typeof a[k] === "string" ? (a[k] as string) : undefined
@@ -562,6 +587,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       "C57 (a): open a decision request {id D-<n>, question, context? (one line), options 2-8 {id, label, consequence}, recommended?, blockingRows?}. Blocking rows cannot go running while it is open (DECISION_PENDING); their status is not changed.",
       false,
       async (a, s) => {
+        const issues = placementGroupIssues(a.request as NewDecisionRequest, requireMission(a.mission as string).mission.project.dir, nfs)
+        if (issues.length > 0) throw new MissionToolError("SCHEMA_INVALID", "the placement groups do not match the mission's folder", { def: "studio_mission_request_decision input", issues })
         const r = await write(dry(a), (tx) => M.requestDecision(tx, a.mission as string, a.request as never, writeOptions(a, s)))
         return { text: `decision request ${r.id} open: ${r.question} (blocks ${(r.blockingRows ?? []).join(", ") || "-"})${dryNote(a)}`, data: { request: r, dryRun: dry(a) } }
       },
@@ -586,6 +613,24 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const answer = pick(a, ["option", "by", "decisionId", "date", "text"]) as never
         const r = await write(dry(a), (tx) => M.answerDecision(tx, mission, request, answer, o))
         return { text: `decision request ${request} answered ${String(a.option)} -> ${r.decision.id}; released ${r.released.join(", ") || "-"}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+      },
+    ),
+    // 1.2.8 row 45 (PROJ-b, N8-142/N8-143). Row 45b adds SESSION_NOT_ATTESTED (N8-460) for a session that is not attested.
+    tool(
+      "studio_mission_place",
+      "Place a mission",
+      "Mission Control only: set the mission's project dir to projectDir, a marked group folder one level down, named by the answered project-placement (join/new) or project-tidy (approve; tidyMission holds it) request decision. Else PLACE_DECISION_UNANSWERED.",
+      false,
+      async (a, s) => {
+        const mission = a.mission as string
+        const dir = a.projectDir as string
+        const actor = actorOf(a, s)
+        const r = await write(false, (tx) => {
+          const out = M.setProjectDir(tx, mission, dir, { request: a.decision as string, ...(str(a, "tidyMission") ? { tidyMission: str(a, "tidyMission") } : {}) }, actor ? { actor } : {})
+          if (!groupMarkerOk(dir, nfs)) throw new StoreError("PLACE_DECISION_UNANSWERED", `${dir} is not a marked group folder (.swarm/group.json)`, { mission, projectDir: dir, reason: "marker" })
+          return out
+        })
+        return { text: `mission ${mission}: project dir ${r.unchanged ? `already ${r.to}, unchanged` : `${r.from} -> ${r.to}`}`, data: r }
       },
     ),
   ]

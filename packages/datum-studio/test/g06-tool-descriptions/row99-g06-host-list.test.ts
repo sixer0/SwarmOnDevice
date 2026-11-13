@@ -65,9 +65,9 @@ afterAll(async () => {
 })
 
 describe("row 99 G-06: full host tools/list", () => {
-  test("40 tools; serialised list < 74 000 B (measured 73 012 B before row 99)", async () => {
+  test("41 tools (1.2.8 row 45: + studio_mission_place); serialised list < 74 000 B (measured 73 012 B before row 99)", async () => {
     const tools = (await c.listTools()).tools
-    expect(tools.length).toBe(40)
+    expect(tools.length).toBe(41)
     const bytes = Buffer.byteLength(JSON.stringify({ tools }))
     console.log(`row99 host tools/list: ${tools.length} tools, ${bytes} B`)
     expect(bytes).toBeLessThan(74_000)

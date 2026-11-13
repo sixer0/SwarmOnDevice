@@ -264,6 +264,21 @@ export interface DecisionOption {
   label: string
   /** one line: what choosing this option leads to */
   consequence: string
+  /** 1.2.8 row 45 (N8-454): `project-placement` join/new only: the group folder name (01d §4) */
+  group?: string
+  /** 1.2.8 row 45 (N8-149): `project-placement` join/new only */
+  groupKind?: GroupKind
+}
+
+/** 1.2.8 row 45 (N8-146, N8-147): a decision request about where missions live (01d §3.3). */
+export type DecisionTopic = "project-placement" | "project-tidy"
+/** 1.2.8 row 45 (N8-149): product, institution or research theme (U1). */
+export type GroupKind = "product" | "institution" | "theme"
+/** 1.2.8 row 45 (N8-148): one tidy proposal line; `group: null` = the mission stays at the root. */
+export interface TidyProposalItem {
+  mission: string
+  group: string | null
+  groupKind?: GroupKind
 }
 
 export interface NewDecisionRequest {
@@ -276,6 +291,10 @@ export interface NewDecisionRequest {
   recommended?: string
   /** rows that may not start while the request is open */
   blockingRows?: string[]
+  /** 1.2.8 row 45 (N8-146): absent = an ordinary decision */
+  topic?: DecisionTopic
+  /** 1.2.8 row 45 (N8-148): `project-tidy` only, 1-200 items */
+  proposal?: TidyProposalItem[]
 }
 
 export interface DecisionRequest extends NewDecisionRequest {

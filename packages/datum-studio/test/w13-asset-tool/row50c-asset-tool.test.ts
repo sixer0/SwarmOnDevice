@@ -115,10 +115,10 @@ afterAll(async () => {
 })
 
 describe("row 50c: studio_asset_put is listed", () => {
-  test("tools/list has studio_asset_put last, 40 tools, write hints, a description that teaches the sha256 reference; own entry < 2 KB", async () => {
+  test("tools/list has studio_asset_put last, 41 tools, write hints, a description that teaches the sha256 reference; own entry < 2 KB", async () => {
     const tools = (await c.listTools()).tools
     const names = tools.map((t) => t.name)
-    expect(names.length).toBe(40)
+    expect(names.length).toBe(41) // 1.2.8 row 45: + studio_mission_place
     expect(names[names.length - 1]).toBe(TOOL)
     const t = tools.find((x) => x.name === TOOL)!
     expect(t.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true })

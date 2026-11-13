@@ -172,7 +172,7 @@ export const MISSION_TOOL_SCHEMAS: Record<string, Schema> = {
       mission: missionId,
       request: {
         type: "object",
-        description: "C57 (a): {id D-<n>, question, context? (one line), options[2-8]{id, label, consequence}, recommended?, blockingRows?[]}. Blocking rows cannot start while it is open.",
+        description: "C57 (a): {id D-<n>, question, context? (one line), options[2-8]{id, label, consequence}, recommended?, blockingRows?[], topic?, proposal?}. Blocking rows cannot start while it is open.",
       },
       ...writeCommon,
     },
@@ -192,6 +192,16 @@ export const MISSION_TOOL_SCHEMAS: Record<string, Schema> = {
     },
     ["mission", "request"],
   ),
+  // 1.2.8 row 45 (PROJ-b, N8-143, N8-455): person-only (PERSON_ONLY_MCP_TOOLS hides it from Swarm agents).
+  studio_mission_place: obj(
+    {
+      mission: { type: "string", pattern: MISSION_ID_PATTERN },
+      projectDir: { type: "string", maxLength: 4096 },
+      decision: { type: "string", pattern: REQUEST_ID_PATTERN },
+      tidyMission: { type: "string", pattern: MISSION_ID_PATTERN },
+    },
+    ["mission", "projectDir", "decision"],
+  ),
 }
 
 /** §8.1 tool order of the `missions` toolset (9 of §8.3) + the two C57 decision tools (C71). */
@@ -207,6 +217,7 @@ export const MISSION_TOOL_NAMES = [
   "studio_mission_export",
   "studio_mission_request_decision",
   "studio_mission_answer_decision",
+  "studio_mission_place",
 ] as const
 
 /** §8.2: arguments the wrappers add to the vendored report tools (stripped before the vendored call). */

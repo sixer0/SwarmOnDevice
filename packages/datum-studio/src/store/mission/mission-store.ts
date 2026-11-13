@@ -47,7 +47,7 @@ import type {
   SessionLink,
 } from "./types.ts"
 import { ROW_DELIVERABLE_KEY, rowDeliverablesNotFinal } from "./output-gate.ts"
-import { assertActor, assertCheckpoint, assertDecisionAnswer, assertDecisionRequest, assertMessage, assertMissionSchema } from "./validate.ts"
+import { assertActor, assertCheckpoint, assertDecisionAnswer, assertDecisionRequest, assertMessage, assertMissionSchema, groupNameOk } from "./validate.ts"
 
 export interface MissionReader {
   get<T = Row>(sql: string, params?: readonly SqlParam[]): T | undefined
@@ -1013,7 +1013,7 @@ export class MissionStore {
     if (tx.get("SELECT 1 FROM mission_decision_request WHERE mission_id = ? AND request_id = ?", [mission, req.id])) throw err("DECISION_REQUEST_ID_TAKEN", "decision request id exists", { mission, request: req.id })
     tx.run(
       "INSERT INTO mission_decision_request (mission_id, request_id, question, context, options, recommended, blocking_rows, status, requested_by, time_created) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)",
-      [mission, req.id, req.question, req.context ?? null, JSON.stringify(req.options), req.recommended ?? null, JSON.stringify(req.blockingRows ?? []), actor, tx.now],
+      [mission, req.id, req.question, req.context ?? null, JSON.stringify(packRequestOptions(req)), req.recommended ?? null, JSON.stringify(req.blockingRows ?? []), actor, tx.now],
     )
     this.event(tx, { mission, verb: "decision", actor, detail: { request: req.id, action: "request", blockingRows: req.blockingRows ?? [] } })
     this.afterWrite(tx, mission, opts)
@@ -1063,6 +1063,44 @@ export class MissionStore {
     this.event(tx, { mission, verb: "decision", actor, detail: { request: requestId, action: "withdraw" } })
     this.afterWrite(tx, mission, opts)
     return this.getDecisionRequest(mission, requestId, tx)!
+  }
+
+  /**
+   * 1.2.8 row 45 (PROJ-b, N8-142): re-point a mission's project dir to a group folder one level below its current dir,
+   * only on an ANSWERED placement request of this mission (join/new; the option's group names the folder) or an
+   * answered tidy request (approve) of `approvalRef.tidyMission` whose proposal puts this mission in that group, and
+   * whose holder lives in the same parent folder. Anything else is PLACE_DECISION_UNANSWERED (N8-145). The disk fact
+   * (`<dir>/.swarm/group.json`) is the host's check (studio_mission_place). A closed mission may be placed (tidy lists
+   * existing missions). Setting the same dir again returns unchanged: true. OP20-7: no trigger guards project_dir; the
+   * 0003 CHECK (absolute) holds.
+   */
+  setProjectDir(tx: StoreTx, mission: string, dir: string, approvalRef: { request: string; tidyMission?: string }, opts?: MissionWriteOptions): { id: string; from: string; to: string; unchanged: boolean } {
+    const actor = this.actorOf(opts)
+    const m = this.missionRow(tx, mission)
+    const holder = approvalRef.tidyMission ?? mission
+    const refuse = (reason: string): never => {
+      throw err("PLACE_DECISION_UNANSWERED", `no answered placement decision moves this mission to ${dir}: ${reason}`, { mission, projectDir: dir, request: approvalRef.request, ...(approvalRef.tidyMission ? { tidyMission: approvalRef.tidyMission } : {}), reason })
+    }
+    const parent = m.project_dir === dir ? posix.dirname(dir) : m.project_dir
+    if (!posix.isAbsolute(dir) || posix.normalize(dir) !== dir || dir.endsWith("/") || posix.dirname(dir) !== parent) refuse("projectDir must be a folder directly inside the mission's project dir")
+    const group = posix.basename(dir)
+    if (!groupNameOk(group)) refuse("the folder name is not a group name")
+    const req = this.getDecisionRequest(holder, approvalRef.request, tx)
+    if (!req || req.status !== "answered" || !req.answer) refuse(`request ${approvalRef.request} of ${holder} is ${req?.status ?? "unknown"}`)
+    const answer = req!.answer!
+    if (approvalRef.tidyMission) {
+      const item = req!.topic === "project-tidy" && answer.option === "approve" ? req!.proposal?.find((x) => x.mission === mission) : undefined
+      if (!item || item.group !== group) refuse("the approved tidy proposal does not put this mission in that group")
+      if (this.missionRow(tx, holder).project_dir !== parent) refuse("the tidy mission lives in another folder")
+    } else {
+      const option = req!.topic === "project-placement" && (answer.option === "join" || answer.option === "new") ? req!.options.find((o) => o.id === answer.option) : undefined
+      if (!option || option.group !== group) refuse("the answer does not name that group")
+    }
+    if (m.project_dir === dir) return { id: mission, from: dir, to: dir, unchanged: true }
+    tx.run("UPDATE mission SET project_dir = ? WHERE id = ?", [dir, mission])
+    this.event(tx, { mission, verb: "decision", actor, decision: answer.decision, detail: { action: "place", request: approvalRef.request, ...(approvalRef.tidyMission ? { tidyMission: approvalRef.tidyMission } : {}), from: m.project_dir, to: dir } })
+    this.afterWrite(tx, mission, opts)
+    return { id: mission, from: m.project_dir, to: dir, unchanged: false }
   }
 
   getDecisionRequest(mission: string, requestId: string, tx?: MissionReader): DecisionRequest | null {
@@ -1466,13 +1504,30 @@ function findingOf(f: Row): MissionFinding {
   }
 }
 
+/**
+ * 1.2.8 row 45 (N8-146, N8-148): the request-level `topic` and `proposal` ride on the first stored option under
+ * REQUEST_META_KEY, because the 0003 CHECK keeps `options` a 2-8 item array and row 45 adds no migration (45b is the
+ * single migration writer). Readers before 1.2.8 see one extra option field and ignore it.
+ */
+const REQUEST_META_KEY = "$request"
+
+function packRequestOptions(req: NewDecisionRequest): unknown[] {
+  if (req.topic === undefined) return req.options
+  const [first, ...rest] = req.options
+  return [{ ...first, [REQUEST_META_KEY]: { topic: req.topic, ...(req.proposal ? { proposal: req.proposal } : {}) } }, ...rest]
+}
+
 function decisionRequestOf(r: Row): DecisionRequest {
   const blockingRows = JSON.parse(r.blocking_rows as string) as string[]
+  const stored = JSON.parse(r.options as string) as Array<DecisionRequest["options"][number] & { [REQUEST_META_KEY]?: Pick<DecisionRequest, "topic" | "proposal"> }>
+  const meta = stored[0]?.[REQUEST_META_KEY]
   return {
     id: r.request_id as string,
     question: r.question as string,
     ...(r.context ? { context: r.context as string } : {}),
-    options: JSON.parse(r.options as string) as DecisionRequest["options"],
+    ...(meta?.topic ? { topic: meta.topic } : {}),
+    ...(meta?.proposal ? { proposal: meta.proposal } : {}),
+    options: stored.map(({ [REQUEST_META_KEY]: _meta, ...o }) => o),
     ...(r.recommended ? { recommended: r.recommended as string } : {}),
     blockingRows,
     status: r.status as DecisionRequest["status"],

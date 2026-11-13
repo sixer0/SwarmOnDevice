@@ -81,6 +81,7 @@ const EXPECTED_TOOLS = [
   "studio_mission_export",
   "studio_mission_request_decision",
   "studio_mission_answer_decision",
+  "studio_mission_place", // 1.2.8 row 45 (PROJ-b, INTENT 40 -> 41)
   // Row 50c (1.2.6, W-13): host built-in, last
   "studio_asset_put",
 ]
@@ -208,12 +209,12 @@ afterAll(async () => {
 })
 
 describe("row 119b: tool list and the wrapper seam", () => {
-  test("tools/list = the exact 40 names in order (23 kept + 5 template + 11 mission + studio_asset_put); wrappers keep their slot", async () => {
+  test("tools/list = the exact 41 names in order (23 kept + 5 template + 12 mission + studio_asset_put); wrappers keep their slot", async () => {
     const tools = (await swarm.listTools()).tools
     const names = tools.map((t) => t.name)
     quote("tool count", names.length)
     expect(names).toEqual(EXPECTED_TOOLS)
-    expect(names.length).toBe(40) // W-13 / row 50c: +studio_asset_put
+    expect(names.length).toBe(41) // W-13 / row 50c: +studio_asset_put; 1.2.8 row 45: + studio_mission_place
     const props = (n: string) => Object.keys((tools.find((t) => t.name === n)!.inputSchema as S).properties ?? {})
     expect(props("studio_report_template")).toContain("row")
     expect(props("studio_report_check")).toContain("row")

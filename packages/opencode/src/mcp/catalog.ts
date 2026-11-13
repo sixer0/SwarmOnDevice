@@ -37,8 +37,18 @@ export async function paginate<T, R extends { nextCursor?: string }>(
   throw new Error(`MCP list exceeded ${MAX_LIST_PAGES} pages`)
 }
 
+/**
+ * 1.2.8 row 45 (PROJ-b, N8-456, 01d §7.3): Studio host tools that act for the person. Swarm's own Mission Control
+ * client calls them; opencode never lists them to an agent, whatever the server. Other MCP clients still see them
+ * (residual S-5; the host's attested-session check is row 45b, SR8-05).
+ */
+export const PERSON_ONLY_MCP_TOOLS: readonly string[] = ["studio_mission_place"]
+
 export function defs(client: Client, timeout?: number) {
-  return listTools(client, timeout ?? DEFAULT_TIMEOUT).pipe(Effect.catch(() => Effect.void))
+  return listTools(client, timeout ?? DEFAULT_TIMEOUT).pipe(
+    Effect.map((tools) => tools.filter((tool) => !PERSON_ONLY_MCP_TOOLS.includes(tool.name))),
+    Effect.catch(() => Effect.void),
+  )
 }
 
 /** Row 188/192 (L51): the `_meta` key datum-studio reads to link a mission write to the calling Swarm session. */
