@@ -42,8 +42,8 @@ export type RevealPathDeps = {
   platform?: NodeJS.Platform
   /** Resolves symlinks; throws for a missing path. Default: fs.realpathSync.native. */
   realpath?: (path: string) => string
-  /** Persistent log (ipc.ts: the Swarm log). The path itself is never logged. */
-  log?: (level: "warn" | "error", message: string, context?: Record<string, unknown>) => void
+  /** Persistent log (ipc.ts: the Swarm log). The path itself is never logged: no path, basename or hash (AC-R18f). */
+  log?: (level: "info" | "warn" | "error", message: string, context?: Record<string, unknown>) => void
 }
 
 /** U-2 rule set for a root (a): refused when a filesystem/drive root, a system folder (or inside one), or above home. */
@@ -103,10 +103,24 @@ export function revealInFolder(
   }
   try {
     deps.shell.showItemInFolder(real)
-    return true
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error))
-    deps.log?.("error", "reveal-path showItemInFolder failed", { source: "reveal-path", message: err.message, stack_trace: err.stack })
+    // 1.2.8 row 30c (AC-R18f, SR8-24): say what failed, with the path taken out of the error text.
+    const scrub = withoutPath(real, path)
+    deps.log?.("error", "reveal-path showItemInFolder failed", {
+      source: "reveal-path",
+      message: scrub(err.message),
+      stack_trace: err.stack === undefined ? undefined : scrub(err.stack),
+    })
     return false
   }
+  // 1.2.8 row 30c (AC-R18f, N8-219 corrected): one success line, source only; no path, basename or hash.
+  deps.log?.("info", "revealed in folder", { source: "reveal-path" })
+  return true
+}
+
+/** Replaces every spelling of the revealed path (checked realpath and the caller's input) with `<path>`. */
+function withoutPath(real: string, input: unknown): (text: string) => string {
+  const spellings = [real, ...(typeof input === "string" && input.length > 0 ? [input] : [])].sort((a, b) => b.length - a.length)
+  return (text) => spellings.reduce((out, spelling) => out.split(spelling).join("<path>"), text)
 }
