@@ -2486,8 +2486,9 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
  * consent (the gate in `index.ts`, which re-exports this one list): no decider call, the root's line with the child's
  * `sessionID`. A positive list, pinned by an equality test (SR7-02); every other opened category still goes to the main
  * agent, where "cannot tell" refuses. `classifySteps` names a decided step before a local one on a compound's line.
+ * Row 29c (C41): `check` too, a recognised test or build command (`CHECKS`), which the root's consent already runs.
  */
-export const SUBAGENT_RUNS_LIKE_ROOT: ReadonlySet<string> = new Set(["not_routine", "script", "outside_folder"])
+export const SUBAGENT_RUNS_LIKE_ROOT: ReadonlySet<string> = new Set(["not_routine", "script", "outside_folder", "check"])
 
 /** 1.2.7 U-7 (C21 b, c): the shells whose `-c` text is read as a command line, and whose script file is screened as one. */
 const SHELL_TEXT_PROGRAMS: ReadonlySet<string> = new Set(["sh", "bash", "zsh"])

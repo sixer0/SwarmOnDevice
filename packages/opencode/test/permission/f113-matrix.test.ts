@@ -660,10 +660,11 @@ describe("1.1.3 matrix rows 40-49: decider outcomes", () => {
         yield* check(`row ${40 + index} root P`, bash("make build"), runs("check").root)
         yield* check(`row ${40 + index} root D`, bash("node x.js"), runs("not_routine").root)
         expect(stub.calls).toEqual([])
-        // 1.2.7 U-7 (INTENT): `not_routine` runs like the root's for a subagent now, so a decided category (`check`) is used.
-        yield* check(`row ${40 + index} subagent`, bash("make build"), {
+        // 1.2.7 U-7 (INTENT): `not_routine` and (row 29c, C41) `check` run like the root's for a subagent now, so a decided
+        // category (`system_service`) is used.
+        yield* check(`row ${40 + index} subagent`, bash("launchctl list"), {
           answer: MAIN_AGENT_UNAVAILABLE_TEXT,
-          line: { class: "A", category: "by_main_agent", bypassed: "check", decision: "reject", decidedBy: "system:main_agent_unavailable" },
+          line: { class: "A", category: "by_main_agent", bypassed: "system_service", decision: "reject", decidedBy: "system:main_agent_unavailable" },
           sections: ["I"],
         }, { caller: "subagent" })
         expect(stub.calls.map((call) => call.options?.forSubagent !== undefined)).toEqual([true])
@@ -679,10 +680,11 @@ describe("1.1.3 matrix rows 40-49: decider outcomes", () => {
       stub.answer = () => Effect.succeed({ decision: "reject", decidedBy: "agent:test/stub", reason: "a person should look." } as Permission.Decided)
       yield* check("row 48 root", bash("make build"), runs("check").root)
       expect(stub.calls).toEqual([])
-      // 1.2.7 U-7 (INTENT): a decided category (`check`); `not_routine` runs like the root's for a subagent now.
-      yield* check("row 48 subagent", bash("make build"), {
+      // 1.2.7 U-7 (INTENT): a decided category (`system_service`); `not_routine` and (row 29c, C41) `check` run like the
+      // root's for a subagent now.
+      yield* check("row 48 subagent", bash("launchctl list"), {
         answer: mainAgentDeclined("a person should look."),
-        line: { class: "A", category: "by_main_agent", bypassed: "check", decision: "reject", decidedBy: "agent:main/build" },
+        line: { class: "A", category: "by_main_agent", bypassed: "system_service", decision: "reject", decidedBy: "agent:main/build" },
         sections: ["M"],
       }, { caller: "subagent" })
     }),

@@ -252,10 +252,10 @@ it.instance("U7-R1: `sh -c` takes the inner command's category, for root and sub
   }),
 )
 
-// N7-129 equality pin (SR7-02): a later addition to the positive list fails here.
-it.instance("SUBAGENT_RUNS_LIKE_ROOT is exactly not_routine, script and outside_folder", () =>
+// N7-129 equality pin (SR7-02): a later addition to the positive list fails here. Row 29c (C41) added `check`.
+it.instance("SUBAGENT_RUNS_LIKE_ROOT is exactly check, not_routine, script and outside_folder", () =>
   Effect.sync(() => {
-    expect([...Permission.SUBAGENT_RUNS_LIKE_ROOT].sort()).toEqual(["not_routine", "outside_folder", "script"])
+    expect([...Permission.SUBAGENT_RUNS_LIKE_ROOT].sort()).toEqual(["check", "not_routine", "outside_folder", "script"])
   }),
 )
 
