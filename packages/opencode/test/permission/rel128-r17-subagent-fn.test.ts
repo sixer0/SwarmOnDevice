@@ -2,8 +2,9 @@
 // network call in a shell function and calls it (`f() { curl https://example.com; }; f`, `function f { wget -q ...; }; f`)
 // must be flagged like the same inline call: it goes to the main agent (where "cannot tell" refuses), not the parity path.
 // A function that only reads (`f() { ls; }; f`) keeps parity. The root's calls are pinned unchanged (CHAR).
+// Row 28e (C68 option b) widened it: any network step inside a script body a subagent runs, wrapped or not.
 // Home is a fresh mkdtemp folder (os.homedir stubbed); every file is synthetic.
-import { afterAll, afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test"
+import { afterAll, afterEach, beforeAll, beforeEach, expect, spyOn } from "bun:test"
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import * as osModule from "node:os"
@@ -160,28 +161,71 @@ const outcome = (sessionID: SessionID, root: SessionID, command: string, dir: st
   })
 
 const INLINE_CURL = "curl https://example.com"
+const INLINE_LOCAL = "curl -s http://127.0.0.1:4321/health"
 const SCRIPTS = {
   fn: `f() { ${INLINE_CURL}; }; f`,
   "fn-kw": "function f { wget -q https://example.com; }; f",
   "fn-ls": "f() { ls; }; f",
+  net: INLINE_CURL,
+  "net-step": `echo start && ${INLINE_CURL}`,
+  "net-file": "sh ./net.sh",
+  "net-nested": "bun run net",
+  local: INLINE_LOCAL,
+  build: "echo build",
 }
-const project = (dir: string) =>
+const project = (dir: string) => {
   writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "p", version: "1.0.0", scripts: SCRIPTS }))
+  writeFileSync(path.join(dir, "net.sh"), `#!/bin/sh\necho fetching\n${INLINE_CURL}\n`)
+}
 
-// AC-R17 stays OPEN (row 28c, timebox S exceeded; C-decision proposed in implementation/28c_r17_subagent_fn.md). The
-// probe's premise does not hold: at BASE and HEAD a subagent's package script that calls curl WITHOUT a function wrapper
-// (`"net": "curl https://example.com"`, `bun run net`) also runs on the parity path with no decider call, because
-// `subagentSendsAnyway` flags only deploys, publishes, image pushes, named adds, gh writes and alias/`function` reuse
-// (C46, C61), and the screen reads a project script's steps for X triggers only. So "flagged like the inline call" needs
-// a network-step rule for every script body a subagent runs (a policy change to C46 parity, and a step-outward predicate
-// that `bypass-screen.ts` does not export), not a function-wrapper rule. Observed at BASE (red log 28c_R17_base.log):
-// `bun run fn` / `npm run fn` run (0 decider calls), `bun run fn-kw` / `npm run fn-kw` go to the main agent (the 47e
-// `function` reuse rule), `bun run net` runs, inline `curl https://example.com` goes to the main agent.
-// Flip to a real test when the C-decision opens the fix row: expect each of PROBE to be [false, 1, "for_subagent"].
-const PROBE = ["bun run fn", "npm run fn", "bun run fn-kw", "npm run fn-kw"] as const
-test.todo(
-  `R-17: a subagent's package script that calls a network function (${PROBE.join(", ")}) goes to the main agent like the inline call`,
-  () => {},
+// 1.2.8 row 28e (C68 option b, N8-318 flipped from todo): a network step inside a package script a subagent runs is
+// judged as the same call written inline: it goes to the main agent (the subagent decider), not the parity path. The
+// plain body (`bun run net`, `npm run net`), a step of a longer body, a script file the body runs (`sh ./net.sh`), a script
+// that runs another by name, and both function wrappers (`f() {...}; f`, `function f {...}; f`).
+const PROBE = [
+  "bun run fn",
+  "npm run fn",
+  "bun run fn-kw",
+  "npm run fn-kw",
+  "bun run net",
+  "npm run net",
+  "bun run net-step",
+  "bun run net-file",
+  "bun run net-nested",
+] as const
+it.instance(
+  `R-17: a subagent's package script that calls the network (${PROBE.join(", ")}) goes to the main agent like the inline call`,
+  () =>
+    Effect.gen(function* () {
+      const dir = (yield* TestInstance).directory
+      project(dir)
+      const { root, child } = yield* family()
+      const inline = yield* outcome(child.id, root.id, INLINE_CURL, dir)
+      expect([inline.ran, inline.decider, inline.via]).toEqual([false, 1, "for_subagent"])
+      for (const command of PROBE) {
+        const got = yield* outcome(child.id, root.id, command, dir)
+        expect([command, got.ran, got.decider, got.via]).toEqual([command, inline.ran, inline.decider, inline.via])
+      }
+    }),
+  { git: true },
+)
+
+// CHAR (C46): a send the person's consent lets out (a local host) keeps the inline call's answer inside a script too, and
+// a script with no network step keeps parity.
+it.instance(
+  "R-17 CHAR: a script's local send and a script with no network step are judged as the inline call and keep parity",
+  () =>
+    Effect.gen(function* () {
+      const dir = (yield* TestInstance).directory
+      project(dir)
+      const { root, child } = yield* family()
+      const inline = yield* outcome(child.id, root.id, INLINE_LOCAL, dir)
+      const script = yield* outcome(child.id, root.id, "bun run local", dir)
+      expect([script.ran, script.decider]).toEqual([inline.ran, inline.decider])
+      const build = yield* outcome(child.id, root.id, "bun run build", dir)
+      expect([build.ran, build.decider, build.via]).toEqual([true, 0, "main_agent"])
+    }),
+  { git: true },
 )
 
 // CHAR (pass at BASE and HEAD): a function that only reads keeps parity; the root's calls run as before.
@@ -196,7 +240,7 @@ it.instance(
       const childLs = yield* outcome(child.id, root.id, "bun run fn-ls", dir)
       expect([childLs.ran, childLs.decider, childLs.via]).toEqual([true, 0, "main_agent"])
       expect(childLs).toEqual(rootLs)
-      for (const command of ["bun run fn", "bun run fn-kw"]) {
+      for (const command of ["bun run fn", "bun run fn-kw", "bun run net", "bun run net-file"]) {
         const got = yield* outcome(root.id, root.id, command, dir)
         expect([command, got.ran, got.decider, got.via]).toEqual([command, true, 0, "main_agent"])
       }

@@ -311,6 +311,10 @@ function definesAndUses(steps: readonly { argv: readonly string[] }[]): boolean 
  * (47a residual), and one level further down (M1-05): a local script file a step runs, or a Makefile recipe, read through
  * the same step reader; a file or recipe that cannot be read in full goes to the main agent too. The gate also asks this
  * of a call a P-01a task grant lifted to the root (M1-18): a grant never skips it.
+ * 1.2.8 row 28e (C68, AC-R17): also a step that leaves the machine (`BypassScreen.stepOutward`) inside what the call runs
+ * without showing it: a project script's body (plain, or wrapped in `f() {...}; f` / `function f {...}; f`), a shell text,
+ * a script file or recipe one level down. The same step written inline already goes to the main agent; C46's script
+ * parity no longer covers a body that sends.
  */
 export function subagentSendsAnyway(input: Input): boolean {
   if (input.bypass?.caller !== "subagent") return false
@@ -329,6 +333,10 @@ function sendsAnyway(input: Input, depth: number): boolean {
     if (form !== undefined && form(found.args)) return true
     if (addsRegistryPackage(found.name, found.args) || addsOtherRegistryPackage(found.name, found.args)) return true
     if (found.name === "gh" && ghWrites(found.args)) return true
+    // 1.2.8 row 28e (C68, AC-R17): a network step the subagent's call does not show itself (a project script's body, a
+    // shell text it runs, a script file or recipe one level down) is judged as the same step written inline: the main
+    // agent's. The call's own steps keep the table's reading; a send the consent lets out keeps parity (`stepOutward`).
+    if ((depth > 0 || step.from !== "call") && BypassScreen.stepOutward(step, input)) return true
     if (step.code !== undefined) return false
     return step.cwds.some((cwd) => {
       const body = stepBody(step.argv, cwd, input.instance)
