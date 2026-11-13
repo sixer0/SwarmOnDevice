@@ -1478,7 +1478,9 @@ export default function LegacyLayout(props: ParentProps) {
     setStore("workspaceOrder", root, (order) => (order ?? []).filter((workspace) => workspace !== directory))
 
     layout.projects.close(directory)
-    layout.projects.open(root)
+    // 1.2.8 R-18c (row 30b): the root goes back through the missing-folder notice; a root folder that is gone is not
+    // reopened (it stays in the list as it was) and the notice offers Restore / Recreate / Choose.
+    await openProject(root, false)
 
     if (shouldLeave) return
 

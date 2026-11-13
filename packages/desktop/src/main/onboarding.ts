@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from "node:fs"
-import { mkdir } from "node:fs/promises"
+import { mkdir, stat } from "node:fs/promises"
 import { userInfo } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { app } from "electron"
 import { getStore } from "./store"
 import { FIRST_LAUNCH_ONBOARDING_COMPLETE_KEY, OLD_LAYOUT_ELIGIBLE_KEY, SETUP_TOOLS_OFFERED_RELEASE } from "./store-keys"
@@ -60,6 +60,27 @@ export function markSetupToolsOffered() {
   writeLog("onboarding", "setup tools offered", { release: SWARM_RELEASE })
 }
 
+const errorCode = (error: unknown) =>
+  typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "unknown"
+
+// 1.2.8 R-18c (row 30b): the Default Project is made as the U-8 Recreate makes a folder (SR7-13 rule 1): the leaf
+// only, inside a Documents folder that exists. A Documents folder that no longer exists is not recreated and a
+// non-folder at the path is left alone. Resolves to undefined when the folder is there, else the reason (no path).
+async function makeDefaultProjectFolder(path: string): Promise<string | undefined> {
+  const documents = await stat(dirname(path)).catch(() => null)
+  if (!documents?.isDirectory()) return "documents folder missing"
+  const existing = await stat(path).catch(() => null)
+  if (existing) return existing.isDirectory() ? undefined : "not a folder"
+  try {
+    await mkdir(path)
+    return undefined
+  } catch (error) {
+    // EEXIST: made meanwhile; fine when it is a folder.
+    if ((await stat(path).catch(() => null))?.isDirectory()) return undefined
+    return `mkdir failed: ${errorCode(error)}`
+  }
+}
+
 export async function finishFirstLaunchOnboarding(createDefaultProject: boolean) {
   if (!isFirstLaunchOnboardingPending()) {
     writeLog("onboarding", "first launch onboarding already completed")
@@ -67,7 +88,14 @@ export async function finishFirstLaunchOnboarding(createDefaultProject: boolean)
   }
 
   const defaultProject = createDefaultProject ? defaultProjectPath() : null
-  if (defaultProject) await mkdir(defaultProject, { recursive: true })
+  if (defaultProject) {
+    const reason = await makeDefaultProjectFolder(defaultProject)
+    if (reason) {
+      // Nothing is opened and onboarding stays pending, so the next launch offers the Default Project again.
+      writeLog("onboarding", "default project folder not available", { reason }, "warn")
+      return null
+    }
+  }
 
   getStore().set(FIRST_LAUNCH_ONBOARDING_COMPLETE_KEY, true)
   writeLog("onboarding", "first launch onboarding completed", { createDefaultProject, defaultProject })

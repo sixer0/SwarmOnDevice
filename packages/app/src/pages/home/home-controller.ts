@@ -4,7 +4,12 @@ import { ServerConnection, useServer } from "@/context/server"
 import { useServerSync } from "@/context/server-sync"
 import { useTabs } from "@/context/tabs"
 import { toggleHomeProjectSelection } from "@/pages/layout/helpers"
-import { openCheckedFolder, useFolderMissingNotice } from "@/pages/layout/folder-missing"
+import {
+  type FolderMissingNotice,
+  type FolderMissingOpenOptions,
+  openCheckedFolder,
+  useFolderMissingNotice,
+} from "@/pages/layout/folder-missing"
 import { createEffect, createMemo } from "solid-js"
 
 export type HomeControllerOptions = {
@@ -13,6 +18,21 @@ export type HomeControllerOptions = {
    * must never rewrite what the full Home page remembers, so with a scope the selection is read-only.
    */
   scope?: () => HomeProjectSelection
+}
+
+/**
+ * 1.2.8 R-18c (row 30b): Home "Add project" sends every picked folder through the window's missing-folder notice
+ * (../layout/folder-missing) before it is added. A folder that is gone gets the existing notice (Restore / Choose) and
+ * is not added, selected or given a draft; Restore adds it once it is back. Without a notice (web, legacy Home) or on a
+ * remote server each folder is added at once, as before. Resolves to whether each folder was added.
+ */
+export function addCheckedProjectFolders(
+  notice: FolderMissingNotice | undefined,
+  directories: string[],
+  add: (directory: string) => unknown,
+  options?: FolderMissingOpenOptions,
+) {
+  return Promise.all(directories.map((directory) => openCheckedFolder(notice, directory, () => add(directory), options)))
 }
 
 export function createHomeController(options?: HomeControllerOptions) {
@@ -112,24 +132,27 @@ export function createHomeController(options?: HomeControllerOptions) {
         if (!directory) return
         const ctx = global.ensureServerCtx(conn)
         const first = ctx.projects.list().length === 0
-        directories.forEach((item) => {
-          if (ctx.projects.list().some((project) => project.worktree === item)) return
-          const location = { directory: item }
-          void ctx.sdk.api.file
-            .list({ path: ".", location })
-            .then(async (files) => {
-              if (files.data.length > 0) return ctx.sdk.api.project.current({ location })
-              const result = await ctx.sdk.client.project.initGit({ directory: item })
-              return result.data ?? ctx.sdk.api.project.current({ location })
-            })
-            .then((project) => ctx.sync.child(item, { bootstrap: false })[1]("project", project.id))
-            .catch(() => undefined)
-          ctx.projects.open(item)
-        })
-        ctx.projects.touch(directory)
-        setSelection({ server: ServerConnection.key(conn), directory })
-        // Somebody opening their first project is here to give it a task, and that is the only thing it can offer yet.
-        if (first) void openProjectNewSession(conn, directory)
+        const addOne = (item: string) => {
+          if (!ctx.projects.list().some((project) => project.worktree === item)) {
+            const location = { directory: item }
+            void ctx.sdk.api.file
+              .list({ path: ".", location })
+              .then(async (files) => {
+                if (files.data.length > 0) return ctx.sdk.api.project.current({ location })
+                const result = await ctx.sdk.client.project.initGit({ directory: item })
+                return result.data ?? ctx.sdk.api.project.current({ location })
+              })
+              .then((project) => ctx.sync.child(item, { bootstrap: false })[1]("project", project.id))
+              .catch(() => undefined)
+            ctx.projects.open(item)
+          }
+          if (item !== directory) return
+          ctx.projects.touch(directory)
+          setSelection({ server: ServerConnection.key(conn), directory })
+          // Somebody opening their first project is here to give it a task, and that is the only thing it can offer yet.
+          if (first) void openProjectNewSession(conn, directory)
+        }
+        void addCheckedProjectFolders(folderMissing, directories, addOne, { local: ServerConnection.local(conn) })
       },
       openNewSession: () => {
         const conn = focusedServer()
