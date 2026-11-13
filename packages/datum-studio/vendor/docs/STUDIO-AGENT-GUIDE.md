@@ -651,7 +651,7 @@ Respons `201`:
 <!-- studio:response -->
 ```json
 {
-  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "014/GSP/KT/X/2026", "missionFolder": "2026-10-23_misi_a",
+  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "000/GSP/KT/X/2026", "missionFolder": "2026-10-23_misi_a",
                 "docKey": "laporan-survei", "template": { "slug": "datum-gsp", "versionNo": 2 }, "tier": "TERBIT" },
   "created": true, "unchanged": false, "rebased": false,
   "revision": { "revisionNo": 1, "changeScope": "create", "changeAuto": true },
@@ -673,8 +673,8 @@ Respons `201`:
       "Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots",
       "Kirim bab pertama: POST /api/studio/chapters",
       "Opsional: tetapkan daftar bab yang direncanakan: PATCH /api/studio/documents/cmw1doc8k2p4x7q9z3/structure {op: setOutline}" ],
-    "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 1: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan, Isi. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) dibuat kosong pada revisi 1. Isi wajib belum ada: Lembar Kendali, Tanda Tangan, Isi. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab (POST /api/studio/chapters), lalu minta render penuh."
+    "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 1: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan, Isi. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) dibuat kosong pada revisi 1. Isi wajib belum ada: Lembar Kendali, Tanda Tangan, Isi. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab (POST /api/studio/chapters), lalu minta render penuh."
   }
 }
 ```
@@ -742,7 +742,7 @@ tidak memuat `job` atau `outputs`; draf bab 3 diminta terpisah lewat seksi 8:
 <!-- studio:response -->
 ```json
 {
-  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "014/GSP/KT/X/2026", "missionFolder": "2026-10-23_misi_a",
+  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "000/GSP/KT/X/2026", "missionFolder": "2026-10-23_misi_a",
                 "docKey": "laporan-survei", "template": { "slug": "datum-gsp", "versionNo": 2 }, "tier": "TERBIT" },
   "created": true, "unchanged": false, "rebased": false,
   "revision": { "revisionNo": 1, "changeScope": "create;chapter:3", "changeAuto": true },
@@ -776,8 +776,8 @@ tidak memuat `job` atau `outputs`; draf bab 3 diminta terpisah lewat seksi 8:
       "Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots",
       "Kirim bab 1, 2: POST /api/studio/chapters",
       "Opsional: tetapkan daftar bab yang direncanakan: PATCH /api/studio/documents/cmw1doc8k2p4x7q9z3/structure {op: setOutline}" ],
-    "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 1: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan; bab belum ada 1, 2. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 1. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Bab belum ada: 1, 2. Terakhir mengisi: bab 3 oleh agent:gsp-analis-01 pukul 09:05 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab 1 dan 2 (POST /api/studio/chapters), lalu minta render penuh."
+    "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 1: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan; bab belum ada 1, 2. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 1. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Bab belum ada: 1, 2. Terakhir mengisi: bab 3 oleh agent:gsp-analis-01 pukul 09:05 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab 1 dan 2 (POST /api/studio/chapters), lalu minta render penuh."
   }
 }
 ```
@@ -900,7 +900,7 @@ Referensi (opsional):
 {
   "$schema": "studio.slot/v2",
   "agentId": "gsp-analis-02",
-  "target": { "docNumber": "014/GSP/KT/X/2026" },
+  "target": { "docNumber": "000/GSP/KT/X/2026" },
   "slot": "references",
   "payload": {
     "type": "sourceRegister",
@@ -1164,7 +1164,7 @@ Baca bab 3 untuk disunting: `GET /api/studio/documents/cmw1doc8k2p4x7q9z3/conten
 <!-- studio:response -->
 ```json
 {
-  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "014/GSP/KT/X/2026" },
+  "document": { "id": "cmw1doc8k2p4x7q9z3", "docNumber": "000/GSP/KT/X/2026" },
   "revisionNo": 7,
   "slot": "content",
   "content": {
@@ -1291,8 +1291,8 @@ Respons agen 1 (`201`, revisi 5; `document` dan `chapter` dihilangkan di sini):
     "nextSteps": [
       "Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots",
       "Kirim bab 5: POST /api/studio/chapters" ],
-    "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 5: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan; bab belum ada 5. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 5. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Bab belum ada: 5. Terakhir mengisi: bab 4 oleh agent:gsp-analis-01 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab 5 (POST /api/studio/chapters), lalu minta render penuh."
+    "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 5: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan; bab belum ada 5. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 5. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Bab belum ada: 5. Terakhir mengisi: bab 4 oleh agent:gsp-analis-01 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots) serta bab 5 (POST /api/studio/chapters), lalu minta render penuh."
   }
 }
 ```
@@ -1326,8 +1326,8 @@ Respons agen 2 (`201`, berbasis revisi 4, digabung di atas revisi 5):
       "appendices": { "expected": [], "expectedSource": "contiguous", "present": [], "missing": [] } },
     "missingRequired": ["controlSheet", "signature"],
     "nextSteps": ["Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots"],
-    "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 6: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 6. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Terakhir mengisi: bab 5 oleh agent:gsp-analis-02 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots), lalu minta render penuh."
+    "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 6: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan. Render penuh ditolak; render bab/slot tersedia sebagai draf.",
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 6. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Terakhir mengisi: bab 5 oleh agent:gsp-analis-02 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots), lalu minta render penuh."
   }
 }
 ```
@@ -1432,10 +1432,10 @@ Render penuh pada revisi 6 (Lembar Kendali dan Tanda Tangan belum ada) menghasil
         { "slotKey": "signature", "label": "Tanda Tangan", "sectionType": "signatureBlock", "state": "EMPTY", "required": true, "lastFilledBy": null, "lastFilledAt": null, "lastFilledRevisionNo": null } ],
       "missingRequired": ["controlSheet", "signature"],
       "nextSteps": ["Kirim isi Lembar Kendali, Tanda Tangan: POST /api/studio/slots"],
-      "message": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 6: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan. Render penuh ditolak; render bab/slot tersedia sebagai draf."
+      "message": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a, laporan-survei) belum lengkap pada revisi 6: isi wajib belum ada untuk Lembar Kendali, Tanda Tangan. Render penuh ditolak; render bab/slot tersedia sebagai draf."
     },
     "allowedScopes": ["chapter", "slot"],
-    "forwardToController": "Dokumen 014/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 6. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Terakhir mengisi: bab 5 oleh agent:gsp-analis-02 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots), lalu minta render penuh."
+    "forwardToController": "Dokumen 000/GSP/KT/X/2026 (misi 2026-10-23_misi_a) belum lengkap pada revisi 6. Isi wajib belum ada: Lembar Kendali, Tanda Tangan. Terakhir mengisi: bab 5 oleh agent:gsp-analis-02 pukul 16:12 WIB. Langkah berikut: kirim Lembar Kendali dan Tanda Tangan (POST /api/studio/slots), lalu minta render penuh."
   }
 }
 ```
@@ -1672,7 +1672,7 @@ Respons `200` (`completeness` dipersingkat):
   "rebased": true, "baseRevisionNo": 7, "appliedOnRevisionNo": 9,
   "completeness": { "status": "COMPLETE", "revisionNo": 10, "fullRenderAllowed": true, "missingRequired": [],
     "nextSteps": ["Minta render penuh: POST /api/studio/documents/cmw1doc8k2p4x7q9z3/render {scope: \"document\"}"],
-    "message": "Dokumen 014/GSP/KT/X/2026 lengkap pada revisi 10; render penuh tersedia." }
+    "message": "Dokumen 000/GSP/KT/X/2026 lengkap pada revisi 10; render penuh tersedia." }
 }
 ```
 

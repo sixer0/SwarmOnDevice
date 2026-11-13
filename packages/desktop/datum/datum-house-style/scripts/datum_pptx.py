@@ -582,7 +582,7 @@ def variants(spec):
 
 # ───────────────────────── built-in sample (no input file) ─────────────────────────
 SAMPLE = {
-    'meta': {'bahasa': 'id', 'nomor': '005/GSP/DEK/VIII/2026', 'rev': 'B', 'klasifikasi': 'RAHASIA',
+    'meta': {'bahasa': 'id', 'nomor': '000/GSP/DEK/VIII/2026', 'rev': 'B', 'klasifikasi': 'RAHASIA',
              'kepala_kiri': 'PT GEMILANG SATRIA PERKASA · DIVISI ENGINEERING',
              'kepala_kanan': 'PERIMETER RING TERLUAR 2026', 'kaki_kanan_pola': 'SLIDE {n} / {N}'},
     'keluaran': {'utama': 'GSP DATUM Contoh Command Brief.pptx'},

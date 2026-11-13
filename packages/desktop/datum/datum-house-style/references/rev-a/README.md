@@ -45,7 +45,7 @@ black (Table 8.1, EN p.51). No seal-coloured logo shipped with the skill, so one
 | derived `assets/logo/gsp-seal.png` (RGBA 2390 × 1285, one opaque colour RGB 110, 20, 32) | `a43657da7dd8e5c06e3474a15b349036a0066011d8272597840f5b3bb8dfe95d` |
 
 Method: Pillow under the row 15 probe Python (`tools/build/datum_runtime_probe/python/bin/python3.14
--I -B`), script `/private/tmp/claude-501/row117/logo/recolour.py`: open the source as RGBA, make a
+-I -B`), a one-off recolour script (not shipped): open the source as RGBA, make a
 same-size image filled with #6E1420, put the source's alpha channel on it unchanged, save PNG.
 Checked by the script: alpha channel byte-identical to the source; the only opaque colour is
 (110, 20, 32). The shape is unchanged; only the ink colour differs.

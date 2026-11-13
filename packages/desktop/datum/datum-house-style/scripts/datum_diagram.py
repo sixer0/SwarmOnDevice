@@ -1881,7 +1881,7 @@ def _samples():
         "layered": {
             "family": "layered", "id": "4.1",
             "title": "Arsitektur federasi bukti digital empat tingkat.",
-            "source": "Kajian Teknis 004/GSP/KT/VIII/2026 §4.2",
+            "source": "Kajian Teknis 000/GSP/KT/VIII/2026 §4.2",
             "provenance": "topologi [DITURUNKAN] · kapasitas tautan [PEMASOK, keandalan B2]",
             "tiers": [
                 {"id": "t1", "label": "TINGKAT 1 · POLSEK", "note": "1.847 lokasi"},
@@ -1981,7 +1981,7 @@ def _samples():
         "rack": {
             "family": "rack", "id": "7.3", "units": 24, "u_height_mm": 4.0,
             "title": "Elevasi rak inti, ruang server Polda.",
-            "source": "Konfigurasi HW 009/GSP/HW/VIII/2026",
+            "source": "Konfigurasi HW 000/GSP/HW/VIII/2026",
             "nodes": [
                 {"id": "sw1", "label": "Switch Inti", "sub": "48× 10G", "u": 24, "size": 1},
                 {"id": "fw", "label": "Firewall", "sub": "HA aktif", "u": 22, "size": 1},
