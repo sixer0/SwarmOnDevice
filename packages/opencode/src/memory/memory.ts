@@ -37,6 +37,13 @@ export const CONSOLIDATE_AT = 1000
 /** Estimated tokens for the whole `<project_memory>` block (U18). Used by the prompt loader. */
 export const LOAD_BUDGET_TOKENS = 8000
 
+/**
+ * The Studio mission id pattern (`MISSION_ID_PATTERN`, datum-studio `src/mcp-host/mission/schemas.ts`), copied as a
+ * literal because opencode does not depend on datum-studio; a test pins the two equal (01e §2.1).
+ */
+export const MISSION_ID_PATTERN = "^\\d{4}-\\d{2}-\\d{2}[_-][a-z0-9][a-z0-9_-]{0,80}$"
+const MISSION_ID = new RegExp(MISSION_ID_PATTERN)
+
 const CONSOLIDATE_STEP = 100
 const VERSION = 2
 
@@ -59,6 +66,13 @@ export interface Interface {
     refs?: readonly MemoryRef[]
     /** The writing session had consumed web, MCP, Studio data or files outside the worktree (SEC-09). */
     untrusted?: boolean
+    /**
+     * "index": a mission index entry (1.2.8 F-MEM). The line must follow ProjectMemory.INDEX_TEXT_PATTERN; one entry
+     * per mission, a second write replaces the first. Any other value is refused `index_format`.
+     */
+    kind?: string
+    /** Required with kind "index": the mission id, equal to the id in the line. */
+    missionId?: string
   }) => Effect.Effect<Result>
   readonly update: (id: string, input: { text?: string; deviceOnly?: boolean }) => Effect.Effect<Result>
   readonly remove: (id: string) => Effect.Effect<boolean>
@@ -165,16 +179,66 @@ export const layer = Layer.effect(
         ),
       )
 
+    /**
+     * A mission index entry (01e §2.2-2.3). Checked whole before anything is written; the report path is added as the
+     * first ref. A second entry for the same mission replaces the first in place (same id, `rolledInto` kept), even when
+     * it is archived; the "same text" shortcut of ordinary notes does not apply.
+     */
+    const addIndex = Effect.fnUntraced(function* (
+      input: Parameters<Interface["add"]>[0],
+      text: string,
+      body: string | undefined,
+      given: MemoryRef[],
+    ) {
+      const missionId = input.missionId ?? ""
+      const checked = indexRefusal({ text, missionId, kind: input.kind })
+      if (typeof checked === "string") return { refused: checked } satisfies Result
+      const refs = uniqueRefs([{ path: checked.report }, ...given])
+      const refused = refusal({ text, body, refs, index: true })
+      if (refused) return { refused } satisfies Result
+      const target = yield* file()
+      const result = yield* change(target, (store): { store?: Stored; value: { item: Item; fresh: boolean } } => {
+        const found = store.items.find((item) => isIndex(item) && item.missionId === missionId)
+        const item: Item = {
+          ...(found ? { id: found.id } : { id: randomBytes(3).toString("hex") }),
+          text,
+          source: input.source,
+          deviceOnly: (found?.deviceOnly ?? false) || (input.deviceOnly ?? false),
+          time: Date.now(),
+          ...(input.sessionID ? { sessionID: input.sessionID } : {}),
+          ...(body ? { body } : {}),
+          refs,
+          ...(input.untrusted ? { untrusted: true } : {}),
+          kind: "index",
+          missionId,
+          ...(found?.rolledInto ? { rolledInto: found.rolledInto } : {}),
+        }
+        const items = found
+          ? store.items.map((existing) => (existing.id === found.id ? item : existing))
+          : [...store.items, item]
+        return { store: { ...store, items }, value: { item, fresh: !found } }
+      })
+      // A replacement is no new note: no toast. A new entry announces itself like any agent note.
+      yield* publish(result.fresh && input.source !== "user" ? result.item : undefined)
+      return { item: result.item } satisfies Result
+    })
+
     const add: Interface["add"] = Effect.fn("ProjectMemory.add")(function* (input) {
       const text = input.text.replace(/\s+/g, " ").trim()
       const body = input.body?.trimEnd() || undefined
       const base = yield* root()
       const refs = uniqueRefs((input.refs ?? []).map((ref) => normaliseRef(ref, base)))
+      if (input.kind !== undefined) {
+        if (!text) return { refused: "empty" }
+        return yield* addIndex(input, text, body, refs)
+      }
       const refused = refusal({ text, body, refs })
       if (refused) return { refused }
       const target = yield* file()
       const result = yield* change(target, (store): { store?: Stored; value: { result: Result; fresh: boolean } } => {
-        const same = store.items.find((item) => item.text.toLowerCase() === text.toLowerCase())
+        const same = store.items.find(
+          (item) => item.kind === undefined && item.text.toLowerCase() === text.toLowerCase(),
+        )
         if (same) return { value: { result: { item: same }, fresh: false } }
         const item: Item = {
           id: randomBytes(3).toString("hex"),
@@ -241,12 +305,39 @@ export const layer = Layer.effect(
       add,
       update: Effect.fn("ProjectMemory.update")(function* (id, input) {
         const text = input.text === undefined ? undefined : input.text.replace(/\s+/g, " ").trim()
+        const target = yield* file()
+        if (text !== undefined) {
+          const current = (yield* read(target)).items.find((item) => item.id === id)
+          if (current && indexed(current) && current.text !== text) {
+            // Store-written lines (roll-ups, archived entries) stay as written; an index line keeps its format.
+            if (!isIndex(current) || current.rolledInto !== undefined) return { refused: "index_format" as const }
+            if (!text) return { refused: "empty" as const }
+            const checked = indexRefusal({ text, missionId: current.missionId ?? "", kind: "index" })
+            if (typeof checked === "string") return { refused: checked }
+            const refused = refusal({ text, index: true })
+            if (refused) return { refused }
+          }
+        }
         const refused = text === undefined ? undefined : refusal({ text })
         if (refused) return { refused }
-        const target = yield* file()
         const item = yield* change(target, (store) => {
           const found = store.items.find((item) => item.id === id)
           if (!found) return { value: undefined }
+          // Checked against the stored line above; a store changed in between keeps the line as it is.
+          if (indexed(found) && text !== undefined && text !== found.text) {
+            if (!isIndex(found) || found.rolledInto !== undefined) return { value: undefined }
+            const checked = indexRefusal({ text, missionId: found.missionId ?? "", kind: "index" })
+            if (typeof checked === "string") return { value: undefined }
+            const refs = uniqueRefs([{ path: checked.report }, ...(found.refs ?? [])])
+            const value: Item = {
+              ...found,
+              text,
+              source: "user",
+              ...(refs.length <= MAX_REFS ? { refs } : {}),
+              ...(input.deviceOnly === undefined ? {} : { deviceOnly: input.deviceOnly }),
+            }
+            return { store: { ...store, items: store.items.map((item) => (item.id === id ? value : item)) }, value }
+          }
           // Rewritten by the user, it is their note now and no longer ties to a command the runtime may retract. A body
           // or refs an agent wrote stay agent-written, so their untrusted flag stays with them.
           const next: Item =
@@ -377,14 +468,60 @@ function refusal(input: {
   text: string
   body?: string
   refs?: readonly MemoryRef[]
+  /** A mission index entry: its line and format were checked by indexRefusal, its body has the index limit. */
+  index?: boolean
 }): ProjectMemory.Refusal | undefined {
   if (!input.text) return "empty"
   if (input.text.length > MAX_TEXT) return "long"
+  if (input.index && input.body && input.body.length > ProjectMemory.INDEX_LIMITS.body) return "index_body_long"
   if (input.body && input.body.length > MAX_BODY) return "body_long"
   if (input.refs && input.refs.length > MAX_REFS) return "too_many_refs"
   // L5 covers everything stored; looksSecret already includes the Secrets.scrubText shapes (SEC-09 item 4).
   const strings = [input.text, input.body ?? "", ...(input.refs ?? []).flatMap(refStrings)]
   if (strings.some((value) => value && MemoryLearn.looksSecret(value))) return "secret"
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Mission index entries (1.2.8 F-MEM, 01e §2). `kind` is stored as a plain string: only these helpers narrow it, and any
+// other value is an ordinary note.
+
+const isIndex = (item: Item) => item.kind === "index"
+/** An index entry, a roll-up or an archived entry: lines the index rules govern. An unknown kind is an ordinary note. */
+const indexed = (item: Item) => isIndex(item) || item.kind === "index_rollup" || item.rolledInto !== undefined
+
+/**
+ * Rules 2-3 of 01e §2.2, in order, before anything is written: `index_long` (line over INDEX_LIMITS.text), then
+ * `index_format` (kind other than "index" from a caller, no or malformed mission id, line not matching
+ * INDEX_TEXT_PATTERN, mission id in the line different, not a calendar date, or a report path that is not a plain
+ * relative `docs/<missionId>/....md`). Returns the report path when the line is valid.
+ */
+export function indexRefusal(input: {
+  text: string
+  missionId: string
+  kind?: string
+}): ProjectMemory.Refusal | { report: string } {
+  if (input.text.length > ProjectMemory.INDEX_LIMITS.text) return "index_long"
+  if (input.kind !== "index") return "index_format"
+  if (!MISSION_ID.test(input.missionId)) return "index_format"
+  const match = ProjectMemory.INDEX_TEXT_PATTERN.exec(input.text)
+  if (!match) return "index_format"
+  const [, date, id, , , report] = match
+  if (id !== input.missionId || !calendarDate(date!) || !safeReportPath(report!, input.missionId)) return "index_format"
+  return { report: report! }
+}
+
+function calendarDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number)
+  const date = new Date(Date.UTC(year!, month! - 1, day!))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month! - 1 && date.getUTCDate() === day
+}
+
+/** Relative, already normalised, no `..`, no `~` or `\\`, inside `docs/<missionId>/`, a Markdown file (01e §9 S-3). */
+function safeReportPath(value: string, missionId: string) {
+  if (value.startsWith("/") || value.startsWith("~") || value.includes("\\")) return false
+  if (path.posix.normalize(value) !== value) return false
+  if (value.split("/").some((part) => part === ".." || part === ".")) return false
+  return value.startsWith(`docs/${missionId}/`) && value.length > `docs/${missionId}/`.length + 3 && value.endsWith(".md")
 }
 
 const refStrings = (ref: MemoryRef) => ("symbol" in ref ? [ref.symbol, ref.path ?? ""] : [ref.path])
@@ -580,7 +717,12 @@ export function consolidate(
     snapshot?: ReadonlyMap<string, string>
   },
 ): { items: Item[]; changed: boolean } {
-  const settled = (item: Item) => !options.snapshot || options.snapshot.get(item.id) === JSON.stringify(item)
+  // Index entries, roll-ups, archived entries and any future kind are never merged and their refs never dropped: the
+  // report link must survive the report being moved (01e §2.3).
+  const settled = (item: Item) =>
+    item.kind === undefined &&
+    item.rolledInto === undefined &&
+    (!options.snapshot || options.snapshot.get(item.id) === JSON.stringify(item))
   const drop = new Set<string>()
   const replace = new Map<string, Item>()
 

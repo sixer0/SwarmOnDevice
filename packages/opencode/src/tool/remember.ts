@@ -33,6 +33,12 @@ export const REFUSED = {
   body_long: `Not saved: the body is over ${Memory.MAX_BODY} characters. Do not shorten the facts: keep them in a file and link it in refs (path, path:line or a graft symbol).`,
   too_many_refs: `Not saved: a note links at most ${Memory.MAX_REFS} files or symbols. Split it into notes by topic, or link the folder or index file that lists the rest.`,
   secret: "Not saved: this looks like a password, key or token. Credentials are never kept in memory.",
+  // 1.2.8 F-MEM mission index entries (01e §2.4).
+  index_long: `Not saved: a mission index entry is one line of at most ${ProjectMemory.INDEX_LIMITS.text} characters. Shorten the outcome or the triggers; put detail in body (up to ${ProjectMemory.INDEX_LIMITS.body} characters).`,
+  index_format: `Not saved: an index entry reads "YYYY-MM-DD <mission-id> | <outcome> | triggers: k1, k2, k3 | docs/<mission-id>/.../report.md", with missionId equal to the id in the line, at most ${ProjectMemory.INDEX_LIMITS.triggers} triggers and the report path inside docs/<mission-id>/.`,
+  index_body_long: `Not saved: the index entry body is over ${ProjectMemory.INDEX_LIMITS.body} characters. Keep the detail in the final report and link it; the report path is already in the line.`,
+  index_full:
+    "Not saved: the mission index is full and older entries cannot be rolled up without cutting them. Ask the person to remove or consolidate old entries in the memory view.",
 } satisfies Record<Exclude<ProjectMemory.Refusal, "full">, string>
 
 export const RememberTool = Tool.define<typeof Parameters, Metadata, Memory.Service>(
