@@ -1,8 +1,8 @@
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import path from "path"
-import { readFile } from "node:fs/promises"
-import { Effect, Layer, Context, Schema } from "effect"
+import { readFile, stat } from "node:fs/promises"
+import { Effect, Layer, Context, Schema, Semaphore } from "effect"
 import { NamedError } from "@opencode-ai/core/util/error"
 import type { Agent } from "@/agent/agent"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -240,7 +240,16 @@ const add = Effect.fnUntraced(function* (
     yield* Effect.logWarning("reserved skill name ignored", { name: md.data.name, skill: match })
     return
   }
-  if (!trusted && !ProjectTrust.isUserLevel(match) && !ProjectTrust.isTextSkill(md.content)) return
+  if (!trusted && !ProjectTrust.isUserLevel(match) && !ProjectTrust.isTextSkill(md.content)) {
+    // U-11: say why a project skill is missing. trust.json lives in the state home, so a standalone CLI and the app can
+    // disagree about one folder. Names and the path only; the skill's text is never logged.
+    yield* Effect.logWarning("project skill hidden by trust", {
+      name: md.data.name,
+      skill: match,
+      reason: "project folder not trusted in this state home and the skill runs programs; trust the folder to load it",
+    })
+    return
+  }
 
   const existing = state.skills[md.data.name]
   // A user-level skill keeps its name: a project copy of the same name (a cloned repository's
@@ -414,6 +423,7 @@ const discoverSkills = Effect.fnUntraced(function* (
   claudeCompat: boolean,
   directory: string,
   worktree: string,
+  pulled: Map<string, string[]>,
 ) {
   const state: ScanState = { matches: new Set(), dirs: new Set() }
 
@@ -456,7 +466,9 @@ const discoverSkills = Effect.fnUntraced(function* (
   }
 
   for (const url of cfg.skills?.urls ?? []) {
-    const pulledDirs = yield* discovery.pull(url)
+    // A URL is pulled once per instance; its folders are re-scanned like any other (U-11: no network on each request).
+    const pulledDirs = pulled.get(url) ?? (yield* discovery.pull(url))
+    pulled.set(url, pulledDirs)
     for (const dir of pulledDirs) {
       yield* scan(state, dir, SKILL_PATTERN)
     }
@@ -467,6 +479,19 @@ const discoverSkills = Effect.fnUntraced(function* (
     dirs: Array.from(state.dirs),
   }
 })
+
+/** What decides whether the parsed skill set is still current: each SKILL.md's path, mtime and size, plus the inputs. */
+async function fingerprint(matches: string[], inputs: unknown[]) {
+  const stamps = await Promise.all(
+    matches.toSorted().map((file) =>
+      stat(file).then(
+        (info) => `${file}\0${info.mtimeMs}\0${info.ctimeMs}\0${info.size}`,
+        () => `${file}\0missing`,
+      ),
+    ),
+  )
+  return JSON.stringify([inputs, stamps])
+}
 
 const loadSkills = Effect.fnUntraced(function* (
   state: State,
@@ -493,100 +518,118 @@ const layer = Layer.effect(
     const fsys = yield* FSUtil.Service
     const global = yield* Global.Service
     const flags = yield* RuntimeFlags.Service
-    const discovered = yield* InstanceState.make(
-      Effect.fn("Skill.discovery")(function* (ctx) {
-        // Global config only (a project cannot turn it on); the env flags still force it off. A global config change
-        // disposes every instance (handlers/global.ts), so this runs again without a restart.
-        const claudeCompat =
-          !flags.disableClaudeCodeSkills &&
-          (yield* config.getGlobal().pipe(
-            Effect.map((item) => item.claude_compat === true),
-            Effect.catchDefect(() =>
-              Effect.logWarning("global config unreadable, Claude Code skills stay off").pipe(Effect.as(false)),
-            ),
-          ))
-        return yield* discoverSkills(
-          config,
-          discovery,
-          fsys,
-          global,
-          flags.disableExternalSkills,
-          claudeCompat,
-          ctx.directory,
-          ctx.worktree,
-        )
-      }),
-    )
-    const state = yield* InstanceState.make(
-      Effect.fn("Skill.state")(function* (ctx) {
-        const s: State = { skills: {}, dirs: new Set() }
-        // Register the built-in skill BEFORE disk discovery so a user-disk
-        // skill with the same name can override it.
-        s.skills[CUSTOMIZE_SWARM_SKILL_NAME] = {
-          name: CUSTOMIZE_SWARM_SKILL_NAME,
-          description: CUSTOMIZE_SWARM_SKILL_DESCRIPTION,
-          location: "<built-in>",
-          content: CUSTOMIZE_SWARM_SKILL_BODY,
-        }
-        yield* loadSkills(s, yield* InstanceState.get(discovered), events, ProjectTrust.isTrusted(ctx.directory))
-        yield* registerDatum(s)
-        s.skills[MISSION_CONTROL_SKILL_NAME] = {
-          name: MISSION_CONTROL_SKILL_NAME,
-          description: MISSION_CONTROL_SKILL_DESCRIPTION,
-          location: "<built-in>",
-          content: MISSION_CONTROL_SKILL_CONTENT,
-        }
-        s.skills[SWARM_WORKFLOW_SKILL_NAME] = {
-          name: SWARM_WORKFLOW_SKILL_NAME,
-          description: SWARM_WORKFLOW_SKILL_DESCRIPTION,
-          location: "<built-in>",
-          content: SWARM_WORKFLOW_SKILL_CONTENT,
-        }
-        s.skills[TOOL_HEALTH_SKILL_NAME] = {
-          name: TOOL_HEALTH_SKILL_NAME,
-          description: TOOL_HEALTH_SKILL_DESCRIPTION,
-          location: "<built-in>",
-          content: TOOL_HEALTH_SKILL_CONTENT,
-        }
-        s.skills[FLUX3_IMAGE_GEN_SKILL_NAME] = {
-          name: FLUX3_IMAGE_GEN_SKILL_NAME,
-          description: FLUX3_IMAGE_GEN_SKILL_DESCRIPTION,
-          location: "<built-in>",
-          content: FLUX3_IMAGE_GEN_SKILL_CONTENT,
-        }
-        const library = LibraryRoot.current()
-        if (library.kind !== "available") return s
-        // getGlobal dies on a broken config. A user who may have switched the library off must not get it back that way.
-        const enabled = yield* config.getGlobal().pipe(
-          Effect.map((global) => global.knowledge_library !== false),
-          Effect.catchDefect(() =>
-            Effect.logWarning("global config unreadable, knowledge library stays off").pipe(Effect.as(false)),
-          ),
-        )
-        if (!enabled) return s
-        const content = knowledgeLibraryEntry(library.root)
-        if (!content) {
-          yield* Effect.logWarning("knowledge library root cannot be written into its entry")
-          s.libraryRejected = true
-          return s
-        }
-        s.skills[KNOWLEDGE_LIBRARY_SKILL_NAME] = {
-          name: KNOWLEDGE_LIBRARY_SKILL_NAME,
-          description: KNOWLEDGE_LIBRARY_SKILL_DESCRIPTION,
-          location: "<built-in>",
-          content,
-        }
-        return s
-      }),
+    // U-11 (C63 D-11c): skills are re-scanned on each request, so a skill another process (a CLI session, an editor)
+    // writes appears in the long-running app server's next request without a restart. The scan is glob + one stat per
+    // SKILL.md; the parsed set is rebuilt only when that fingerprint (paths, mtime, size, trust, claude_compat) changes.
+    // URL sources are pulled once per instance. A global config change still disposes every instance (handlers/global.ts).
+    type Snapshot = { key: string; discovered: DiscoveryState; state: State }
+    const holder = yield* InstanceState.make(() =>
+      Effect.succeed({ pulled: new Map<string, string[]>(), last: undefined as Snapshot | undefined, lock: Semaphore.makeUnsafe(1) }),
     )
 
+    const build = Effect.fnUntraced(function* (discovered: DiscoveryState, trusted: boolean) {
+      const s: State = { skills: {}, dirs: new Set() }
+      // Register the built-in skill BEFORE disk discovery so a user-disk
+      // skill with the same name can override it.
+      s.skills[CUSTOMIZE_SWARM_SKILL_NAME] = {
+        name: CUSTOMIZE_SWARM_SKILL_NAME,
+        description: CUSTOMIZE_SWARM_SKILL_DESCRIPTION,
+        location: "<built-in>",
+        content: CUSTOMIZE_SWARM_SKILL_BODY,
+      }
+      yield* loadSkills(s, discovered, events, trusted)
+      yield* registerDatum(s)
+      s.skills[MISSION_CONTROL_SKILL_NAME] = {
+        name: MISSION_CONTROL_SKILL_NAME,
+        description: MISSION_CONTROL_SKILL_DESCRIPTION,
+        location: "<built-in>",
+        content: MISSION_CONTROL_SKILL_CONTENT,
+      }
+      s.skills[SWARM_WORKFLOW_SKILL_NAME] = {
+        name: SWARM_WORKFLOW_SKILL_NAME,
+        description: SWARM_WORKFLOW_SKILL_DESCRIPTION,
+        location: "<built-in>",
+        content: SWARM_WORKFLOW_SKILL_CONTENT,
+      }
+      s.skills[TOOL_HEALTH_SKILL_NAME] = {
+        name: TOOL_HEALTH_SKILL_NAME,
+        description: TOOL_HEALTH_SKILL_DESCRIPTION,
+        location: "<built-in>",
+        content: TOOL_HEALTH_SKILL_CONTENT,
+      }
+      s.skills[FLUX3_IMAGE_GEN_SKILL_NAME] = {
+        name: FLUX3_IMAGE_GEN_SKILL_NAME,
+        description: FLUX3_IMAGE_GEN_SKILL_DESCRIPTION,
+        location: "<built-in>",
+        content: FLUX3_IMAGE_GEN_SKILL_CONTENT,
+      }
+      const library = LibraryRoot.current()
+      if (library.kind !== "available") return s
+      // getGlobal dies on a broken config. A user who may have switched the library off must not get it back that way.
+      const enabled = yield* config.getGlobal().pipe(
+        Effect.map((global) => global.knowledge_library !== false),
+        Effect.catchDefect(() =>
+          Effect.logWarning("global config unreadable, knowledge library stays off").pipe(Effect.as(false)),
+        ),
+      )
+      if (!enabled) return s
+      const content = knowledgeLibraryEntry(library.root)
+      if (!content) {
+        yield* Effect.logWarning("knowledge library root cannot be written into its entry")
+        s.libraryRejected = true
+        return s
+      }
+      s.skills[KNOWLEDGE_LIBRARY_SKILL_NAME] = {
+        name: KNOWLEDGE_LIBRARY_SKILL_NAME,
+        description: KNOWLEDGE_LIBRARY_SKILL_DESCRIPTION,
+        location: "<built-in>",
+        content,
+      }
+      return s
+    })
+
+    const current = Effect.fn("Skill.current")(function* () {
+      const ctx = yield* InstanceState.context
+      const h = yield* InstanceState.get(holder)
+      return yield* h.lock.withPermits(1)(
+        Effect.gen(function* () {
+          // Global config only (a project cannot turn it on); the env flags still force it off.
+          const claudeCompat =
+            !flags.disableClaudeCodeSkills &&
+            (yield* config.getGlobal().pipe(
+              Effect.map((item) => item.claude_compat === true),
+              Effect.catchDefect(() =>
+                Effect.logWarning("global config unreadable, Claude Code skills stay off").pipe(Effect.as(false)),
+              ),
+            ))
+          const discovered = yield* discoverSkills(
+            config,
+            discovery,
+            fsys,
+            global,
+            flags.disableExternalSkills,
+            claudeCompat,
+            ctx.directory,
+            ctx.worktree,
+            h.pulled,
+          )
+          const trusted = ProjectTrust.isTrusted(ctx.directory)
+          const key = yield* Effect.promise(() => fingerprint(discovered.matches, [trusted, claudeCompat]))
+          if (h.last?.key === key) return h.last
+          const next: Snapshot = { key, discovered, state: yield* build(discovered, trusted) }
+          h.last = next
+          return next
+        }),
+      )
+    })
+
     const get = Effect.fn("Skill.get")(function* (name: string) {
-      const s = yield* InstanceState.get(state)
+      const s = (yield* current()).state
       return s.skills[name]
     })
 
     const require = Effect.fn("Skill.require")(function* (name: string) {
-      const s = yield* InstanceState.get(state)
+      const s = (yield* current()).state
       const info = s.skills[name]
       if (info) return info
       return yield* new NotFoundError({
@@ -602,16 +645,16 @@ const layer = Layer.effect(
     })
 
     const all = Effect.fn("Skill.all")(function* () {
-      const s = yield* InstanceState.get(state)
+      const s = (yield* current()).state
       return Object.values(s.skills)
     })
 
     const dirs = Effect.fn("Skill.dirs")(function* () {
-      return (yield* InstanceState.get(discovered)).dirs
+      return (yield* current()).discovered.dirs
     })
 
     const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info) {
-      const s = yield* InstanceState.get(state)
+      const s = (yield* current()).state
       const list = Object.values(s.skills).toSorted((a, b) => a.name.localeCompare(b.name))
       if (!agent) return list
       return list.filter((skill) => Permission.evaluate("skill", skill.name, agent.permission).action !== "deny")
