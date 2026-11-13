@@ -174,6 +174,87 @@ function stepWriteNames(argv: readonly string[], cwd: string, instance: Instance
   return operands
 }
 
+/**
+ * 1.2.8 row 64a (S-01, C149): programs that run code given as text (`-c`, `-e`, a `-` or heredoc script on stdin), by
+ * their name or a path to it, anywhere in the call (`sh -c '…'`, `env`, a pipe). Their code is not words the shell
+ * reading can judge, so it is read as text, as `runsAutonomyCommand` reads it for `swarm autonomy`.
+ */
+const CODE_RUNNER =
+  /(?:^|[\s;&|(`'"/=])(?:python[0-9.]*|pypy[0-9.]*|node(?:js)?|bun|bunx|deno|tsx|ts-node|perl[0-9.]*|ruby|irb|php|lua(?:jit)?|Rscript|osascript|awk|gawk|nawk|mawk)(?=$|[\s'"`;|&)<])/
+/**
+ * 1.2.8 row 64a: a call in that code that may change a file, by any spelling the common runners use: an `open` with a
+ * write mode (`'w'`, `'a'`, `'x'`, `'+'`, `mode=`, `O_WRONLY`/`O_CREAT`/…), Perl's `'>'`/`">path"` modes, and the write,
+ * copy, move, remove, link and folder calls of Python (`os`, `shutil`, `pathlib`), Node/Bun/Deno (`fs`), Perl and Ruby
+ * (`File`, `IO`, `FileUtils`), plus anything that runs another program (`system`, `subprocess`, `child_process`, `exec`,
+ * `spawn`, AppleScript's `do shell script`). Stricter only: when unsure, a call counts as a write. Printing to the
+ * standard streams is no write.
+ */
+const CODE_WRITE = new RegExp(
+  [
+    String.raw`\bopen(?:Sync)?\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*?,\s*(?:mode\s*=\s*)?['"][rbtU]*[wax+]`,
+    String.raw`\.open\s*\(\s*(?:mode\s*=\s*)?['"][rbt]*[wax+]`,
+    String.raw`\bmode\s*=\s*['"][rbt]*[wax+]`,
+    String.raw`\bO_(?:WRONLY|RDWR|CREAT|APPEND|TRUNC)\b`,
+    String.raw`['"]\s*\+?(?:>{1,2}|\+<)`,
+    String.raw`(?<!std(?:out|err)\.)\b(?:write\w*|append\w*|createWriteStream|copy\w*|cp(?:Sync)?|rename\w*|unlink\w*|remove\w*|rmdir\w*|rm(?:Sync|tree)?|mkdir\w*|makedirs|mkpath|make_path|symlink\w*|link(?:Sync)?|truncate\w*|touch|chmod\w*|chown\w*|move|utime\w*|syswrite|binwrite|system|popen\w*|exec\w*|spawn\w*|Popen|check_call|check_output|call)\b\s*[('"$]`,
+    String.raw`\b(?:shutil|subprocess|child_process|FileUtils)\b`,
+    String.raw`\b(?:os|Path|path)\.replace\b`,
+    String.raw`\bBun\.(?:write|spawn\w*|\$)`,
+    String.raw`\bDeno\.(?:write\w*|remove\w*|rename\w*|mkdir\w*|copy\w*|symlink\w*|link\w*|truncate\w*|create\w*|open\w*|run|Command)\b`,
+    String.raw`\b(?:File|IO|Dir)\.(?:write|binwrite|open|new|delete|unlink|rename|symlink|link|mkdir|rmdir)\b`,
+    String.raw`\bdo shell script\b`,
+  ].join("|"),
+)
+/** 1.2.8 row 64a: the code names the home folder (`~`, `$HOME`, `os.homedir()`, `expanduser`, `Path.home()`, an env HOME). */
+const CODE_HOME =
+  /(?:^|[^\w])~(?=\/|['"]|$)|\$\{?HOME\b|\bhomedir\s*\(|\bexpanduser\s*\(|\bPath\.home\s*\(|\bDir\.home\b|\bgetenv\s*\(\s*['"]HOME|\benv(?:iron)?\s*(?:\.\s*HOME\b|\[\s*['"]HOME|\.get\s*\(\s*['"]HOME|\{\s*HOME\b)|\bENV\s*\[\s*['"]HOME/
+
+/**
+ * 1.2.8 row 64a (S-01, C149): the places an interpreter's inline code may write, as names a skill-folder or vault-mirror
+ * check can judge. Empty unless the call runs one of `CODE_RUNNER` and its text holds a `CODE_WRITE` call; then every
+ * path-like word of the whole text (quoted or not; `~`, `$HOME`, `${HOME}` expanded; a `>`/`+<` mode prefix dropped), in
+ * every folder the call may run in, and, when the code names the home folder, the same words under home; plus the
+ * literal pieces of each `join(…)` and of each `Path.home() / 'a' / 'b'` chain, joined. Pragmatic, stricter only: a
+ * read-only one-liner keeps its verdict; any write-ish call beside a named folder counts. Residual (as C81): a script
+ * file that writes there is not read, nor a name the code builds by other means (string concatenation of pieces,
+ * variables from outside).
+ */
+function interpreterWriteNames(input: Input): string[] {
+  const command = input.metadata.command
+  if (typeof command !== "string" || !CODE_RUNNER.test(command) || !CODE_WRITE.test(command)) return []
+  // Only now: the shell reading of a long list is not cheap, and most calls run no interpreter.
+  const cwds = shellCwds(input)
+  const home = homedir()
+  const text = command.replace(/\$\{HOME\}/g, "$HOME")
+  const homeNamed = CODE_HOME.test(text)
+  const words = text
+    .split(/[\s'"`,;()[\]{}<>|&=\\]+/)
+    .map((word) => word.replace(/^\+/, ""))
+    .filter((word) => word.includes("/") || /^(?:~|\$HOME)$/.test(word) || /skill\.md$/i.test(word))
+  const pieces: string[] = []
+  for (const match of text.matchAll(/\bjoin\s*\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/g)) {
+    const literals = [...match[1]!.matchAll(/['"]([^'"]*)['"]/g)].map((literal) => literal[1]!).filter(Boolean)
+    if (literals.length > 0) pieces.push(literals.join("/"))
+  }
+  for (const match of text.matchAll(/((?:\s*\/\s*['"][^'"]+['"])+)/g)) {
+    const literals = [...match[1]!.matchAll(/['"]([^'"]+)['"]/g)].map((literal) => literal[1]!)
+    if (literals.length > 1) pieces.push(literals.join("/"))
+  }
+  const names: string[] = []
+  for (const word of [...words, ...pieces]) {
+    const expanded = word.replace(/^(?:~|\$HOME)(?=\/|$)/, home)
+    for (const cwd of cwds) names.push(path.resolve(cwd, expanded))
+    if (homeNamed && expanded === word) names.push(path.join(home, word))
+  }
+  return names
+}
+
+/** 1.2.8 row 64a: every folder a shell call may run in (its own and each `cd`/`pushd` walk the reading found). */
+function shellCwds(input: Input): string[] {
+  const reading = shellReading(input.metadata.steps, input.instance)
+  return [...new Set([input.cwd, ...(reading?.steps.flatMap((step) => step.cwds) ?? [])])]
+}
+
 function writesSkillFolder(input: Input) {
   const instance = input.instance
   if (input.permission === "edit")
@@ -184,7 +265,8 @@ function writesSkillFolder(input: Input) {
     return typeof filepath === "string" && Reach.skillFolder(filepath, instance)
   }
   if (input.permission !== "bash") return false
-  return shellWriteNames(input).some((file) => Reach.skillFolder(file, instance))
+  // 1.2.8 row 64a (S-01): an interpreter's inline code is read as text too (`interpreterWriteNames`).
+  return [...shellWriteNames(input), ...interpreterWriteNames(input)].some((file) => Reach.skillFolder(file, instance))
 }
 
 /**
@@ -201,7 +283,7 @@ function writesVaultMirror(input: Input) {
     return typeof filepath === "string" && Reach.vaultMirror(filepath, instance)
   }
   if (input.permission !== "bash") return false
-  return shellWriteNames(input).some((file) => Reach.vaultMirror(file, instance))
+  return [...shellWriteNames(input), ...interpreterWriteNames(input)].some((file) => Reach.vaultMirror(file, instance))
 }
 
 /**
