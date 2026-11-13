@@ -136,9 +136,12 @@ describe("T9 G1: a shell's -c text and eval are unwrapped and judged", () => {
   })
 
   test("negative: a harmless -c text or eval still runs as the main agent's", async () => {
-    await expectCase(`bash -c "echo hi"`, HELD("not_routine"), RUNS("unreadable_command"))
+    // 1.2.7 U-7 (INTENT, C21 b): a `-c` literal the shell's reader reads in full is judged as the command it runs (here a
+    // look, A); one with an expansion stays unread, as before.
+    await expectCase(`bash -c "echo hi"`, HELD("not_routine"), { class: "A", category: undefined })
+    await expectCase(`bash -c 'echo $X'`, HELD("not_routine"), RUNS("unreadable_command"))
     await expectCase(`eval "echo hi"`, HELD("not_routine"), RUNS("unreadable_command"))
-    await expectCase(`sh -c "ls -la src"`, HELD("not_routine"), RUNS("unreadable_command"))
+    await expectCase(`sh -c "ls -la src"`, HELD("not_routine"), { class: "A", category: undefined })
   })
 
   test("the agent's answer is ARCHIVE_FIRST_TEXT / IRREVERSIBLE_ARCHIVE_TEXT", () => {

@@ -315,6 +315,13 @@ const mainAgentRefused = (text: string) => {
 export const BYPASS_REASON = "the person agreed that the main agent decides during this run"
 
 /**
+ * 1.2.7 U-7 (C7, C21, OP-1, N7-129): the opened categories a subagent's call runs in like the root's under the person's
+ * consent: no decider call, the root's line (`via: main_agent`) with the child's `sessionID`. A positive list, pinned by
+ * an equality test (SR7-02); every other opened category still goes to the main agent, where "cannot tell" refuses.
+ */
+export const SUBAGENT_RUNS_LIKE_ROOT: ReadonlySet<string> = AutonomyTable.SUBAGENT_RUNS_LIKE_ROOT
+
+/**
  * Defence in depth (S1.36): categories the overlay never opens. A verdict that claims to have opened one of them did not
  * come from `underConsent`, and runs nowhere near the main agent. The X ones are refused, the rest held for a person.
  */
@@ -857,7 +864,15 @@ const layer = Layer.effect(
       // S1.32/S1.33: a call the consented bypass opened. The main agent's own call runs on the person's consent; a
       // subagent's goes to the main agent, which answers yes or no and never holds it.
       const overlaid = !answered && bypass !== undefined && verdict.class === "A" && verdict.bypassed !== undefined
-      const forSubagent = overlaid && bypass.caller === "subagent"
+      // 1.2.7 U-7 (C7, C21): except a shell call in a local category (`SUBAGENT_RUNS_LIKE_ROOT`), which runs as the root's
+      // does. Only the shell (its `bash` ask, and its `external_directory` ask, which carries the command): what an MCP,
+      // plugin or other tool does the table cannot read, so it stays the main agent's.
+      const shellCall =
+        input.permission === "bash" ||
+        (input.permission === "external_directory" &&
+          typeof (input.metadata as Record<string, unknown> | undefined)?.command === "string")
+      const runsLikeRoot = shellCall && SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed as string)
+      const forSubagent = overlaid && bypass.caller === "subagent" && !runsLikeRoot
       const mainAgent = `agent:main/${last?.agent ?? "build"}` as const
       const asked =
         verdict.class === "P"

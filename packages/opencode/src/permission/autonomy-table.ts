@@ -15,6 +15,7 @@ import { OutwardConsent } from "./outward-consent"
 import { ScriptScreen } from "./script-screen"
 import { BypassLists } from "./bypass-lists"
 import { BypassScreen } from "./bypass-screen"
+import { ScriptReader } from "./script-reader"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { LibraryRoot } from "../skill/library-root"
 import { SelfAddress } from "../server/self-address"
@@ -1124,9 +1125,15 @@ function classifySteps(input: Input, checkClass: CheckClass, reading: Reading): 
   // overlay opened; then the first opened step, as in 1.1.1.
   const openedSteps = strongest.filter((verdict) => verdict.class === "A" && verdict.bypassed !== undefined)
   const sends = (verdict: Verdict) => verdict.bypassed !== undefined && OUTWARD_HELD.has(verdict.bypassed)
+  const subagent = input.bypass?.caller === "subagent"
   const chosen =
     openedSteps.find((verdict) => OPENED_BY_NO_WAIT.has(verdict) && sends(verdict)) ??
     openedSteps.find((verdict) => sends(verdict)) ??
+    // 1.2.7 U-7 (SR7-02): for a subagent, a step opened in a decided category before one in a local category, so a
+    // compound that holds one decided piece reaches the main agent whatever the order of its steps. The root's line is
+    // chosen as in 1.2.6.
+    (subagent ? openedSteps.find((verdict) => OPENED_BY_NO_WAIT.has(verdict) && !SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed!)) : undefined) ??
+    (subagent ? openedSteps.find((verdict) => !SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed!)) : undefined) ??
     openedSteps.find((verdict) => OPENED_BY_NO_WAIT.has(verdict)) ??
     openedSteps[0] ??
     strongest.find((verdict) => verdict.category !== undefined) ??
@@ -2450,6 +2457,9 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   if (!input.bypass) return classifyBase(input, checkClass)
   // 1.1.3 (T3): under consent no verdict waits, the plan lineage's included; rule 8 still refuses what it refused.
   if (input.plan === true) return noWait(input, classifyBase(input, checkClass))
+  // 1.2.7 U-7 (C21 b): `sh|bash|zsh -c '<literal>'` is judged as the command line it runs, for root and subagent alike.
+  const inner = shellTextCall(input)
+  if (inner) return classify(inner, checkClass)
   // 1.1.1 F12b (Perf P2): one classify asks git about a file once, however many steps or scripts write it. 1.1.1 F14
   // (G5-P1): the one scope covers the whole consented classify, the steps' own overlays (reached from `classifySteps`,
   // whose nested scopes share this one), the call-level check and the kept path's `classifyBase` included.
@@ -2469,6 +2479,65 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
     }
     return noWait(input, verdict)
   })
+}
+
+/**
+ * 1.2.7 U-7 (C7, C21, OP-1, N7-129): the opened categories a subagent's call runs in like the root's under the person's
+ * consent (the gate in `index.ts`, which re-exports this one list): no decider call, the root's line with the child's
+ * `sessionID`. A positive list, pinned by an equality test (SR7-02); every other opened category still goes to the main
+ * agent, where "cannot tell" refuses. `classifySteps` names a decided step before a local one on a compound's line.
+ */
+export const SUBAGENT_RUNS_LIKE_ROOT: ReadonlySet<string> = new Set(["not_routine", "script", "outside_folder"])
+
+/** 1.2.7 U-7 (C21 b, c): the shells whose `-c` text is read as a command line, and whose script file is screened as one. */
+const SHELL_TEXT_PROGRAMS: ReadonlySet<string> = new Set(["sh", "bash", "zsh"])
+
+/**
+ * 1.2.7 U-7 (C21 b): a call that is exactly `sh|bash|zsh -c '<one literal>'` (one command, nothing before or after it, no
+ * redirect, no `cd`, no `NAME=value`), as the text the shell will run: the literal read by the shell's own reader
+ * (`ScriptReader`, the same tree-sitter `decompose` the shell tool gives `metadata.steps` with). undefined keeps the call
+ * as it was (decided `unreadable_command`): the reader is not ready; the literal has an expansion, a substitution, a
+ * variable, a glob or anything else the reader does not read in full; a control or format character, or a backslash before
+ * a line break, that the reader and the shell might take differently (SR7-20); or it runs a shell text, an `eval` or a
+ * launcher's code itself (one level only); or it deletes or replaces a file (`DeletionWords.deletesOrReplacesWide`), which
+ * is refused on the 1.2.6 path with its 1.2.6 line. What the shell said about the outer text (archive, checkpoint) is not about the
+ * inner one, so it is dropped: an inner deletion or overwrite is judged with nothing saved first.
+ */
+function shellTextCall(input: Input): Input | undefined {
+  if (input.permission !== "bash") return undefined
+  const command = input.metadata.command
+  if (typeof command !== "string") return undefined
+  const outer = ScriptReader.read(command, input.cwd)
+  if (!outer || outer.steps.length !== 1 || outer.writes.length > 0 || outer.upward || outer.chdirs || outer.assigned)
+    return undefined
+  const step = outer.steps[0]!
+  if (step.code !== undefined || step.argv.length !== 3 || step.cwds.length !== 1 || step.cwds[0] !== input.cwd) return undefined
+  const [program, flag, text] = step.argv as [string, string, string]
+  if (!SHELL_TEXT_PROGRAMS.has(program) || flag !== "-c" || text.trim() === "") return undefined
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text.replace(/[\n\t]/g, "")) || text.includes("\\\n")) return undefined
+  const steps = ScriptReader.read(text, input.cwd)
+  const reading = shellReading(steps, input.instance)
+  if (!steps || !reading?.complete || reading.steps.length === 0) return undefined
+  if (reading.steps.some((each) => BypassScreen.runText(each.argv) !== undefined)) return undefined
+  // A deletion or a replacement in the text keeps the 1.2.6 path (refused, archive first), its line included (CHAR-05).
+  if (reading.steps.some((each) => DeletionWords.deletesOrReplacesWide(each.argv, commandWords))) return undefined
+  return {
+    ...input,
+    patterns: [text],
+    metadata: { ...input.metadata, command: text, steps, archive: undefined, archiveTargets: undefined, checkpointTargets: undefined },
+    whole: input.whole ?? command,
+  }
+}
+
+/**
+ * 1.2.7 U-7 (C21 c): `sh|bash|zsh <file> [args]` the table judged P `script` (`scriptForm`: screened, hashed by the shell)
+ * runs that file as `./<file>` does, so the wide reader's "a shell with a script file cannot be read" is no deletion: the
+ * script screen's `delete` flag is what refuses a script that deletes (`noWait` rule 3).
+ */
+function shellRunsScreenedScript(input: Input, category: string | undefined) {
+  if (category !== "script" || input.permission !== "bash" || typeof input.metadata.command !== "string") return false
+  const form = scriptForm(input.metadata.command)
+  return form?.file !== undefined && form.program !== undefined && SHELL_TEXT_PROGRAMS.has(form.program)
 }
 
 /**
@@ -3031,7 +3100,8 @@ export function noWait(input: Input, verdict: Verdict): Verdict {
     if (flags.includes("sudo")) return { ...refused("admin_rights"), bypassed }
     if (flags.includes("delete")) return { ...refused("delete_compound"), bypassed }
   }
-  if (category === "not_reversible" || destroys(input)) return { ...refused("not_reversible"), bypassed }
+  if (category === "not_reversible" || (destroys(input) && !shellRunsScreenedScript(input, category)))
+    return { ...refused("not_reversible"), bypassed }
   const destinations = category !== undefined && OUTWARD_HELD.has(category) ? destinationsOf(input) : undefined
   return openedByNoWait({
     class: "A",
