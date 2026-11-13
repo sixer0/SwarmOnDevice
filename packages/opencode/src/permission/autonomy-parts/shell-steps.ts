@@ -254,10 +254,27 @@ export function cdTarget(words: readonly string[], cwd: string): string | undefi
   if (words[0] === "popd" || !FOLDER_MOVES.has(words[0]!) || words.length !== 2) return undefined
   const operand = words[1]!
   if (/^[-+]/.test(operand)) return undefined
+  // 1.2.8 row 27a (G1-01, C106): an operand with a shell operator or redirect character (`;`, `|`, `&`, `<`, `>`, `(`,
+  // `)`, `{`, `}`, `!`, `#`) or any whitespace but a plain space (a line break, a tab) names no folder the table can tell:
+  // the shell may split it. A plain space reaches here only inside a quoted word (`cd "my dir"`): every caller passes the
+  // words of a quote-aware reader (`Risk.plainWords`, `lookWords`, `homeCdWords`), never a split on spaces. Only a leading
+  // `${HOME}` keeps its braces; the home folder's own name is not judged.
+  if (/[^\S ]|[;|&<>(){}!#]/.test(operand.replace(/^\$\{HOME\}(?=\/|$)/, ""))) return undefined
   const spelled = operand.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, homedir())
   if (/[$`*?[~'"\\]/.test(spelled)) return undefined
   if (process.env.CDPATH && !/^(\/|\.{1,2}(\/|$))/.test(spelled)) return undefined
   return path.resolve(cwd, spelled)
+}
+
+/**
+ * 1.2.8 row 27a (G1-01, C106): the only folder move a walker reads from a piece `lookWords` refuses. Exactly `cd $HOME`
+ * or `cd ${HOME}`, optionally followed by `/` and a plain path (letters, digits, `.`, `_`, `+`, `-`, `/`), as the words
+ * `cdTarget` takes; undefined for anything else. Text the shell parser refused is never split on spaces, so an operator,
+ * a redirect, a quote or a second command in the operand never names a folder.
+ */
+export function homeCdWords(piece: string): string[] | undefined {
+  const match = /^cd (\$HOME|\$\{HOME\})(\/[A-Za-z0-9._+/-]*)?$/.exec(piece)
+  return match ? ["cd", match[1]! + (match[2] ?? "")] : undefined
 }
 
 /**
@@ -792,11 +809,13 @@ function installed(file: string, instance: InstanceContext) {
  */
 export function programInProject(command: string, cwd: string, instance: InstanceContext) {
   const pieces = command.replace(OUTPUT_TAIL, "").split(" && ")
-  const first = lookWords(pieces[0]!) ?? pieces[0]!.split(" ")
+  const first = lookWords(pieces[0]!) ?? homeCdWords(pieces[0]!)
   // A leading `cd <path>` is where every later piece looks for its program (1.2.8 R-2: read by `cdTarget`). A folder change
-  // whose folder cannot be told leaves the lookup unknown, which counts as the project's own program.
-  const moves = FOLDER_MOVES.has(first[0]!)
-  const target = moves ? cdTarget(first, cwd) : cwd
+  // whose folder cannot be told leaves the lookup unknown, which counts as the project's own program. 1.2.8 row 27a
+  // (G1-01): a first piece neither reader takes is a folder move when its leading name is one, and its folder is unknown.
+  const leading = first?.[0] ?? pieces[0]!.trimStart().split(/[^A-Za-z]/, 1)[0]!
+  const moves = FOLDER_MOVES.has(leading)
+  const target = moves ? (first ? cdTarget(first, cwd) : undefined) : cwd
   if (target === undefined) return pieces.length > 1
   const here = target
   return pieces.some((piece, index) => {
@@ -872,9 +891,9 @@ export function protectedLook(command: string, cwd: string, instance: InstanceCo
   for (const [index, piece] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
     // As `routine` reads it: a piece may drop its own error output, and nothing else.
     const words = lookWords(piece.replace(DROP_ERRORS, ""))
-    // `cd $HOME` is no plain word list, and `cdTarget` reads it from the bare words. In single quotes `$HOME` is no
-    // variable, so a quoted `$` is never read as the home folder.
-    const target = index === 0 && !/'[^']*\$/.test(piece) ? cdTarget(words ?? piece.trim().split(" "), cwd) : undefined
+    // `cd $HOME` is no plain word list; `homeCdWords` reads only its exact forms (1.2.8 row 27a, G1-01), never a naive split.
+    const cdWords = index === 0 ? (words ?? homeCdWords(piece)) : undefined
+    const target = cdWords ? cdTarget(cdWords, cwd) : undefined
     if (target !== undefined) {
       here = target
       named.push(here)

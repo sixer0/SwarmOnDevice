@@ -33,6 +33,9 @@ beforeAll(async () => {
   for (const name of ["sub/s.md", "sub/deep/s.md", "my dir/s.md"]) writeFileSync(path.join(dir, name), "x\n")
   home = mkdtempSync(path.join(os.tmpdir(), "r2cd-"))
   writeFileSync(path.join(home, "s.md"), "x\n")
+  // 1.2.8 row 27a (G1-01): the reviewer's probe fixture: a file a shell may read its commands from, a folder under home.
+  writeFileSync(path.join(dir, "a.md"), "x\n")
+  mkdirSync(path.join(home, "x"))
   spies = [spyOn(os, "homedir").mockReturnValue(home), spyOn(osModule, "homedir").mockReturnValue(home)]
 })
 afterAll(async () => {
@@ -113,4 +116,70 @@ describe("R-2 cd PROBE: a write after a folder change is judged where it lands",
     const cd = AutonomyTable.classify(await input(`cd ${home} && echo x > s.md`, undefined, "root"))
     expect({ pushd: pushd.class }).toEqual({ pushd: cd.class })
   })
+})
+
+// 1.2.8 row 27a (G1-01 HIGH, C106). Row 27 read a first piece `lookWords` refused by splitting it on spaces, and `cdTarget`
+// refused no shell operator, so `cd sub;./run.sh && ls` was read as a move into a folder named `sub;./run.sh` and the line
+// became A `protected_read` decided by the gate, for read roles, coder and root, mode on and off. Each verdict below is the
+// one BASE e1f9673772 gives (copied from a run of the same calls on a `git archive` of BASE); red at ca5040628d..50f5bdf8b3.
+type Expected = Pick<AutonomyTable.Verdict, "class" | "decidedBy" | "category" | "bypassed">
+const MAIN_AGENT = (bypassed: AutonomyTable.Verdict["bypassed"]): Expected => ({ class: "A", decidedBy: "agent", category: "by_main_agent", bypassed })
+const NOT_REVERSIBLE: Expected = { class: "X", decidedBy: "gate", category: "not_reversible", bypassed: "not_routine" }
+const NOT_ROUTINE: Expected = { class: "D", decidedBy: "gate", category: "not_routine" }
+const FILE_OP: Expected = { class: "A", decidedBy: "gate", category: "file-op" }
+// [command, verdict with consent (mode on), verdict without (mode off)]
+const SPLIT_OPERANDS: [string, Expected, Expected][] = [
+  // The five commands of the gate's probe (gateway_check/01_gate_m1.md G1-01).
+  ["cd sub;./run.sh && ls", MAIN_AGENT("not_routine"), NOT_ROUTINE],
+  ["cd sub;make && ls", MAIN_AGENT("not_routine"), NOT_ROUTINE],
+  ["cd sub;sh<a.md && ls", NOT_REVERSIBLE, NOT_ROUTINE],
+  ["cd ~/x;id && ls", MAIN_AGENT("not_routine"), NOT_ROUTINE],
+  ["cd sub|sh && ls", NOT_REVERSIBLE, NOT_ROUTINE],
+  // The rest of the refused set: `&`, `>`, `(`/`)`, and the home forms the new helper reads followed by an operator.
+  ["cd sub&./run.sh && ls", MAIN_AGENT("not_routine"), NOT_ROUTINE],
+  ["cd sub>a.md && ls", FILE_OP, FILE_OP],
+  ["cd sub(x) && ls", MAIN_AGENT("unreadable_command"), NOT_ROUTINE],
+  ["cd sub;touch${IFS}zz && ls", MAIN_AGENT("unreadable_command"), NOT_ROUTINE],
+  ["cd $HOME;id && ls", MAIN_AGENT("not_routine"), NOT_ROUTINE],
+  ["cd ${HOME}/x;id && ls", MAIN_AGENT("not_routine"), NOT_ROUTINE],
+  ["cd $HOME/x|sh && ls", NOT_REVERSIBLE, NOT_ROUTINE],
+]
+const CALLERS: [string | undefined, "root" | "subagent"][] = [
+  [undefined, "root"],
+  ["coder", "subagent"],
+  ["planner", "subagent"],
+]
+
+describe("27a G1-01: a cd operand the shell would split names no folder; every verdict equals BASE", () => {
+  for (const [command, on, off] of SPLIT_OPERANDS)
+    for (const [agent, caller] of CALLERS)
+      for (const mode of ["on", "off"] as const)
+        test(`${command} | ${agent ?? "root"} | mode ${mode}`, async () => {
+          const call = await input(command, agent, caller)
+          if (mode === "off") delete (call as { bypass?: unknown }).bypass
+          const verdict = AutonomyTable.classify(call)
+          expect({
+            command,
+            readClass: AutonomyTable.isReadOnlyShell(command, dir, instance),
+            roleRefuses: AutonomyTable.readRoleRefuses(call, instance),
+            verdict: { class: verdict.class, decidedBy: verdict.decidedBy, category: verdict.category, bypassed: verdict.bypassed },
+          }).toEqual({
+            command,
+            readClass: false,
+            roleRefuses: agent === "planner",
+            verdict: { decidedBy: undefined, category: undefined, bypassed: undefined, ...(mode === "on" ? on : off) },
+          })
+        })
+})
+
+describe("27a G1-01: the exact home forms keep row 27's read (red at BASE, green at row 27 and after)", () => {
+  for (const command of ["cd $HOME && ls", "cd ${HOME}/x && ls"])
+    test(command, async () => {
+      const call = await input(command, "planner", "subagent")
+      expect({ command, readClass: AutonomyTable.isReadOnlyShell(command, dir, instance), roleRefuses: AutonomyTable.readRoleRefuses(call, instance) }).toEqual({
+        command,
+        readClass: true,
+        roleRefuses: false,
+      })
+    })
 })

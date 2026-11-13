@@ -9,7 +9,7 @@ import { Reach } from "../../tool/reach"
 import { Risk } from "../../tool/risk"
 import type { CommandKind } from "./types"
 import { BRANCH, COMMIT, FILE_OPS, INSTALLS, OUTPUT_TAIL, canRunIn, fileOp, gitAllowed, lockfileUnchanged, matchesCheck, noRepositoryBetween, safePath } from "./routine"
-import { SED_ADDR, cdTarget, lookWords, probe, programInProject } from "./shell-steps"
+import { SED_ADDR, cdTarget, homeCdWords, lookWords, probe, programInProject } from "./shell-steps"
 import { CHECKSUMS, nearLibrary } from "./outside"
 // Programs that only look. Each lists what would make it do more: run a program (`find -exec`, `rg --pre`, `rg -z`), write
 // (`find -delete`, `find -fprint`, `tree -o`, `tree -R`, `file -C`), wait for good (`tail -f`), read names from a file
@@ -566,9 +566,9 @@ export function readClass(command: string, cwd: string, instance: InstanceContex
   const named: string[] = []
   for (const [index, raw] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
     const words = lookWords(raw.replace(DROP_ERRORS, ""))
-    // `cd $HOME` is no plain word list, and `cdTarget` reads it from the bare words. In single quotes `$HOME` is no
-    // variable, so a quoted `$` is never read as the home folder.
-    const target = index === 0 && !/'[^']*\$/.test(raw) ? cdTarget(words ?? raw.trim().split(" "), cwd) : undefined
+    // `cd $HOME` is no plain word list; `homeCdWords` reads only its exact forms (1.2.8 row 27a, G1-01), never a naive split.
+    const cdWords = index === 0 ? (words ?? homeCdWords(raw)) : undefined
+    const target = cdWords ? cdTarget(cdWords, cwd) : undefined
     if (target !== undefined) {
       here = target
       named.push(here)
