@@ -18,8 +18,16 @@ export type MissionWriter = {
    * 1.2.8 row 46 (N8-144, 01d §7): join/new of an open placement request. Main answers, moves and places in one
    * sequence; absent (older desktop) = join/new stay disabled.
    */
-  place?(input: { mission: string; request: string; option: string }): Promise<MissionControlResult<{ decision: string; group: string }>>
+  place?(input: { mission: string; request: string; option: string }): Promise<PlaceResult>
 }
+
+/**
+ * 1.2.8 row 46b: what `place` answers. A placement (or its retry) returns `group`; a tidy approve returns `moved` and
+ * `total`. A tidy refusal or stop names its `mission`; `moved` is present once the answer was recorded (a stop).
+ */
+export type PlaceResult =
+  | { ok: true; data: { decision: string; group?: string; moved?: number; total?: number; replayed?: boolean } }
+  | { ok: false; code: string; message: string; mission?: string; moved?: number; total?: number }
 
 /** Adapter: the platform's optional `missions` field; absent (or read-only) = no writes offered. */
 export function missionWriterOf(platform: object): MissionWriter | undefined {
@@ -79,6 +87,29 @@ export function groupNameOk(name: unknown): name is string {
   return !RESERVED_GROUP_NAMES.some((reserved) => reserved === name.toLowerCase())
 }
 export const isPlacement = (decision: MissionDecisionVM) => decision.topic === PLACEMENT_TOPIC
+// 1.2.8 row 46b (AC-PROJg; 01d §5): the tidy list in the same decision card.
+export const TIDY_TOPIC = "project-tidy"
+export const isTidy = (decision: MissionDecisionVM) => decision.topic === TIDY_TOPIC
+const kindChip = (kind: string | undefined, t: Translate) => (kind && GROUP_KINDS.includes(kind) ? t(`session.mission.group.${kind}`) : undefined)
+
+export type TidyLineView = { mission: string; text: string; stays: boolean; kind?: string }
+
+/**
+ * One line per proposal item: N8-161 `{{mission}} → {{group}}` or N8-162 when the mission stays. `{{mission}}` is the id
+ * (the host proposal carries ids only). A line whose group fails the group-name rule is shown as staying: main refuses
+ * that list anyway.
+ */
+export function tidyLines(decision: MissionDecisionVM, t: Translate): TidyLineView[] {
+  return (decision.proposal ?? []).map((item) =>
+    item.group !== null && groupNameOk(item.group)
+      ? { mission: item.mission, text: t("session.mission.tidy.row", { mission: item.mission, group: item.group }), stays: false, kind: kindChip(item.groupKind, t) }
+      : { mission: item.mission, text: `${item.mission} — ${t("session.mission.tidy.stay")}`, stays: true },
+  )
+}
+
+/** Items that move (have a valid group): the count on the approve button (N8-163). */
+export const tidyCount = (decision: MissionDecisionVM) =>
+  (decision.proposal ?? []).filter((item) => item.group !== null && groupNameOk(item.group)).length
 
 export type DecisionOptionView = {
   id: string
@@ -100,6 +131,17 @@ export type DecisionOptionView = {
  */
 export function decisionOptions(decision: MissionDecisionVM, t: Translate): DecisionOptionView[] {
   const tag = (recommended: boolean) => (recommended ? t("session.mission.decision.recommended") : undefined)
+  if (isTidy(decision)) {
+    // 1.2.8 row 46b: approve (N8-163, moves the listed missions in main) and decline (N8-164, the ordinary answer).
+    const has = (id: string) => decision.options.find((opt) => opt.id === id)
+    const shown: DecisionOptionView[] = []
+    const approve = has("approve")
+    if (approve && tidyCount(decision) > 0)
+      shown.push({ id: "approve", label: t("session.mission.tidy.approve", { count: tidyCount(decision) }), consequence: "", tag: tag(approve.recommended), moves: true })
+    const decline = has("decline")
+    if (decline) shown.push({ id: "decline", label: t("session.mission.tidy.decline"), consequence: "", tag: tag(decline.recommended) })
+    return shown
+  }
   if (!isPlacement(decision))
     return decision.options.map((opt) => ({ id: opt.id, label: opt.label, consequence: opt.consequence, tag: tag(opt.recommended) }))
   const shown: DecisionOptionView[] = []
@@ -116,7 +158,7 @@ export function decisionOptions(decision: MissionDecisionVM, t: Translate): Deci
       tag: tag(opt.recommended),
       moves: true,
       group: opt.group,
-      ...(opt.groupKind && GROUP_KINDS.includes(opt.groupKind) ? { kind: t(`session.mission.group.${opt.groupKind}`) } : {}),
+      ...(kindChip(opt.groupKind, t) ? { kind: kindChip(opt.groupKind, t) } : {}),
     })
   }
   return shown
@@ -176,6 +218,8 @@ export type MissionCommandState = {
   inputError: string | null
   localMission: string | undefined
   local: MissionFeedLine[]
+  /** 1.2.8 row 46b: a tidy apply in flight (N8-165) */
+  moving: { done: number; total: number } | null
 }
 
 export function emptyCommandState(): MissionCommandState {
@@ -187,6 +231,7 @@ export function emptyCommandState(): MissionCommandState {
     inputError: null,
     localMission: undefined,
     local: [],
+    moving: null,
   }
 }
 
@@ -202,8 +247,8 @@ export function createCommandController(input: {
   t: Translate
   onState: (state: MissionCommandState) => void
   now?: () => string
-  /** 1.2.8 row 46: the success toast of a placement (N8-168) */
-  toast?: (text: string) => void
+  /** 1.2.8 row 46: the success toast of a placement (N8-168); 1.2.8 row 46b: "error" for a stopped tidy (N8-167) */
+  toast?: (text: string, variant?: "success" | "error") => void
 }) {
   const now = input.now ?? (() => new Date().toISOString())
   let state = emptyCommandState()
@@ -259,28 +304,69 @@ export function createCommandController(input: {
   /**
    * 1.2.8 row 46 (01d §4, §7): join/new of an open placement request. One main-process action records the answer and
    * moves the mission; no session prompt follows (the session itself moved; the agent reads the answer from the store).
+   * 1.2.8 row 46b (01d §5): approve of an open tidy request goes the same way (one approval; main moves the listed
+   * missions).
    */
   async function place(mission: string, decision: MissionDecisionVM, optionId: string) {
     forMission(mission)
     const option = decision.options.find((opt) => opt.id === optionId)
     const writerPlace = input.writer.place
-    if (!option || !isPlacement(decision) || !writerPlace || !groupNameOk(option.group)) return false
+    if (!option || !writerPlace) return false
+    const tidy = isTidy(decision)
+    if (tidy ? option.id !== "approve" || tidyCount(decision) === 0 : !isPlacement(decision) || !groupNameOk(option.group)) return false
     if (!canAnswer(mission, decision.id)) return false
     const key = keyOf(mission, decision.id)
-    emit({ busy: true, answered: [...state.answered, key], decisionError: null })
-    const result = await writerPlace
+    emit({ busy: true, answered: [...state.answered, key], decisionError: null, moving: tidy ? { done: 0, total: tidyCount(decision) } : null })
+    const result: PlaceResult = await writerPlace
       .call(input.writer, { mission, request: decision.id, option: option.id })
-      .catch((error): MissionControlResult<never> => ({ ok: false, code: "FAILED", message: errorText(error) }))
+      .catch((error): PlaceResult => ({ ok: false, code: "FAILED", message: errorText(error) }))
     if (!result.ok) {
       // A refusal before the answer leaves the request open (the person may choose again); after it the next read
       // drops the card.
+      const stopped = tidy && typeof result.moved === "number"
+      const text = !tidy
+        ? moveErrorText(result, input.t)
+        : stopped && result.code !== "REHOME_ROLLBACK_FAILED"
+          ? input.t("session.mission.tidy.stopped", { mission: result.mission ?? "", reason: moveErrorText(result, input.t) })
+          : input.t("session.mission.move.error.failed", { reason: `${result.mission ? `${result.mission}: ` : ""}${moveErrorText(result, input.t)}` })
+      emit({ busy: false, moving: null, answered: state.answered.filter((item) => item !== key), decisionError: text })
+      // A stopped tidy is answered: its card leaves on the refresh, so the stop also goes to a toast.
+      if (stopped) input.toast?.(text, "error")
+      input.refresh()
+      return false
+    }
+    emit({ busy: false, moving: null })
+    input.refresh()
+    input.toast?.(
+      tidy
+        ? input.t("session.mission.tidy.done", { count: result.data.moved ?? 0 })
+        : input.t("session.mission.move.done", { group: result.data.group ?? option.group ?? "" }),
+    )
+    return true
+  }
+
+  /**
+   * 1.2.8 row 46b (C98): the person's placement answer is saved but the mission is not in the group (the move failed
+   * after the answer). Main runs the move again from the rehome step (idempotent; already placed = no-op); nothing is
+   * answered again.
+   */
+  async function retry(mission: string, unplaced: { id: string; option: string; group: string }) {
+    forMission(mission)
+    const writerPlace = input.writer.place
+    if (!writerPlace || !groupNameOk(unplaced.group) || !canAnswer(mission, unplaced.id)) return false
+    const key = keyOf(mission, unplaced.id)
+    emit({ busy: true, answered: [...state.answered, key], decisionError: null })
+    const result: PlaceResult = await writerPlace
+      .call(input.writer, { mission, request: unplaced.id, option: unplaced.option })
+      .catch((error): PlaceResult => ({ ok: false, code: "FAILED", message: errorText(error) }))
+    if (!result.ok) {
       emit({ busy: false, answered: state.answered.filter((item) => item !== key), decisionError: moveErrorText(result, input.t) })
       input.refresh()
       return false
     }
     emit({ busy: false })
     input.refresh()
-    input.toast?.(input.t("session.mission.move.done", { group: result.data.group }))
+    input.toast?.(input.t("session.mission.move.done", { group: result.data.group ?? unplaced.group }))
     return true
   }
 
@@ -315,6 +401,7 @@ export function createCommandController(input: {
     canAnswer,
     answer,
     place,
+    retry,
     setDraft(text: string) {
       const check = checkInstruction(text)
       const tooLong = !check.ok && check.reason === "tooLong"

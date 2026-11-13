@@ -166,8 +166,10 @@ export type MissionControlClient = MissionControlPlatform & {
   /**
    * 1.2.8 row 46 (01d §7.2 step 6): `studio_mission_place` for a mission whose placement request was answered with join or
    * new. Called by mission-ipc.ts `place` only, after the move; never a renderer channel of its own.
+   * 1.2.8 row 46b (01d §7.3): `tidyMission` = the mission holding the answered project-tidy request (`decision`) whose
+   * proposal lists this mission.
    */
-  setProjectDir(input: { mission: string; projectDir: string; decision: string }): Promise<MissionControlResult<Record<string, unknown>>>
+  setProjectDir(input: { mission: string; projectDir: string; decision: string; tidyMission?: string }): Promise<MissionControlResult<Record<string, unknown>>>
   /** Low level, allow-listed. Exported for the tests of the allow-list; ipc never calls it. */
   callTool(name: string, args: Record<string, unknown>): Promise<MissionControlResult<Record<string, unknown>>>
 }
@@ -476,16 +478,19 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
     return { ok: true, data: { seq } }
   }
 
-  async function setProjectDir(input: { mission: string; projectDir: string; decision: string }) {
-    const r = plain(input, ["mission", "projectDir", "decision"])
-    if (!r) return bad("place takes {mission, projectDir, decision}")
+  async function setProjectDir(input: { mission: string; projectDir: string; decision: string; tidyMission?: string }) {
+    const r = plain(input, ["mission", "projectDir", "decision"], ["tidyMission"])
+    if (!r) return bad("place takes {mission, projectDir, decision, tidyMission?}")
     const mission = missionOf(r)
     if (!mission) return bad("mission id is not valid")
     if (!isString(r.decision) || !REQUEST_ID_RE.test(r.decision)) return bad("request id is not valid")
     const dir = r.projectDir
     if (!isString(dir) || dir.length < 1 || dir.length > DIRECTORY_MAX_CHARS || CONTROL_RE.test(dir) || !isAbsolute(dir))
       return bad("projectDir must be an absolute folder")
-    return callTool("studio_mission_place", { mission, projectDir: dir, decision: r.decision })
+    if (r.tidyMission === undefined) return callTool("studio_mission_place", { mission, projectDir: dir, decision: r.decision })
+    const tidyMission = missionOf({ mission: r.tidyMission })
+    if (!tidyMission) return bad("tidy mission id is not valid")
+    return callTool("studio_mission_place", { mission, projectDir: dir, decision: r.decision, tidyMission })
   }
 
   return { list, get, answer, instruct, setProjectDir, callTool }

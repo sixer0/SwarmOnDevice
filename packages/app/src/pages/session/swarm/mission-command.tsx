@@ -12,6 +12,8 @@ import {
   emptyCommandState,
   feedWho,
   isPlacement,
+  isTidy,
+  tidyLines,
   type MissionWriter,
   type Translate,
 } from "./mission-command-model"
@@ -48,8 +50,8 @@ export function MissionCommand(props: {
    * (N8-453). Absent = not known (the rehome route still refuses an active session).
    */
   sessionBusy?: (sessions: string[]) => boolean
-  /** 1.2.8 row 46: the placement success toast (N8-168); default the app toast */
-  toast?: (text: string) => void
+  /** 1.2.8 row 46: the placement success toast (N8-168); default the app toast. 1.2.8 row 46b: tidy done / stopped */
+  toast?: (text: string, variant?: "success" | "error") => void
 }) {
   const language = useLanguage()
   const t = language.t as Translate
@@ -60,18 +62,29 @@ export function MissionCommand(props: {
     prompt: (text) => props.prompt(text),
     t,
     onState: (next) => setState(reconcile(next)),
-    toast: (text) => (props.toast ? props.toast(text) : showToast({ title: text, variant: "success" })),
+    toast: (text, variant = "success") => (props.toast ? props.toast(text, variant) : showToast({ title: text, variant })),
   })
 
   const options = createMemo(() => (props.model.decision ? decisionOptions(props.model.decision, t) : []))
   const placement = () => !!props.model.decision && isPlacement(props.model.decision)
-  const waitIdle = () => placement() && !!props.sessionBusy?.(props.model.sessions ?? [])
+  // 1.2.8 row 46b (01d §5): the tidy list renders in the same card; approve waits like join/new.
+  const tidy = () => !!props.model.decision && isTidy(props.model.decision)
+  const lines = createMemo(() => (props.model.decision && tidy() ? tidyLines(props.model.decision, t) : []))
+  const waitIdle = () => (placement() || tidy()) && !!props.sessionBusy?.(props.model.sessions ?? [])
+  // 1.2.8 row 46b (C98): an answered placement whose move did not finish, shown when no request is open.
+  const unplaced = () => (props.model.decision ? undefined : props.model.unplaced)
   const answerLocked = () => {
     state.busy
     state.answered.length
     const decision = props.model.decision
     return !decision || !command.canAnswer(props.model.id, decision.id)
   }
+  const answerLockedFor = (request: string) => {
+    state.busy
+    state.answered.length
+    return !command.canAnswer(props.model.id, request)
+  }
+  const waitIdleAny = () => !!props.sessionBusy?.(props.model.sessions ?? [])
   const feed = createMemo(() => {
     state.local.length
     state.localMission
@@ -104,12 +117,32 @@ export function MissionCommand(props: {
             <div data-mission-decision-body class="flex max-h-[min(40vh,240px)] min-h-0 shrink flex-col gap-1.5 overflow-y-auto overscroll-contain">
               <div class="flex items-baseline justify-between gap-2">
                 <h2 data-mission-question class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">
-                  {placement() ? t("session.mission.placement.title") : decision().question}
+                  {placement() ? t("session.mission.placement.title") : tidy() ? t("session.mission.tidy.title") : decision().question}
                 </h2>
                 <span class="shrink-0 text-v2-text-text-faint">{decision().id}</span>
               </div>
               <Show when={decision().context}>
                 {(context) => <p data-mission-context class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{context()}</p>}
+              </Show>
+              {/* 1.2.8 row 46b: the tidy description (N8-160) and one line per listed mission (N8-161 / N8-162). */}
+              <Show when={tidy()}>
+                <p data-mission-tidy-description class="text-v2-text-text-muted">{t("session.mission.tidy.description")}</p>
+                <ul data-mission-tidy-list class="flex min-w-0 flex-col gap-0.5">
+                  <For each={lines()}>
+                    {(line) => (
+                      <li data-mission-tidy-line data-stays={line.stays ? "" : undefined} class="flex min-w-0 flex-wrap items-center gap-1.5 [overflow-wrap:anywhere] text-v2-text-text-base">
+                        {line.text}
+                        <Show when={line.kind}>
+                          {(kind) => (
+                            <span data-mission-group-kind class="rounded-[4px] px-1 text-v2-text-text-muted [font-weight:440]">
+                              {kind()}
+                            </span>
+                          )}
+                        </Show>
+                      </li>
+                    )}
+                  </For>
+                </ul>
               </Show>
             </div>
             <div data-mission-decision-actions class="flex min-w-0 shrink-0 flex-wrap gap-1.5">
@@ -159,10 +192,56 @@ export function MissionCommand(props: {
             <Show when={waitIdle()}>
               <p data-mission-placement-wait class="text-v2-text-text-faint">{t("session.mission.placement.waitIdle")}</p>
             </Show>
+            <Show when={state.moving}>
+              {(moving) => (
+                <p data-mission-tidy-progress class="text-v2-text-text-muted">
+                  {t("session.mission.tidy.progress", { done: moving().done, total: moving().total })}
+                </p>
+              )}
+            </Show>
             <Show when={props.model.openDecisions > 1}>
               <div class="text-v2-text-text-faint">
                 {t("session.mission.decision.more", { count: props.model.openDecisions - 1 })}
               </div>
+            </Show>
+            <Show when={state.decisionError}>
+              {(error) => (
+                <div role="alert" data-mission-decision-error class="text-v2-state-fg-danger">
+                  {error()}
+                </div>
+              )}
+            </Show>
+          </section>
+        )}
+      </Show>
+
+      {/* 1.2.8 row 46b (C98): the same decision card for an answered placement whose move did not finish. */}
+      <Show when={unplaced()}>
+        {(item) => (
+          <section
+            data-mission-decision
+            data-mission-retry-card
+            class="mb-0.5 flex max-h-full min-w-0 shrink-0 flex-col gap-1.5 overflow-y-auto rounded-[8px] p-2 [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
+          >
+            <div class="flex items-baseline justify-between gap-2">
+              <p data-mission-unplaced class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base">
+                {t("session.mission.move.error.failed", { reason: t(`session.mission.placement.${item().option}`, { group: item().group }) })}
+              </p>
+              <span class="shrink-0 text-v2-text-text-faint">{item().id}</span>
+            </div>
+            <div class="flex min-w-0 shrink-0 flex-wrap gap-1.5">
+              <button
+                type="button"
+                data-mission-retry
+                disabled={answerLockedFor(item().id) || waitIdleAny() || !props.writer.place}
+                class="flex min-w-0 flex-[1_1_8rem] flex-col items-stretch gap-0.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2 py-1.5 text-left text-v2-text-text-base [font-weight:500] disabled:opacity-60"
+                onClick={() => void command.retry(props.model.id, item())}
+              >
+                {t(`session.mission.placement.${item().option}`, { group: item().group })}
+              </button>
+            </div>
+            <Show when={waitIdleAny()}>
+              <p data-mission-placement-wait class="text-v2-text-text-faint">{t("session.mission.placement.waitIdle")}</p>
             </Show>
             <Show when={state.decisionError}>
               {(error) => (

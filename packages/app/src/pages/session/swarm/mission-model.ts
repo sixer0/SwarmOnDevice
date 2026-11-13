@@ -42,6 +42,8 @@ export type DecisionRequestWire = {
   blockingRows?: string[]
   /** 1.2.8 row 46 (N8-146): absent = an ordinary decision. */
   topic?: string
+  /** 1.2.8 row 46b (N8-148): `project-tidy` only; `group: null` = the mission stays at the root. */
+  proposal?: Array<{ mission: string; group: string | null; groupKind?: string }>
   status: "open" | "answered" | "withdrawn"
   createdAt: string
   closedAt?: string
@@ -109,6 +111,8 @@ export type MissionGetWire = {
     rows: MissionRowWire[]
     /** 1.2.8 row 46: the linked sessions (host SessionLink); absent from tests and older callers. */
     sessions?: Array<{ client: string; ref: string }>
+    /** 1.2.8 row 46b: the mission's project folder (host `project.dir`); absent from tests and older callers. */
+    project?: { dir?: string }
   }
   derived: MissionDerivedWire
   requests?: DecisionRequestWire[]
@@ -158,6 +162,8 @@ export type MissionDecisionVM = {
   options: Array<{ id: string; label: string; consequence: string; recommended: boolean; group?: string; groupKind?: string }>
   /** 1.2.8 row 46: "project-placement" renders the placement card (01d §4). */
   topic?: string
+  /** 1.2.8 row 46b: the tidy list lines of a "project-tidy" request (01d §5). */
+  proposal?: Array<{ mission: string; group: string | null; groupKind?: string }>
 }
 export type MissionFeedLine = {
   key: string
@@ -204,6 +210,11 @@ export type MissionVM = {
   openDecisions: number
   /** 1.2.8 row 46: Swarm sessions linked to the mission (join/new wait while one of them is busy, 01d §4). */
   sessions?: string[]
+  /**
+   * 1.2.8 row 46b (C98): the person answered a placement with join/new in Mission Control (by user, attested) but the
+   * mission is not in that group: the move did not finish and can be retried from the card.
+   */
+  unplaced?: { id: string; option: string; group: string; groupKind?: string }
   feed: MissionFeedLine[]
   deliverables: MissionDeliverableVM[]
   finalCount: number
@@ -521,8 +532,29 @@ export function buildMission(
           ...(opt.groupKind === undefined ? {} : { groupKind: opt.groupKind }),
         })),
         ...(oldestOpen.topic === undefined ? {} : { topic: oldestOpen.topic }),
+        ...(Array.isArray(oldestOpen.proposal) ? { proposal: oldestOpen.proposal } : {}),
       }
     : null
+
+  // 1.2.8 row 46b (C98): the latest person-answered placement whose group is not the mission's folder (yet).
+  const projectDir = typeof mission.project?.dir === "string" ? mission.project.dir : undefined
+  const lastPlacement = requests
+    .filter((req) => req.status === "answered" && req.topic === "project-placement" && req.answer)
+    .sort((a, b) => timeOf(b.closedAt) - timeOf(a.closedAt))[0]
+  const placedOption =
+    lastPlacement?.answer?.by === "user" && lastPlacement.answer.attested === true && ["join", "new"].includes(lastPlacement.answer.option)
+      ? lastPlacement.options.find((opt) => opt.id === lastPlacement.answer?.option)
+      : undefined
+  const unplaced =
+    lastPlacement && placedOption && typeof placedOption.group === "string" && projectDir !== undefined &&
+    projectDir.split("/").pop() !== placedOption.group
+      ? {
+          id: lastPlacement.id,
+          option: placedOption.id,
+          group: placedOption.group,
+          ...(placedOption.groupKind === undefined ? {} : { groupKind: placedOption.groupKind }),
+        }
+      : undefined
 
   const answeredReqs = requests
     .filter((req) => req.status === "answered" && req.answer)
@@ -573,6 +605,7 @@ export function buildMission(
     decision,
     openDecisions: open.length,
     sessions: (mission.sessions ?? []).filter((link) => link?.client === "swarm" && typeof link.ref === "string").map((link) => link.ref),
+    ...(unplaced ? { unplaced } : {}),
     feed,
     deliverables,
     finalCount: deliverables.filter((d) => d.status === "final").length,
