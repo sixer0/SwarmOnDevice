@@ -414,6 +414,64 @@ function swimFrameSvg(f: SwimFrame, W: number): string[] {
   return out;
 }
 
+type RoutedPaths = Parameters<typeof crossingHops>[0];
+type PathPt = RoutedPaths[number]["points"][number];
+
+/** Row 55c: a polyline without repeated vertices and without straight-through vertices of an axis-parallel run. */
+function straightRuns(pts: readonly PathPt[]): PathPt[] {
+  const out: PathPt[] = [];
+  for (const p of pts) {
+    const q = out[out.length - 1];
+    if (q && Math.abs(q[0] - p[0]) < 1e-9 && Math.abs(q[1] - p[1]) < 1e-9) continue;
+    const o = out[out.length - 2];
+    // q lies between o and p on one vertical or horizontal line: q is no bend
+    if (o && q) {
+      const vert = Math.abs(o[0] - q[0]) < 1e-9 && Math.abs(q[0] - p[0]) < 1e-9 && (q[1] - o[1]) * (p[1] - q[1]) > 0;
+      const hor = Math.abs(o[1] - q[1]) < 1e-9 && Math.abs(q[1] - p[1]) < 1e-9 && (q[0] - o[0]) * (p[0] - q[0]) > 0;
+      if (vert || hor) out.pop();
+    }
+    out.push(p);
+  }
+  return out;
+}
+
+/**
+ * Swarm 1.2.8 row 55c (C133, VIS-9 jumps, 01f §3.3): line jumps as Visio draws them. `crossingHops` (HS port) tests a
+ * crossing strictly inside one segment of each path, so a crossing on a vertex where the router left a repeated or
+ * straight-through point (vis9's crossing at 128 mm: the horizontal link has the vertex x = 64.0 twice, right on the
+ * vertical link) drew no hop. The hop test now runs on the straight runs of each path; the drawn paths are unchanged.
+ * A real bend at a crossing is an overlap (orthogonal legs), never a hop. A hop whose arc would reach past a bend of its
+ * run (centre closer than the hop radius) moves along the run so the arc stays on the straight piece (still over the
+ * crossing); a run shorter than the arc takes it at its middle. Paths without such vertices keep their hops byte for byte.
+ */
+export function jumpHops(paths: RoutedPaths): HoppedEdge[] {
+  const runs = paths.map((p) => ({ ...p, points: straightRuns(p.points) }));
+  const found = crossingHops(runs);
+  const r = LIMITS.hop_radius_mm;
+  return paths.map((p, i) => {
+    const pts = runs[i].points;
+    const hops = found[i].hops.map(([hx, hy]): readonly [number, number] => {
+      for (let u = 0; u + 1 < pts.length; u++) {
+        const [ax, ay] = pts[u];
+        const [bx, by] = pts[u + 1];
+        if (Math.abs(ay - by) >= 1e-9 || Math.abs(ay - hy) >= 1e-9) continue;
+        const lo = Math.min(ax, bx);
+        const hi = Math.max(ax, bx);
+        if (!(lo < hx && hx < hi)) continue;
+        // a run end is a bend unless it is the path's own end (node border)
+        const loBend = ax < bx ? u > 0 : u + 2 < pts.length;
+        const hiBend = ax < bx ? u + 2 < pts.length : u > 0;
+        const min = loBend ? lo + r : -Infinity;
+        const max = hiBend ? hi - r : Infinity;
+        if (min > max) return [(lo + hi) / 2, hy];
+        return [Math.min(Math.max(hx, min), max), hy];
+      }
+      return [hx, hy];
+    });
+    return { ...p, d: p.d ?? polylineD(p.points), hops };
+  });
+}
+
 /**
  * Swarm 1.2.8 row 55b (VIS-2b, 01f §2.3): kolam dan lajurnya, tanpa data-mark (G-2). Tepi kolam = kotak garis utama
  * (STROKE_PRIMARY) berwarna garis tepi simpul (ink700, tanpa warna baru); strip kepala kolam dibatasi garis utama yang
@@ -461,7 +519,8 @@ function swimPoolsSvg(f: SwimFrame, pools: readonly SwimPool[], W: number): stri
     p.lanes.forEach((li, j) => {
       const ln = f.lanes[li];
       if (j > 0) out.push(lineSvg(ln.lo, head, ln.lo, f.bottom, "ink200", STROKE_HAIR));
-      out.push(lineSvg(ln.lo, f.headBottom, ln.hi, f.headBottom, "ink200", STROKE_HAIR));
+      // row 55c (G3-15): no lane header row when no lane is named (headBottom = pool header rule)
+      if (f.headBottom > head + 1e-6) out.push(lineSvg(ln.lo, f.headBottom, ln.hi, f.headBottom, "ink200", STROKE_HAIR));
       if (ln.label) out.push(svgText((ln.lo + ln.hi) / 2.0, head + hdr, ln.label, { ...opt, anchor: "middle" }));
     });
   }
@@ -649,7 +708,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   const fit = s.family === "graph" ? graphFit(s, sheet, paths, plan ? planBands(plan) : undefined) : undefined;
   if (plan && fit) plan = shiftPlan(plan, fit.dy);
   // Row 57b (VIS-9, 01f §3.3, N8-266): `jumps: "off"` draws no hop; "on" or absent = today's crossingHops.
-  const hopped: HoppedEdge[] = crossingHops(fit ? fit.paths : paths).map((p) => (s.jumps === "off" ? { ...p, hops: [] } : p));
+  // Row 55c (C133): a crossing on a collinear vertex of a run (vis9 at 128 mm) also hops (`jumpHops`).
+  const hopped: HoppedEdge[] = jumpHops(fit ? fit.paths : paths).map((p) => (s.jumps === "off" ? { ...p, hops: [] } : p));
   const arrows = arrowsOfPaths(s, hopped); // row 57 (VIS-7): heads per drawn connector
   ran.push("DATUM-32"); // ditegakkan detur rute (gagal = lempar)
 
@@ -728,8 +788,15 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     // Swarm 1.2.8 row 55b (VIS-2b, 01f §1 Group, N8-252): style "group" = BPMN group, rounded (rx 1.6 mm) dashdot;
     // absent or "zone" = today's dashed rect, byte-identical.
     const group = (z as { style?: unknown }).style === "group";
+    // Swarm 1.2.8 row 55c (C133): a member on the sheet edge put the zone half a column past it (dg_topology x -5.33);
+    // the rect is clipped to the figure box, half a stroke inside, only where it ran outside (others byte-identical).
+    const inset = STROKE_HAIR / 2;
+    const zx0 = zx < 0 ? inset : zx;
+    const zy0 = zy < 0 ? inset : zy;
+    const zx1 = zx + zw > W ? W - inset : zx + zw;
+    const zy1 = zy + zh;
     sheet.add(
-      `<rect x="${pyNum(zx, 2)}" y="${pyNum(zy, 2)}" width="${pyNum(zw, 2)}" height="${pyNum(zh, 2)}" ${group ? 'rx="1.6" ry="1.6" ' : ""}fill="none" ` +
+      `<rect x="${pyNum(zx0, 2)}" y="${pyNum(zy0, 2)}" width="${pyNum(zx0 === zx && zx1 === zx + zw ? zw : zx1 - zx0, 2)}" height="${pyNum(zy0 === zy ? zh : zy1 - zy0, 2)}" ${group ? 'rx="1.6" ry="1.6" ' : ""}fill="none" ` +
         `stroke="${colourOf("ink400")}" stroke-width="${pyNum(STROKE_HAIR, 2)}" stroke-dasharray="${group ? DASH_PATTERNS.dashdot : DASH_PATTERNS.dashed}"/>`,
     );
     const label = z.label !== undefined ? z.label : z.id !== undefined ? z.id : "zona";

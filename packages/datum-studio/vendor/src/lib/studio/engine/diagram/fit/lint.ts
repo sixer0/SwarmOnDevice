@@ -59,7 +59,8 @@ export type DiagramDefectKind =
   | "edgeEntryCollision"
   | "stubSegment"
   | "arrowTangent"
-  | "labelCollision";
+  | "labelCollision"
+  | "frameOutside";
 
 export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "textOverlap",
@@ -74,7 +75,16 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "stubSegment",
   "arrowTangent",
   "labelCollision",
+  "frameOutside",
 ];
+
+/**
+ * Swarm 1.2.8 row 55c (C133, kind `frameOutside`, check id GEOM_FRAME_OUTSIDE): a container frame (pool or lane box,
+ * lane / phase / pool rule, zone or group outline: unmarked stroked `<line>` / unfilled `<rect>` outside a symbol)
+ * whose centre line runs past the figure box by more than this (mm) is clipped. Measured on the centre line, so a rule
+ * drawn edge to edge (x 0..W) is inside.
+ */
+export const FRAME_OUTSIDE_MIN_MM = 0.05;
 
 /**
  * Swarm 1.2.6 T-03 (register N-008..N-010). Thresholds of the three connector-end checks:
@@ -213,6 +223,8 @@ interface Scan {
   linkHeads: Array<{ end: HeadSize | null; start: HeadSize | null }>;
   /** Row 57c: container rules (solid unmarked `<line>` / stroked unfilled `<rect>` sides: lane rules, phase separators, pool borders). */
   rules: Array<{ a: Pt; b: Pt; half: number }>;
+  /** Row 55c: container frames (also dashed zone / group outlines) as centre-line boxes, for `frameOutside`. */
+  frames: Box[];
 }
 
 /** Row 57c: length and width (mm) of an arrowhead marker (`markerWidth` / `markerHeight` minus the 1 mm margins). */
@@ -238,8 +250,10 @@ function scan(svg: string): Scan {
   const markers = new Map<string, HeadSize>();
   const linkHeads: Scan["linkHeads"] = [];
   const rules: Scan["rules"] = [];
+  const frames: Box[] = [];
   // Row 57c: a leader line is drawn right before its label band; it is not a container rule.
   let lastWasRule = false;
+  let lastWasFrameLine = false;
   let inDefs = 0;
   // Row 150c (C144 A): one frame per open <g> inside a `data-symbol` group. A group whose transform is
   // only translate(...) (symbol-sheet cell, symbols/index.ts, sheet-fit.ts) prints at 1:1, so its text
@@ -352,6 +366,8 @@ function scan(svg: string): Scan {
     const a = attrsOf(k[5]);
     const wasRule = lastWasRule;
     lastWasRule = false;
+    const wasFrameLine = lastWasFrameLine;
+    lastWasFrameLine = false;
     // pita knockout: rect berisi tanpa goresan/tanda tepat sebelum <text> (core/svg labelKnockoutSvg)
     prevKnock =
       tag === "rect" &&
@@ -365,8 +381,21 @@ function scan(svg: string): Scan {
       ? { box: [Number(a.x ?? 0), Number(a.y ?? 0), Number(a.x ?? 0) + Number(a.width ?? 0), Number(a.y ?? 0) + Number(a.height ?? 0)], order: k.index }
       : null;
     if (prevKnock && wasRule) rules.pop(); // row 57c: the line before a band is its leader
+    if (prevKnock && wasFrameLine) frames.pop(); // row 55c: same leader, not a frame
     const mark = a["data-mark"];
     const nodeId = a["data-node"];
+    // Row 55c: container frames, dashed or solid. A hair solid rect is a node's offset shadow, not a frame.
+    if (mark === undefined && nodeId === undefined && a.stroke !== undefined && a.stroke !== "none") {
+      const sw = Number(a["stroke-width"] ?? 0) || 0;
+      if (tag === "line") {
+        const x1 = Number(a.x1 ?? 0), y1 = Number(a.y1 ?? 0), x2 = Number(a.x2 ?? 0), y2 = Number(a.y2 ?? 0);
+        frames.push([Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)]);
+        lastWasFrameLine = true;
+      } else if (tag === "rect" && (a.fill === undefined || a.fill === "none") && (sw > 0.3 || a["stroke-dasharray"] !== undefined)) {
+        const x = Number(a.x ?? 0), y = Number(a.y ?? 0);
+        frames.push([x, y, x + Number(a.width ?? 0), y + Number(a.height ?? 0)]);
+      }
+    }
     // Row 57c: container rules = solid decoration without a mark (lane rules, phase separators, pool borders).
     if (mark === undefined && nodeId === undefined && a.stroke !== undefined && a.stroke !== "none" && a["stroke-dasharray"] === undefined) {
       const half = (Number(a["stroke-width"] ?? 0) || 0) / 2;
@@ -432,7 +461,7 @@ function scan(svg: string): Scan {
     if (!Number.isFinite(box[0])) continue;
     nodes.push({ id: nodeId ?? null, outline, circle, ...(rx !== undefined ? { rx } : {}), half, box });
   }
-  return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules };
+  return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, frames };
 }
 
 function segX(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
@@ -915,12 +944,13 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
     stubSegment: 0,
     arrowTangent: 0,
     labelCollision: 0,
+    frameOutside: 0,
   };
 }
 
 /** Lint geometri SVG diagram (tanpa browser). `score` = jumlah semua cacat. */
 export function lintDiagramGeometry(svg: string): DiagramGeomLint {
-  const { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules } = scan(svg);
+  const { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, frames } = scan(svg);
   const defects: DiagramGeomDefect[] = [];
   // teks-teks
   for (let i = 0; i < texts.length; i++) {
@@ -1043,6 +1073,14 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
   // Row 57c: label bands against arrowheads, node outlines and container rules.
   for (const c of labelCollisions(bands, links, linkHeads, nodes, rules)) {
     defects.push({ kind: "labelCollision", text: c.text, other: c.other });
+  }
+  // Row 55c (C133): a container frame clipped by the figure box (pool past the edge at 128 mm).
+  for (const f of frames) {
+    const over = Math.max(-f[0], f[2] - W, -f[1], f[3] - H);
+    if (over > FRAME_OUTSIDE_MIN_MM) {
+      const at = `x ${f[0].toFixed(2)}..${f[2].toFixed(2)}, y ${f[1].toFixed(2)}..${f[3].toFixed(2)} (lembar ${W.toFixed(1)} x ${H.toFixed(1)})`;
+      defects.push({ kind: "frameOutside", text: "bingkai wadah", other: at, amount: Number(over.toFixed(2)) });
+    }
   }
   const counts = emptyCounts();
   for (const d of defects) counts[d.kind]++;

@@ -12,6 +12,8 @@ import { baselineStepMm, type Lattice, latticeOf, nodeSize, pyStr, sheetHeight, 
 import { diagramFitActive, diagramFitAllows, diagramFitCapacity, diagramFitCapMode, diagramFitNote } from "../fit/state";
 import { layoutSwimCapacity } from "./swimcap";
 import { grownHeight, planNodeText } from "../fit/text";
+import { STROKE_PRIMARY } from "../core/tokens";
+import { DiagramDefect } from "../core/defect";
 
 export interface SwimlaneLayout extends LayoutResult {
   family: "swimlane";
@@ -252,7 +254,9 @@ function layoutSwimFramed(
   const top = L.top;
   // vertikal dengan kolam: baris kepala kolam (2 kisi) di atas baris kepala lajur (2 kisi)
   const poolHead = vertical ? top + L.y * 2 : gutter;
-  const headBottom = top + L.y * 2 + (vertical && grouped ? L.y * 2 : 0);
+  // Row 55c (C134 G3-15): when no lane has a name (pools only), the empty lane header row is not drawn.
+  const laneHeads = !grouped || lanes.some((ln) => laneLabel(ln) !== "");
+  const headBottom = top + L.y * 2 + (vertical && grouped && laneHeads ? L.y * 2 : 0);
   const nodes: Record<string, DiagramBox> = {};
   const laneBoxes: Record<string, DiagramBox> = {};
   const laneList: DiagramBox[] = [];
@@ -264,6 +268,34 @@ function layoutSwimFramed(
   // so a pool whose outer lane holds a zone member keeps 3 rows and the zone stays inside the pool.
   const zoneLanes = new Set((s.zones ?? []).flatMap((z) => (z.members ?? []).map((m) => nodeLane[m])));
   const pad = (ln: string): number => (zoneLanes.has(ln) ? L.y * 3 : L.y);
+  /**
+   * Swarm 1.2.8 row 55c (C133): vertical pools. The last pool's frame ends at `ends + L.x / 2`; the pool gaps (2 lattice
+   * columns each) were not in any width budget, so a figure whose nodes the sheet clamp kept inside 128 mm drew its
+   * second pool frame past the figure edge. When the natural columns do not fit inside `L.W - STROKE_PRIMARY / 2` (the
+   * same inset the horizontal pool box uses), the widest columns are narrowed to the largest lattice multiple that fits
+   * (>= 2 lattice): their nodes take that width (height grows when fit allows it; otherwise the label lint reports and
+   * auto-fit retries). Columns that already fit keep their bytes. If even 2 lattice does not fit, nothing changes and the
+   * frame lint (`frameOutside`, GEOM_FRAME_OUTSIDE) fails the figure.
+   */
+  function fitPoolColumns(): void {
+    const colW = lanes.map((ln) => {
+      const members = specNodes.filter((n) => nodeLane[n.id] === ln);
+      return members.length ? Math.max(...members.map(W)) : L.x * 3;
+    });
+    const breaks = lanes.filter((_, i) => poolBreak(i)).length;
+    const room = L.W - STROKE_PRIMARY / 2 - (startX + L.x + (lanes.length - 1) * L.x + breaks * L.x * 2 + L.x / 2);
+    const total = (c: number): number => colW.reduce((a, w) => a + Math.min(w, c), 0);
+    if (total(Infinity) <= room + 1e-6) return;
+    let c = Math.floor(Math.max(...colW) / L.x + 1e-9) * L.x;
+    while (c > L.x * 2 + 1e-6 && total(c) > room + 1e-6) c -= L.x;
+    if (total(c) > room + 1e-6) return;
+    for (const n of specNodes) {
+      const [w, h] = size.get(n.id)!;
+      if (w <= c + 1e-6) continue;
+      const h0 = nodeSize(n, L)[1];
+      size.set(n.id, [c, diagramFitAllows("grow") ? Math.max(h, grownHeight(h0, planNodeText(n, c, h0), L.y)) : h]);
+    }
+  }
 
   if (!vertical) {
     // fase = pita x
@@ -315,6 +347,7 @@ function layoutSwimFramed(
     const xStart = new Map<string, number>();
     const slotW = new Map<string, number>();
     const ends: number[] = [];
+    if (grouped) fitPoolColumns();
     let x = startX + L.x;
     lanes.forEach((ln, i) => {
       if (poolBreak(i)) x += L.x * 2; // celah antarkolam 2 kisi
@@ -359,6 +392,21 @@ function layoutSwimFramed(
       `swimlane berfase tidak muat di ${L.W.toFixed(1)} mm; mode waktu: simpul 3 kisi, simpul satu sel lajur x fase ditumpuk`,
       `kurangi simpul per fase atau pecah menjadi 2 diagram (lebar ${L.W.toFixed(0)} mm)`,
     );
+  }
+  // Swarm 1.2.8 row 55c (C134 G3-01/G3-02, C116 D55b-1): a pool's nodes keep half a lattice column inside the pool
+  // frame, which stays inside the figure. A node that would reach past that is refused DATUM-37-sheet (the capacity path
+  // retries, then refuses with the pool remedy) instead of being squeezed by the sheet clamp (10.44 mm nodes, the group
+  // zone past the figure edge at 128 mm).
+  if (grouped) {
+    const limit = L.W - L.x / 2;
+    const over = specNodes.find((n) => nodes[n.id] && nodes[n.id].x + nodes[n.id].w > limit + 1e-6);
+    if (over) {
+      const b = nodes[over.id];
+      throw new DiagramDefect(
+        `DATUM-37-sheet: simpul ${over.id} keluar kolam (${b.x.toFixed(1)}..${(b.x + b.w).toFixed(1)} dari batas ${limit.toFixed(1)} mm pada lebar ${L.W.toFixed(1)} mm) (P8, kolam)`,
+        { checkId: "DATUM-37-sheet" },
+      );
+    }
   }
   const pools: SwimPool[] = [];
   if (grouped) {

@@ -28,6 +28,7 @@ const CHECK: Record<DiagramDefectKind, string> = {
   stubSegment: "GEOM_STUB_SEGMENT",
   arrowTangent: "GEOM_ARROW_TANGENT",
   labelCollision: "GEOM_LABEL_COLLISION",
+  frameOutside: "GEOM_FRAME_OUTSIDE", // Swarm 1.2.8 row 55c (C133)
 };
 
 const WHAT: Record<DiagramDefectKind, string> = {
@@ -43,6 +44,7 @@ const WHAT: Record<DiagramDefectKind, string> = {
   stubSegment: "potongan konektor pendek yang tidak menuju apa pun",
   arrowTangent: "kepala panah sejajar sisi simpul, bukan tegak lurus",
   labelCollision: "label tepi menutup kepala panah, garis tepi simpul atau garis wadah",
+  frameOutside: "bingkai wadah (kolam, lajur, fase, zona, grup) keluar batas gambar",
 };
 
 const SUGGEST: Record<DiagramDefectKind, string> = {
@@ -60,6 +62,8 @@ const SUGGEST: Record<DiagramDefectKind, string> = {
   arrowTangent: "ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran",
   // Swarm 1.2.8 row 57c: the label needs a free run on its connector.
   labelCollision: "persingkat label tepi (maks ~20 karakter) atau beri jarak lebih antara kedua simpul",
+  // Swarm 1.2.8 row 55c: the frame needs width, not shorter labels.
+  frameOutside: "kurangi lajur atau kolom per kolam, pakai lebar 166 mm atau kolam vertikal, atau pecah menjadi 2 diagram",
 };
 
 /** Isu REPORT per jenis cacat tersisa, dengan contoh teks dan `suggest`. */

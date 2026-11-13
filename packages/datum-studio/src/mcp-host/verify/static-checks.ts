@@ -315,6 +315,8 @@ export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   "edgeEntryCollision",
   "stubSegment",
   "arrowTangent",
+  // Swarm 1.2.8 row 55c (C133): a container frame clipped by the figure box (9 -> 10).
+  "frameOutside",
 ])
 
 /**

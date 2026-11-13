@@ -31,6 +31,7 @@ const CHECK: Record<DiagramDefectKind, string> = {
   stubSegment: "GEOM_STUB_SEGMENT",
   arrowTangent: "GEOM_ARROW_TANGENT",
   labelCollision: "GEOM_LABEL_COLLISION", // row 57c: new kind (INTENT, the record covers every kind)
+  frameOutside: "GEOM_FRAME_OUTSIDE", // row 55c: new kind (INTENT, the record covers every kind)
 }
 const T03: readonly DiagramDefectKind[] = ["edgeEntryCollision", "stubSegment", "arrowTangent"]
 
