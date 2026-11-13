@@ -334,13 +334,14 @@ function neutraliseText(text: string): string {
   )
 }
 
-/** Inline code whose content starts with `=` or `$=` (Dataview queries) gets a leading space so it stays text. */
+/**
+ * Inline code whose content starts with `=` or `$=` (Dataview queries), even after trimming, gets a zero-width space
+ * (U+200B) right after the opening backtick(s): the text no longer starts with a query prefix whether or not the
+ * reader trims first, and U+200B is not whitespace, so it is not trimmed or stripped itself (row 43j, C151).
+ */
 function neutraliseCode(content: string): string {
-  const stripped = content.length >= 2 && content.startsWith(" ") && content.endsWith(" ") && content.trim() !== ""
-  const effective = stripped ? content.slice(1, -1) : content
-  if (!/^\$?=/.test(effective)) return content
-  // A content that ends in a space would be stripped again on both sides, so two spaces keep one.
-  return (effective.endsWith(" ") ? "  " : " ") + effective
+  if (!/^\$?=/.test(content.trim())) return content
+  return "\u200b" + content
 }
 
 /**

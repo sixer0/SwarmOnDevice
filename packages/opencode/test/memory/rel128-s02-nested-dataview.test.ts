@@ -53,9 +53,9 @@ describe("S-02 nested executable fences become text", () => {
     for (const text of keep) expect(n(text)).toBe(text)
   })
 
-  test("inline Dataview queries inside containers still get the leading space", () => {
-    expect(n("> nilai `= this.file.name`")).toBe("> nilai ` = this.file.name`")
-    expect(n("- `$= dv.pages().length`")).toBe("- ` $= dv.pages().length`")
+  test("inline Dataview queries inside containers still get the zero-width space", () => {
+    expect(n("> nilai `= this.file.name`")).toBe("> nilai `\u200b= this.file.name`")
+    expect(n("- `$= dv.pages().length`")).toBe("- `\u200b$= dv.pages().length`")
   })
 
   test("the line count is kept", () => {

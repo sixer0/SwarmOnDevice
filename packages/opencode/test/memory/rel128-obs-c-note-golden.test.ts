@@ -290,12 +290,20 @@ describe("AC-OBSc SR8-13 report copies cannot run code or open other apps", () =
     expect(out).toBe("- a\n```js\n<img src=x onerror=y>\n```\n&lt;i>after&lt;/i>")
   })
 
-  test("inline code starting with = or $= gets a leading space", () => {
-    expect(n("nilai `= this.file.name` di sini")).toBe("nilai ` = this.file.name` di sini")
-    expect(n("`$= dv.pages().length`")).toBe("` $= dv.pages().length`")
-    expect(n("` = x `")).toBe("` = x`")
-    expect(n("`= x `")).toBe("`  = x `")
+  test("inline code starting with = or $= gets a zero-width space after the opening backtick (trim-proof)", () => {
+    const Z = "\u200b"
+    expect(n("nilai `= this.file.name` di sini")).toBe("nilai `" + Z + "= this.file.name` di sini")
+    expect(n("`$= dv.pages().length`")).toBe("`" + Z + "$= dv.pages().length`")
+    expect(n("` = x `")).toBe("`" + Z + " = x `")
+    expect(n("`= x `")).toBe("`" + Z + "= x `")
     expect(n("`a = b` dan `<T>`")).toBe("`a = b` dan `<T>`")
+    for (const text of ["`= 1+1`", "`$= 1`", "` = x `", "`  $= x`", "``= x``", "x `=y` `$=z`"]) {
+      const out = n(text)
+      for (const m of out.matchAll(/(`+)(.+?)\1/g)) {
+        expect(m[2].trim().startsWith("=")).toBe(false)
+        expect(m[2].trim().startsWith("$=")).toBe(false)
+      }
+    }
   })
 
   test("link targets other than http, https, mailto are written as escaped text", () => {
