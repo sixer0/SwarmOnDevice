@@ -7,7 +7,7 @@ import { join } from "path"
 // Why this file exists: the exemption is a deliberate, bounded weakening of a completeness invariant
 // (branch B of the 2026-10-21 decision in
 // `docs/2026-10-19_opencode_swarm_rebrand/decisions/decisions.md`). Its safety depends entirely on
-// staying bounded — two hundred and twenty-one entries as of row 109 of docs/2026-11-12_swarm_1_2_6_patch (four more for 1.2.6 UX-03: the Mission Control drift line `session.mission.line.drift` and the checkpoint group `session.autonomy.checkpoint.title`/`revert`/`confirm`, EN and ID only), two hundred and seventeen entries as of row 197 (decision L57) of docs/2026-11-05_swarm_linux_installer_patcher (two more for the Mission Control approved-not-started line and the self-approved (autonomous) label, `session.mission.line.approvedNotStarted`, `session.mission.approval.autonomous`, EN and ID only), two hundred and fifteen entries as of row 192 (decision L49) of docs/2026-11-05_swarm_linux_installer_patcher (two more for the Claude Code compatibility switch in Settings, `settings.general.row.claudeCompat.title`/`description`, EN and ID only), two hundred and thirteen entries as of row 190 (decision L48) of docs/2026-11-05_swarm_linux_installer_patcher (two more for the Mission Control not-started and paused status line, `session.mission.line.notStarted`/`paused`, EN and ID only), two hundred and eleven entries as of row 180 of docs/2026-11-06_swarm_1_2_0_datum_installer (three more for the Mission Control empty and unavailable states, `session.mission.empty`/`emptyHint`/`unavailable`, EN and ID only), two hundred and eight entries as of row 133b of docs/2026-11-06_swarm_1_2_0_datum_installer (two more for the mission control expand toggle, `session.mission.expand`/`collapse`, decision C175, EN and ID only), two hundred and six entries as of row 128 of docs/2026-11-06_swarm_1_2_0_datum_installer (fifty-seven more for mission control, `session.mission.*`, decision C127 (3), EN and ID only), one hundred and forty-nine entries as of row 112 of docs/2026-11-06_swarm_1_2_0_datum_installer (five more for the document preview inside the existing file tab, decision U12, studio spec §8.2), one hundred and forty-four entries as of row 34b of docs/2026-11-06_swarm_1_2_0_datum_installer (seven more for the native Install DATUM Studio for Claude menu item and dialogs, decisions C63/C64), one hundred and thirty-seven entries as of row 54 of docs/2026-11-02_swarm_system_patch_updates (twenty-five more for the native Update from File and Undo Last Update menu items and dialogs, register BN-30..BN-54), one hundred and twelve entries as of decision P12 (two more for the 1.1.1 healing loop F3: the not-bypassed hint and its palette command), one hundred and ten as of decision P6 (forty-two more for 1.1.1: consent dialog, Decisions view, session switcher) of docs/2026-11-03_swarm_1_1_1_patch, sixty-eight as of decision C121 (Install Command Line Tool), sixty-one as of row 162 (U11 archive row), sixty as of row 246 (U14 fix pass, C80 and C82), fifty-four as of row 228 (register U14, gate G-U14), forty-four as of row 159 (register U11, gate G-U11) of the 2026-11-01 Knowledge Library
+// staying bounded — two hundred and thirty-three entries as of row 22 of docs/2026-11-13_swarm_1_2_7_patch (twelve more for 1.2.7: the Mission Control empty-session text, the deliverable reveal-only tooltip, the Shared files map filter, the project-folder-missing toast group, the own_api decision category and the two ui reasoning toggle labels, EN and ID only), two hundred and twenty-one entries as of row 109 of docs/2026-11-12_swarm_1_2_6_patch (four more for 1.2.6 UX-03: the Mission Control drift line `session.mission.line.drift` and the checkpoint group `session.autonomy.checkpoint.title`/`revert`/`confirm`, EN and ID only), two hundred and seventeen entries as of row 197 (decision L57) of docs/2026-11-05_swarm_linux_installer_patcher (two more for the Mission Control approved-not-started line and the self-approved (autonomous) label, `session.mission.line.approvedNotStarted`, `session.mission.approval.autonomous`, EN and ID only), two hundred and fifteen entries as of row 192 (decision L49) of docs/2026-11-05_swarm_linux_installer_patcher (two more for the Claude Code compatibility switch in Settings, `settings.general.row.claudeCompat.title`/`description`, EN and ID only), two hundred and thirteen entries as of row 190 (decision L48) of docs/2026-11-05_swarm_linux_installer_patcher (two more for the Mission Control not-started and paused status line, `session.mission.line.notStarted`/`paused`, EN and ID only), two hundred and eleven entries as of row 180 of docs/2026-11-06_swarm_1_2_0_datum_installer (three more for the Mission Control empty and unavailable states, `session.mission.empty`/`emptyHint`/`unavailable`, EN and ID only), two hundred and eight entries as of row 133b of docs/2026-11-06_swarm_1_2_0_datum_installer (two more for the mission control expand toggle, `session.mission.expand`/`collapse`, decision C175, EN and ID only), two hundred and six entries as of row 128 of docs/2026-11-06_swarm_1_2_0_datum_installer (fifty-seven more for mission control, `session.mission.*`, decision C127 (3), EN and ID only), one hundred and forty-nine entries as of row 112 of docs/2026-11-06_swarm_1_2_0_datum_installer (five more for the document preview inside the existing file tab, decision U12, studio spec §8.2), one hundred and forty-four entries as of row 34b of docs/2026-11-06_swarm_1_2_0_datum_installer (seven more for the native Install DATUM Studio for Claude menu item and dialogs, decisions C63/C64), one hundred and thirty-seven entries as of row 54 of docs/2026-11-02_swarm_system_patch_updates (twenty-five more for the native Update from File and Undo Last Update menu items and dialogs, register BN-30..BN-54), one hundred and twelve entries as of decision P12 (two more for the 1.1.1 healing loop F3: the not-bypassed hint and its palette command), one hundred and ten as of decision P6 (forty-two more for 1.1.1: consent dialog, Decisions view, session switcher) of docs/2026-11-03_swarm_1_1_1_patch, sixty-eight as of decision C121 (Install Command Line Tool), sixty-one as of row 162 (U11 archive row), sixty as of row 246 (U14 fix pass, C80 and C82), fifty-four as of row 228 (register U14, gate G-U14), forty-four as of row 159 (register U11, gate G-U11) of the 2026-11-01 Knowledge Library
 // task, up from thirty-six since its decision C62 of the 2026-11-01 Knowledge Library task removed one,
 // thirty-seven as of its row 77, up from thirty-six
 // at its decision C18, twelve at its decision C2, ten at blueprint-11 row 249 (session 6), nine at row 204 and the original three.
@@ -243,6 +243,18 @@ const APPROVED_EXEMPT_KEYS = [
   "session.autonomy.checkpoint.title",
   "session.autonomy.checkpoint.revert",
   "session.autonomy.checkpoint.confirm",
+  "session.mission.emptySession",
+  "session.mission.deliverable.revealOnly",
+  "session.map.filter.shared",
+  "toast.project.folderMissing.title",
+  "toast.project.folderMissing.description",
+  "toast.project.folderMissing.restore",
+  "toast.project.folderMissing.recreate",
+  "toast.project.folderMissing.choose",
+  "toast.project.folderMissing.recreateFailed",
+  "session.map.decisions.category.own_api",
+  "ui.messagePart.reasoning.show",
+  "ui.messagePart.reasoning.hide",
 ]
 
 function arrayLiteral(name: string) {
@@ -260,10 +272,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the two-hundred-and-eight approved keys and nothing else", () => {
+  test("the exemption holds exactly the two-hundred-and-thirty-three approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(221)
-    expect(new Set(exemptKeys).size).toBe(221)
+    expect(exemptKeys.length).toBe(233)
+    expect(new Set(exemptKeys).size).toBe(233)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -518,12 +530,22 @@ describe("i18n parity exemption guard", () => {
           "session.autonomy.checkpoint.title",
           "session.autonomy.checkpoint.revert",
           "session.autonomy.checkpoint.confirm",
+          "session.mission.emptySession",
+          "session.mission.deliverable.revealOnly",
+          "session.map.filter.shared",
+          "toast.project.folderMissing.title",
+          "toast.project.folderMissing.description",
+          "toast.project.folderMissing.restore",
+          "toast.project.folderMissing.recreate",
+          "toast.project.folderMissing.choose",
+          "toast.project.folderMissing.recreateFailed",
+          "session.map.decisions.category.own_api",
         ],
       },
       {
         domain: "ui",
         file: "../../../ui/src/i18n/en.ts",
-        keys: ["ui.toast.ariaLabel", "ui.messagePart.notRun.deferred"],
+        keys: ["ui.toast.ariaLabel", "ui.messagePart.notRun.deferred", "ui.messagePart.reasoning.show", "ui.messagePart.reasoning.hide"],
       },
     ]
     for (const source of sources) {
