@@ -233,7 +233,10 @@ const LOOK_BY_AGENT: Record<string, [MissionFamily, MissionTool]> = {
   "pm-writer": ["ship", "send"],
 }
 
-export const FEED_SIZE = 4
+/** Feed entries kept, newest first (1.2.7 U-4, N7-030): equals MISSION_MESSAGES_TAIL (N7-031), the schema maximum. */
+export const FEED_SIZE = 50
+/** Feed entries visible before the list scrolls (1.2.7 U-4, N7-029; R-5: entries, each two text lines). */
+export const FEED_VISIBLE_ROWS = 10
 export const WAVES_SHOWN = 4
 const ROW_KEY = /^row-([1-9][0-9]{0,3}[a-z]?)-(.+)$/
 // finalFileName must be a plain file name before it becomes part of a project path (§12).
@@ -532,6 +535,7 @@ export function buildMission(
   ]
     .sort((a, b) => timeOf(a.at) - timeOf(b.at))
     .slice(-FEED_SIZE)
+    .reverse() // newest first (1.2.7 U-4)
 
   const held = Object.values(agents).filter((a) => a.status === "issue" || a.status === "blocked").length
   const { done, total } = derived.progress

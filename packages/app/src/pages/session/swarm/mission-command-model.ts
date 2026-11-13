@@ -75,9 +75,12 @@ const time = (at: string) => {
   return Number.isFinite(ms) ? ms : 0
 }
 
-/** Store feed + local lines of this mission, by time, newest last, at most FEED_SIZE. */
+/** Store feed + local lines of this mission, by time, newest first, at most FEED_SIZE (1.2.7 U-4). */
 export function mergeFeed(model: MissionVM, local: MissionFeedLine[]) {
-  return [...model.feed, ...local].sort((a, b) => time(a.at) - time(b.at)).slice(-FEED_SIZE)
+  return [...model.feed, ...local]
+    .sort((a, b) => time(a.at) - time(b.at))
+    .slice(-FEED_SIZE)
+    .reverse()
 }
 
 /** "What's blocking?" (§5.6): computed locally, never stored. */

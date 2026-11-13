@@ -422,34 +422,110 @@ export function DecisionRow(props: {
   }
   return (
     <div data-decision={props.entry.id} class="flex min-w-0 flex-col gap-1 rounded-[6px] px-2 py-1.5 leading-[18px]">
-      <span data-decision-summary class="min-w-0 break-words text-v2-text-text-base [font-weight:440]">
-        <span data-decision-what>
-          {language.t(whatOf(props.entry.permission))}
-          <Show when={subject()}>
+      {/* 1.2.7 U-5 (C6, D-11): the summary and Details scroll in a bounded body; the buttons stay below it. */}
+      <div data-map-decision-body class="flex max-h-[min(50vh,320px)] min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain">
+        <span data-decision-summary class="min-w-0 break-words text-v2-text-text-base [font-weight:440]">
+          <span data-decision-what>
+            {language.t(whatOf(props.entry.permission))}
+            <Show when={subject()}>
+              {(text) => (
+                <>
+                  {": "}
+                  <span class="break-all font-mono text-[12px]">{text()}</span>
+                </>
+              )}
+            </Show>
+          </span>
+          {" · "}
+          <span data-decision-state>{state()}</span>
+          {" · "}
+          <span data-decision-who>{language.t(whoOf(props.entry.by))}</span>
+          <Show when={why()}>
             {(text) => (
               <>
-                {": "}
-                <span class="break-all font-mono text-[12px]">{text()}</span>
+                {" · "}
+                <span data-decision-why class="text-v2-text-text-muted">
+                  {text()}
+                </span>
               </>
             )}
           </Show>
         </span>
-        {" · "}
-        <span data-decision-state>{state()}</span>
-        {" · "}
-        <span data-decision-who>{language.t(whoOf(props.entry.by))}</span>
-        <Show when={why()}>
-          {(text) => (
-            <>
-              {" · "}
-              <span data-decision-why class="text-v2-text-text-muted">
-                {text()}
+        <Show when={open()}>
+          <div data-decision-details class="flex min-w-0 flex-col gap-1">
+            <span class="text-v2-text-text-faint [font-weight:440]">{props.entry.permission}</span>
+            <For each={shownPatterns(props.entry.patterns)}>
+              {(pattern) => (
+                <span
+                  data-decision-pattern
+                  class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base"
+                >
+                  {pattern}
+                </span>
+              )}
+            </For>
+            <Show when={props.entry.patternsTruncated}>
+              <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
+            </Show>
+            <For each={props.entry.follows}>
+              {(next) => (
+                <span data-decision-follows class="flex min-w-0 flex-col">
+                  <span class="text-v2-text-text-faint [font-weight:440]">{next.permission}</span>
+                  <For each={shownPatterns(next.patterns)}>
+                    {(pattern) => (
+                      <span class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
+                        {pattern}
+                      </span>
+                    )}
+                  </For>
+                </span>
+              )}
+            </For>
+            <For each={props.calls}>
+              {(call) => (
+                <span data-decision-call class="flex min-w-0 flex-col gap-1">
+                  <span class="text-v2-text-text-faint [font-weight:440]">{call.tool}</span>
+                  <For each={call.args}>
+                    {(arg) => (
+                      <span class="flex min-w-0 flex-col">
+                        <span class="text-v2-text-text-faint [font-weight:440]">{arg.name}</span>
+                        <span class="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
+                          {arg.value}
+                        </span>
+                      </span>
+                    )}
+                  </For>
+                </span>
+              )}
+            </For>
+            <Show when={category()}>
+              {(key) => <span class="text-v2-text-text-muted [font-weight:440]">{language.t(key())}</span>}
+            </Show>
+            <Show when={props.entry.reason}>
+              {(reason) => (
+                <span
+                  data-decision-reason
+                  class="min-w-0 whitespace-pre-wrap break-words text-v2-text-text-muted [font-weight:440]"
+                >
+                  {reason()}
+                </span>
+              )}
+            </Show>
+            <Show when={by() || outcome()}>
+              <span class="flex flex-wrap items-center gap-x-2 text-v2-text-text-faint [font-weight:440]">
+                <Show when={by()}>{(value) => <span class="min-w-0 break-all">{value()}</span>}</Show>
+                <Show when={outcome()}>{(key) => <span>{language.t(key())}</span>}</Show>
               </span>
-            </>
-          )}
+            </Show>
+            <Show when={cannotUndo()}>
+              <span data-decision-no-undo class="text-v2-text-text-faint [font-weight:440]">
+                {language.t("session.permission.cannotUndo")}
+              </span>
+            </Show>
+          </div>
         </Show>
-      </span>
-      <span class="mt-0.5 flex flex-wrap gap-1">
+      </div>
+      <span data-map-decision-actions class="mt-0.5 flex shrink-0 flex-wrap gap-1">
         <Show when={props.onReply}>
           {(reply) => (
             <>
@@ -488,79 +564,6 @@ export function DecisionRow(props: {
           {language.t(open() ? "session.map.decisions.details.hide" : "session.map.decisions.details.show")}
         </ButtonV2>
       </span>
-      <Show when={open()}>
-        <div data-decision-details class="flex min-w-0 flex-col gap-1">
-          <span class="text-v2-text-text-faint [font-weight:440]">{props.entry.permission}</span>
-          <For each={shownPatterns(props.entry.patterns)}>
-            {(pattern) => (
-              <span
-                data-decision-pattern
-                class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base"
-              >
-                {pattern}
-              </span>
-            )}
-          </For>
-          <Show when={props.entry.patternsTruncated}>
-            <span class="font-mono text-[12px] text-v2-text-text-faint">…</span>
-          </Show>
-          <For each={props.entry.follows}>
-            {(next) => (
-              <span data-decision-follows class="flex min-w-0 flex-col">
-                <span class="text-v2-text-text-faint [font-weight:440]">{next.permission}</span>
-                <For each={shownPatterns(next.patterns)}>
-                  {(pattern) => (
-                    <span class="min-w-0 whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
-                      {pattern}
-                    </span>
-                  )}
-                </For>
-              </span>
-            )}
-          </For>
-          <For each={props.calls}>
-            {(call) => (
-              <span data-decision-call class="flex min-w-0 flex-col gap-1">
-                <span class="text-v2-text-text-faint [font-weight:440]">{call.tool}</span>
-                <For each={call.args}>
-                  {(arg) => (
-                    <span class="flex min-w-0 flex-col">
-                      <span class="text-v2-text-text-faint [font-weight:440]">{arg.name}</span>
-                      <span class="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[12px] text-v2-text-text-base">
-                        {arg.value}
-                      </span>
-                    </span>
-                  )}
-                </For>
-              </span>
-            )}
-          </For>
-          <Show when={category()}>
-            {(key) => <span class="text-v2-text-text-muted [font-weight:440]">{language.t(key())}</span>}
-          </Show>
-          <Show when={props.entry.reason}>
-            {(reason) => (
-              <span
-                data-decision-reason
-                class="min-w-0 whitespace-pre-wrap break-words text-v2-text-text-muted [font-weight:440]"
-              >
-                {reason()}
-              </span>
-            )}
-          </Show>
-          <Show when={by() || outcome()}>
-            <span class="flex flex-wrap items-center gap-x-2 text-v2-text-text-faint [font-weight:440]">
-              <Show when={by()}>{(value) => <span class="min-w-0 break-all">{value()}</span>}</Show>
-              <Show when={outcome()}>{(key) => <span>{language.t(key())}</span>}</Show>
-            </span>
-          </Show>
-          <Show when={cannotUndo()}>
-            <span data-decision-no-undo class="text-v2-text-text-faint [font-weight:440]">
-              {language.t("session.permission.cannotUndo")}
-            </span>
-          </Show>
-        </div>
-      </Show>
     </div>
   )
 }

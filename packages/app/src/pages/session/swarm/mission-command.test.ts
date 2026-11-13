@@ -154,13 +154,14 @@ describe("view helpers", () => {
     expect(feedWho(line("b", "x", { agent: "verifier", row: "12" }), t)).toBe("verifier → session.mission.swarm · 12")
     expect(feedWho(line("c", "x", { from: "controller", to: "agent" }), t)).toBe("session.mission.swarm → session.mission.feed.agent")
   })
-  test("feed order: by time, newest last, at most 4, local lines merged", () => {
+  // INTENT 1.2.7 U-4 (C6): newest first, up to FEED_SIZE 50 (was newest last, at most 4).
+  test("feed order: by time, newest first, local lines merged", () => {
     const m = model({
-      feed: [line("m1", "2026-11-07T10:00:00Z"), line("m2", "2026-11-07T11:00:00Z"), line("m3", "2026-11-07T11:30:00Z")],
+      feed: [line("m3", "2026-11-07T11:30:00Z"), line("m2", "2026-11-07T11:00:00Z"), line("m1", "2026-11-07T10:00:00Z")],
     })
     const local = [line("l1", "2026-11-07T10:30:00Z", { local: true }), line("l2", "2026-11-07T12:00:00Z", { local: true })]
-    expect(mergeFeed(m, local).map((item) => item.key)).toEqual(["l1", "m2", "m3", "l2"])
-    expect(mergeFeed(m, []).map((item) => item.key)).toEqual(["m1", "m2", "m3"])
+    expect(mergeFeed(m, local).map((item) => item.key)).toEqual(["l2", "m3", "m2", "l1", "m1"])
+    expect(mergeFeed(m, []).map((item) => item.key)).toEqual(["m3", "m2", "m1"])
   })
 })
 

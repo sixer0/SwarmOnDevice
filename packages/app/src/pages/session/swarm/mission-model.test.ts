@@ -197,10 +197,10 @@ describe("buildMission per mission type", () => {
       expect(vm.openDecisions).toBe(2)
       expect(vm.answered).toEqual({ id: "D-00", question: "Approve plan?", optionLabel: "Approve", decision: "U1" })
 
-      // Feed: last 4 by time, answered request merged in.
-      expect(vm.feed.map((f) => f.key)).toEqual(["aD-00", "m2", "m3", "m4"])
-      expect(vm.feed[0]).toMatchObject({ from: "owner", to: "controller", text: "D-00: Approve" })
-      expect(vm.feed[1]).toMatchObject({ agent: "data-collector", row: "3" })
+      // Feed: INTENT 1.2.7 U-4 (C6) newest first, up to FEED_SIZE 50 (was last 4, oldest first), answered request merged in.
+      expect(vm.feed.map((f) => f.key)).toEqual(["m4", "m3", "m2", "aD-00", "m1"])
+      expect(vm.feed[3]).toMatchObject({ from: "owner", to: "controller", text: "D-00: Approve" })
+      expect(vm.feed[2]).toMatchObject({ agent: "data-collector", row: "3" })
 
       // Deliverables (§7).
       const [a, b, c] = vm.deliverables

@@ -1,4 +1,6 @@
-import { For, Show } from "solid-js"
+import { For, Show, onCleanup, onMount } from "solid-js"
+import { makeEventListener } from "@solid-primitives/event-listener"
+import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { alwaysLabel, offersAlways } from "./permission-always"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import { Button } from "@opencode-ai/ui/button"
@@ -18,6 +20,72 @@ const FOOTER_ACTIONS = "min-w-0 flex-wrap justify-end gap-y-2"
 
 export const clockTime = (at: number) =>
   new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+
+/**
+ * 1.2.7 U-5 (C6, D-11, SR7-14): the prompt's body (session-ui `data-slot="permission-body"`) is the one scroll area and
+ * the footer buttons stay outside it. This binds, in the calling owner:
+ * - `--permission-prompt-max-height` (N7-036) on the dock, measured like `--question-prompt-max-height` in
+ *   session-question-dock.tsx, so the dock never grows under the session's sticky header;
+ * - `data-permission-body-more` (N7-149) on the body while text is hidden below, which message-part.css draws as a fade,
+ *   so a long command whose tail is cut shows it in both scrollbar modes;
+ * - the body starts at its top, so the start of the command is what is read first.
+ * Returns the ref for DockPrompt.
+ */
+function bindPermissionBody() {
+  let root: HTMLDivElement | undefined
+  const body = () => root?.querySelector<HTMLElement>('[data-slot="permission-body"]') ?? undefined
+
+  const cue = () => {
+    const el = body()
+    if (!el) return
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > 1) el.setAttribute("data-permission-body-more", "")
+    else el.removeAttribute("data-permission-body-more")
+  }
+
+  const measure = () => {
+    if (!root) return
+    const scroller = document.querySelector(".scroll-view__viewport")
+    const head = scroller instanceof HTMLElement ? scroller.firstElementChild : undefined
+    const top =
+      head instanceof HTMLElement && head.classList.contains("sticky") ? head.getBoundingClientRect().bottom : 0
+    const dock = root.closest('[data-component="session-prompt-dock"]')
+    if (!top || !(dock instanceof HTMLElement)) {
+      root.style.removeProperty("--permission-prompt-max-height")
+      return
+    }
+    const dockBottom = dock.getBoundingClientRect().bottom
+    const below = Math.max(0, dockBottom - root.getBoundingClientRect().bottom)
+    const max = Math.max(240, Math.floor(dockBottom - top - 8 - below))
+    root.style.setProperty("--permission-prompt-max-height", `${max}px`)
+  }
+
+  onMount(() => {
+    let raf: number | undefined
+    const update = () => {
+      if (raf !== undefined) cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        raf = undefined
+        measure()
+        cue()
+      })
+    }
+    const el = body()
+    if (el) {
+      el.scrollTop = 0
+      makeEventListener(el, "scroll", cue, { passive: true })
+      createResizeObserver([el, ...Array.from(el.children)], update)
+    }
+    makeEventListener(window, "resize", update)
+    createResizeObserver([root?.closest('[data-component="session-prompt-dock"]'), document.querySelector(".scroll-view__viewport")], update)
+    cue()
+    update()
+    onCleanup(() => {
+      if (raf !== undefined) cancelAnimationFrame(raf)
+    })
+  })
+
+  return (el: HTMLDivElement) => (root = el)
+}
 
 export function SessionPermissionDock(props: {
   request: PermissionRequest
@@ -40,52 +108,56 @@ export function SessionPermissionDock(props: {
       when={spend()}
       fallback={<RegularPermission {...props} toolDescription={toolDescription()} />}
     >
-      {(detail) => (
-        <DockPrompt
-          kind="permission"
-          header={
-            <div data-slot="permission-row" data-variant="header">
-              <span data-slot="permission-icon">
-                <Icon name="warning" size="normal" />
-              </span>
-              <div data-slot="permission-header-title">{language.t("session.spend.title")}</div>
-            </div>
-          }
-          footer={
-            <div class={FOOTER_ROW} data-permission-footer-row>
-              <div data-slot="permission-footer-actions" class={FOOTER_ACTIONS}>
-                <Button
-                  variant="ghost"
-                  size="normal"
-                  onClick={() => props.onDecide("reject")}
-                  disabled={props.responding}
-                >
-                  {language.t("session.spend.stop")}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="normal"
-                  onClick={() => props.onDecide("once")}
-                  disabled={props.responding}
-                >
-                  {language.t("session.spend.continue", { amount: money(detail().next) })}
-                </Button>
+      {(detail) => {
+        const ref = bindPermissionBody()
+        return (
+          <DockPrompt
+            kind="permission"
+            ref={ref}
+            header={
+              <div data-slot="permission-row" data-variant="header">
+                <span data-slot="permission-icon">
+                  <Icon name="warning" size="normal" />
+                </span>
+                <div data-slot="permission-header-title">{language.t("session.spend.title")}</div>
+              </div>
+            }
+            footer={
+              <div class={FOOTER_ROW} data-permission-footer-row>
+                <div data-slot="permission-footer-actions" class={FOOTER_ACTIONS}>
+                  <Button
+                    variant="ghost"
+                    size="normal"
+                    onClick={() => props.onDecide("reject")}
+                    disabled={props.responding}
+                  >
+                    {language.t("session.spend.stop")}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="normal"
+                    onClick={() => props.onDecide("once")}
+                    disabled={props.responding}
+                  >
+                    {language.t("session.spend.continue", { amount: money(detail().next) })}
+                  </Button>
+                </div>
+              </div>
+            }
+          >
+            <div data-slot="permission-row">
+              <span data-slot="permission-spacer" aria-hidden="true" />
+              <div data-slot="permission-hint">
+                {language.t("session.spend.summary", { spent: money(detail().spent) })}
+                <Show when={detail().subagents > 0}>
+                  {" "}
+                  {language.t("context.spend.subagents")}: {detail().subagents} ({money(detail().subagentCost)})
+                </Show>
               </div>
             </div>
-          }
-        >
-          <div data-slot="permission-row">
-            <span data-slot="permission-spacer" aria-hidden="true" />
-            <div data-slot="permission-hint">
-              {language.t("session.spend.summary", { spent: money(detail().spent) })}
-              <Show when={detail().subagents > 0}>
-                {" "}
-                {language.t("context.spend.subagents")}: {detail().subagents} ({money(detail().subagentCost)})
-              </Show>
-            </div>
-          </div>
-        </DockPrompt>
-      )}
+          </DockPrompt>
+        )
+      }}
     </Show>
   )
 }
@@ -98,10 +170,12 @@ function RegularPermission(props: {
 }) {
   const language = useLanguage()
   const toolDescription = () => props.toolDescription
+  const ref = bindPermissionBody()
 
   return (
     <DockPrompt
       kind="permission"
+      ref={ref}
       header={
         <div data-slot="permission-row" data-variant="header">
           <span data-slot="permission-icon">
