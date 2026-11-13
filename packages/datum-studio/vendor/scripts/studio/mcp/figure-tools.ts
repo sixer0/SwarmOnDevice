@@ -50,11 +50,16 @@ export const SVG_CAP = 6000;
 const ISSUE_LINES = 20;
 export const CHART_PATCH_KEYS = ["data", "caption", "source", "note", "unit", "dec", "highlight", "limit", "keyRow", "code", "form", "panels", "orientation", "sort", "topN", "otherLabel", "labelShort"] as const;
 export const DIAGRAM_PATCH_KEYS = ["spec", "caption", "source", "keyRow"] as const;
+/**
+ * Swarm 1.2.7 row 39 (T-11, N7-071/K7-11): required keys of a merged INLINE v2 diagram spec (no `$schema`), equal to
+ * the `required` of the v2 diagram spec schema (common.schema.ts `DiagramSpecV2`, pinned by rel127-t11 test).
+ */
+export const INLINE_V2_DIAGRAM_REQUIRED = ["family", "nodes"] as const;
 const PATCH_KEYS: ReadonlySet<string> = new Set([...CHART_PATCH_KEYS, ...DIAGRAM_PATCH_KEYS]);
 const INLINE_TEXT_KEYS: ReadonlySet<string> = new Set(["caption", "source", "keyRow"]);
 const PID_RE = new RegExp(PID_PATTERN);
 const PID = { type: "string", pattern: PID_PATTERN } as const;
-const ADDRESS = { type: "string", minLength: 1, maxLength: 80, description: "3.1.4 / Gambar 3.1" } as const;
+const ADDRESS = { type: "string", minLength: 1, maxLength: 80, description: "3.1.4/Gambar 3.1" } as const;
 const PREVIEW_ACTION = "POST /api/studio/documents/{id}/figures/preview";
 
 const previewRoute = (id: string) => `/api/studio/documents/${encodeURIComponent(id)}/figures/preview`;
@@ -139,13 +144,14 @@ function svgFileName(id: string, b: Rec, f: Rec): string {
 const figurePreviewTool: ToolDef = {
   name: "studio_figure_preview",
   description:
-    "Pratinjau satu chart/diagram tanpa render: ukuran, isu bersaran. Sasaran pid/address/block v2 (dry-run). SVG: downloadDir/includeSvg (terpotong). Gerbang figur: gerbang mesin = pratinjau inline (pratinjau mandiri bukan gerbang); figur selesai hanya setelah gerbang mesin DAN gerbang mata atas PNG hasil render. standalone: figur sendiri + KUNCI/SUMBER, batas angka; png: +PNG.",
+    "Pratinjau chart/diagram tanpa render: ukuran, isu bersaran. Sasaran pid/address/block v2. SVG: downloadDir/includeSvg (terpotong). Gerbang figur: gerbang mesin = pratinjau inline (pratinjau mandiri bukan gerbang); figur selesai hanya setelah gerbang mesin DAN gerbang mata atas PNG hasil render. standalone: figur sendiri + KUNCI/SUMBER, batas angka; png: +PNG, hanya bersama standalone: true dan downloadDir.",
   inputSchema: obj(
     {
       documentId: S.documentId,
       pid: PID,
       address: ADDRESS,
-      block: { type: "object", description: "chart/diagram" },
+      // Swarm 1.2.7 row 39 (tools/list < 30 000 B, C12 O-2): the tool description already says "block v2".
+      block: { type: "object" },
       rev: S.rev,
       includeSvg: { type: "boolean" },
       // Row 165E (C192, tools/list < 30 KB): the meaning of standalone/png lives in the tool description and the guide.
@@ -222,6 +228,9 @@ const figurePreviewTool: ToolDef = {
         // The stand-alone name carries the caption (server text): the lines go in the untrusted block.
         fields.push("savedTo", "backup", ...(png ? ["pngSavedTo", "pngBackup"] : []));
         lines.push(`  gambar mandiri disimpan (${png ? "SVG + PNG" : "SVG"}); lokasi di blok di bawah`);
+        // Swarm 1.2.7 row 39 (T-12 text line for row 36b, N7-068): numbers only, so the line stays outside the block.
+        const fu = isRecord(f.standalone) && isRecord(f.standalone.furniture) ? f.standalone.furniture : null;
+        if (fu !== null) lines.push(`  perabot: KUNCI ${tok(fu.keyLines)} baris, SUMBER ${tok(fu.sourceLines)} baris, tinggi ${tok(typeof fu.heightMm === "number" ? Math.round(fu.heightMm * 10) / 10 : null)} mm`);
         lines.push(serverBlock(saved, { jenis: "berkas-gambar", documentId: id }) as string);
       } else lines.push(`  ${saved[0]}`);
     }
@@ -279,7 +288,11 @@ function deepMergeSpec(base: Rec, patch: Rec): Rec {
  * Gabung `patch` ke isi blok v2: `null` = hapus medan; caption/source/keyRow berupa string -> `{ text }`.
  * Swarm 1.2.6 row 69 (T-16): `spec` is deep-merged into the stored spec (objects merge, arrays replace, `null` removes),
  * so a nodes-only or edges-only patch keeps family, edges, title and the rest. A spec patch that leaves a required
- * diagram key (diagram.schema.ts `required`) missing is refused SCHEMA_INVALID naming the key, before any write.
+ * diagram key missing is refused SCHEMA_INVALID naming the key, before any write.
+ * Swarm 1.2.7 row 39 (T-11): the required set depends on the merged spec. With `$schema` (a v1 spec) it is
+ * diagram.schema.ts `required` (unchanged); without (an inline v2 spec) it is INLINE_V2_DIAGRAM_REQUIRED, so a
+ * `{spec:{direction:"LR"}}` patch is no longer refused for the v1 keys an inline spec never has. The server still
+ * validates the full block.
  */
 export function mergeFigurePatch(content: Rec, patch: Rec): Rec {
   const out: Rec = { ...content };
@@ -292,7 +305,8 @@ export function mergeFigurePatch(content: Rec, patch: Rec): Rec {
   }
   if (Object.prototype.hasOwnProperty.call(patch, "spec")) {
     const spec = isRecord(out.spec) ? out.spec : null;
-    const missing = spec === null ? ["spec"] : (diagramSchema.required as readonly string[]).filter((r) => !Object.prototype.hasOwnProperty.call(spec, r));
+    const required: readonly string[] = spec !== null && Object.prototype.hasOwnProperty.call(spec, "$schema") ? diagramSchema.required : INLINE_V2_DIAGRAM_REQUIRED;
+    const missing = spec === null ? ["spec"] : required.filter((r) => !Object.prototype.hasOwnProperty.call(spec, r));
     if (missing.length > 0) {
       throw new McpToolError("SCHEMA_INVALID", `spec hasil gabungan kehilangan medan wajib: ${missing.join(", ")}; kirim nilai medan itu atau jangan hapus (null) medan itu. Tidak ada yang dikirim`, { pointer: `/spec/${missing[0]}` });
     }
@@ -386,7 +400,7 @@ function graphDeltaLines(id: string, d: FigureGraphDelta): string[] {
 const figureReviseTool: ToolDef = {
   name: "studio_figure_revise",
   description:
-    "Ubah konten satu figur v2 tanpa kirim ulang bab, lalu pratinjau. patch parsial: data, caption, unit, labelShort, sort...; spec digabung; null = hapus. Simpul/tepi berubah -> FIGURE_GRAPH_DELTA. Wajib change + baseRevisionNo (atau basis sesi).",
+    "Ubah satu figur v2 tanpa kirim ulang bab, lalu pratinjau. patch parsial; spec digabung; null = hapus. Simpul/tepi berubah -> FIGURE_GRAPH_DELTA. Wajib change + baseRevisionNo/basis sesi. Arah alur: patch {spec:{direction:\"LR\"}} (TB/LR); kunci direction di tingkat atas ditolak.",
   inputSchema: obj(
     {
       documentId: S.documentId,
@@ -396,7 +410,8 @@ const figureReviseTool: ToolDef = {
       baseRevisionNo: BASE_REV,
       change: CHANGE,
       preview: { type: "boolean", default: true },
-      adoptExisting: { ...ADOPT, description: "Dokumen agentId lain (eksplisit)." },
+      // Swarm 1.2.7 row 39 (tools/list budget): no description; the DOCUMENT_OWNED_BY_OTHER refusal names adoptExisting.
+      adoptExisting: { type: ADOPT.type },
       agentId: S.agentId,
     },
     ["documentId", "patch", "change"],
@@ -409,7 +424,7 @@ const figureReviseTool: ToolDef = {
     const address = str(a, "address");
     if ((pidArg === null) === (address === null)) throw new McpToolError("INVALID_ARGUMENT", "berikan tepat satu dari pid atau address; tidak ada yang dikirim");
     const unknown = Object.keys(isRecord(a.patch) ? a.patch : {}).filter((k) => !PATCH_KEYS.has(k));
-    if (unknown.length > 0) throw new McpToolError("INVALID_ARGUMENT", `patch memuat medan yang bukan konten figur: ${unknown.map((k) => tok(k, "?")).join(", ")}; tidak ada yang dikirim`);
+    if (unknown.length > 0) throw new McpToolError("INVALID_ARGUMENT", `patch memuat medan yang bukan konten figur: ${unknown.map((k) => tok(k, "?")).join(", ")}; tidak ada yang dikirim${unknown.includes("direction") ? '; arah alur lewat patch {spec:{direction:"LR"}}' : ""}`);
     // F-3 tanpa jaringan: basis eksplisit atau basis sesi.
     const basis = requireBasis(num(a, "baseRevisionNo"), ctx, id, null);
     const base = basis.baseRevisionNo;
