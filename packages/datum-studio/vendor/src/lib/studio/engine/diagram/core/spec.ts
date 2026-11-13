@@ -310,6 +310,19 @@ const EDGE_STYLE_ENUMS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["label_at", DIAGRAM_LABEL_AT],
 ];
 const EDGE_STYLE_FIELDS: readonly string[] = [...EDGE_STYLE_ENUMS.map(([k]) => k), "from_slot", "to_slot"];
+/**
+ * Swarm 1.2.8 row 57b (AC-VIS8, 01f §3.5, N8-212): DATUM-25L line-style key of one edge = (kind, effective dash,
+ * effective weight). The kind's own pattern and width are the absent fields (`normal` on a non-accent kind; on `accent`
+ * absent = its 1.6 x width, `normal` = 0.45 mm, a style of its own). Shown as the kind alone when both are the kind's,
+ * else `kind/dash/weight` with the effective values.
+ */
+function lineStyleKey(kind: DiagramEdgeKind, dash: unknown, weight: unknown): string {
+  const meta = EDGE_KINDS[kind];
+  const d = typeof dash === "string" ? dash : meta.pattern;
+  const w = typeof weight === "string" && !(weight === "normal" && kind !== "accent") ? weight : kind === "accent" ? "accent" : "normal";
+  return d === meta.pattern && w === (kind === "accent" ? "accent" : "normal") ? kind : `${kind}/${d}/${w}`;
+}
+
 /** 01f §3.3 (D-V3): families where an author may place bend points (`flow` only without `direction`). */
 const VIA_FAMILIES = "flow tanpa direction, graph, swimlane";
 
@@ -667,10 +680,13 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
   pass("DATUM-34", mark);
 
   // DATUM-25L (Swarm 1.2.8 row 35c, H-T06, D-H1, N8-212/N8-213): distinct line styles <= LINE_STYLE_MAX (4), <= 3 when
-  // a node carries a mark. A style is the edge kind here; row 57b adds dash and weight to the key (AC-VIS8). Not the
-  // closure DATUM-25 (colours). Runs and is listed in `ran` only above the lower limit, so a spec within 3 styles
-  // keeps its verdict and check list (52c rule).
-  const lineStyles = new Set(edgeObjs.filter((e) => typeof e.kind === "string" && has(EDGE_KINDS, e.kind)).map((e) => e.kind as string));
+  // a node carries a mark. Not the closure DATUM-25 (colours). Runs and is listed in `ran` only above the lower limit,
+  // so a spec within 3 styles keeps its verdict and check list (52c rule).
+  // Row 57b (AC-VIS8, 01f §3.5): the style key is (kind, effective dash, effective weight); a style that only differs
+  // from its kind by a non-default dash or weight is named `kind/dash/weight`, so a kind-only spec keeps its message.
+  const lineStyles = new Set(
+    edgeObjs.filter((e) => typeof e.kind === "string" && has(EDGE_KINDS, e.kind)).map((e) => lineStyleKey(e.kind as DiagramEdgeKind, e.dash, e.weight)),
+  );
   if (lineStyles.size > LIMITS.max_line_styles_with_mark) {
     mark = out.length;
     const max = marksUsed.size > 0 ? LIMITS.max_line_styles_with_mark : LIMITS.max_line_styles;

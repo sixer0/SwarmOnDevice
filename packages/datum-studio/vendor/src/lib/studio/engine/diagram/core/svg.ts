@@ -10,7 +10,16 @@
  * `data-mark="node"`, jalur konektor `data-mark="link"` + `data-series=<jenis>`.
  * Opsi `dataMarks: false` menghasilkan keluaran Python murni.
  */
-import type { DiagramArrowSize, DiagramArrowType, DiagramEdge, DiagramEdgeKind, FaceRole, ProvenanceMark } from "../../../contract";
+import type {
+  DiagramArrowSize,
+  DiagramArrowType,
+  DiagramEdge,
+  DiagramEdgeKind,
+  DiagramEdgeWeight,
+  DiagramLabelAt,
+  FaceRole,
+  ProvenanceMark,
+} from "../../../contract";
 import { symbolBody } from "../../symbols";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure, tspanLines } from "../../chart/core/textfit";
 import { diagramFitActive } from "../fit/state";
@@ -45,8 +54,10 @@ import {
   PAPER,
   STROKE_HAIR,
   STROKE_PRIMARY,
+  WEIGHT_MM,
   colourOf,
   estTextMm,
+  type DashPatternName,
   faceOf,
   pt2mm,
   role,
@@ -1044,15 +1055,23 @@ export function edgePathSvg(
   opts: SvgMarkOptions = {},
 ): string {
   const meta = EDGE_KINDS[kind];
-  const dash = DASH_PATTERNS[meta.pattern];
-  let attrs = `fill="none" stroke="${colourOf(meta.colour)}" stroke-width="${r2(edgeStrokeWidth(kind))}"`;
+  // Row 57b (VIS-8, 01f §3.1): the effective dash and weight (`edgeArrowsOf` keeps only values other than the kind's).
+  const arrows = opts.arrows ?? DEFAULT_ARROWS;
+  const dash = edgeLineDash(kind, arrows.line);
+  let attrs = `fill="none" stroke="${colourOf(meta.colour)}" stroke-width="${r2(edgeLineWidth(kind, arrows.line))}"`;
   if (dash) attrs += ` stroke-dasharray="${dash}"`;
   const route = opts.route === "straight" || opts.route === "curved" ? ` data-route="${opts.route}"` : "";
   // Row 57 (VIS-7, 01f §3.2.4): `marker-start` only with a start head; no `marker-end` for `arrow_end: "none"`.
-  const arrows = opts.arrows ?? DEFAULT_ARROWS;
-  const start = arrows.start ? ` marker-start="url(#${edgeMarkerId(kind, arrows.start, "start")})"` : "";
-  const end = arrows.end ? ` marker-end="url(#${edgeMarkerId(kind, arrows.end, "end")})"` : "";
-  return `<path d="${polylineD(pts)}" ${attrs}${start}${end}${markAttrs("link", opts, kind)}${route}/>`;
+  const start = arrows.start ? ` marker-start="url(#${edgeMarkerId(kind, arrows.start, "start", arrows.line)})"` : "";
+  const end = arrows.end ? ` marker-end="url(#${edgeMarkerId(kind, arrows.end, "end", arrows.line)})"` : "";
+  // Row 57b (C111, C119): under a filled head on a line wider than STROKE_PRIMARY the drawn path stops inside the head
+  // (`headTrimMm`), so its square end no longer shows beside the tip; the marker's refX keeps the tip where it was.
+  let drawn = pts;
+  const tEnd = arrows.end ? headTrimMm(kind, arrows.end, arrows.line) : 0;
+  const tStart = arrows.start ? headTrimMm(kind, arrows.start, arrows.line) : 0;
+  if (tEnd > 0) drawn = trimPolyline(drawn, tEnd);
+  if (tStart > 0) drawn = trimPolyline([...drawn].reverse(), tStart).reverse();
+  return `<path d="${polylineD(drawn)}" ${attrs}${start}${end}${markAttrs("link", opts, kind)}${route}/>`;
 }
 
 /** Swarm 1.2.8 row 57 (VIS-7, D-V4, 01f §5.2): one drawn arrowhead (type other than `none`, size key). */
@@ -1061,10 +1080,38 @@ export interface EdgeHead {
   size: DiagramArrowSize;
 }
 
-/** Row 57: the heads of one connector; null = no head at that end. */
+/**
+ * Swarm 1.2.8 row 57b (VIS-8, 01f §3.1, register N8-262 / N8-263): a connector's line style other than its kind's.
+ * `dash` only when it differs from the kind pattern, `weight` only when it differs from the kind width (`normal` on a
+ * non-accent kind is the absent field; `normal` on `accent` draws 0.45 mm instead of 0.72 mm), so the explicit default
+ * renders byte-identical to the absent field (01f §3.2.2).
+ */
+export interface EdgeLine {
+  dash?: DashPatternName;
+  weight?: DiagramEdgeWeight;
+}
+
+/**
+ * Row 57: the heads of one connector; null = no head at that end.
+ * Row 57b (VIS-8, VIS-9): plus its line style (`line`, absent = the kind's) and its fixed label position (`labelAt`,
+ * register N8-265; absent = the computed placement). Read by `edgePathSvg`, `diagramDefs`, `hopSvg` and the label
+ * placement of `build/svg.ts` / `build/fitlabels.ts`.
+ */
 export interface EdgeArrows {
   start: EdgeHead | null;
   end: EdgeHead | "kind" | null;
+  line?: EdgeLine;
+  labelAt?: DiagramLabelAt;
+}
+
+/** Row 57b (VIS-8): stroke width (mm) of a connector: `WEIGHT_MM[weight]` when set, else the kind width. */
+export function edgeLineWidth(kind: DiagramEdgeKind, line?: EdgeLine): number {
+  return line?.weight ? WEIGHT_MM[line.weight] : edgeStrokeWidth(kind);
+}
+
+/** Row 57b (VIS-8): `stroke-dasharray` of a connector: the `dash` pattern when set, else the kind pattern; null = solid. */
+export function edgeLineDash(kind: DiagramEdgeKind, line?: EdgeLine): string | null {
+  return DASH_PATTERNS[line?.dash ?? EDGE_KINDS[kind].pattern];
 }
 
 /** Today's connector: the kind's head at the end (`head-<kind>`), nothing at the start. */
@@ -1081,21 +1128,93 @@ export function kindHeadType(kind: DiagramEdgeKind): EdgeHead["type"] {
  * renders byte-identical to one that omits them.
  */
 export function edgeArrowsOf(
-  e: Pick<DiagramEdge, "kind" | "arrow_start" | "arrow_end" | "arrow_start_size" | "arrow_end_size">,
+  e: Pick<DiagramEdge, "kind" | "arrow_start" | "arrow_end" | "arrow_start_size" | "arrow_end_size"> &
+    Partial<Pick<DiagramEdge, "dash" | "weight" | "label_at">>,
 ): EdgeArrows {
   const startType = e.arrow_start ?? "none";
   const endType = e.arrow_end ?? kindHeadType(e.kind);
   const endSize = e.arrow_end_size ?? "m";
-  return {
+  const out: EdgeArrows = {
     start: startType === "none" ? null : { type: startType, size: e.arrow_start_size ?? "m" },
     end: endType === "none" ? null : endType === kindHeadType(e.kind) && endSize === "m" ? "kind" : { type: endType, size: endSize },
   };
+  // Row 57b (VIS-8, 01f §3.2.2): only values other than the kind's enter `line`, so explicit defaults are absent.
+  const line = edgeLineOf(e);
+  if (line) out.line = line;
+  if (e.label_at !== undefined) out.labelAt = e.label_at;
+  return out;
 }
 
-/** Row 57 (register N8-468): `head-<kind>` for the kind head, else `arrow-<end>-<type>-<size>-<kind>`. */
-export function edgeMarkerId(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end"): string {
-  if (head === "kind") return `head-${kind}`;
-  return `arrow-${at}-${head.type}-${head.size}-${kind}`;
+/**
+ * Row 57b (VIS-8, VIS-9): `edgeArrowsOf` per drawn connector, from its spec edge (the matching of row 57's
+ * `build/svg.ts arrowsOfPaths`, shared so label placement reads the same edge). Routers keep the spec order; a path
+ * whose ends differ from the edge at its index takes the first unused edge with the same ends and kind. No match =
+ * the kind's defaults.
+ */
+export function edgeArrowsOfPaths(
+  edges: ReadonlyArray<Parameters<typeof edgeArrowsOf>[0] & Pick<DiagramEdge, "from" | "to">>,
+  paths: ReadonlyArray<{ from: string; to: string; kind: DiagramEdgeKind }>,
+): EdgeArrows[] {
+  const used = new Set<number>();
+  const same = (i: number, p: (typeof paths)[number]) => !used.has(i) && edges[i].from === p.from && edges[i].to === p.to && edges[i].kind === p.kind;
+  return paths.map((p, i) => {
+    const j = i < edges.length && same(i, p) ? i : edges.findIndex((_, k) => same(k, p));
+    if (j < 0) return edgeArrowsOf({ kind: p.kind });
+    used.add(j);
+    return edgeArrowsOf(edges[j]);
+  });
+}
+
+/**
+ * Row 57b (C111, C119; 01f §5.2): how far (mm) the drawn path end is pulled back under a filled (triangle) head so the
+ * line's square end lies where the head is at least as wide as the line: distance from the tip >= w L / W. Only for a
+ * line wider than STROKE_PRIMARY (accent 0.72 mm, weight thick 0.70 mm); 0 otherwise, so other figures keep their bytes.
+ * The head's refX moves back by the same amount (`arrowMarkerSvg`), so the tip does not move.
+ */
+export function headTrimMm(kind: DiagramEdgeKind, head: EdgeHead | "kind", line?: EdgeLine): number {
+  const type = head === "kind" ? kindHeadType(kind) : head.type;
+  const sw = edgeLineWidth(kind, line);
+  if (type !== "triangle" || sw <= STROKE_PRIMARY + 1e-9) return 0;
+  const L = ARROW_SIZES_MM[head === "kind" ? "m" : head.size];
+  return Math.max(0, (sw * L) / (0.89 * L) - L / 18);
+}
+
+/** Row 57b: a polyline shortened by `d` mm at its end (zero-length pieces at the end are dropped first). */
+function trimPolyline(pts: ReadonlyArray<readonly [number, number]>, d: number): Array<readonly [number, number]> {
+  const out = [...pts];
+  let rest = d;
+  while (out.length >= 2) {
+    const b = out[out.length - 1];
+    const a = out[out.length - 2];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len > rest + 1e-9) {
+      out[out.length - 1] = [b[0] - ((b[0] - a[0]) * rest) / len, b[1] - ((b[1] - a[1]) * rest) / len];
+      return out;
+    }
+    out.pop();
+    rest -= len;
+  }
+  return out;
+}
+
+/** Row 57b (VIS-8): the non-default line style of an edge (`EdgeLine`); undefined = the kind's dash and width. */
+export function edgeLineOf(e: Pick<DiagramEdge, "kind"> & Partial<Pick<DiagramEdge, "dash" | "weight">>): EdgeLine | undefined {
+  const line: EdgeLine = {};
+  if (e.dash !== undefined && e.dash !== EDGE_KINDS[e.kind].pattern) line.dash = e.dash;
+  if (e.weight !== undefined && !(e.weight === "normal" && e.kind !== "accent")) line.weight = e.weight;
+  return line.dash || line.weight ? line : undefined;
+}
+
+/**
+ * Row 57 (register N8-468): `head-<kind>` for the kind head, else `arrow-<end>-<type>-<size>-<kind>`.
+ * Row 57b (C111): a connector with a `weight` other than its kind's gets `-<weight>` appended (`head-data-thick`,
+ * `arrow-end-open-m-control-thin`), because the head's stroke follows the line width; a thick edge never reuses the
+ * normal head. `dash` does not enter the id (heads are drawn solid).
+ */
+export function edgeMarkerId(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
+  const w = line?.weight ? `-${line.weight}` : "";
+  if (head === "kind") return `head-${kind}${w}`;
+  return `arrow-${at}-${head.type}-${head.size}-${kind}${w}`;
 }
 
 /**
@@ -1116,12 +1235,13 @@ export function edgeMarkerSvg(kind: DiagramEdgeKind): string {
  * separate definitions with the shape mirrored (tip towards the source); `orient="auto-start-reverse"` is not used
  * (support in the DOCX/PDF chain unverified, 01f risk R3).
  */
-export function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end"): string {
+export function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
   const type = head === "kind" ? kindHeadType(kind) : head.type;
   const L = ARROW_SIZES_MM[head === "kind" ? "m" : head.size];
   const W = 0.89 * L;
   const P = 1;
-  const sw = Math.max(0.3, edgeStrokeWidth(kind));
+  // Row 57b (C111): the head's stroke follows the connector's effective width (>= 0.30 mm).
+  const sw = Math.max(0.3, edgeLineWidth(kind, line));
   const col = colourOf(EDGE_KINDS[kind].colour);
   const mir = at === "start";
   // x of a point of the end-pointing shape (tip at x = L), mirrored for a start head, shifted by the margin
@@ -1130,7 +1250,8 @@ export function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", a
   // how far the drawn outline reaches past its geometric tip: the miter of a stroked vertex, half the stroke of a circle
   const reach = type === "triangle" ? 0 : type === "open" ? sw / 2 / Math.sin(Math.atan(W / 2 / L)) : type === "diamond" ? sw / 2 / Math.sin(Math.atan(W / L)) : sw / 2;
   const tip = type === "circle" ? L / 2 + W / 2 : L;
-  const ref = tip + reach - L / 18;
+  // Row 57b (C119): the path stops `headTrimMm` before its geometric end under a filled head on a wide line.
+  const ref = tip + reach - L / 18 - headTrimMm(kind, head, line);
   const body =
     type === "triangle"
       ? `<path d="M${X(0)},${Y(0)} L${X(L)},${Y(W / 2)} L${X(0)},${Y(W)} Z" fill="${col}"/>`
@@ -1140,7 +1261,7 @@ export function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", a
           ? `<path d="M${X(0)},${Y(W / 2)} L${X(L / 2)},${Y(0)} L${X(L)},${Y(W / 2)} L${X(L / 2)},${Y(W)} Z" fill="${PAPER}" stroke="${col}" stroke-width="${r2(sw)}"/>`
           : `<circle cx="${X(L / 2)}" cy="${Y(W / 2)}" r="${r2(W / 2)}" fill="${PAPER}" stroke="${col}" stroke-width="${r2(sw)}"/>`;
   return (
-    `<marker id="${edgeMarkerId(kind, head, at)}" markerUnits="userSpaceOnUse" markerWidth="${r2(L + 2 * P)}" ` +
+    `<marker id="${edgeMarkerId(kind, head, at, line)}" markerUnits="userSpaceOnUse" markerWidth="${r2(L + 2 * P)}" ` +
     `markerHeight="${r2(W + 2 * P)}" refX="${X(ref)}" refY="${Y(W / 2)}" orient="auto">${body}</marker>`
   );
 }
@@ -1175,7 +1296,8 @@ export function diagramDefs(use?: DiagramDefsUse): string[] {
   if (!use) return ["<defs>", hatchPatternSvg(45), hatchPatternSvg(135), ...EDGE_KIND_NAMES_SORTED.map(edgeMarkerSvg), "</defs>"];
   const all = [...use.kinds];
   const arrows = all.map((_, i) => use.arrows?.[i] ?? DEFAULT_ARROWS);
-  const kinds = new Set(all.filter((_, i) => arrows[i].end === "kind"));
+  // Row 57b (C111): a kind head drawn with a non-default weight is its own definition (`head-<kind>-<weight>`).
+  const kinds = new Set(all.filter((_, i) => arrows[i].end === "kind" && !arrows[i].line?.weight));
   const out: string[] = [];
   if (use.hatch45) out.push(hatchPatternSvg(45));
   if (use.hatch135) out.push(hatchPatternSvg(135));
@@ -1184,8 +1306,9 @@ export function diagramDefs(use?: DiagramDefsUse): string[] {
   const extra = new Map<string, string>();
   all.forEach((k, i) => {
     const a = arrows[i];
-    if (a.start) extra.set(edgeMarkerId(k, a.start, "start"), arrowMarkerSvg(k, a.start, "start"));
-    if (a.end && a.end !== "kind") extra.set(edgeMarkerId(k, a.end, "end"), arrowMarkerSvg(k, a.end, "end"));
+    const ln = a.line?.weight ? a.line : undefined;
+    if (a.start) extra.set(edgeMarkerId(k, a.start, "start", ln), arrowMarkerSvg(k, a.start, "start", ln));
+    if (a.end && (a.end !== "kind" || ln)) extra.set(edgeMarkerId(k, a.end, "end", ln), arrowMarkerSvg(k, a.end, "end", ln));
   });
   out.push(...[...extra.keys()].sort().map((id) => extra.get(id)!));
   return out.length ? ["<defs>", ...out, "</defs>"] : [];
@@ -1238,12 +1361,17 @@ export function lineSvg(
   return `<line x1="${pyNum(x1, 2)}" y1="${pyNum(y1, 2)}" x2="${pyNum(x2, 2)}" y2="${pyNum(y2, 2)}" fill="none" stroke="${colourOf(colourToken)}" stroke-width="${r2(strokeW)}"${d}/>`;
 }
 
-/** Lompatan silang pada lintasan horizontal (r = 0,9 mm). */
-export function hopSvg(hx: number, hy: number, kind: DiagramEdgeKind): string {
+/**
+ * Lompatan silang pada lintasan horizontal (r = 0,9 mm).
+ * Swarm 1.2.8 row 57b (VIS-9, 01f §3.3 Jumps): with `arrows` (the connector's `edgeArrowsOf`), the hop stroke is the
+ * connector's `weight` when set, else today's `STROKE_PRIMARY` (also for `accent`).
+ */
+export function hopSvg(hx: number, hy: number, kind: DiagramEdgeKind, arrows?: EdgeArrows): string {
   const r = LIMITS.hop_radius_mm;
+  const sw = arrows?.line?.weight ? WEIGHT_MM[arrows.line.weight] : STROKE_PRIMARY;
   return (
     `<path d="M ${r2(hx - r)} ${r2(hy)} A ${r2(r)} ${r2(r)} 0 0 1 ${r2(hx + r)} ${r2(hy)}" ` +
-    `fill="none" stroke="${colourOf(EDGE_KINDS[kind].colour)}" stroke-width="${r2(STROKE_PRIMARY)}"/>`
+    `fill="none" stroke="${colourOf(EDGE_KINDS[kind].colour)}" stroke-width="${r2(sw)}"/>`
   );
 }
 

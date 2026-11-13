@@ -16,11 +16,14 @@
  * 3. Tidak ada: label digeser menjauhi segmen dengan garis penunjuk (`leader`).
  * 4. Masih tidak ada: label bernomor; nomor di jalur, teks lengkap di baris catatan di atas kaki.
  *    Teks label tidak pernah dihapus atau dipotong (multiset teks DATA tetap, D-491).
+ * Swarm 1.2.8 row 57b (VIS-9, 01f §3.4): a label with `label_at` is fixed (`fixed`): its centre sits at
+ * `LABEL_AT_FRACTION` of the drawn path length (`labelAtBaseline`), it is placed first and never moved; a collision
+ * stays and is reported by the geometry lint (`textOverlap`, `lineThroughText`, `textOverNode`).
  * Murni dan deterministik.
  */
-import type { DiagramEdgeKind } from "../../../contract";
+import type { DiagramEdgeKind, DiagramLabelAt } from "../../../contract";
 import { measure } from "../../chart/core/textfit";
-import { pt2mm, role } from "../core/tokens";
+import { LABEL_AT_FRACTION, pt2mm, role } from "../core/tokens";
 import type { Box } from "./lint";
 
 type Pt = readonly [number, number];
@@ -31,6 +34,8 @@ export interface EdgeLabelInput {
   kind: DiagramEdgeKind;
   /** Posisi bawaan: pusat x dan garis dasar teks. */
   orig: Pt;
+  /** Row 57b (VIS-9): `orig` is a `label_at` position: kept as it is, never moved. */
+  fixed?: boolean;
 }
 
 export type EdgeLabelMode = "keep" | "moved" | "leader" | "numbered" | "unplaced";
@@ -65,6 +70,32 @@ const railMm = (): number => pt2mm(railPt());
 /** Garis dasar label = titik jalur - pt2mm(1,2) (Garis A `build_svg`). */
 export const LABEL_LIFT_MM = (): number => pt2mm(1.2);
 const HARD_EPS = 0.05;
+
+/** Row 57b (VIS-9): the point at fraction `f` (0..1) of a polyline's length (first point for an empty length). */
+export function pointAtFraction(points: ReadonlyArray<Pt>, f: number): [number, number] {
+  if (!points.length) return [0, 0];
+  let total = 0;
+  for (let i = 0; i + 1 < points.length; i++) total += Math.hypot(points[i + 1][0] - points[i][0], points[i + 1][1] - points[i][1]);
+  let rest = total * Math.min(Math.max(f, 0), 1);
+  for (let i = 0; i + 1 < points.length; i++) {
+    const [a, b] = [points[i], points[i + 1]];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (rest <= len && len > 0) return [a[0] + ((b[0] - a[0]) * rest) / len, a[1] + ((b[1] - a[1]) * rest) / len];
+    rest -= len;
+  }
+  const last = points[points.length - 1];
+  return [last[0], last[1]];
+}
+
+/**
+ * Row 57b (VIS-9, 01f §3.4, register N8-265 / N8-471): centre x and text baseline of a label placed `at` along its
+ * drawn path: the knock-out band (`knockBox`: baseline - 1.15 s .. baseline + 0.55 s) is centred on the point at
+ * `LABEL_AT_FRACTION[at]` of the path length, so the label sits on the line it names.
+ */
+export function labelAtBaseline(points: ReadonlyArray<Pt>, at: DiagramLabelAt): [number, number] {
+  const [x, y] = pointAtFraction(points, LABEL_AT_FRACTION[at]);
+  return [x, y + railMm() * 0.3];
+}
 
 /** Lebar teks evidence_rail (mono kapital 0,6 em), mm. */
 export function railTextWidthMm(text: string): number {
@@ -283,7 +314,14 @@ export function placeEdgeLabels(edges: readonly EdgeLabelInput[], ctx: EdgeLabel
   const out: Array<PlacedEdgeLabel | null> = edges.map(() => null);
   // 1. posisi bawaan bebas tabrakan -> tetap. Dua label bawaan yang saling timpa: yang pertama tetap.
   const sc = scorer(ctx, edges, placed);
+  // Row 57b (VIS-9): fixed (`label_at`) labels first, as given: they are never moved and other labels avoid them.
   edges.forEach((e, i) => {
+    if (!e.fixed) return;
+    out[i] = { mode: "keep", x: e.orig[0], y: e.orig[1], text: e.label, kw: kws[i] };
+    if (e.label.trim()) placed.set(i, origBox[i]);
+  });
+  edges.forEach((e, i) => {
+    if (out[i]) return;
     if (!e.label.trim()) {
       out[i] = { mode: "keep", x: e.orig[0], y: e.orig[1], text: e.label, kw: kws[i] };
       return;

@@ -103,8 +103,11 @@ describe("H-ARW arrowhead size (N8-378)", () => {
           expect(h.units, id).toBe("userSpaceOnUse")
           expect(Math.abs(printed(r.svg, h).len - 3.2), id).toBeLessThanOrEqual(0.01)
           expect(h.closed, id).toBe(!OPEN.has(kind))
-          // the outermost point of the head lies L/18 = 0.18 mm past the path end: inside the node's 0.225 mm half stroke
-          expect(Math.abs(reach(h) - 3.2 / 18), id).toBeLessThanOrEqual(0.02)
+          // the outermost point of the head lies L/18 = 0.18 mm past the path end: inside the node's 0.225 mm half stroke.
+          // INTENT row 57b (C119): on the 0.72 mm accent line the path stops where the head is as wide as the line
+          // (w L / W = 0.72 / 0.89 mm before the tip), so its square end no longer shows beside the tip.
+          const want = kind === "accent" ? 0.72 / 0.89 : 3.2 / 18
+          expect(Math.abs(reach(h) - want), id).toBeLessThanOrEqual(0.02)
         }
       }
       expect([...seen].sort()).toEqual([...KINDS].sort())

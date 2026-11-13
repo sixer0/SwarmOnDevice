@@ -123,6 +123,10 @@ export const LIMITS = {
   weight_mm: { thin: 0.3, normal: 0.45, thick: 0.7 },
   shape_glyph_mm: 2.4,
   label_at_fraction: { start: 0.2, middle: 0.5, end: 0.8 },
+  // Swarm 1.2.8 row 57b (C86; register N8-478, N8-479): row 54's label-below sizes, moved from fit/text.ts.
+  label_below_gap_mm: 1.0,
+  bpmn_event_diameter_mm: 8.0,
+  bpmn_gateway_size_mm: 11.0,
 } as const;
 
 /** Swarm 1.2.8 row 52 (VIS-0a): exported aliases of the LIMITS keys above (register names). */
@@ -142,6 +146,32 @@ export const ARROW_HEAD_MIN_MM = 2.5;
 export const WEIGHT_MM = LIMITS.weight_mm;
 export const SHAPE_GLYPH_MM = LIMITS.shape_glyph_mm;
 export const LABEL_AT_FRACTION = LIMITS.label_at_fraction;
+
+// Swarm 1.2.8 row 57b (C86, C101; register N8-477..N8-479, N8-470): the label-below names of row 54 and the BPMN shape
+// constants of row 54b, moved here from `fit/text.ts` (which re-exports them, so its importers are unchanged). Values
+// unchanged (OP20-6).
+/**
+ * Row 54 (VIS-3a, C12 OP-18-4, N8-477): BPMN events and gateways are drawn at a fixed outline size, centred
+ * horizontally at the top of the node's layout cell, with their label block (tag line, label, sub) below the outline.
+ */
+export const LABEL_BELOW_SHAPES: ReadonlySet<string> = new Set([
+  "event_start",
+  "event_intermediate",
+  "event_end",
+  "gateway_exclusive",
+  "gateway_parallel",
+  "gateway_inclusive",
+  "gateway_complex",
+]);
+/** Row 54 (N8-478): gap (mm) from the outline's outer stroke edge to the top of the label block. */
+export const LABEL_BELOW_GAP_MM = LIMITS.label_below_gap_mm;
+/** Row 54 (N8-479): outline diameter (mm) of a BPMN event; side of the bounding square of a BPMN gateway (mm). */
+export const BPMN_EVENT_DIAMETER_MM = LIMITS.bpmn_event_diameter_mm;
+export const BPMN_GATEWAY_SIZE_MM = LIMITS.bpmn_gateway_size_mm;
+/** Row 54b (VIS-3b): clearance (mm) between the sub-process [+] square and the outline stroke below it, and the text. */
+export const SUBPROCESS_GLYPH_CLEAR_MM = 0.4;
+/** Row 54b (01f §1.3): arm length (mm) of the text annotation's open bracket (`M x+1.6 y L x y L x y+h L x+1.6 y+h`). */
+export const ANNOTATION_BRACKET_MM = 1.6;
 
 /** Peran tipografi yang dicetak mesin (diuji DATUM-28). */
 export const DIAGRAM_ROLES = ["caption", "source_line", "table_header", "evidence_rail", "register_block"] as const;

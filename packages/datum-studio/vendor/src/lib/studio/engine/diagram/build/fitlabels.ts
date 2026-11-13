@@ -5,8 +5,9 @@
 import type { DiagramZone, RoutedEdge, StudioDiagramV1 } from "../../../contract";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure } from "../../chart/core/textfit";
 import { EDGE_KINDS, LATTICE_Y, pt2mm, role, STROKE_PRIMARY, svgText, type Sheet, type SheetNode } from "../core";
+import { edgeArrowsOfPaths } from "../core/svg";
 import type { Box } from "../fit/lint";
-import { placeEdgeLabels, type EdgeLabelInput, type EdgeLabelPlan, layoutNotes } from "../fit/labels";
+import { labelAtBaseline, placeEdgeLabels, type EdgeLabelInput, type EdgeLabelPlan, layoutNotes } from "../fit/labels";
 import { diagramFitAllows, diagramFitNote } from "../fit/state";
 import { capLineMm, capWidthMm, nodeTextLayout } from "../fit/text";
 
@@ -103,7 +104,13 @@ export function fitEdgeLabels(a: FitLabelInputs): EdgeLabelPlan {
   }
   const hdr = pt2mm(role("table_header").size);
   for (const lane of a.sheet.lanes) obstacles.push(textBox(0.5, lane.y + hdr + LATTICE_Y / 2.0, headerWidth(lane.name), hdr, "start"));
-  const edges: EdgeLabelInput[] = a.paths.map((p, i) => ({ points: p.points, label: String(p.label ?? ""), kind: p.kind, orig: a.orig[i] }));
+  // Swarm 1.2.8 row 57b (VIS-9, 01f §3.4): an edge with `label_at` keeps its label at that fraction of the path, fixed.
+  const at = edgeArrowsOfPaths(a.s.edges ?? [], a.paths).map((x) => x.labelAt);
+  const edges: EdgeLabelInput[] = a.paths.map((p, i) => {
+    const fixedAt = at[i];
+    const base = { points: p.points, label: String(p.label ?? ""), kind: p.kind };
+    return fixedAt ? { ...base, orig: labelAtBaseline(p.points, fixedAt), fixed: true } : { ...base, orig: a.orig[i] };
+  });
   const plan = placeEdgeLabels(edges, { W: a.sheet.widthMm, yMax: a.yMax, yMin: a.yMin, nodeBoxes, obstacles, allowNumbered: diagramFitAllows("numbered") });
   const moved = plan.placed.filter((p) => p.mode === "moved").length;
   if (moved) diagramFitNote("LABEL_MOVED", `${moved} label tepi dipindah ke posisi bebas tabrakan`);

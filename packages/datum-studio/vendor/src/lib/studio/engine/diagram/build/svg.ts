@@ -72,7 +72,8 @@ import { capacityRetry, isCapacityReject, withAction } from "./capacity";
 import { crossingHops, routePlaced, routeStyleOfPath, type HoppedEdge } from "./route";
 import { canonicalSymbolId } from "../../symbols";
 import { colourCountDetail, diagramColourSources } from "../core/colour"; // row 62 (T-06)
-import { edgeArrowsOf, type EdgeArrows } from "../core/svg"; // row 57 (VIS-7)
+import { edgeArrowsOfPaths, type EdgeArrows } from "../core/svg"; // row 57 (VIS-7); row 57b: shared path-edge matching
+import { labelAtBaseline } from "../fit/labels"; // row 57b (VIS-9)
 
 /**
  * Laporan rakitan (HS `report`) di atas `SvgResult.report`.
@@ -243,6 +244,7 @@ function graphFit(s: StudioDiagramV1, sheet: Sheet, paths: readonly RoutedEdge[]
   const ys: number[] = [];
   for (const nd of nodes) ys.push(nd.y, nd.y + nd.h);
   const railMm = pt2mm(role("evidence_rail").size);
+  const fixedAt = edgeArrowsOfPaths(s.edges ?? [], paths).map((a) => a.labelAt); // row 57b (VIS-9)
   paths.forEach((p, i) => {
     for (const [, y] of p.points) ys.push(y);
     if (bands) {
@@ -250,8 +252,9 @@ function graphFit(s: StudioDiagramV1, sheet: Sheet, paths: readonly RoutedEdge[]
       return;
     }
     // pita knockout `labelKnockoutSvg`: y = my - 1,15 size, tinggi 1,7 size; my = labelPos - pt2mm(1,2)
-    const [, ly] = labelPos(p.points, nodes, estTextMm(p.label, "evidence_rail"), railMm * 1.4);
-    const my = ly - pt2mm(1.2);
+    // Row 57b (VIS-9): a `label_at` label sits at its fixed baseline (`labelAtBaseline`), no lift.
+    const at = fixedAt[i];
+    const my = at ? labelAtBaseline(p.points, at)[1] : labelPos(p.points, nodes, estTextMm(p.label, "evidence_rail"), railMm * 1.4)[1] - pt2mm(1.2);
     ys.push(my - railMm * 1.15, my - railMm * 1.15 + railMm * 1.7);
   });
   for (const z of s.zones ?? []) {
@@ -562,7 +565,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   // D-290: graph = lembar pas kotak pembatas semua unsur + rem tetap.
   const fit = s.family === "graph" ? graphFit(s, sheet, paths, plan ? planBands(plan) : undefined) : undefined;
   if (plan && fit) plan = shiftPlan(plan, fit.dy);
-  const hopped: HoppedEdge[] = crossingHops(fit ? fit.paths : paths);
+  // Row 57b (VIS-9, 01f §3.3, N8-266): `jumps: "off"` draws no hop; "on" or absent = today's crossingHops.
+  const hopped: HoppedEdge[] = crossingHops(fit ? fit.paths : paths).map((p) => (s.jumps === "off" ? { ...p, hops: [] } : p));
   const arrows = arrowsOfPaths(s, hopped); // row 57 (VIS-7): heads per drawn connector
   ran.push("DATUM-32"); // ditegakkan detur rute (gagal = lempar)
 
@@ -670,7 +674,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   if (plan) {
     const placed = plan.placed;
     hopped.forEach((p, i) => sheet.add(edgePathSvg(p.points, p.kind, { index: i, route: routeStyleOfPath(p), arrows: arrows[i] })));
-    for (const p of hopped) for (const [hx, hy] of p.hops) sheet.add(hopSvg(hx, hy, p.kind));
+    hopped.forEach((p, i) => p.hops.forEach(([hx, hy]) => sheet.add(hopSvg(hx, hy, p.kind, arrows[i])))); // row 57b: hop stroke = weight
     hopped.forEach((p, i) => {
       const pl = placed[i];
       if (pl.leader) sheet.add(lineSvg(pl.leader[0], pl.leader[1], pl.leader[2], pl.leader[3], EDGE_KINDS[p.kind].colour, STROKE_HAIR));
@@ -680,10 +684,17 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     hopped.forEach((p, i) => {
       sheet.add(edgePathSvg(p.points, p.kind, { index: i, route: routeStyleOfPath(p), arrows: arrows[i] }));
       const lw = estTextMm(p.label, "evidence_rail");
+      // Row 57b (VIS-9, 01f §3.4): `label_at` = fixed centre at LABEL_AT_FRACTION of the path (no lift, never moved).
+      const at = arrows[i].labelAt;
+      if (at) {
+        const [ax, ay] = labelAtBaseline(p.points, at);
+        labels.push([ax, ay, p.label, p.kind]);
+        return;
+      }
       const [mx, my] = labelPos(p.points, nodes, lw, railMm * 1.4);
       labels.push([mx, my - pt2mm(1.2), p.label, p.kind]);
     });
-    for (const p of hopped) for (const [hx, hy] of p.hops) sheet.add(hopSvg(hx, hy, p.kind));
+    hopped.forEach((p, i) => p.hops.forEach(([hx, hy]) => sheet.add(hopSvg(hx, hy, p.kind, arrows[i])))); // row 57b: hop stroke = weight
     for (const [mx, my, lab, kind] of labels) sheet.addAll(edgeLabelSvg(mx, my, lab, kind, W));
   }
 
@@ -787,13 +798,6 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
  * with the same ends and kind. No match = the kind head (today's drawing).
  */
 function arrowsOfPaths(s: StudioDiagramV1, paths: readonly HoppedEdge[]): EdgeArrows[] {
-  const edges = s.edges ?? [];
-  const used = new Set<number>();
-  const same = (i: number, p: HoppedEdge) => !used.has(i) && edges[i].from === p.from && edges[i].to === p.to && edges[i].kind === p.kind;
-  return paths.map((p, i) => {
-    const j = i < edges.length && same(i, p) ? i : edges.findIndex((_, k) => same(k, p));
-    if (j < 0) return edgeArrowsOf({ kind: p.kind });
-    used.add(j);
-    return edgeArrowsOf(edges[j]);
-  });
+  // Row 57b: the matching lives in core/svg.ts `edgeArrowsOfPaths` (shared with the label placement).
+  return edgeArrowsOfPaths(s.edges ?? [], paths);
 }

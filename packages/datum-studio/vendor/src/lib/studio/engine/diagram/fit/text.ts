@@ -10,7 +10,31 @@
 import type { DiagramNode, DiagramShape } from "../../../contract";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, LINE_HEIGHT_EM, measure, wrap } from "../../chart/core/textfit";
 import { pyStr } from "../core/pyfmt";
-import { pt2mm, role, snapCeil, STROKE_PRIMARY } from "../core/tokens";
+import {
+  ANNOTATION_BRACKET_MM,
+  BPMN_EVENT_DIAMETER_MM,
+  BPMN_GATEWAY_SIZE_MM,
+  LABEL_BELOW_GAP_MM,
+  LABEL_BELOW_SHAPES,
+  pt2mm,
+  role,
+  SHAPE_GLYPH_MM,
+  snapCeil,
+  STROKE_PRIMARY,
+  SUBPROCESS_GLYPH_CLEAR_MM,
+} from "../core/tokens";
+
+// Swarm 1.2.8 row 57b (C86, C101): the label-below names and the row 54b constants live in `core/tokens.ts`; they are
+// re-exported here so the importers of this module (core/svg.ts, build/route.ts, chart flowchart) keep their imports.
+export {
+  ANNOTATION_BRACKET_MM,
+  BPMN_EVENT_DIAMETER_MM,
+  BPMN_GATEWAY_SIZE_MM,
+  LABEL_BELOW_GAP_MM,
+  LABEL_BELOW_SHAPES,
+  SHAPE_GLYPH_MM,
+  SUBPROCESS_GLYPH_CLEAR_MM,
+};
 
 /** Baris label simpul paling banyak sebelum lebar/tinggi dilaporkan (audit §6 P1-10). */
 export const NODE_MAX_LINES = 3;
@@ -40,27 +64,9 @@ export function subWidthMm(s: string): number {
 }
 
 // ---------------------------------------------------------------- row 54 (VIS-3a, label below)
-/**
- * Swarm 1.2.8 row 54 (VIS-3a, C12 OP-18-4, 01_specs.md §5.3, register N8-477..N8-479): BPMN events and gateways are drawn
- * at a fixed outline size, centred horizontally at the top of the node's layout cell, and their label block (tag line,
- * label, sub) sits below the outline. Every other shape keeps its label inside. Values per OP20-6 (row 54 eye check).
- * Kept here, not in `core/tokens.ts` (V-core-tokens held by row 35c in wave I3; file request row 54 -> tokens.ts).
- */
-export const LABEL_BELOW_SHAPES: ReadonlySet<string> = new Set([
-  "event_start",
-  "event_intermediate",
-  "event_end",
-  "gateway_exclusive",
-  "gateway_parallel",
-  "gateway_inclusive",
-  "gateway_complex",
-]);
-/** Gap (mm) from the outline's outer stroke edge to the top of the label block. */
-export const LABEL_BELOW_GAP_MM = 1.0;
-/** Outline diameter (mm) of a BPMN event; side of the bounding square of a BPMN gateway (mm). */
-export const BPMN_EVENT_DIAMETER_MM = 8.0;
-export const BPMN_GATEWAY_SIZE_MM = 11.0;
-
+// Swarm 1.2.8 row 54 (VIS-3a, C12 OP-18-4, 01_specs.md §5.3): BPMN events and gateways draw their label below a fixed
+// outline; the names (LABEL_BELOW_SHAPES, LABEL_BELOW_GAP_MM, BPMN_EVENT_DIAMETER_MM, BPMN_GATEWAY_SIZE_MM) are in
+// core/tokens.ts since row 57b (C86).
 export function isLabelBelow(shape: string | undefined): boolean {
   return shape !== undefined && LABEL_BELOW_SHAPES.has(shape);
 }
@@ -93,17 +99,8 @@ function labelBelowTop(shape: string | undefined): number {
 }
 
 // ---------------------------------------------------------------- row 54b (VIS-3b)
-/**
- * Swarm 1.2.8 row 54b (VIS-3b, 01f §1.3 / G-3, register N8-470): side (mm) of the collapsed sub-process [+] square, which
- * sits centred at the bottom inside its own band. Kept here beside the label-below names (V-core-tokens; file request
- * row 54b -> tokens.ts). Gateway markers are sized from the gateway (core/svg.ts), not from this value (eye check).
- */
-export const SHAPE_GLYPH_MM = 2.4;
-/** Row 54b: clearance (mm) between the [+] square and the outline stroke below it, and between the square and the text. */
-export const SUBPROCESS_GLYPH_CLEAR_MM = 0.4;
-
-/** Row 54b (01f §1.3): arm length (mm) of the text annotation's open bracket (`M x+1.6 y L x y L x y+h L x+1.6 y+h`). */
-export const ANNOTATION_BRACKET_MM = 1.6;
+// Swarm 1.2.8 row 54b (VIS-3b, 01f §1.3): SHAPE_GLYPH_MM (N8-470), SUBPROCESS_GLYPH_CLEAR_MM and ANNOTATION_BRACKET_MM
+// are in core/tokens.ts since row 57b (C101). Gateway markers are sized from the gateway (core/svg.ts), not from them.
 
 /** Row 54b (01f §1.3): corner radius (mm) of a BPMN task / sub-process, rx = ry = min(1.6 mm, h / 4). */
 export function taskRadiusMm(h: number): number {
