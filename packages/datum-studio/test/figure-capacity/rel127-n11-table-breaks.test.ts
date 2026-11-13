@@ -6,7 +6,11 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { useStudioEnv } from "../ported/_env"
 
+// Own env scope: the row 143a kit sets the Studio env once per process and restores it after the first file that
+// imported it, so a second kit user in the same run must not rely on that side effect (row 40c).
+useStudioEnv()
 const K = await import("../engine-rev-a/row143a/_kit")
 const fit = await import("../../vendor/src/lib/studio/engine/table-fit")
 const writeClient = await import("../../vendor/scripts/studio/mcp/write-client")
