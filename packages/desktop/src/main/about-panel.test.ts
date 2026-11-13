@@ -6,9 +6,9 @@ import { aboutPanelOptions, formatBuildDate } from "./about-panel"
 
 describe("about panel (row 175)", () => {
   test("Indonesian: name, version only once, update date; no licence text", () => {
-    expect(aboutPanelOptions({ name: "Swarm", version: "1.2.6", buildDate: "2026-11-08", locale: "id" })).toEqual({
+    expect(aboutPanelOptions({ name: "Swarm", version: "1.2.7", buildDate: "2026-11-08", locale: "id" })).toEqual({
       applicationName: "Swarm",
-      applicationVersion: "1.2.6",
+      applicationVersion: "1.2.7",
       version: "",
       credits: "",
       copyright: "Diperbarui 8 November 2026",
@@ -16,13 +16,13 @@ describe("about panel (row 175)", () => {
   })
 
   test("English locale", () => {
-    expect(aboutPanelOptions({ name: "Swarm", version: "1.2.6", buildDate: "2026-01-05", locale: "en" }).copyright).toBe(
+    expect(aboutPanelOptions({ name: "Swarm", version: "1.2.7", buildDate: "2026-01-05", locale: "en" }).copyright).toBe(
       "Updated January 5, 2026",
     )
   })
 
   test("no build date (dev run): empty copyright, never the Info.plist text", () => {
-    const o = aboutPanelOptions({ name: "Swarm Dev", version: "1.2.6", buildDate: undefined, locale: "id" })
+    const o = aboutPanelOptions({ name: "Swarm Dev", version: "1.2.7", buildDate: undefined, locale: "id" })
     expect(o.copyright).toBe("")
     expect(JSON.stringify(o)).not.toMatch(/opencode|MIT/i)
   })
@@ -36,7 +36,7 @@ describe("about panel (row 175)", () => {
 
 // Row 206 (1.2.3): the About date is the build commit's date, never the run time: electron.vite.config.ts reads
 // `git log -1 --format=%cs` into SWARM_BUILD_DATE and main passes it to aboutPanelOptions with app.getVersion().
-describe("about panel build date comes from the commit (1.2.6)", () => {
+describe("about panel build date comes from the commit (1.2.7)", () => {
   const root = join(import.meta.dir, "..", "..")
   test("the vite config derives SWARM_BUILD_DATE from the commit date and main uses it", () => {
     const cfg = readFileSync(join(root, "electron.vite.config.ts"), "utf8")
@@ -47,13 +47,13 @@ describe("about panel build date comes from the commit (1.2.6)", () => {
     expect(main).toContain("import.meta.env.SWARM_BUILD_DATE")
     expect(main).toContain("buildDate: BUILD_DATE")
   })
-  test("the commit date of this checkout formats as the About line, with the 1.2.6 version", () => {
+  test("the commit date of this checkout formats as the About line, with the 1.2.7 version", () => {
     const iso = execFileSync("git", ["log", "-1", "--format=%cs"], { cwd: root, encoding: "utf8" }).trim()
     expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string }
-    expect(pkg.version).toBe("1.2.6")
+    expect(pkg.version).toBe("1.2.7")
     const o = aboutPanelOptions({ name: "Swarm", version: pkg.version, buildDate: iso, locale: "id" })
-    expect(o.applicationVersion).toBe("1.2.6")
+    expect(o.applicationVersion).toBe("1.2.7")
     expect(o.copyright).toBe(`Diperbarui ${formatBuildDate(iso, "id")}`)
   })
 })
