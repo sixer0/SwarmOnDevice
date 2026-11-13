@@ -149,6 +149,8 @@ it.instance("SEC-08 stubbed Tailscale utun route: requests are sent and no warni
     route?.setProbe(async (host) => (probed.push(host), "utun4"))
     // 1.2.6 FX-5/6 (M1 S1, intended change): a utun counts as Tailscale only with an address in 100.64.0.0/10.
     route?.setAddresses?.(async () => ["100.101.7.9"])
+    // 1.2.7 F-7 (C8, intended setup change): the Tailscale CLI must report the same address; stubbed, never run.
+    route?.setTailscaleSelf?.(async () => ["100.101.7.9"])
     const warnings = watchWarnings()
     try {
       yield* sendThree()
@@ -246,6 +248,8 @@ it.live("SEC-08 S1 another VPN's utun no longer suppresses the warning; a Tailsc
     route.setSink((w) => warned.push({ code: w.code, iface: w.iface }))
     route.setProbe(async () => "utun7")
     route.setAddresses?.(async () => ["100.102.0.5"])
+    // 1.2.7 F-7 (C8, intended setup change): the Tailscale CLI must report the same address; stubbed, never run.
+    route.setTailscaleSelf?.(async () => ["100.102.0.5"])
     await fetchFn("http://100.102.23.27:11400/v1/chat/completions")
     await route.settled()
     expect(sent).toBe(2)
