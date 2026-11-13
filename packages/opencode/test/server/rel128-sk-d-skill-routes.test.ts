@@ -122,9 +122,9 @@ describe("AC-SKd person-only: every write route needs the desktop nonce", () => 
     )
   })
 
-  // Pending: row 28 adds `/(?:^|\/)skill(?:\/|$)/` to PERSON_ONLY_WRITES (P-3). Enable after row 28 commits.
-  test.todo(
-    "pending row 28 (P-3): PERSON_ONLY_WRITES refuses an agent's PUT/DELETE/POST under /skill; the three GETs still run",
+  // Row 28 added `/(?:^|\/)skill(?:\/|$)/` to PERSON_ONLY_WRITES (P-3); enabled by row 28 (C57).
+  test(
+    "row 28 (P-3): PERSON_ONLY_WRITES refuses an agent's PUT/DELETE/POST under /skill; the three GETs still run",
     () => {
       for (const [method, route] of [
         ["PUT", "/skill"],

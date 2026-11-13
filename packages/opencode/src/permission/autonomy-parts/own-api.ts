@@ -9,7 +9,7 @@ import { Reach } from "../../tool/reach"
 import { DeletionWords } from "../../tool/deletion"
 import type { OwnApiReason } from "../autonomy-texts"
 import { homes, protectedOutside } from "./outside"
-import type { Input } from "./types"
+import type { Input, Verdict } from "./types"
 // Hosts that are this computer, whatever the listener's own name. `0` and `0.0.0.0` connect to it on macOS and Linux.
 const LOOPBACK_NAME = /^(?:localhost|ip6-localhost|ip6-loopback|[\w.-]+\.localhost|127(?:\.\d{1,3}){3}|0|0\.0\.0\.0|::|::1|::ffff:127(?:\.\d{1,3}){3}|0:0:0:0:0:0:0:1)$/i
 const WILDCARD = new Set(["0.0.0.0", "::", ""])
@@ -152,6 +152,9 @@ const PERSON_ONLY_ROUTES: readonly RegExp[] = [
   /(?:^|\/)experimental\/workspace\/warp(?:\/|$)/,
   /(?:^|\/)sync\/steal(?:\/|$)/,
   /(?:^|\/)mcp\/[^/]+\/connect(?:\/|$)/,
+  // 1.2.8 row 28 (P-3, AC-PROJi, R20-C13): moving the project's folder (`POST /project/rehome`, N8-130) is the person's
+  // click only, whatever the method; the route also needs the desktop nonce.
+  /(?:^|\/)project\/rehome(?:\/|$)/,
 ]
 /**
  * 1.2.7 row 47k (U10-1): routes whose writes only the person makes: configuration (`/config`, `/global/config`, the lane
@@ -171,6 +174,10 @@ const PERSON_ONLY_WRITES: readonly RegExp[] = [
   /(?:^|\/)experimental\/worktree(?:\/|$)/,
   /(?:^|\/)experimental\/workspace\/(?!(?:adapter|sync-list|status|warp)(?:\/|$))[^/]+(?:\/|$)/,
   /(?:^|\/)mcp$/,
+  // 1.2.8 row 28 (P-3, AC-SKd, R20-C13): saving, deleting (archive first) and approving or discarding a draft skill are
+  // the person's (`PUT`/`DELETE /skill`, `POST`/`DELETE /skill/drafts/:name...`); `GET /skill`, `/skill/source` and
+  // `/skill/drafts` still run. The routes also need the desktop nonce.
+  /(?:^|\/)skill(?:\/|$)/,
 ]
 const READ_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS"])
 
@@ -827,6 +834,238 @@ export function ownServerCall(input: Input): OwnApiHit | undefined {
 /** Whether a call to Swarm's own running server is refused, by `ownServerCall` (1.2.7 row 47k: a readable, not person-only route is not). */
 export function callsOwnServer(input: Input) {
   return ownServerCall(input) !== undefined
+}
+
+/**
+ * 1.2.8 row 28 (H-U10, N8-387, SR8-01, C13): the routes of Swarm's own server an agent may read under the consent without
+ * the main agent, each the exact path as registered in `server/routes/instance/httpapi/groups/*.ts` (OP20-10; `:name` is
+ * one path segment). Matched on the whole normalised path (`routePath`), so a prefix (a workspace proxy) or a longer path
+ * is not on it. Off the list on purpose (they return unmasked secrets, search any folder or reach other servers):
+ * `file*`, `find*`, `config*`, `global/config`, `provider*`, `GET /memory`, `experimental/*`, the event streams,
+ * `autonomy/*`, `pty*`, `saved-command/*`, `workspace*`, and every route added later. The list may shrink in review; it
+ * never grows without a security re-review (01_specs §3.3 rule 1). `/memory/vault` is row 43e's route (AC-OBSe).
+ */
+export const OWN_API_READ_ROUTES: readonly { readonly route: string; readonly pattern: RegExp }[] = [
+  "/global/health",
+  "/global/agents",
+  "/session",
+  "/session/status",
+  "/session/:sessionID",
+  "/session/:sessionID/children",
+  "/session/:sessionID/todo",
+  "/session/:sessionID/message",
+  "/session/:sessionID/message/:messageID",
+  "/session/:sessionID/diff",
+  "/project",
+  "/project/current",
+  "/path",
+  "/vcs",
+  "/vcs/status",
+  "/vcs/diff",
+  "/agent",
+  "/command",
+  "/skill",
+  "/skill/drafts",
+  "/skill/source",
+  "/lsp",
+  "/formatter",
+  "/mcp",
+  "/question",
+  "/permission",
+  "/memory/vault",
+].map((route) => ({ route, pattern: new RegExp(`^${route.toLowerCase().replace(/:[a-z]+/g, "[^/]+")}$`) }))
+
+/** The verdict of an own-server read under the consent (N8-386): run by the gate, nobody asked, the main agent included. */
+export const OWN_API_READ: Verdict = { class: "A", decidedBy: "gate", category: "own_api_read" }
+
+/** A request read from a call's words for `ownApiRead`: its URL, method, headers and query items (httpie's `a==b`). */
+type ReadRequest = { url: string; method: "GET" | "HEAD"; headers: [string, string][]; query: [string, string][] }
+
+const READ_CURL_FLAGS: ReadonlySet<string> = new Set(NetOptions.OWN_API_READ_OPTIONS.curl.flags)
+const READ_CURL_VALUES: ReadonlySet<string> = new Set(NetOptions.OWN_API_READ_OPTIONS.curl.values)
+const READ_METHODS_HTTPIE: ReadonlySet<string> = new Set(NetOptions.OWN_API_READ_OPTIONS.httpie.methods)
+/** Outside quotes, a character that makes the text more than one plain command: an operator, a redirection, a glob, `~`, a comment. */
+const READ_UNQUOTED = new Set(";&|<>()*?[]{}~\\!#")
+
+/** Whether the text is one plain command: nothing expanded (`$`, backquotes), no line break, no unquoted operator or glob. */
+function plainCommand(text: string) {
+  if (/[$`\r\n]/.test(text)) return false
+  let quote: string | undefined
+  for (const char of text) {
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined
+    } else if (char === "'" || char === '"') quote = char
+    else if (READ_UNQUOTED.has(char)) return false
+  }
+  return quote === undefined
+}
+
+/** curl with only the N8-388 options and one URL; undefined for anything else. */
+function curlRead(args: readonly string[]): ReadRequest | undefined {
+  const urls: string[] = []
+  const headers: [string, string][] = []
+  let head = false
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (word.startsWith("--")) {
+      if (READ_CURL_FLAGS.has(word)) continue
+      if (!READ_CURL_VALUES.has(word) || args[index + 1] === undefined) return undefined
+      index++
+      continue
+    }
+    if (word.startsWith("-")) {
+      if (word.length < 2) return undefined
+      for (let at = 1; at < word.length; at++) {
+        const option = `-${word[at]}`
+        if (READ_CURL_FLAGS.has(option)) {
+          if (option === "-I") head = true
+          continue
+        }
+        if (!READ_CURL_VALUES.has(option)) return undefined
+        const value = word.slice(at + 1) || args[++index]
+        if (value === undefined) return undefined
+        if (option === "-H") {
+          const colon = value.indexOf(":")
+          if (value.startsWith("@") || colon < 1) return undefined
+          headers.push([value.slice(0, colon).trim(), value.slice(colon + 1).trim()])
+        }
+        break
+      }
+      continue
+    }
+    urls.push(word)
+  }
+  if (urls.length !== 1) return undefined
+  return { url: urls[0]!, method: head ? "HEAD" : "GET", headers, query: [] }
+}
+
+/** httpie or xh with no option, an optional GET/HEAD, one URL, and only `a==b` and `a:b` items; undefined otherwise. */
+function httpieRead(args: readonly string[]): ReadRequest | undefined {
+  if (args.length === 0 || args.some((word) => word.startsWith("-"))) return undefined
+  const named = args.length > 1 && /^[A-Za-z]+$/.test(args[0]!)
+  const method = named ? args[0]!.toUpperCase() : "GET"
+  if (!READ_METHODS_HTTPIE.has(method)) return undefined
+  const headers: [string, string][] = []
+  const query: [string, string][] = []
+  for (const item of args.slice(named ? 2 : 1)) {
+    // `@` reads a value from a file; `=`, `:=` and `=@` items are data, which make it a POST.
+    if (item.includes("@")) return undefined
+    const pair = /^([^:=]+)==(.*)$/.exec(item)
+    if (pair) {
+      query.push([pair[1]!, pair[2]!])
+      continue
+    }
+    const header = /^([^:=]+):(?!=)(.*)$/.exec(item)
+    if (!header) return undefined
+    headers.push([header[1]!.trim(), header[2]!.trim()])
+  }
+  return { url: args[named ? 1 : 0]!, method: method as "GET" | "HEAD", headers, query }
+}
+
+/** Config files httpie and xh read by themselves, which may add options (`default_options`) nobody wrote on the line. */
+function httpieConfigs(program: string) {
+  const env = process.env
+  const files =
+    program === "xh"
+      ? [
+          ...(env.XH_CONFIG_DIR ? [path.join(env.XH_CONFIG_DIR, "config.json")] : []),
+          ...(env.XDG_CONFIG_HOME ? [path.join(env.XDG_CONFIG_HOME, "xh", "config.json")] : []),
+          ...homes().flatMap((home) => [
+            path.join(home, ".config", "xh", "config.json"),
+            path.join(home, "Library", "Application Support", "xh", "config.json"),
+          ]),
+        ]
+      : [
+          ...(env.HTTPIE_CONFIG_DIR ? [path.join(env.HTTPIE_CONFIG_DIR, "config.json")] : []),
+          ...(env.XDG_CONFIG_HOME ? [path.join(env.XDG_CONFIG_HOME, "httpie", "config.json")] : []),
+          ...homes().flatMap((home) => [path.join(home, ".config", "httpie", "config.json"), path.join(home, ".httpie", "config.json")]),
+        ]
+  return files.filter((file) => fs.lstatSync(file, { throwIfNoEntry: false }) !== undefined)
+}
+
+/** The request of a shell call that is one plain curl, http, https or xh command with only listed options. */
+function shellRead(command: string): ReadRequest | undefined {
+  if (!plainCommand(command)) return undefined
+  const segments = shellSegments(command)
+  if (segments.length !== 1) return undefined
+  const [program, ...args] = segments[0]!
+  if (program === "curl") return defaultConfigs("curl").length === 0 ? curlRead(args) : undefined
+  if (program === "http" || program === "https" || program === "xh")
+    return httpieConfigs(program).length === 0 ? httpieRead(args) : undefined
+  return undefined
+}
+
+/** Whether a directory a request names is the caller's worktree or inside it, by its spelling and by where it really is. */
+function insideWorktree(value: string, instance: Input["instance"]) {
+  if (!path.isAbsolute(value) || value.includes("%")) return false
+  const root = instance.worktree && instance.worktree !== "/" ? instance.worktree : instance.directory
+  const within = (base: string, file: string) => {
+    const relative = path.relative(base, file)
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
+  }
+  const real = (file: string) => {
+    try {
+      return fs.realpathSync(file)
+    } catch {
+      return undefined
+    }
+  }
+  const resolved = path.resolve(value)
+  const rootReal = real(root) ?? path.resolve(root)
+  if (!within(path.resolve(root), resolved) && !within(rootReal, resolved)) return false
+  const valueReal = real(resolved)
+  return valueReal === undefined || within(rootReal, valueReal)
+}
+
+/**
+ * 1.2.8 row 28 (H-U10, C5, C13; SR8-01/02): whether a call is a read of Swarm's own server that runs under the consent
+ * as class A `own_api_read`. All of these hold: a listener exists and the call names it (no reason); the call is a
+ * webfetch, or one plain curl/http/https/xh command with only the N8-388 options and one URL (no default config file that
+ * could add options); the method is GET or HEAD and no header overrides it; the route is on `OWN_API_READ_ROUTES`; no
+ * `workspace` query parameter or `x-opencode-workspace` header; any `directory` query parameter or `x-opencode-directory`
+ * header names the caller's worktree or a folder inside it; and `ownServerCall` refuses nothing in it. Only the consent
+ * layer reads this (`classify` with `bypass`); with the mode off the person is still asked (U10).
+ */
+export function ownApiRead(input: Input): boolean {
+  const listeners = SelfAddress.list()
+  if (listeners.length === 0) return false
+  // Only a call written as it is: a step of a longer text, or the text a shell's `-c` runs (`whole` is the outer call),
+  // keeps its 1.2.7 verdict.
+  if (input.whole !== undefined && input.whole !== input.metadata.command) return false
+  const webfetch = input.permission === "webfetch"
+  const request: ReadRequest | undefined = webfetch
+    ? typeof input.metadata.url === "string" && input.metadata.command === undefined
+      ? { url: input.metadata.url, method: "GET", headers: [], query: [] }
+      : undefined
+    : input.permission === "bash" && typeof input.metadata.command === "string"
+      ? shellRead(input.metadata.command)
+      : undefined
+  if (request === undefined) return false
+  const hit = judgeAddress(request.url, listeners, webfetch)
+  if (hit === undefined || hit.reason !== undefined) return false
+  const route = routePath(request.url)
+  if (route === undefined || !OWN_API_READ_ROUTES.some((entry) => entry.pattern.test(route))) return false
+  if (personOnlyRoute({ method: request.method, path: route })) return false
+  const directories: string[] = []
+  const query = /\?([^#]*)/.exec(request.url.replace(/^[A-Za-z][\w+.-]*:\/\//, ""))?.[1]
+  let params: [string, string][]
+  try {
+    params = [...new URLSearchParams(query ?? "").entries(), ...request.query]
+  } catch {
+    return false
+  }
+  for (const [name, value] of params) {
+    const key = name.toLowerCase()
+    if (key === "workspace" || key === "_method") return false
+    if (key === "directory") directories.push(value)
+  }
+  for (const [name, value] of request.headers) {
+    const key = name.toLowerCase()
+    if (/method-override/.test(key) || key === "x-opencode-workspace") return false
+    if (key === "x-opencode-directory") directories.push(value)
+  }
+  if (!directories.every((value) => insideWorktree(value, input.instance))) return false
+  return ownServerCall(input) === undefined
 }
 
 /** The Swarm CLI by any name it ships under (`swarm`, `swarm-launcher.sh`, `opencode`), as a program's last path part. */

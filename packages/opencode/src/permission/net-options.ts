@@ -60,6 +60,23 @@ const HTTPIE_VALUE_LONG: ReadonlySet<string> = new Set([
 ])
 export const HTTPIE: ValueTable = { short: HTTPIE_VALUE_SHORT, long: HTTPIE_VALUE_LONG }
 
+/**
+ * 1.2.8 row 28 (H-U10, N8-388, SR8-02, C13): the only options an own-server call may carry to be class A `own_api_read`
+ * under consent. A positive list on purpose: every option not here (one that writes a file, sends a body, changes the
+ * method or the target, adds a second request) keeps the call's 1.2.7 verdict, so a new option is never let through by
+ * default. curl: `flags` take no value (`-G` is only ever "GET" here, since no data option is on the list), `values` take
+ * one (`-H` a header, checked again for a method override, a header file and the directory headers). httpie/xh: no option
+ * at all, an optional method of `methods`, one URL, and items of the two forms in `items` (`a==b` query, `a:b` header).
+ * The list may shrink in review; it never grows without a security re-review (01_specs §3.3 rule 1).
+ */
+export const OWN_API_READ_OPTIONS = {
+  curl: {
+    flags: ["-s", "-S", "-f", "-i", "-I", "-v", "-G", "--compressed"],
+    values: ["-m", "--max-time", "--connect-timeout", "-H"],
+  },
+  httpie: { methods: ["GET", "HEAD"], items: ["a==b", "a:b"] },
+} as const
+
 /** Whether `option` (`-X` or `--name`) takes a value in `table`. */
 export function takesValue(table: ValueTable, option: string) {
   if (option.startsWith("--")) return table.long.has(option)

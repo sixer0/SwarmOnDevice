@@ -23,7 +23,7 @@ import { OPENED_BY_NO_WAIT, noWait, openedByNoWait } from "./destroys"
 import { SUBAGENT_RUNS_LIKE_ROOT, shellTextCall } from "./subagent"
 import { OUTPUT_TAIL, WORD_BREAK, canRunIn, outsideProject, routine } from "./routine"
 import { DROP_ERRORS, READS, onlyLooks, unwrapped } from "./read-class"
-import { ownServerCall, runsAutonomyCommand, runsGraftInit } from "./own-api"
+import { OWN_API_READ, ownApiRead, ownServerCall, runsAutonomyCommand, runsGraftInit } from "./own-api"
 import { classifyCheckpoint } from "./checkpoint"
 export function editTargets(input: Input) {
   const named = input.patterns.filter((pattern) => pattern !== "*").map((pattern) => path.resolve(input.instance.worktree, pattern))
@@ -943,6 +943,12 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
   // 1.2.7 U-7 (C21 b): `sh|bash|zsh -c '<literal>'` is judged as the command line it runs, for root and subagent alike.
   const inner = shellTextCall(input)
   if (inner) return classify(inner, checkClass)
+  // 1.2.8 row 28 (H-U10, C5, C13): a read of a listed route of Swarm's own server is run by the gate (A `own_api_read`),
+  // root and subagent alike, unless the table refuses or stops it for another reason or a person's rule names it.
+  if (input.rule === undefined && ownApiRead(input)) {
+    const base = Reach.snapshotScope(() => classifyBase(input, checkClass))
+    if (base.class !== "X" && base.class !== "B") return OWN_API_READ
+  }
   // 1.1.1 F12b (Perf P2): one classify asks git about a file once, however many steps or scripts write it. 1.1.1 F14
   // (G5-P1): the one scope covers the whole consented classify, the steps' own overlays (reached from `classifySteps`,
   // whose nested scopes share this one), the call-level check and the kept path's `classifyBase` included.
