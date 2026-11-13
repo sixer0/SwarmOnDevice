@@ -44,6 +44,12 @@ export const LOAD_BUDGET_TOKENS = 8000
 export const MISSION_ID_PATTERN = "^\\d{4}-\\d{2}-\\d{2}[_-][a-z0-9][a-z0-9_-]{0,80}$"
 const MISSION_ID = new RegExp(MISSION_ID_PATTERN)
 
+/**
+ * The period a roll-up of index entries covers (N8-011). The year is the second level: quarterly roll-ups of one year
+ * roll into a yearly one when the index is still full (01e §5.2).
+ */
+export const INDEX_ROLLUP_PERIOD = "quarter"
+
 const CONSOLIDATE_STEP = 100
 const VERSION = 2
 
@@ -197,14 +203,30 @@ export const layer = Layer.effect(
       const refused = refusal({ text, body, refs, index: true })
       if (refused) return { refused } satisfies Result
       const target = yield* file()
-      const result = yield* change(target, (store): { store?: Stored; value: { item: Item; fresh: boolean } } => {
+      type Outcome = { item: Item; fresh: boolean } | { refused: ProjectMemory.Refusal }
+      const result = yield* change(target, (store): { store?: Stored; value: Outcome } => {
         const found = store.items.find((item) => isIndex(item) && item.missionId === missionId)
+        const used = new Set(store.items.map((item) => item.id))
+        const freshId = () => {
+          const id = randomBytes(3).toString("hex")
+          if (used.has(id)) return freshId()
+          used.add(id)
+          return id
+        }
+        const time = Date.now()
+        // A new entry that would make the live index 41 rolls older entries up first, in this same lock (01e §2.3).
+        // A replacement adds nothing and rolls nothing.
+        const rolled =
+          !found && store.items.filter(liveIndex).length >= ProjectMemory.INDEX_LIMITS.entries
+            ? rollUp(store.items, { date: checked.date, time, id: freshId })
+            : { items: store.items }
+        if ("refused" in rolled) return { value: rolled }
         const item: Item = {
-          ...(found ? { id: found.id } : { id: randomBytes(3).toString("hex") }),
+          id: found ? found.id : freshId(),
           text,
           source: input.source,
           deviceOnly: (found?.deviceOnly ?? false) || (input.deviceOnly ?? false),
-          time: Date.now(),
+          time,
           ...(input.sessionID ? { sessionID: input.sessionID } : {}),
           ...(body ? { body } : {}),
           refs,
@@ -215,10 +237,12 @@ export const layer = Layer.effect(
         }
         const items = found
           ? store.items.map((existing) => (existing.id === found.id ? item : existing))
-          : [...store.items, item]
+          : [...rolled.items, item]
         return { store: { ...store, items }, value: { item, fresh: !found } }
       })
-      // A replacement is no new note: no toast. A new entry announces itself like any agent note.
+      // index_full: the store is unchanged, nothing was cut (R20-C03).
+      if ("refused" in result) return { refused: result.refused } satisfies Result
+      // A replacement is no new note: no toast. A new entry announces itself like any agent note; the roll-up is silent.
       yield* publish(result.fresh && input.source !== "user" ? result.item : undefined)
       return { item: result.item } satisfies Result
     })
@@ -499,7 +523,7 @@ export function indexRefusal(input: {
   text: string
   missionId: string
   kind?: string
-}): ProjectMemory.Refusal | { report: string } {
+}): ProjectMemory.Refusal | { report: string; date: string } {
   if (input.text.length > ProjectMemory.INDEX_LIMITS.text) return "index_long"
   if (input.kind !== "index") return "index_format"
   if (!MISSION_ID.test(input.missionId)) return "index_format"
@@ -507,8 +531,131 @@ export function indexRefusal(input: {
   if (!match) return "index_format"
   const [, date, id, , , report] = match
   if (id !== input.missionId || !calendarDate(date!) || !safeReportPath(report!, input.missionId)) return "index_format"
-  return { report: report! }
+  return { report: report!, date: date! }
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Roll-up (01e §5, C9, R20-C03/C04). Written, never cut: a roll-up body holds one line per member, `[<id>] <line>`, and
+// every member stays whole (line, body, refs) as an archived item carrying `rolledInto`. A part that would pass
+// LIMITS.body is left as it is and a new part starts; a line is never split.
+
+/** `<period> roll-up[ part <p>] | <n> missions | triggers: t1, ... | body`; period `YYYY-Qn` or `YYYY` (N8-010). */
+const ROLLUP_LINE = /^(\d{4}(?:-Q[1-4])?) roll-up(?: part (\d+))? \| (\d+) missions \| triggers: ([^|]+) \| body$/
+
+/** Counted against INDEX_LIMITS.entries: index entries and roll-ups that are not archived. */
+const liveIndex = (item: Item) => item.rolledInto === undefined && (isIndex(item) || item.kind === "index_rollup")
+
+/**
+ * Frees index slots until fewer than INDEX_LIMITS.entries are live, so the new entry dated `date` fits (01e §5.2):
+ * A. the oldest quarter's live entries roll into that quarter's roll-up; B. otherwise the quarterly roll-ups of the
+ * oldest year that has two or more roll into that year's roll-up; C. otherwise `index_full` and nothing changes.
+ * Pure: the same items, date, time and id source give the same result. Item order is kept; new roll-ups are appended.
+ */
+export function rollUp(
+  items: readonly Item[],
+  input: { date: string; time: number; id: () => string },
+): { items: Item[] } | { refused: "index_full" } {
+  const work = [...items]
+  for (;;) {
+    const live = work.filter(liveIndex)
+    if (live.length < ProjectMemory.INDEX_LIMITS.entries) return { items: work }
+    const entries = live.filter(isIndex)
+    if (entries.length) {
+      // The oldest quarter: a complete one before the new entry's when there is one, else the current one.
+      const quarter = entries.map((item) => quarterOf(entryDate(item))).toSorted()[0]!
+      const members = entries
+        .filter((item) => quarterOf(entryDate(item)) === quarter)
+        .toSorted(
+          (a, b) =>
+            entryDate(a).localeCompare(entryDate(b)) || a.time - b.time || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        )
+      rollInto(work, quarter, members, input)
+      continue
+    }
+    const quarterly = live.flatMap((item) => {
+      const parsed = rollupOf(item)
+      return parsed && parsed.period.includes("-Q") ? [{ item, ...parsed }] : []
+    })
+    const year = [...new Set(quarterly.map((roll) => roll.period.slice(0, 4)))]
+      .toSorted()
+      .find((y) => quarterly.filter((roll) => roll.period.startsWith(y)).length >= 2)
+    if (!year) return { refused: "index_full" }
+    const members = quarterly
+      .filter((roll) => roll.period.startsWith(year))
+      .toSorted((a, b) => a.period.localeCompare(b.period) || a.part - b.part || (a.item.id < b.item.id ? -1 : 1))
+      .map((roll) => roll.item)
+    rollInto(work, year, members, input)
+  }
+}
+
+/** Appends each member's line to the newest open part of `period`, starting a new part when it would not fit. */
+function rollInto(work: Item[], period: string, members: readonly Item[], input: { time: number; id: () => string }) {
+  const open = work
+    .filter(liveIndex)
+    .flatMap((item) => {
+      const parsed = rollupOf(item)
+      return parsed && parsed.period === period ? [{ item, part: parsed.part }] : []
+    })
+    .toSorted((a, b) => b.part - a.part)[0]
+  const state = { target: open?.item, part: open?.part ?? 0 }
+  for (const member of members) {
+    const line = `[${member.id}] ${member.text}`
+    const current = state.target
+    const fits = current?.body !== undefined && current.body.length + 1 + line.length <= ProjectMemory.LIMITS.body
+    const body = fits ? `${current!.body}\n${line}` : line
+    const part = fits ? state.part : state.part + 1
+    const next: Item = {
+      id: fits ? current!.id : input.id(),
+      text: rollupText(period, part, body),
+      source: "agent",
+      deviceOnly: (fits && current!.deviceOnly) || member.deviceOnly,
+      time: input.time,
+      body,
+      ...((fits && current!.untrusted) || member.untrusted ? { untrusted: true } : {}),
+      kind: "index_rollup",
+    }
+    const at = work.findIndex((item) => item.id === next.id)
+    if (at === -1) work.push(next)
+    else work[at] = next
+    const memberAt = work.findIndex((item) => item.id === member.id)
+    work[memberAt] = { ...member, rolledInto: next.id }
+    state.target = next
+    state.part = part
+  }
+}
+
+/** The roll-up line, recomputed from its body: missions behind it and its five most frequent trigger words. */
+function rollupText(period: string, part: number, body: string) {
+  const counts = new Map<string, number>()
+  const missions = body.split("\n").reduce((total, line) => {
+    const member = line.slice(line.indexOf("] ") + 2)
+    const entry = ProjectMemory.INDEX_TEXT_PATTERN.exec(member)
+    const roll = entry ? undefined : ROLLUP_LINE.exec(member)
+    const words = (entry?.[4] ?? roll?.[4] ?? "").split(",").map((word) => word.trim())
+    for (const word of words) if (word) counts.set(word, (counts.get(word) ?? 0) + 1)
+    return total + (roll ? Number(roll[3]) : 1)
+  }, 0)
+  // Count descending, then first appearance in member order (Map keeps insertion order; the sort is stable).
+  const triggers = [...counts.entries()]
+    .toSorted((a, b) => b[1] - a[1])
+    .slice(0, ProjectMemory.INDEX_LIMITS.triggers)
+    .map(([word]) => word)
+  const label = part > 1 ? `${period} roll-up part ${part}` : `${period} roll-up`
+  return `${label} | ${missions} missions | triggers: ${(triggers.length ? triggers : [period]).join(", ")} | body`
+}
+
+function rollupOf(item: Item) {
+  if (item.kind !== "index_rollup") return undefined
+  const match = ROLLUP_LINE.exec(item.text)
+  return match ? { period: match[1]!, part: Number(match[2] ?? 1) } : undefined
+}
+
+/** The line date (group 1); an entry whose line was edited out of shape falls back to its write time. */
+function entryDate(item: Item) {
+  return ProjectMemory.INDEX_TEXT_PATTERN.exec(item.text)?.[1] ?? new Date(item.time).toISOString().slice(0, 10)
+}
+
+const quarterOf = (date: string) => `${date.slice(0, 4)}-Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1}`
 
 function calendarDate(value: string) {
   const [year, month, day] = value.split("-").map(Number)
