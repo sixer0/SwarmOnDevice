@@ -4,7 +4,7 @@ import os from "os"
 import path from "path"
 import fs from "fs/promises"
 import { setTimeout as sleep } from "node:timers/promises"
-import { afterAll } from "bun:test"
+import { afterAll, beforeAll } from "bun:test"
 
 // Set XDG env vars FIRST, before any src/ imports
 const dir = path.join(os.tmpdir(), "opencode-test-data-" + process.pid)
@@ -102,5 +102,12 @@ ProjectTrust.assumeTrustedForTests(true)
 
 // The shell reader starts asynchronously and the table answers "not read" until it is ready. The live gate waits for it
 // before judging, so every file starts with it ready; otherwise a verdict depends on which file ran first (row 28f).
-const { ScriptReader } = await import("../src/permission/script-reader")
-await ScriptReader.prepare()
+// It is started in a global beforeAll, not here at load time (row 49c): starting it imports tool/shell, whose chain
+// (tool/external-directory) loads skill/library-root, and that module takes process.type/resourcesPath once as it
+// loads. A preload body runs before any `--preload` given on the command line, so an eager start fixed the library
+// root before a child process could pose them (instruction.test.ts "Instruction library guard"). A global beforeAll
+// runs after every preload and the test file's own imports, and still before the first test or file-level hook.
+beforeAll(async () => {
+  const { ScriptReader } = await import("../src/permission/script-reader")
+  await ScriptReader.prepare()
+})
