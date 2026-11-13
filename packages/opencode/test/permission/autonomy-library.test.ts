@@ -630,17 +630,23 @@ it.instance("XF-03: TB-T1..3, TB-B1, TB-B2 are held for a person and change noth
     const library = env.S
     yield* everyHeld([
       ["T1 write", (root) => use("write", { filePath: `${env.S}/a.md`, content: "changed\n" }, root, { library })],
-      [
-        "T2 edit",
-        (root) =>
-          use("edit", { filePath: `${env.S}/3 Skills/a/SKILL.md`, oldString: "alpha", newString: "changed" }, root, {
-            library,
-          }),
-      ],
       ["T3 apply_patch", (root) => use("apply_patch", { patchText: PATCH(`${env.S}/a.md`) }, root, { library })],
       ["B1 cat", (root) => shell(`cat ${env.S}/a.md`, root, { library })],
       ["B2 rm", (root) => shell(`rm -rf "${env.S}/3 Skills"`, root, { library }), "not_reversible"],
     ])
+    // INTENT (C90, rows 40e/40h): T2, an edit of the copy's `3 Skills/a/SKILL.md`, is no longer held for a person. A skill
+    // folder is refused before any hold (N8-058), nothing is asked and the file stays as it was.
+    const ids = yield* lineage
+    const t2 = yield* verdictOf(
+      ids.root,
+      use("edit", { filePath: `${env.S}/3 Skills/a/SKILL.md`, oldString: "alpha", newString: "changed" }, ids.root, {
+        library,
+      }),
+    )
+    expect(t2.outcome).toContain("SkillFolderRefused")
+    expect(t2.outcome).toContain("skills are saved only from Settings > Skills")
+    expect([t2.lines, t2.asked]).toEqual([[], 0])
+    expect(yield* heldFor([ids.root])).toEqual([])
     expect(stub.calls).toEqual([])
     expect(readFileSync(path.join(env.S, "a.md"), "utf8")).toBe("alpha library text\n")
     expect(readFileSync(path.join(env.S, "3 Skills/a/SKILL.md"), "utf8")).toBe("alpha skill\n")
