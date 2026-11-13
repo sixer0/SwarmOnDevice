@@ -16,6 +16,7 @@ import { nudgeRoutes } from "./lanesroute";
 import { activeElkRoutes } from "../elk/routes";
 import { edgeConflicts, ENTRY_COLLISION_MM } from "../fit/lint";
 import { flowDirectionOf, flowRanks } from "../layout-a/flow";
+import { CURVE_SAMPLES } from "../core/tokens";
 
 type Pt = readonly [number, number];
 type Side = "bottom" | "top" | "right" | "left";
@@ -24,6 +25,62 @@ const OPP: Readonly<Record<Side, Side>> = { bottom: "top", top: "bottom", right:
 /** Jalur dengan lompatan silang: titik pusat (x, y) pada lintasan horizontal jalur ini. */
 export interface HoppedEdge extends RoutedEdge {
   hops: ReadonlyArray<readonly [number, number]>;
+}
+
+/**
+ * Swarm 1.2.8 row 56 (VIS-4, AC-VIS4, 01f §3.3, register N8-254 / N8-469): the drawn route of an edge other than
+ * today's orthogonal router. `orthogonal` written explicitly is the absent field (01f §3.2.2), so it gives undefined.
+ */
+export type EdgeRouteStyle = "straight" | "curved";
+
+export function edgeRouteOf(e: Pick<DiagramEdge, "route"> | undefined): EdgeRouteStyle | undefined {
+  const r = e?.route;
+  return r === "straight" || r === "curved" ? r : undefined;
+}
+
+/** Row 56: a routed edge carries its style (spread copies in build keep it), read for `data-route` and hops. */
+export function routeStyleOfPath(p: RoutedEdge): EdgeRouteStyle | undefined {
+  const r = (p as RoutedEdge & { route?: unknown }).route;
+  return r === "straight" || r === "curved" ? r : undefined;
+}
+
+/** Outward unit normal of a node side (sheet y grows downwards). */
+const NORMAL: Readonly<Record<Side, Pt>> = { bottom: [0, 1], top: [0, -1], right: [1, 0], left: [-1, 0] };
+
+/**
+ * Row 56 (VIS-4, 01f §3.3 `curved`, D-V2): cubic Bezier P0 -> P3 with P1 = P0 + n0 k, P2 = P3 + n3 k (n = outward
+ * normal of the side, k = 0.4 x chord), emitted as a polyline of `CURVE_SAMPLES` equal-parameter segments
+ * (`CURVE_SAMPLES` + 1 points). The second and the second-to-last sample are projected onto the normal through their
+ * end (they lie within 3h^2 x lateral offset of it, h = 1 / CURVE_SAMPLES: under 0.1 mm on an A4 figure), so the
+ * first and last segments meet the sides head-on and the arrowhead keeps its tangent.
+ */
+export function curvedPoints(p: Pt, sa: Side, q: Pt, sb: Side, samples: number = CURVE_SAMPLES): Pt[] {
+  const n0 = NORMAL[sa];
+  const n3 = NORMAL[sb];
+  const k = 0.4 * Math.hypot(q[0] - p[0], q[1] - p[1]);
+  const p1: Pt = [p[0] + n0[0] * k, p[1] + n0[1] * k];
+  const p2: Pt = [q[0] + n3[0] * k, q[1] + n3[1] * k];
+  const out: Pt[] = [];
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const u = 1 - t;
+    const b0 = u * u * u;
+    const b1 = 3 * u * u * t;
+    const b2 = 3 * u * t * t;
+    const b3 = t * t * t;
+    out.push([b0 * p[0] + b1 * p1[0] + b2 * p2[0] + b3 * q[0], b0 * p[1] + b1 * p1[1] + b2 * p2[1] + b3 * q[1]]);
+  }
+  out[0] = p;
+  out[samples] = q;
+  const onNormal = (end: Pt, n: Pt, s: Pt): Pt => {
+    const d = (s[0] - end[0]) * n[0] + (s[1] - end[1]) * n[1];
+    return [end[0] + n[0] * d, end[1] + n[1] * d];
+  };
+  if (samples >= 2) {
+    out[1] = onNormal(p, n0, out[1]);
+    out[samples - 1] = onNormal(q, n3, out[samples - 1]);
+  }
+  return out;
 }
 
 function sideOf(a: SheetNode, b: SheetNode): Side {
@@ -252,7 +309,8 @@ export function routePlaced(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
   const kept = new Set<number>();
   for (let round = 0; round < edges.length; round++) {
     const out = routeWithSides(s, sheet, over);
-    const bad = edges.findIndex((e, i) => !over.has(i) && !kept.has(i) && throughEnds(out[i].points, nodeOf(sheet, e.from), nodeOf(sheet, e.to)));
+    // Row 56 (VIS-4): straight and curved edges are never rerouted (a crossing is reported, 01f §3.3).
+    const bad = edges.findIndex((e, i) => !over.has(i) && !kept.has(i) && !edgeRouteOf(e) && throughEnds(out[i].points, nodeOf(sheet, e.from), nodeOf(sheet, e.to)));
     if (bad < 0) return out;
     const e = edges[bad];
     const a = nodeOf(sheet, e.from);
@@ -321,7 +379,7 @@ function fanGroups(
       const members: number[] = [];
       for (const e of g) {
         const i = edges.indexOf(e);
-        if (i < 0 || e.from === e.to) continue;
+        if (i < 0 || e.from === e.to || edgeRouteOf(e)) continue; // row 56: styled routes never fan
         const [sa, sb] = sides[i];
         if (out ? e.from === node && sa === side && sb === OPP[side] : e.to === node && sb === side && sa === OPP[side]) members.push(i);
       }
@@ -464,7 +522,12 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     let pts: Pt[];
     const vertA = sa === "bottom" || sa === "top";
     const vertB = sb === "bottom" || sb === "top";
-    if (vertA !== vertB) {
+    const style = edgeRouteOf(e);
+    if (style === "straight") {
+      pts = [p, q]; // row 56 (VIS-4): one segment, diagonal allowed
+    } else if (style === "curved") {
+      pts = curvedPoints(p, sa, q, sb); // row 56 (VIS-4): sampled Bezier, ends normal to the sides
+    } else if (vertA !== vertB) {
       pts = cornerRoute(p, sa, q, sb, stub); // row 124 (CP-41): L pair
     } else if (vertA) {
       const pa: Pt = [p[0], p[1] + (sa === "bottom" ? stub : -stub)];
@@ -484,6 +547,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   const finish = (rawPts: readonly Pt[][]): { routes: Pt[][]; moved: number } => {
     let routes = edges.map((e, i) => {
       const pts = rawPts[i];
+      if (edgeRouteOf(e)) return [...pts]; // row 56 (VIS-4): no detour; a crossed node is reported by the lint
       if (!laneFix) return detour(pts, [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);
       // FIG-02b2: detur mulai dari ujung stub agar konektor keluar tegak lurus sisi simpul
       // (bukan menyusuri garis tepi simpul) dan segmen dalamnya dapat dipisah jalurnya.
@@ -493,7 +557,8 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     let moved = 0;
     if (laneFix) {
       const n = nudgeRoutes(routes, edges.map((e) => [e.from, e.to] as const), nodes, sheet.widthMm);
-      routes = n.paths;
+      // Row 56 (VIS-4): lane nudging moves orthogonal segments only; styled routes keep their geometry.
+      routes = n.paths.map((r, i) => (edgeRouteOf(edges[i]) ? routes[i] : r));
       moved = n.moved;
     }
     return { routes, moved };
@@ -537,7 +602,10 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   if (fanKept) diagramFitNote("EDGE_LANES", `${fanKept} konektor kipas diberi titik keluar dan tingkat belok sendiri`, "kurangi cabang dari satu sisi simpul bila kipas terlalu rapat");
   edges.forEach((e, i) => {
     const pts = routes[i];
-    out.push({ from: e.from, to: e.to, kind: e.kind, label: e.label, points: pts, d: polylineD(pts) });
+    const style = edgeRouteOf(e);
+    // Row 56: the style rides on the routed edge (absent for orthogonal, so old objects are unchanged).
+    if (style) out.push({ from: e.from, to: e.to, kind: e.kind, label: e.label, points: pts, d: polylineD(pts), route: style } as RoutedEdge);
+    else out.push({ from: e.from, to: e.to, kind: e.kind, label: e.label, points: pts, d: polylineD(pts) });
   });
   return out;
 }
@@ -551,7 +619,9 @@ export function crossingHops(paths: readonly RoutedEdge[]): HoppedEdge[] {
   const hops: Array<Array<readonly [number, number]>> = paths.map(() => []);
   for (let i = 0; i < paths.length; i++) {
     const pp = paths[i].points;
+    if (routeStyleOfPath(paths[i]) === "curved") continue; // row 56 (01f §3.3 Jumps): curved connectors get no hops
     for (let j = i + 1; j < paths.length; j++) {
+      if (routeStyleOfPath(paths[j]) === "curved") continue;
       const qp = paths[j].points;
       for (let t = 0; t + 1 < qp.length; t++) {
         const [cx, cy] = qp[t];

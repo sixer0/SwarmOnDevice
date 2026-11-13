@@ -65,7 +65,7 @@ import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneGeom } from "./fitla
 import { placeDiagram, type Placement } from "./place";
 import { reorderPlaced } from "./order";
 import { capacityRetry, isCapacityReject, withAction } from "./capacity";
-import { crossingHops, routePlaced, type HoppedEdge } from "./route";
+import { crossingHops, routePlaced, routeStyleOfPath, type HoppedEdge } from "./route";
 import { canonicalSymbolId } from "../../symbols";
 import { colourCountDetail, diagramColourSources } from "../core/colour"; // row 62 (T-06)
 
@@ -547,7 +547,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   const railMm = pt2mm(role("evidence_rail").size);
   if (plan) {
     const placed = plan.placed;
-    hopped.forEach((p, i) => sheet.add(edgePathSvg(p.points, p.kind, { index: i })));
+    hopped.forEach((p, i) => sheet.add(edgePathSvg(p.points, p.kind, { index: i, route: routeStyleOfPath(p) })));
     for (const p of hopped) for (const [hx, hy] of p.hops) sheet.add(hopSvg(hx, hy, p.kind));
     hopped.forEach((p, i) => {
       const pl = placed[i];
@@ -556,7 +556,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     });
   } else {
     hopped.forEach((p, i) => {
-      sheet.add(edgePathSvg(p.points, p.kind, { index: i }));
+      sheet.add(edgePathSvg(p.points, p.kind, { index: i, route: routeStyleOfPath(p) }));
       const lw = estTextMm(p.label, "evidence_rail");
       const [mx, my] = labelPos(p.points, nodes, lw, railMm * 1.4);
       labels.push([mx, my - pt2mm(1.2), p.label, p.kind]);

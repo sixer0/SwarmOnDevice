@@ -1,0 +1,200 @@
+{
+  "$comment": "Swarm 1.2.8 row 56 (AC-VIS4, AT-V4-straight / AT-V4-curved, register N8-375 / N8-475). Synthetic labels only. `spec`: flow without direction (per_row 3), three edges, one per route (orthogonal absent, straight, curved); 0 geometry defects at HEAD. `through`: flow column whose straight edge a->c runs through b (reported, not rerouted). `layered`: an ELK family with a curved edge (ELK not used, reason R1: edge geometry fields).",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.4",
+    "title": "Gambar sintetis gaya rute.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 0,
+          "row": 3
+        }
+      },
+      {
+        "id": "e",
+        "label": "Langkah E",
+        "class": {
+          "col": 0,
+          "row": 4
+        }
+      },
+      {
+        "id": "f",
+        "label": "Langkah F",
+        "class": {
+          "col": 0,
+          "row": 5
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "ortogonal"
+      },
+      {
+        "from": "a",
+        "to": "e",
+        "kind": "control",
+        "label": "lurus",
+        "route": "straight"
+      },
+      {
+        "from": "c",
+        "to": "e",
+        "kind": "control",
+        "label": "lengkung",
+        "route": "curved"
+      }
+    ],
+    "per_row": 3
+  },
+  "through": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.5",
+    "title": "Gambar sintetis gaya rute.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "satu"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "control",
+        "label": "dua"
+      },
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "control",
+        "label": "lurus",
+        "route": "straight"
+      }
+    ]
+  },
+  "layered": {
+    "$schema": "studio.diagram/v1",
+    "family": "layered",
+    "id": "9.6",
+    "title": "Gambar sintetis lapis lengkung.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "tier": 1
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "tier": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "satu"
+      },
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "control",
+        "label": "dua",
+        "route": "curved"
+      }
+    ]
+  }
+}

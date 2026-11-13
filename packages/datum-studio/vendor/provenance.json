@@ -125,7 +125,7 @@
   "patched": 160,
   "replaced": 12,
   "added": 30,
-  "bytes": 10010660
+  "bytes": 10016992
  },
  "files": [
   {
@@ -2394,9 +2394,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/route.ts",
    "status": "patched",
-   "bytes": 26560,
+   "bytes": 30331,
    "source_sha256": "2189c545c59473987ba23d3dc64eeeaf9c336c0624c0e9029a34a29773ffa769",
-   "sha256": "4d5ceb95f69cba02ca57c098cc2e2a22b3e05d5930eb70a0249e7e9a8251ec14",
+   "sha256": "0e2cef553a4a28e513e1a55fbc0c3ece434373935ed1446c79dc89611f4c560c",
+   "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "VIS-4 route style: edgeRouteOf (explicit orthogonal = absent), routeStyleOfPath, curvedPoints (cubic Bezier P1=P0+n0k, P2=P3+n3k, k=0.4 chord, CURVE_SAMPLES 32 equal-parameter segments, second and second-to-last sample projected onto the side normal); routeWithSides draws straight = [anchor, anchor] and curved = sampled curve on the auto sides, no detour, no lane nudge, no fan-out, no row 124 side retry (a crossed node is reported by the lint); the routed edge carries route only when straight/curved; crossingHops gives curved connectors no hops", "diff_base": "sha256 before this row", "before_sha256": "4d5ceb95f69cba02ca57c098cc2e2a22b3e05d5930eb70a0249e7e9a8251ec14", "after_sha256": "0e2cef553a4a28e513e1a55fbc0c3ece434373935ed1446c79dc89611f4c560c", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "b84a1e3bd54150f4206d8ba6b045853f8ffeb303659a66960003dd8d2aa3053a"},
    "patch_row64": {"id": "row64-t08-fanout", "row": "64", "decision": "1.2.6 patch T-08 fan-out sub-ranking (U5; register N-018 FANOUT_SPLIT_MIN, E-13; 01e §8, A8, A21) + 01e §4.2 ranked-flow forward sides (request routed by row 46, 967face95b)", "summary": "routeWithSides: (1) a forward edge of a ranked flow (flowDirectionOf set, flowRanks rank(from) < rank(to)) gets fixed sides, TB bottom->top, LR right->left; back/intra-rank edges and legacy flow keep sideOf. (2) NEW export FANOUT_SPLIT_MIN 4: a fan group (>= 4 edges on one node side, other ends across the corridor; fan-out then fan-in) whose members conflict (edgeConflicts collinear+cross > 0) is re-routed with slots sorted by far centre, distinct exits (far centre inside the side span when no other exit lies within ENTRY_COLLISION_MM), staggered turn levels LATTICE_Y/2 outermost first; kept only if group conflicts strictly drop, figure conflicts do not rise and no member runs through its own boxes (EDGE_LANES note). Groups without conflicts and legacy flows (no direction, 01e A15) stay byte-identical", "diff_base": "sha256 before this row", "before_sha256": "1e5c034f041eafa18df9214a9fae0061bebfaf10fc0dcf3a80ebc467fc79bccd", "after_sha256": "4d5ceb95f69cba02ca57c098cc2e2a22b3e05d5930eb70a0249e7e9a8251ec14", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/64_row64_diffs/src_lib_studio_engine_diagram_build_route.ts.diff", "diff_sha256": "a3a2ece061d3affa09b39297bcea2ce097600b8e6eb5b695398252a336570a79"},
    "patch_row162b": {
     "id": "row162b-route-elk-seam",
@@ -2423,9 +2424,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 33451,
+   "bytes": 33525,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "24ec6c45b053f4bb5418068fd9aa54a48201fa0d0a45aebaffcaa371d69f58d5",
+   "sha256": "af8634eff47cc6d6765c0c7732cdce6f0bf45b38a7cba4455cfed19ca9ef5383",
+   "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "edgePathSvg calls pass route: routeStyleOfPath(p) (both label paths); no other change", "diff_base": "sha256 before this row", "before_sha256": "24ec6c45b053f4bb5418068fd9aa54a48201fa0d0a45aebaffcaa371d69f58d5", "after_sha256": "af8634eff47cc6d6765c0c7732cdce6f0bf45b38a7cba4455cfed19ca9ef5383", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "22206595ec526c63cfba4bfd70ae3102b4267cd57d36881ef283757427662780"},
    "patch_row36b": {"id": "127-36b-T12", "row": "36b", "decision": "1.2.7 P-6 / CH-6 (T-12, AC-T12, N7-138)", "summary": "DiagramBuildReport.furniture?: {keyLines, sourceLines, heightMm}, set only when apparatus === figure: keyLines = keyTexts.length (KUNCI lines drawn), sourceLines = srcLines.length (SUMBER lines after wrapping), heightMm = furnitureMm (caption, KUNCI, SUMBER height); feeds the preview route's standalone.furniture (N7-068); report only, SVG bytes unchanged", "before_sha256": "c2fd6e9f8a915bbee1af43127a28b2e1738405bc3ef4ac62a9086ef4e2a89c6b", "after_sha256": "24ec6c45b053f4bb5418068fd9aa54a48201fa0d0a45aebaffcaa371d69f58d5", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/36b_row36b_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "f5ef3702d1aead47d115063d6d2e7deaa2d5fe22fd9eaab2b11beaeb5262f5bd"},
    "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "DiagramBuildOptions.provenance (SUMBER + PROVENANS part with coloured glyphs); caption lines marked, NEW withCaptionAbove moves them above the drawing; foot order KUNCI then SUMBER", "before_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "after_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "diff": "implementation/146_row165P_diffs/engine_diagram_build_svg.ts.diff"},
    "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "buildOnce: no hatch <pattern> defined (diagramDefs hatch45/hatch135 false; hatches are vector lines from nodeSvg); nodeSvg gets the sheet size (canvas W x H) for the half-stroke edge inset", "before_sha256": "d00ed096ae2ee9775dac86045c845ca532b89833c469df1f9889c1af434ba100", "after_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "b0eb988881e88aef2e4615a4ae468d623d9292de9cc04a839b681a797f20f8f9"},
@@ -2591,9 +2593,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/svg.ts",
    "status": "patched",
-   "bytes": 40701,
+   "bytes": 41081,
    "source_sha256": "6c1846b3c5b2966476dbe1fff3fe44283daea1c70eb7bf12d5b3fbece817c741",
-   "sha256": "7c30471d90749405c3074cf8ec4534c3bfc10d6c7105ea7d299b9a2c0f722a56",
+   "sha256": "e253103fad0230f24026054d280a6a7d8fecb71a7509f8504d4256b31c00d79e",
+   "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "SvgMarkOptions.route; edgePathSvg appends data-route=\"straight\"|\"curved\" after the mark attributes (N8-469), absent for orthogonal so default edges keep their bytes", "diff_base": "sha256 before this row", "before_sha256": "7c30471d90749405c3074cf8ec4534c3bfc10d6c7105ea7d299b9a2c0f722a56", "after_sha256": "e253103fad0230f24026054d280a6a7d8fecb71a7509f8504d4256b31c00d79e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "6ded08921873cf12f148affbbd8d78e6805a409f32954a243733df9f886df02e"},
    "patch_row61b": {"id": "row61b-t05-glyph-all-shapes", "row": "61b", "decision": "1.2.6 patch T-05 follow-up, finding F61-1 of row 61 (rev 183/184 GEOM_TEXT_NODE)", "summary": "markGlyphAnchor covers hexagon, cylinder, circle and bus through NEW curvedGlyphAnchor: the box anchor is kept whenever the glyph ink (lint em box, 12 % shrink) already clears the outline by stroke half + 1.5 pt, else hexagon glyph moves left inside both right sides (perpendicular clearance), circle glyph sits inside at the top right of the circle square, cylinder glyph drops below the top front rim (centred between the rims when the body is too short), bus glyph rises above the rail; box, diamond and parallelogram anchors unchanged", "before_sha256": "bbbdd9bb5720a5b185aa98672ba3323c15240f463d3604202733643a655fea49", "after_sha256": "7c30471d90749405c3074cf8ec4534c3bfc10d6c7105ea7d299b9a2c0f722a56", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/61b_row61b_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "268f2f10c7f66c37cfa1c687f5bbb6b53b9d6b78266e729a97c7113169e019da"},
    "patch_row61": {"id": "row61-t05-glyph-inset", "row": "61", "decision": "1.2.6 patch T-05, U5 (01_specs T-05; rev 183/184 GEOM_TEXT_NODE)", "summary": "NEW export markGlyphAnchor: provenance glyph anchor by node shape; parallelogram glyph moves left by the slant at the glyph bottom plus the 1.5 pt clearance measured perpendicular to the side; diamond glyph stays in the box top-right corner outside the outline and rises (never drops) until it clears the upper-right side by 1.5 pt; markGlyphSvg and nodeTextGroundSvg use it; every other shape (box included) keeps the old anchor, byte-identical", "before_sha256": "30483840831c8a73f182096a0134265636056784ed27360cbe02cf832af46247", "after_sha256": "bbbdd9bb5720a5b185aa98672ba3323c15240f463d3604202733643a655fea49", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "83998f27449cb9116c89b5b42126cf977fe587fa958baa84186d4acd7df1e197"},
    "patch_row165O": {"id": "row165O-figure-explicit-fill", "row": "165O", "decision": "C204 item 4 (F-Y3)", "summary": "hatch line group and the stroke-only lines (bus node, doubled-node mid line, lineSvg) carry fill=\"none\"; no figure element falls back to the SVG default black fill (Chromium wrote #000000 fill operators on the figure page)", "before_sha256": "f21973d1db9792f1c4656724b1946fc4aac9ba6323d80a2bc96361fe83f82163", "after_sha256": "30483840831c8a73f182096a0134265636056784ed27360cbe02cf832af46247", "diff": "implementation/145_row165O_diffs/engine_diagram_core_svg.ts.diff"},
@@ -2629,9 +2632,10 @@
   {
    "path": "src/lib/studio/engine/diagram/elk/adapter.ts",
    "status": "added",
-   "bytes": 15318,
+   "bytes": 16370,
    "source_sha256": null,
-   "sha256": "a080c35a0f38e33522f09b53b1647aa7cc18762b7099d0dd573d91a4bc773c98",
+   "sha256": "3e6b286190d6d6f2f8c0bb371a61f5c6ec7e0dfdaf512d38d4382b8ea862de42",
+   "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "ELK_EDGE_GEOMETRY_REASON \"edge geometry fields\", elkEdgeGeometry(s) (route other than orthogonal, side other than auto, a slot, or via); elkRefusal returns it first", "diff_base": "sha256 before this row", "before_sha256": "a080c35a0f38e33522f09b53b1647aa7cc18762b7099d0dd573d91a4bc773c98", "after_sha256": "3e6b286190d6d6f2f8c0bb371a61f5c6ec7e0dfdaf512d38d4382b8ea862de42", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_elk_adapter.ts.diff", "diff_sha256": "4d7efe77bcb06e90435e72b70ddd8633d61a7d00f989f543bdb81eaa292bf143"},
    "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "NEW ELK_DIRECTION {TB: DOWN, LR: RIGHT} (N-111) replaces the hard-coded elk.direction DOWN (layered/topology pass TB, option map unchanged); elkRefusal: ranked flow eligible, flow without direction keeps the family refusal; elkGraphFor: ranked flow layers = flowRanks, sizes = rankedFlowSizes, main-axis initial positions; elkLayoutPlan: LR cross axis y (order by y, cx = y centre, no frame shift, one column per layer), no sections for LR (route import TB-only), plan.direction for ranked flow", "diff_base": "sha256 before this row", "before_sha256": "35678d1b14d4ed95db3fda8ddf092c6c66ecaf21f6be5c0fe0854537cf1cd8bb", "after_sha256": "a080c35a0f38e33522f09b53b1647aa7cc18762b7099d0dd573d91a4bc773c98", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_elk_adapter.ts.diff", "diff_sha256": "d0061053d1284d569885c9922225d7180bc1536752a6a2332f3b3320b2cbc6b0"},
    "added_by": "162",
    "note": "NEW Swarm file of row 162 (U24 C; no clone original): ELK graph (generated ids n<k>/e<k>, fixed options, Studio sizes), elkLayoutPlan (C8 bounds before layout, 10 s budget, L4 guard: `self` hidden only around the first `new ELK()`, globalThis.onmessage checked), ElkUnavailable. Imports elkjs/lib/elk.bundled.js (EPL-2.0 OR GPL-3.0-or-later, shipped unmodified as its own file, C126). Copy: implementation/114_row162_diffs/engine__diagram__elk__adapter.ts.new"
@@ -2639,9 +2643,10 @@
   {
    "path": "src/lib/studio/engine/diagram/elk/index.ts",
    "status": "added",
-   "bytes": 8231,
+   "bytes": 8579,
    "source_sha256": null,
-   "sha256": "6b2e2afb93912c707d7483165d9635f199551d131a12d53942aa4763ee900540",
+   "sha256": "e5ffc1322a4201f7acea3fd4e4fb2de7e5520fd17cf2b899e6c59e6204796ebd",
+   "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "buildDiagramSvgAuto: edges with own geometry -> decision R1: edge geometry fields, Studio build without ELK (01f 3.2.5); re-exports ELK_EDGE_GEOMETRY_REASON, elkEdgeGeometry", "diff_base": "sha256 before this row", "before_sha256": "6b2e2afb93912c707d7483165d9635f199551d131a12d53942aa4763ee900540", "after_sha256": "e5ffc1322a4201f7acea3fd4e4fb2de7e5520fd17cf2b899e6c59e6204796ebd", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_elk_index.ts.diff", "diff_sha256": "2f3dcb22e08c861962180a0d341b70a1afef9ae411d239c13aa23f182a7c5ccb"},
    "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "ROUTE_DEFECT_KINDS gains edgeEntryCollision, stubSegment, arrowTangent (N-166) so ELK may cure them", "diff_base": "sha256 before this row", "before_sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a", "after_sha256": "d5a2e0c455399d49b7bdd23583b4d14509215c7acd4ec792054f274ebc27f368", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_elk_index.ts.diff", "diff_sha256": "62da4573d9afda4d968b8a4814946e9e8ae639fd91916f444bc1506ba4056bce"},
    "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "layouts compared on the raw sheet (buildDiagramSvgRaw); the pick gets withCaptionAbove", "before_sha256": "18c9a304afb34032f32225b99b3c0a9a72672bf9415461192499328c9f92d65b", "after_sha256": "e37b131787e30da3a22bb252f43023727e0155f830511a5814e179d8ac82551a", "diff": "implementation/146_row165P_diffs/engine_diagram_elk_index.ts.diff"},
    "added_by": "162",
@@ -2686,9 +2691,10 @@
   {
    "path": "src/lib/studio/engine/diagram/fit/lint.ts",
    "status": "patched",
-   "bytes": 31362,
+   "bytes": 32069,
    "source_sha256": "2b169e21faaa4064307ab8fdcec45c0b7a0d4f9d2982ebc56094d3a704ebc3d8",
-   "sha256": "ebb8e0e8bccbff54276cef7f7fa52b41cf023882ff95c7ab04c82f555cbbbd75",
+   "sha256": "8c2ce7c3aa97736703272a660ae0963bdc01c3d5a326c274ce0027ef3056d429",
+   "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "scan reads data-route per link (linkCurved); stubSegments checks only the first and last straight piece of a curved link (01f 7 (b), OP-18-6); no new defect kind", "diff_base": "sha256 before this row", "before_sha256": "ebb8e0e8bccbff54276cef7f7fa52b41cf023882ff95c7ab04c82f555cbbbd75", "after_sha256": "8c2ce7c3aa97736703272a660ae0963bdc01c3d5a326c274ce0027ef3056d429", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "203abbe094c22f5dd3ec3a7330afe29362b653fe5a6013628c5ddd99b9e756e6"},
    "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "NEW kinds edgeEntryCollision, stubSegment, arrowTangent with ENTRY_COLLISION_MM 1.5, STUB_SEGMENT_MIN_MM 2.0, ARROW_TANGENT_TOL_DEG 15; scan records link order and label knockout bands; the three kinds are in counts/defects but not in score (auto-fit path of existing figures unchanged)", "diff_base": "sha256 before this row", "before_sha256": "6b9d83313a49012bf14e0a3490fbf0a04ff76e737aeee7a1d180a65da6027472", "after_sha256": "ebb8e0e8bccbff54276cef7f7fa52b41cf023882ff95c7ab04c82f555cbbbd75", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_fit_lint.ts.diff", "diff_sha256": "132d1c590767a1e7c4f34dfac935148643faea379a3ac1c40b6398574696c721"},
    "patch_row150c": {
     "id": "row150c-lint-symbol-cell-text",
@@ -6275,6 +6281,7 @@
   "52",
   "35b",
   "32",
-  "53a"
+  "53a",
+  "56"
  ]
 }

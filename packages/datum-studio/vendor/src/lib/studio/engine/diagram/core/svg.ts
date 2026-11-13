@@ -63,6 +63,11 @@ export interface SvgMarkOptions {
   dataMarks?: boolean;
   /** Indeks tanda dalam gambar (`data-index`). */
   index?: number;
+  /**
+   * Swarm 1.2.8 row 56 (VIS-4, register N8-469, R18-2): `data-route` of a connector drawn `straight` or `curved`;
+   * absent for orthogonal, so a default edge keeps its bytes (01f §3.2.4). Read by `edgePathSvg` only.
+   */
+  route?: "straight" | "curved";
 }
 
 export interface SvgTextOptions {
@@ -717,7 +722,8 @@ export function edgePathSvg(
   const dash = DASH_PATTERNS[meta.pattern];
   let attrs = `fill="none" stroke="${colourOf(meta.colour)}" stroke-width="${r2(edgeStrokeWidth(kind))}"`;
   if (dash) attrs += ` stroke-dasharray="${dash}"`;
-  return `<path d="${polylineD(pts)}" ${attrs} marker-end="url(#head-${kind})"${markAttrs("link", opts, kind)}/>`;
+  const route = opts.route === "straight" || opts.route === "curved" ? ` data-route="${opts.route}"` : "";
+  return `<path d="${polylineD(pts)}" ${attrs} marker-end="url(#head-${kind})"${markAttrs("link", opts, kind)}${route}/>`;
 }
 
 /** Kepala panah satu jenis (P4: solid terisi, open bergaris). */

@@ -187,6 +187,8 @@ interface Scan {
   linkHalf: number[];
   /** T-03: document order of each link (a knockout band drawn later hides it). */
   linkOrder: number[];
+  /** Swarm 1.2.8 row 56 (VIS-4, OP-18-6): true for a link drawn with `data-route="curved"` (sampled Bezier). */
+  linkCurved: boolean[];
   /** T-03: label knockout bands (paper rect right before a `<text>`) with their document order. */
   bands: { box: Box; order: number }[];
 }
@@ -201,6 +203,7 @@ function scan(svg: string): Scan {
   const links: Pt[][] = [];
   const linkHalf: number[] = [];
   const linkOrder: number[] = [];
+  const linkCurved: boolean[] = [];
   const bands: { box: Box; order: number }[] = [];
   let pendingBand: { box: Box; order: number } | null = null;
   let inDefs = 0;
@@ -315,6 +318,7 @@ function scan(svg: string): Scan {
         links.push(pl[0].map((p) => [p[0], p[1]] as Pt));
         linkHalf.push((Number(a["stroke-width"] ?? 0) || 0) / 2);
         linkOrder.push(k.index);
+        linkCurved.push(a["data-route"] === "curved");
       }
       continue;
     }
@@ -346,7 +350,7 @@ function scan(svg: string): Scan {
     if (!Number.isFinite(box[0])) continue;
     nodes.push({ id: nodeId ?? null, outline, circle, half, box });
   }
-  return { W, H, texts, nodes, links, linkHalf, linkOrder, bands };
+  return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, bands };
 }
 
 function segX(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
@@ -526,10 +530,14 @@ function entryCollisions(links: ReadonlyArray<ReadonlyArray<Pt>>, nodes: readonl
  *      join the two. A label sitting on a straight or half-column jog (the accepted rev 210 figure,
  *      fixture t03_n1) is not a stub.
  * Calibration (row 25): F1 fixtures t03_k1..k7 each give at least one stub; t03_n1/n2 give none.
+ * Swarm 1.2.8 row 56 (VIS-4, 01f §7 (b), OP-18-6): on a link with `data-route="curved"` only the first and the last
+ * straight piece are checked. Its `CURVE_SAMPLES` steps merge into pieces of about `STRAIGHT_TURN_DEG`, whose length
+ * is the sampling of one smooth curve, not a routing stub.
  */
 function stubSegments(
   links: ReadonlyArray<ReadonlyArray<Pt>>,
   bandsOver: ReadonlyArray<ReadonlyArray<Box>>,
+  curved: ReadonlyArray<boolean> = [],
 ): Array<{ link: number; length: number }> {
   type End = "src" | "head" | "bend" | "cut";
   interface Piece { a: Pt; b: Pt; st: End; en: End; jog: boolean; len: number }
@@ -538,6 +546,7 @@ function stubSegments(
     const pl = straightPieces(raw);
     const pieces: Piece[] = [];
     for (let s = 0; s + 1 < pl.length; s++) {
+      if (curved[li] && s > 0 && s + 2 < pl.length) continue; // row 56: interior piece of a sampled curve
       const a = pl[s];
       const b = pl[s + 1];
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -637,7 +646,7 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
 
 /** Lint geometri SVG diagram (tanpa browser). `score` = jumlah semua cacat. */
 export function lintDiagramGeometry(svg: string): DiagramGeomLint {
-  const { W, H, texts, nodes, links, linkHalf, linkOrder, bands } = scan(svg);
+  const { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, bands } = scan(svg);
   const defects: DiagramGeomDefect[] = [];
   // teks-teks
   for (let i = 0; i < texts.length; i++) {
@@ -724,7 +733,7 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
     defects.push({ kind: "edgeEntryCollision", text: `konektor ${c.a}`, other: `konektor ${c.b} @ ${nodeName(c.node)}`, amount: Number(c.gap.toFixed(2)) });
   }
   const bandsOver = links.map((_, i) => bands.filter((b) => b.order > linkOrder[i]).map((b) => b.box));
-  for (const s of stubSegments(links, bandsOver)) {
+  for (const s of stubSegments(links, bandsOver, linkCurved)) {
     defects.push({ kind: "stubSegment", text: `konektor ${s.link}`, amount: Number(s.length.toFixed(2)) });
   }
   for (const t of arrowTangents(links, nodes)) {
