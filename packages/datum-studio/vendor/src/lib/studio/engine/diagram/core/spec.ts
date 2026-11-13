@@ -12,6 +12,18 @@
  *   pertama, kembalikan daftar `ran`), dipakai build (S30) dan `estimate`.
  */
 import type { DiagramEdgeKind, LintIssue, ProvenanceMark, StudioDiagramV1 } from "../../../contract";
+import {
+  DIAGRAM_ARROW_SIZES,
+  DIAGRAM_ARROW_TYPES,
+  DIAGRAM_EDGE_DASHES,
+  DIAGRAM_EDGE_ROUTES,
+  DIAGRAM_EDGE_SIDES,
+  DIAGRAM_EDGE_WEIGHTS,
+  DIAGRAM_EVENT_TYPES,
+  DIAGRAM_JUMPS,
+  DIAGRAM_LABEL_AT,
+  DIAGRAM_LANE_ORIENTATIONS,
+} from "../../../contract/enums";
 import { DiagramDefect } from "./defect";
 import { type DiagramGrid, resolveDiagramGrid, widthLabel } from "./grid";
 import { pyRepr, pyReprFloat, pyStr } from "./pyfmt";
@@ -82,9 +94,15 @@ export const SPEC_CHECK_IDS = [
   "P1-sources",
   "P1-direction",
   "P1-nodes+P3-shapes",
+  // Swarm 1.2.8 row 52c (01f §1.5, §2.2, §3.3, §3.6; N8-267..N8-271): run only when the spec carries the field.
+  "P1-event_type",
+  "P1-containers",
   "DATUM-35",
   "DATUM-24",
   "DATUM-26",
+  "P1-edge-style",
+  "P1-via",
+  "P3-via-family",
   "DATUM-34",
   "P3-diamond-exits",
 ] as const;
@@ -259,6 +277,50 @@ function notationEntries(nodes: ReadonlyArray<{ id: string; shape: string; set: 
     .join("; ");
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Swarm 1.2.8 row 52c (contributor to AC-VIS2a, VIS3a, VIS3b, VIS4, VIS5, VIS6, VIS7; plan P-20, P-24): the M3
+// field-level spec checks. Each runs (and is listed in `ran`) only when the spec carries one of its fields, the
+// P1-direction pattern, so a spec without the 1.2.8 fields keeps its report byte-for-byte. The contract refuses most
+// bad values first (SCHEMA_INVALID); these repeat the rules for v1 artefacts and specs that bypass the schema.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** 01f §1.5 (N8-271): shapes that may carry `event_type`. */
+const EVENT_SHAPES: ReadonlySet<string> = new Set(["event_start", "event_intermediate", "event_end"]);
+/** 01f §1.5: decision shapes checked by `P3-diamond-exits` (diamond + the four BPMN gateways). */
+const DECISION_SHAPES: ReadonlySet<string> = new Set([
+  "diamond",
+  "gateway_exclusive",
+  "gateway_parallel",
+  "gateway_inclusive",
+  "gateway_complex",
+]);
+/** 01f §3.1: edge fields whose values or combinations `P1-edge-style` checks (`via` is `P1-via`). */
+const EDGE_STYLE_ENUMS: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ["route", DIAGRAM_EDGE_ROUTES],
+  ["from_side", DIAGRAM_EDGE_SIDES],
+  ["to_side", DIAGRAM_EDGE_SIDES],
+  ["arrow_start", DIAGRAM_ARROW_TYPES],
+  ["arrow_end", DIAGRAM_ARROW_TYPES],
+  ["arrow_start_size", DIAGRAM_ARROW_SIZES],
+  ["arrow_end_size", DIAGRAM_ARROW_SIZES],
+  ["dash", DIAGRAM_EDGE_DASHES],
+  ["weight", DIAGRAM_EDGE_WEIGHTS],
+  ["label_at", DIAGRAM_LABEL_AT],
+];
+const EDGE_STYLE_FIELDS: readonly string[] = [...EDGE_STYLE_ENUMS.map(([k]) => k), "from_slot", "to_slot"];
+/** 01f §3.3 (D-V3): families where an author may place bend points (`flow` only without `direction`). */
+const VIA_FAMILIES = "flow tanpa direction, graph, swimlane";
+
+/** Present and not `undefined` (JSON has no undefined; an object literal may). */
+function given(o: Json, k: string): boolean {
+  return has(o, k) && o[k] !== undefined;
+}
+
+/** Short quoted form of a refused value for a message (no long user text echoed). */
+function shown(v: unknown): string {
+  return typeof v === "string" ? JSON.stringify(v.slice(0, 32)) : pyStr(v).slice(0, 32);
+}
+
 /**
  * Validasi penuh spek. Mengembalikan entri per cek (PASS) atau per pelanggaran
  * (FAIL, `detail` = pesan Python, `pointer` = JSON pointer medan).
@@ -387,6 +449,84 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
     }
   });
   pass("P1-nodes+P3-shapes", mark);
+  const nodeObjs = nodes.map((raw) => (isObj(raw) ? raw : {}));
+  const shapeOf = new Map<unknown, unknown>(nodeObjs.map((n) => [n.id, has(n, "shape") ? n.shape : "box"]));
+
+  // P1-event_type (row 52c, 01f §1.5, N8-271): only on event_* shapes, value none/message/timer.
+  if (nodeObjs.some((n) => given(n, "event_type"))) {
+    mark = out.length;
+    nodeObjs.forEach((n, i) => {
+      if (!given(n, "event_type")) return;
+      const ptr = `/nodes/${i}/event_type`;
+      if (typeof n.shape !== "string" || !EVENT_SHAPES.has(n.shape)) {
+        fail(
+          "P1-event_type",
+          `event_type hanya untuk event_start/event_intermediate/event_end (simpul '${pyStr(n.id).slice(0, 64)}': ${shown(has(n, "shape") ? n.shape : "box")})`,
+          ptr,
+        );
+      } else if (!(DIAGRAM_EVENT_TYPES as readonly unknown[]).includes(n.event_type)) {
+        fail("P1-event_type", `event_type ${shown(n.event_type)} bukan salah satu dari ${DIAGRAM_EVENT_TYPES.join("/")}`, ptr);
+      }
+    });
+    pass("P1-event_type", mark);
+  }
+
+  // P1-containers (row 52c, 01f §2.2, N8-270): phases, pools, lane_orientation of the swimlane family.
+  const classOf = (n: Json): Json => (isObj(n.class) ? n.class : {});
+  if (
+    ["phases", "pools", "lane_orientation"].some((k) => given(spec, k)) ||
+    nodeObjs.some((n) => given(classOf(n), "phase") || given(classOf(n), "pool"))
+  ) {
+    mark = out.length;
+    for (const k of ["phases", "pools", "lane_orientation"]) {
+      // Cause 1: a container field outside the swimlane family.
+      if (given(spec, k) && fam !== "swimlane") {
+        fail("P1-containers", `${k} hanya untuk family swimlane (family '${pyStr(fam).slice(0, 32)}')`, `/${k}`);
+      }
+    }
+    if (given(spec, "lane_orientation") && !(DIAGRAM_LANE_ORIENTATIONS as readonly unknown[]).includes(spec.lane_orientation)) {
+      fail("P1-containers", `lane_orientation ${shown(spec.lane_orientation)} harus ${DIAGRAM_LANE_ORIENTATIONS.join(" atau ")}`, "/lane_orientation");
+    }
+    for (const [list, key, max] of [
+      ["phases", "phase", LIMITS.max_phases],
+      ["pools", "pool", LIMITS.max_pools],
+    ] as const) {
+      const declared = new Set<string>();
+      if (given(spec, list)) {
+        const items = spec[list];
+        if (!Array.isArray(items) || items.length === 0) {
+          fail("P1-containers", `${list} harus larik [{id, label}] berisi 1..${max} entri`, `/${list}`);
+        } else {
+          // Cause 5: over PHASES_MAX / POOLS_MAX.
+          if (items.length > max) fail("P1-containers", `${list}: ${items.length} entri, maksimum ${max}`, `/${list}`);
+          items.forEach((it, j) => {
+            const id = isObj(it) ? it.id : undefined;
+            if (typeof id !== "string" || id.length < 1 || id.length > 64 || !pyStr(isObj(it) ? it.label : "").trim()) {
+              fail("P1-containers", `${list}[${j}] wajib id (1..64 karakter) dan label`, `/${list}/${j}`);
+              return;
+            }
+            // Cause 2: duplicate id.
+            if (declared.has(id)) fail("P1-containers", `id ${key} ganda: ${shown(id)}`, `/${list}/${j}/id`);
+            declared.add(id);
+          });
+        }
+      }
+      nodeObjs.forEach((n, i) => {
+        const c = classOf(n);
+        if (given(c, key)) {
+          // Cause 3: class.phase / class.pool naming an unknown id.
+          if (typeof c[key] !== "string" || !declared.has(c[key] as string)) {
+            fail("P1-containers", `class.${key} ${shown(c[key])} pada simpul '${pyStr(n.id).slice(0, 64)}' bukan id di ${list}[]`, `/nodes/${i}/class/${key}`);
+          }
+        } else if (given(spec, list)) {
+          // Cause 4: all-or-nothing, every node names its phase / pool when the list is present.
+          fail("P1-containers", `${list} ada tetapi simpul '${pyStr(n.id).slice(0, 64)}' tanpa class.${key} (semua atau tidak sama sekali)`, `/nodes/${i}/class`);
+        }
+      });
+    }
+    // Cause 6 (01f §2.2): a pool whose nodes carry no class.lane, and a lane name repeated across pools, are allowed.
+    pass("P1-containers", mark);
+  }
 
   // DATUM-35: satu dialek simbol per gambar (universal boleh berdampingan). Swarm 1.2.8 row 53a (H-D35, D-V1, 01f §1.4):
   // sah bila irisan notation_set semua simpul non-universal tidak kosong (diamond = {ISO 5807, BPMN} cocok dengan
@@ -427,6 +567,92 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
   }
   pass("DATUM-26", mark);
 
+  const edgeObjs = edges.map((raw) => (isObj(raw) ? raw : {}));
+  // P1-edge-style (row 52c, 01f §3.6, N8-267). Pointer /edges/<i>/<field>.
+  if (edgeObjs.some((e) => EDGE_STYLE_FIELDS.some((k) => given(e, k))) || given(spec, "jumps")) {
+    mark = out.length;
+    if (given(spec, "jumps") && !(DIAGRAM_JUMPS as readonly unknown[]).includes(spec.jumps)) {
+      fail("P1-edge-style", `jumps ${shown(spec.jumps)} harus ${DIAGRAM_JUMPS.join(" atau ")}`, "/jumps");
+    }
+    edgeObjs.forEach((e, i) => {
+      const ptr = `/edges/${i}`;
+      // Cause 6: an unknown enum value (the contract refuses it first with SCHEMA_INVALID).
+      for (const [k, allowed] of EDGE_STYLE_ENUMS) {
+        if (given(e, k) && !(allowed as readonly unknown[]).includes(e[k])) {
+          fail("P1-edge-style", `${k} ${shown(e[k])} bukan salah satu dari ${allowed.join("/")}`, `${ptr}/${k}`);
+        }
+      }
+      for (const end of ["from", "to"] as const) {
+        const slotKey = `${end}_slot`;
+        const sideKey = `${end}_side`;
+        if (!given(e, slotKey)) continue;
+        const v = e[slotKey];
+        // Cause 2: a slot outside (0, 1).
+        if (typeof v !== "number" || !Number.isFinite(v) || v <= 0 || v >= 1) {
+          fail("P1-edge-style", `${slotKey} ${shown(v)} harus angka di antara 0 dan 1 (tidak termasuk)`, `${ptr}/${slotKey}`);
+        }
+        // Cause 1: a slot needs its side (not absent, not "auto").
+        if (!given(e, sideKey) || e[sideKey] === "auto") {
+          fail("P1-edge-style", `${slotKey} perlu ${sideKey} selain auto (titik sambung diukur sepanjang sisi itu)`, `${ptr}/${slotKey}`);
+        }
+      }
+      // Cause 3: a head size without a head. Start: absent = none; end: absent = the kind head, only "none" refuses.
+      if (given(e, "arrow_start_size") && (!given(e, "arrow_start") || e.arrow_start === "none")) {
+        fail("P1-edge-style", "arrow_start_size tanpa arrow_start (kepala awal tidak ada)", `${ptr}/arrow_start_size`);
+      }
+      if (given(e, "arrow_end_size") && e.arrow_end === "none") {
+        fail("P1-edge-style", 'arrow_end_size dengan arrow_end "none" (kepala akhir tidak ada)', `${ptr}/arrow_end_size`);
+      }
+      // Cause 4: curved + via (a curve has no bend points; P-24 moved this refusal here from row 56).
+      if (e.route === "curved" && given(e, "via")) {
+        fail("P1-edge-style", 'route "curved" tidak dapat digabung dengan via; pakai orthogonal atau straight', `${ptr}/via`);
+      }
+      // Cause 5: an explicit side on an edge touching a bus node (bus taps are fixed, route.ts).
+      if (shapeOf.get(e.from) === "bus" || shapeOf.get(e.to) === "bus") {
+        for (const sideKey of ["from_side", "to_side"]) {
+          if (given(e, sideKey) && e[sideKey] !== "auto") {
+            fail("P1-edge-style", `${sideKey} tidak boleh pada konektor ke/dari simpul bus (titik tap bus tetap)`, `${ptr}/${sideKey}`);
+          }
+        }
+      }
+    });
+    pass("P1-edge-style", mark);
+  }
+
+  // P1-via + P3-via-family (row 52c, 01f §3.3, N8-268, N8-269, D-V3).
+  if (edgeObjs.some((e) => given(e, "via"))) {
+    mark = out.length;
+    const hint = "titik via = {col,row} kisi; lihat figure.lattice pada pratinjau";
+    edgeObjs.forEach((e, i) => {
+      if (!given(e, "via")) return;
+      const ptr = `/edges/${i}/via`;
+      const via = e.via;
+      if (!Array.isArray(via) || via.length === 0) {
+        fail("P1-via", `via harus larik 1..${LIMITS.max_via} titik {col,row}; ${hint}`, ptr);
+        return;
+      }
+      if (via.length > LIMITS.max_via) {
+        fail("P1-via", `via: ${via.length} titik, maksimum ${LIMITS.max_via}; ${hint}`, ptr);
+      }
+      via.forEach((p, j) => {
+        const ok =
+          isObj(p) &&
+          ["col", "row"].every((k) => typeof p[k] === "number" && Number.isInteger(p[k]) && (p[k] as number) >= 0);
+        if (!ok) fail("P1-via", `via[${j}] ${reprish(p).slice(0, 64)} bukan bilangan bulat col,row >= 0; ${hint}`, `${ptr}/${j}`);
+      });
+    });
+    pass("P1-via", mark);
+
+    mark = out.length;
+    const ranked = fam === "flow" && given(spec, "direction");
+    if (!(fam === "graph" || fam === "swimlane" || (fam === "flow" && !ranked))) {
+      const first = edgeObjs.findIndex((e) => given(e, "via"));
+      const named = ranked ? "flow + direction" : pyStr(fam).slice(0, 32);
+      fail("P3-via-family", `via tidak berlaku pada family '${named}' (tata letak otomatis); via hanya untuk ${VIA_FAMILIES}`, `/edges/${first}/via`);
+    }
+    pass("P3-via-family", mark);
+  }
+
   // DATUM-34: glif rumah wajib baris kunci terbit
   mark = out.length;
   if (marksUsed.size > 0) {
@@ -438,14 +664,16 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
   }
   pass("DATUM-34", mark);
 
-  // P3-diamond-exits: keputusan wajib keluaran berlabel
+  // P3-diamond-exits: keputusan wajib keluaran berlabel. Swarm 1.2.8 row 52c (01f §1.5): also the four BPMN
+  // gateways; the diamond text is unchanged, a gateway message names its shape.
   mark = out.length;
   nodes.forEach((raw, i) => {
     const n = isObj(raw) ? raw : {};
-    if (n.shape === "diamond") {
+    if (typeof n.shape === "string" && DECISION_SHAPES.has(n.shape)) {
       const outs = edges.filter((e) => isObj(e) && e.from === n.id);
       if (outs.length === 0) {
-        fail("P3-diamond-exits", `keputusan '${pyStr(n.id)}' tanpa keluaran berlabel (P3: every exit labelled)`, `/nodes/${i}`);
+        const what = n.shape === "diamond" ? "keputusan" : `keputusan ${n.shape}`;
+        fail("P3-diamond-exits", `${what} '${pyStr(n.id)}' tanpa keluaran berlabel (P3: every exit labelled)`, `/nodes/${i}`);
       }
     }
   });
