@@ -163,7 +163,17 @@ export function sessionOf(args: Record<string, unknown>, s: HostToolSession): Se
   const client = raw.client ?? s.agentId
   if (client !== s.agentId) throw new MissionToolError("AGENT_ID_LOCKED", `session.client is locked to this MCP session's agent "${s.agentId}"`, { client: raw.client, agent: s.agentId })
   const role = raw.role ? { role: raw.role } : {}
-  if (validSessionRef(client, raw.ref)) return { client: client as SessionLink["client"], ref: raw.ref, ...role }
+  if (validSessionRef(client, raw.ref)) {
+    // 1.2.8 row 31 (H-N12): a well-formed ref is linked only when it is the calling session. Another ref is replaced by
+    // the calling session (N8-203 SESSION_REF_IGNORED, both refs named); with no calling session known it is refused
+    // (N8-202 SESSION_UNKNOWN): the host cannot tell an invented id from a real one.
+    if (known === raw.ref) return { client: client as SessionLink["client"], ref: raw.ref, ...role }
+    if (known) {
+      note(args, `SESSION_REF_IGNORED: session.ref ${raw.ref} is not the calling session; linked the calling session ${known} instead (omit session; Swarm links the calling session itself)`)
+      return { client: client as SessionLink["client"], ref: known, ...role }
+    }
+    throw new MissionToolError("SESSION_UNKNOWN", `session.ref ${raw.ref} cannot be linked: the calling session is unknown, so the host cannot tell it from an invented id`, { given: raw.ref, client })
+  }
   if (known) {
     note(args, `session.ref is not a ${client} session id; linked the calling session ${known} instead (omit session; Swarm fills it)`)
     return { client: client as SessionLink["client"], ref: known, ...role }
@@ -331,13 +341,16 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         if (include?.includes("messages")) extra.messages = M.listMessages(id)
         // Row 126 (spec mission control §8 G1, G3).
         const tail = typeof a.messagesTail === "number" ? a.messagesTail : undefined
-        if (tail !== undefined || include?.includes("deliverables")) {
-          const rowIds = new Set((got.mission.rows ?? []).map((r) => r.id))
-          await read(async (q) => {
-            if (tail !== undefined) extra.messages = readMessagesTail(q, M, id, tail)
-            if (include?.includes("deliverables")) extra.deliverables = readDeliverables(q, id, rowIds) // row 136b: sync, the store's one rule
-          })
-        }
+        // 1.2.8 row 31 (H-MC08): the deliverables are read for every get, so the text prints their full sha256; the
+        // data key stays opt-in (include: deliverables), as before.
+        const rowIds = new Set((got.mission.rows ?? []).map((r) => r.id))
+        let deliverables: ReturnType<typeof readDeliverables> = []
+        await read(async (q) => {
+          if (tail !== undefined) extra.messages = readMessagesTail(q, M, id, tail)
+          deliverables = readDeliverables(q, id, rowIds) // row 136b: sync, the store's one rule
+        })
+        if (include?.includes("deliverables")) extra.deliverables = deliverables
+        const detail = a.detail === true
         const d = got.derived
         const text = [
           `mission ${id} (${got.mission.type} v${got.mission.typeVersion}): ${got.mission.status}${got.mission.supersededBy ? `, superseded by ${got.mission.supersededBy}` : ""}`,
@@ -350,6 +363,15 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
                   (d.drift.dropped.length > 0 ? `; dropped: ${d.drift.dropped.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ")}` : ""),
               ]
             : []),
+          // 1.2.8 row 31 (H-N14, N8-204): detail: true lists every row with its reports.
+          ...(detail
+            ? (got.mission.rows ?? []).flatMap((r) => [
+                `  row ${r.id} [${r.phase}/${r.kind}] ${r.status}: ${r.title}`,
+                ...(r.reports ?? []).map((p) => `    report ${p.kind} ${p.documentId} rev ${p.revisionNo}${p.status ? ` ${p.status}` : ""}`),
+              ])
+            : []),
+          // 1.2.8 row 31 (H-MC08): one line per deliverable output, full sha256, no truncation.
+          ...deliverables.flatMap((dl) => dl.outputs.map((o) => `  deliverable ${o.finalFileName ?? o.fileName ?? o.fileId} sha256 ${o.sha256}${o.verified ? "" : " (unverified)"}`)),
         ].join("\n")
         return { text, data: { mission, derived: d, ...extra } }
       },

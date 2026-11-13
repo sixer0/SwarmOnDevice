@@ -27,7 +27,8 @@ const session: Schema = {
     ref: { type: "string", minLength: 1, maxLength: 128, description: "Swarm session id (ses_..., 30 characters) or an opaque Claude session ref." },
     role: { type: "string", enum: ["controller", "driver", "viewer"] },
   },
-  description: "Optional session link (mission contract §2.4): links this session to the mission; a repeated link only updates the time.",
+  // 1.2.8 row 31 (H-N12): the agent omits it; an explicit ref other than the calling session is never linked.
+  description: "Omit it: Swarm links the calling session itself. Another ref is replaced by the calling one, or SESSION_UNKNOWN.",
 }
 const actor: Schema = { type: "string", pattern: ACTOR_PATTERN, description: "Declared actor recorded in the event trail (not authenticated, limit L2). Default: this session's agent." }
 const dryRun: Schema = { type: "boolean", default: false, description: "Validate and run the write, then roll it back (nothing is stored)." }
@@ -108,6 +109,8 @@ export const MISSION_TOOL_SCHEMAS: Record<string, Schema> = {
       include: { type: "array", uniqueItems: true, items: { type: "string", enum: [...GET_INCLUDE] }, description: "Default: the whole MissionDoc (rows with reports, decisions, findings, locks)." },
       // Row 126 (spec mission control §8 G3).
       messagesTail: { type: "integer", minimum: 1, maximum: 50, description: "Return `messages` as the newest N messages (ascending seq) instead of the oldest 200." },
+      // 1.2.8 row 31 (H-N14, N8-204).
+      detail: { type: "boolean", default: false, description: "true: the text also lists every row and its reports." },
     },
     ["mission"],
   ),

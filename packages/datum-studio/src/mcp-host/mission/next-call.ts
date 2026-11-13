@@ -39,6 +39,8 @@ const NEXT: Record<string, string> = {
   ROW_CLOSED: "the row is done or dropped: add a new row with studio_mission_update_row {rows: [{id, add: {...}}]}",
   DEP_NOT_DONE: "finish the build (:B) dependency first; studio_mission_get shows ready rows in derived.ready. Notes are never gated by dependencies: send the note as its own patch (a note in the refused status patch is kept, results[].noteSaved: true)",
   OUTPUT_UNVERIFIED: "verify the row's Studio outputs (done gate) or name the check and its result file in the row note, then retry done",
+  // 1.2.8 row 31 (H-N12, N8-202).
+  SESSION_UNKNOWN: "omit session; Swarm links the calling session itself",
   AGENT_ID_LOCKED: "omit session.client (it is this MCP session's agent), or omit session entirely; Swarm fills it",
   SCHEMA_INVALID: "fix the fields named in rincian.issues or rincian.field (a row done straight from running needs a note) (guide: resource studio://skema/mission; create with dryRun: true first); omit session, Swarm fills it",
   STORE_BUSY: "retry the same call once",
