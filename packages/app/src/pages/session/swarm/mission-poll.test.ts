@@ -444,6 +444,8 @@ describe("createMissionControl", () => {
     expect(pollModeOf({ docVisible: true, watching: false, mapOpen: true })).toBe("discover")
     expect(pollModeOf({ docVisible: true, watching: false, mapOpen: false })).toBe("stopped")
     expect(pollModeOf({ docVisible: false, watching: true, mapOpen: true })).toBe("background")
-    expect(pollModeOf({ docVisible: false, watching: false, mapOpen: true })).toBe("stopped")
+    // INTENT 1.2.7 row 58d (F-6): hidden window, map open -> discover (list only), so the Agents entry is known.
+    expect(pollModeOf({ docVisible: false, watching: false, mapOpen: true })).toBe("discover")
+    expect(pollModeOf({ docVisible: false, watching: false, mapOpen: false })).toBe("stopped")
   })
 })

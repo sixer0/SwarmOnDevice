@@ -315,7 +315,10 @@ export function createMissionPoller(input: {
 export function pollModeOf(view: { docVisible: boolean; watching: boolean; mapOpen: boolean }): PollMode {
   // Row 173 (F146b-1): a hidden window (display off, screen locked, another window on top) no longer freezes the
   // Agents view at its last state; it reads at the slow cadence and at once when the window is visible again.
-  if (!view.docVisible) return view.watching ? "background" : "stopped"
+  // 1.2.7 row 58d (F-6): with the map open but another filter shown, a hidden window still lists (discover: list only,
+  // 15 s). After a restart the window can start hidden; without the first list the Agents entry, which needs a known
+  // mission (offersAgentsView), was never offered for a one-agent session with missions.
+  if (!view.docVisible) return view.watching ? "background" : view.mapOpen ? "discover" : "stopped"
   if (view.watching) return "live"
   if (view.mapOpen) return "discover"
   return "stopped"
