@@ -302,7 +302,7 @@ export interface Decided {
 
 /**
  * 1.2.7 U4 (N7-054): a read role (`READ_SHELL_ROLES`: planner, data-collector) ran a shell command outside the read class.
- * Shipped and final: the text names the substitute (a coder subagent), so the agent hands the command on.
+ * Shipped and final: the text names the final-message route (N8-391), so the agent lists the command for its caller.
  */
 export class RoleShellRefusedError extends PermissionV1.DeniedError {
   override get message() {

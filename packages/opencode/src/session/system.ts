@@ -117,7 +117,7 @@ const ROUTING_AGENT = "build"
 const ROUTING_LINES: readonly { name: string; text: string; mcp?: string }[] = [
   { name: "planner", text: "- planner: intent, blueprint, analysis or spec; no code changes." },
   { name: "coder", text: "- coder: implement, fix or refactor code and make its checks pass." },
-  { name: "verifier", text: "- verifier: check finished work against its criteria, review, run tests; never edits." },
+  { name: "verifier", text: "- verifier: check finished work against its criteria, review, run tests; edits no code, writes only Markdown after asking." },
   { name: "data-collector", text: "- data-collector: read and digest the person's own files and documents." },
   { name: "document-writer", text: "- document-writer: DOCX, PDF, XLSX or PPTX deliverables in the house style." },
   { name: "explore", text: "- explore: find files and code in this codebase." },

@@ -293,7 +293,7 @@ describe("session.system", () => {
       head,
       "- planner: intent, blueprint, analysis or spec; no code changes.",
       "- coder: implement, fix or refactor code and make its checks pass.",
-      "- verifier: check finished work against its criteria, review, run tests; never edits.",
+      "- verifier: check finished work against its criteria, review, run tests; edits no code, writes only Markdown after asking.",
       "- data-collector: read and digest the person's own files and documents.",
       "- document-writer: DOCX, PDF, XLSX or PPTX deliverables in the house style.",
       "- explore: find files and code in this codebase.",

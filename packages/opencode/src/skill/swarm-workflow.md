@@ -12,7 +12,7 @@ Agents. Delegate a step with the task tool. Pick the agent by the kind of work:
 |---|---|---|---|
 | planner | intent, blueprint, analysis, spec; no code changes | thinker | the request is unclear, large or needs a design |
 | coder | implement, fix, refactor, make its checks pass | worker | a row changes code or config |
-| verifier | check finished work against its criteria, review, run tests; never edits | thinker | a row is finished; always the last rows |
+| verifier | check finished work against its criteria, review, run tests; edits no code, writes only Markdown after asking | thinker | a row is finished; always the last rows |
 | data-collector | read and digest the person's own files and documents | worker-fast | the inputs are the person's files |
 | explore | find files and code in this codebase | worker-fast | you need to know where something lives |
 | document-writer | DOCX, PDF, XLSX or PPTX in the house style | worker | the output is an office document |
