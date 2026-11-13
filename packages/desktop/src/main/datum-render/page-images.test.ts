@@ -49,10 +49,10 @@ describe("page selection, file names, PNG size, layout validation", () => {
     expect(selectPages(5, [])).toEqual([1, 2, 3, 4, 5])
   })
 
-  test("pNNN.png names", () => {
-    expect(pageFileName(1)).toBe("p001.png")
-    expect(pageFileName(42)).toBe("p042.png")
-    expect(pageFileName(1234)).toBe("p1234.png")
+  test("witness-pNNN.png names (1.2.7 N-5 INTENT)", () => {
+    expect(pageFileName(1)).toBe("witness-p001.png")
+    expect(pageFileName(42)).toBe("witness-p042.png")
+    expect(pageFileName(1234)).toBe("witness-p1234.png")
   })
 
   test("pngSize reads IHDR and refuses other bytes", () => {

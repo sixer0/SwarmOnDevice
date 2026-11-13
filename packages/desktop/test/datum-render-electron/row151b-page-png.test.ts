@@ -113,12 +113,12 @@ describe.skipIf(!runnable)("render bridge pagePng in real Electron 42", () => {
     expect(result.home.startsWith("/Users/")).toBe(false)
   })
 
-  test("paged: a 3-page A4 HTML gives 3 PNGs p001..p003 at 150 dpi with the A4 aspect ratio", () => {
+  test("paged: a 3-page A4 HTML gives 3 PNGs witness-p001..p003 at 150 dpi with the A4 aspect ratio", () => {
     const r = runOf("paged3")
     expect(r).toMatchObject({ layout: "paged", media: "print", pageCount: 3, dpi: 150, pageSizeSource: "css" })
     expect(r.pageSizeMm).toEqual({ wMm: 210, hMm: 297 })
     expect(r.pages.map((p: any) => p.n)).toEqual([1, 2, 3])
-    expect(r.pages.map((p: any) => p.dst)).toEqual([1, 2, 3].map((n) => join(work, "out", `p00${n}.png`)))
+    expect(r.pages.map((p: any) => p.dst)).toEqual([1, 2, 3].map((n) => join(work, "out", `witness-p00${n}.png`)))
     for (const p of r.pages) {
       expect(p.width).toBe(px(210, 150))
       expect(p.height).toBe(px(297, 150))
@@ -166,12 +166,12 @@ describe.skipIf(!runnable)("render bridge pagePng in real Electron 42", () => {
     expect(result.pixels.keyword_a5.map((p: any) => colour(p.samples[0].rgb))).toEqual(["cyan", "cyan"])
   })
 
-  test("page selection and dpi: pages [2] at 96 dpi gives only p002.png, 793 x 1122 px, green", () => {
+  test("page selection and dpi: pages [2] at 96 dpi gives only witness-p002.png, 793 x 1122 px, green", () => {
     const r = runOf("dpi96_p2")
     expect(r).toMatchObject({ pageCount: 3, dpi: 96 })
     expect(r.pages.length).toBe(1)
     expect(r.pages[0].n).toBe(2)
-    expect(r.pages[0].dst).toBe(join(work, "out", "dpi96", "p002.png"))
+    expect(r.pages[0].dst).toBe(join(work, "out", "dpi96", "witness-p002.png"))
     expect([r.pages[0].width, r.pages[0].height]).toEqual([px(210, 96), px(297, 96)])
     expect(colour(result.pixels.dpi96_p2[0].samples[0].rgb)).toBe("green")
   })

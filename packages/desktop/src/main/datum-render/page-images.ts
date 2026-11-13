@@ -93,7 +93,9 @@ export function pngSize(png: Uint8Array): { width: number; height: number } {
   return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) }
 }
 
-export const pageFileName = (n: number) => `p${String(n).padStart(3, "0")}.png`
+/** 1.2.7 N-5 (N7-066): page images are witnesses of the printed page (an approximation), never deliverables. */
+export const PAGE_WITNESS_PREFIX = "witness-"
+export const pageFileName = (n: number) => `${PAGE_WITNESS_PREFIX}p${String(n).padStart(3, "0")}.png`
 
 /** Validate what the page script returned (it runs inside an untrusted document). */
 export function readLayout(raw: unknown): PageLayout {
