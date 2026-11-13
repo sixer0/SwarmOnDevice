@@ -297,6 +297,8 @@ Teks (`Inline`) memakai tepat satu dari:
 
 `source` = teks + `provenance` opsional (`TERUKUR`, `DITURUNKAN`, `PEMASOK`, `ASUMSI`). Studio
 menambahkan label SUMBER dan PROVENANS sendiri.
+Lebar tabel (DT-10a): daftar ID tanpa spasi dipatah setelah , ; / bila lebih dari 16 karakter; URL
+(`://`, `www.`, `mailto:`) tidak pernah dipatah dan dihitung utuh.
 
 Yang ditolak (`400 SCHEMA_INVALID`):
 
@@ -519,6 +521,8 @@ tindakannya; norma kerja diagram lengkap (batas label, warna aksen, jenis garis)
    kunci). `{ spec: { nodes: [...] } }` mempertahankan `family`, `edges`, dan `direction`, tetapi
    `nodes` yang dikirim menggantikan seluruh daftar simpul. Hasil gabungan yang kehilangan medan wajib
    spec ditolak `SCHEMA_INVALID` dengan nama medan itu (`pointer` `/spec/<medan>`), 0 tulis.
+   Diagram v2 inline (tanpa `$schema`) hanya wajib `family` dan `nodes`, jadi patch `spec` sebagian
+   berlaku. Arah alur: patch {spec:{direction:"LR"}} (TB/LR); kunci direction di tingkat atas ditolak.
 3. **Baca `FIGURE_GRAPH_DELTA`.** Bila simpul atau tepi berubah, hasil revisi memuat baris
    `FIGURE_GRAPH_DELTA` (jumlah simpul dan tepi sebelum dan sesudah) dan `structuredContent.graphDelta`
    (`nodes.added`, `nodes.removed`, `edges.added`, `edges.removed`, `edges.rewired`; tepi ditulis
@@ -1520,6 +1524,11 @@ formats: ["docx", "html"], figures: ["png"] }`.
   (`FIGURE_PLACEHOLDER` di HTML, `PLACEHOLDER_IN_OUTPUT` di DOCX), jadi berkas itu
   `RENDER_UNVERIFIED(U24)`. Perbaiki figurnya (pratinjau, seksi 4.1.2) lalu render lagi. Berkas
   berplaceholder tidak diserahkan.
+- **Render dari `studio_write`.** Baris berkasnya `berkas: tidak dirender (galat <kode> (<cek>))`.
+  Render gagal: teks memuat kode dan cek (mis. FIGURE_OVER_CAPACITY (DT-10a)); perbaiki isi lalu ulangi
+  studio_write yang sama (dokumen yang sama dipakai). Draf gagal dilepas lewat `retire` di
+  `studio_mission_update_row`; penolakan `DELIVERABLE_NOT_RETIRABLE` disengaja: `NOT_BOUND_TO_ROW`
+  (docKey bukan `row-<id>-<nama>`) dan `NO_CURRENT_DELIVERABLE` (baris jadi tanpa hasil).
 
 **Render tidak menjawab dalam 540 detik.** Tandanya galat MCP `-32001` (batas waktu klien), atau
 `REMOTE_UNREACHABLE` dengan pesan `render <id> (R17) tidak menjawab dalam 540 detik
@@ -1572,6 +1581,8 @@ setelah gerbang mesin DAN gerbang mata atas PNG hasil render. Langkahnya di seks
 sendirian (caption, KUNCI, dan SUMBER di dalam gambar) dengan batas angka figur. Pratinjau mandiri
 tidak menggantikan pratinjau inline atau pemeriksaan halaman.
 png: true hanya bersama standalone: true dan downloadDir; selain itu INVALID_ARGUMENT.
+Hasil mandiri memuat perabot: jumlah baris KUNCI dan SUMBER serta tingginya (mm), dicetak
+`perabot: KUNCI <k> baris, SUMBER <s> baris, tinggi <h> mm`.
 
 ### 8.5 Lint: semua temuan satu cek
 
