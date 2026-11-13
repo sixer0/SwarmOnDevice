@@ -1,7 +1,8 @@
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import path from "path"
-import { readFile, stat } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { readFile, realpath, stat } from "node:fs/promises"
 import { Effect, Layer, Context, Schema, Semaphore } from "effect"
 import { NamedError } from "@opencode-ai/core/util/error"
 import type { Agent } from "@/agent/agent"
@@ -138,13 +139,66 @@ const RESERVED_SKILL_NAMES = new Set([
   FLUX3_IMAGE_GEN_SKILL_NAME,
 ])
 
+/** N8-034: limits of a SKILL.md `triggers` map. Over a limit the skill still loads, without triggers (N8-049). */
+export const TRIGGER_LIMITS = { entries: 10, keyword: 40, glob: 100 } as const
+/** N8-049: the code a bad `triggers` map is reported with. */
+export const SKILL_TRIGGERS_INVALID = "SKILL_TRIGGERS_INVALID"
+/** N8-037: a SKILL.md up to this size carries a sha256 of its bytes in the change key; a bigger one keeps the stat key. */
+export const SKILL_HASH_MAX_BYTES = 1048576
+/** N8-044: the drafts folder name, global under the data dir and per project under `.swarm/`. Never discovered. */
+export const SKILL_DRAFTS_DIR = "skill-drafts"
+
+// The longest value per list (01b section 3.1). Mission types follow Studio's mission `type` maxLength of 64.
+const TRIGGER_MAX = { keywords: TRIGGER_LIMITS.keyword, files: TRIGGER_LIMITS.glob, missionTypes: 64 } as const
+
+export const Triggers = Schema.Struct({
+  keywords: Schema.Array(Schema.String),
+  files: Schema.Array(Schema.String),
+  missionTypes: Schema.Array(Schema.String),
+})
+export type Triggers = Schema.Schema.Type<typeof Triggers>
+
 export const Info = Schema.Struct({
   name: Schema.String,
   description: Schema.optional(Schema.String),
   location: Schema.String,
   content: Schema.String,
+  /** N8-030: data that suggests the skill (SK-g); it never loads it. Absent when the file has none or they are invalid. */
+  triggers: Schema.optional(Triggers),
 })
 export type Info = Schema.Schema.Type<typeof Info>
+
+/**
+ * N8-030..N8-034: a SKILL.md `triggers` value, normalised (lists always present, values trimmed, keywords and mission
+ * types lower-cased, duplicates dropped). Nothing when the file has none; a reason when the map breaks a rule, in which
+ * case the whole map is ignored.
+ */
+export function parseTriggers(value: unknown): { triggers: Triggers } | { reason: string } | undefined {
+  if (value === undefined || value === null) return undefined
+  if (!isRecord(value)) return { reason: "triggers is not a map" }
+  const unknown = Object.keys(value).find((key) => !Object.hasOwn(TRIGGER_MAX, key))
+  if (unknown !== undefined) return { reason: `unknown key ${JSON.stringify(unknown.slice(0, 40))} in triggers` }
+  const lists = { keywords: [] as string[], files: [] as string[], missionTypes: [] as string[] }
+  for (const key of ["keywords", "files", "missionTypes"] as const) {
+    const raw = value[key]
+    if (raw === undefined || raw === null) continue
+    if (!Array.isArray(raw)) return { reason: `triggers.${key} is not a list of strings` }
+    if (raw.length > TRIGGER_LIMITS.entries) {
+      return { reason: `triggers.${key} has more than ${TRIGGER_LIMITS.entries} entries` }
+    }
+    for (const item of raw) {
+      if (typeof item !== "string") return { reason: `triggers.${key} is not a list of strings` }
+      const trimmed = item.trim()
+      const length = Array.from(trimmed).length
+      if (length < 1 || length > TRIGGER_MAX[key]) {
+        return { reason: `a triggers.${key} entry is not 1 to ${TRIGGER_MAX[key]} characters` }
+      }
+      const normal = key === "files" ? trimmed : trimmed.toLowerCase()
+      if (!lists[key].includes(normal)) lists[key].push(normal)
+    }
+  }
+  return { triggers: lists }
+}
 
 const Issue = Schema.StructWithRest(
   Schema.Struct({
@@ -154,7 +208,7 @@ const Issue = Schema.StructWithRest(
   [Schema.Record(Schema.String, Schema.Unknown)],
 )
 
-function isSkillFrontmatter(data: unknown): data is { name: string; description?: string } {
+function isSkillFrontmatter(data: unknown): data is { name: string; description?: string; triggers?: unknown } {
   return (
     isRecord(data) &&
     typeof data.name === "string" &&
@@ -210,6 +264,13 @@ export interface Interface {
   readonly all: () => Effect.Effect<Info[]>
   readonly dirs: () => Effect.Effect<string[]>
   readonly available: (agent?: Agent.Info) => Effect.Effect<Info[]>
+  /**
+   * RA-17: every folder a SKILL.md placed under would be loaded (or held as a draft) by this instance, whether or not
+   * it exists yet: config `{skill,skills}` folders, `.agents/skills` (and `.claude/skills` with claude_compat), each
+   * discovered skill's folder, and both `skill-drafts` roots. Absolute; an existing folder is also listed by its real
+   * path. The contract the skill-folder write guard (row 40e) checks against, so the guard and discovery agree.
+   */
+  readonly folders: () => Effect.Effect<string[]>
 }
 
 const add = Effect.fnUntraced(function* (
@@ -274,12 +335,27 @@ const add = Effect.fnUntraced(function* (
     })
   }
 
+  const parsed = parseTriggers(md.data.triggers)
+  if (parsed && "reason" in parsed) {
+    // Once per path and reason, as U-11b: the skill loads without triggers, so it is suggested by name only.
+    const cause = `triggers-invalid\u0000${match}\u0000${parsed.reason}`
+    if (!warned || !warned.has(cause)) {
+      warned?.add(cause)
+      yield* Effect.logWarning(`${SKILL_TRIGGERS_INVALID}: skill triggers ignored`, {
+        name: md.data.name,
+        skill: match,
+        reason: parsed.reason,
+      })
+    }
+  }
+
   state.dirs.add(path.dirname(match))
   state.skills[md.data.name] = {
     name: md.data.name,
     description: md.data.description,
     location: match,
     content: md.content,
+    ...(parsed && "triggers" in parsed ? { triggers: parsed.triggers } : {}),
   }
 })
 
@@ -483,15 +559,24 @@ const discoverSkills = Effect.fnUntraced(function* (
   }
 })
 
-/** What decides whether the parsed skill set is still current: each SKILL.md's path, mtime and size, plus the inputs. */
+/**
+ * What decides whether the parsed skill set is still current: each SKILL.md's path, mtime, ctime and size, plus the
+ * inputs. R-18a (C65): a file up to SKILL_HASH_MAX_BYTES also adds a sha256 of its bytes, so a same-length rewrite that
+ * keeps the times (a restored mtime, a coarse clock) is still seen; a bigger file keeps the stat key alone.
+ */
 async function fingerprint(matches: string[], inputs: unknown[]) {
   const stamps = await Promise.all(
-    matches.toSorted().map((file) =>
-      stat(file).then(
-        (info) => `${file}\0${info.mtimeMs}\0${info.ctimeMs}\0${info.size}`,
-        () => `${file}\0missing`,
-      ),
-    ),
+    matches.toSorted().map(async (file) => {
+      const info = await stat(file).catch(() => undefined)
+      if (!info) return `${file}\0missing`
+      const key = `${file}\0${info.mtimeMs}\0${info.ctimeMs}\0${info.size}`
+      if (info.size > SKILL_HASH_MAX_BYTES) return key
+      const hash = await readFile(file).then(
+        (bytes) => createHash("sha256").update(bytes).digest("hex"),
+        () => "unreadable",
+      )
+      return `${key}\0${hash}`
+    }),
   )
   return JSON.stringify([inputs, stamps])
 }
@@ -523,10 +608,11 @@ const layer = Layer.effect(
     const global = yield* Global.Service
     const flags = yield* RuntimeFlags.Service
     // U-11 (C63 D-11c): skills are re-scanned on each request, so a skill another process (a CLI session, an editor)
-    // writes appears in the long-running app server's next request without a restart. The scan is glob + one stat per
-    // SKILL.md; the parsed set is rebuilt only when that fingerprint (paths, mtime, size, trust, claude_compat) changes.
+    // writes appears in the long-running app server's next request without a restart. The scan is glob + one stat and one
+    // read per SKILL.md; the parsed set is rebuilt only when that fingerprint (paths, mtime, size, content hash up to
+    // SKILL_HASH_MAX_BYTES, trust, claude_compat) changes.
     // URL sources are pulled once per instance. A global config change still disposes every instance (handlers/global.ts).
-    type Snapshot = { key: string; discovered: DiscoveryState; state: State }
+    type Snapshot = { key: string; discovered: DiscoveryState; state: State; claudeCompat: boolean }
     const holder = yield* InstanceState.make(() =>
       Effect.succeed({
         pulled: new Map<string, string[]>(),
@@ -638,7 +724,7 @@ const layer = Layer.effect(
           const trusted = ProjectTrust.isTrusted(ctx.directory)
           const key = yield* Effect.promise(() => fingerprint(discovered.matches, [trusted, claudeCompat]))
           if (h.last?.key === key) return h.last
-          const next: Snapshot = { key, discovered, state: yield* build(discovered, trusted, h.warned) }
+          const next: Snapshot = { key, discovered, state: yield* build(discovered, trusted, h.warned), claudeCompat }
           h.last = next
           return next
         }),
@@ -682,9 +768,48 @@ const layer = Layer.effect(
       return list.filter((skill) => Permission.evaluate("skill", skill.name, agent.permission).action !== "deny")
     })
 
-    return Service.of({ get, require, all, dirs, available })
+    const folders = Effect.fn("Skill.folders")(function* () {
+      const ctx = yield* InstanceState.context
+      const snapshot = yield* current()
+      // `.agents` always (the guard is stricter than discovery when external skills are switched off); `.claude` when
+      // the person turned claude_compat on, as discovery does.
+      const external = snapshot.claudeCompat ? [AGENTS_EXTERNAL_DIR, CLAUDE_EXTERNAL_DIR] : [AGENTS_EXTERNAL_DIR]
+      const upDirs = yield* fsys
+        .up({ targets: external, start: ctx.directory, stop: ctx.worktree })
+        .pipe(Effect.catch(() => Effect.succeed([] as string[])))
+      // A project without git has "/" as its worktree; a filesystem root is never a project base.
+      const bases = Array.from(new Set([ctx.directory, ctx.worktree])).filter((dir) => path.dirname(dir) !== dir)
+      const listed = [
+        ...(yield* config.textDirectories()),
+        ...bases.map((base) => path.join(base, ".swarm")),
+      ].flatMap((dir) => [path.join(dir, "skill"), path.join(dir, "skills")])
+      const roots = [
+        ...listed,
+        ...external.map((dir) => path.join(global.home, dir, "skills")),
+        ...bases.flatMap((base) => external.map((dir) => path.join(base, dir, "skills"))),
+        ...upDirs.map((dir) => path.join(dir, "skills")),
+        ...snapshot.discovered.dirs,
+        path.join(global.data, SKILL_DRAFTS_DIR),
+        ...bases.map((base) => path.join(base, ".swarm", SKILL_DRAFTS_DIR)),
+      ].map((dir) => path.resolve(dir))
+      const real = yield* Effect.promise(() =>
+        Promise.all(roots.map((dir) => realpath(dir).catch(() => undefined))),
+      )
+      return Array.from(new Set([...roots, ...real.filter((dir) => dir !== undefined)])).toSorted()
+    })
+
+    return Service.of({ get, require, all, dirs, available, folders })
   }),
 )
+
+/**
+ * SR8-07 (AC-SEC07): a skill's name and description are text from a file anyone can write, so `&`, `<` and `>` are
+ * escaped and the text cannot close `<available_skills>` or open a tag of its own. Quotes are left as they are: they are
+ * inert in element text, and the built-in descriptions use apostrophes, whose output stays byte-identical.
+ */
+function escapeText(value: string) {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+}
 
 export function fmt(list: Info[], opts: { verbose: boolean }) {
   const described = list.filter((skill) => skill.description !== undefined)
@@ -696,8 +821,8 @@ export function fmt(list: Info[], opts: { verbose: boolean }) {
         .toSorted((a, b) => a.name.localeCompare(b.name))
         .flatMap((skill) => [
           "  <skill>",
-          `    <name>${skill.name}</name>`,
-          `    <description>${skill.description}</description>`,
+          `    <name>${escapeText(skill.name)}</name>`,
+          `    <description>${escapeText(skill.description ?? "")}</description>`,
           `    <location>${escapeHtml(skill.location)}</location>`,
           "  </skill>",
         ]),
@@ -709,7 +834,7 @@ export function fmt(list: Info[], opts: { verbose: boolean }) {
     "## Available Skills",
     ...described
       .toSorted((a, b) => a.name.localeCompare(b.name))
-      .map((skill) => `- **${skill.name}**: ${skill.description}`),
+      .map((skill) => `- **${escapeText(skill.name)}**: ${escapeText(skill.description ?? "")}`),
   ].join("\n")
 }
 
