@@ -33,6 +33,13 @@ import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { disposeAllInstances, TestInstance, tmpdir } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
+import { Layer } from "effect"
+import { Plugin } from "../../src/plugin"
+import { MCP } from "../../src/mcp"
+import { RuntimeFlags } from "../../src/effect/runtime-flags"
+import { ToolRegistry } from "../../src/tool/registry"
+import * as SessionToolsModule from "../../src/session/tools"
+import * as InstanceStateModule from "../../src/effect/instance-state"
 
 const { AutonomyTable } = TableModule
 const Reach = ReachModule.Reach as typeof ReachModule.Reach & Record<string, any>
@@ -296,6 +303,174 @@ describe("SK-e the edit tools: refused without asking, mode on and off, with an 
       const exit = yield* write.execute({ filePath: file, content: "synthetic\n" }, context(asked) as never).pipe(Effect.exit)
       expect(Exit.isSuccess(exit)).toBe(true)
       expect(asked).toContain("edit")
+    }),
+  )
+})
+
+// 1.2.8 row 40h (C82, the two row-40e requests): (1) the edit tools check the skill folder BEFORE the outside-folder
+// prompt, so a write into ~/.agents/skills (outside the project) is refused with nothing asked first; (2) resolving a
+// session's tools records Skill.Service.folders(), so a skills.paths folder holds from the very first call, before any
+// edit tool asked the service (the autonomy table judges a shell write against it, and the edit tools refuse it).
+describe("SK-e row 40h: skill folder before the outside-folder prompt, and the Skill folders known from tool resolve", () => {
+  afterEach(async () => {
+    Reach.forgetSkillFolders?.()
+    await disposeAllInstances()
+  })
+  // A skills.paths folder outside the project, only the Skill service names it.
+  const extra = () => path.join(home, "extra-skills")
+  const skillStub = Layer.succeed(
+    Skill.Service,
+    Skill.Service.of({
+      get: () => Effect.succeed(undefined),
+      require: () => Effect.die("unused"),
+      all: () => Effect.succeed([]),
+      dirs: () => Effect.succeed([extra()]),
+      available: () => Effect.succeed([]),
+      folders: () => Effect.succeed([extra()]),
+    } as unknown as SkillModule.Skill.Interface),
+  )
+  const stubs = Layer.mergeAll(
+    Layer.succeed(
+      Plugin.Service,
+      Plugin.Service.of({
+        init: () => Effect.void,
+        list: () => Effect.succeed([]),
+        trigger: (_name, _input, output) => Effect.succeed(output),
+      } satisfies Plugin.Interface),
+    ),
+    Layer.succeed(
+      Permission.Service,
+      Permission.Service.of({
+        ask: () => Effect.void,
+        reply: () => Effect.succeed(undefined),
+        grant: () => Effect.void,
+        list: () => Effect.succeed([]),
+      } satisfies PermissionModule.Permission.Interface),
+    ),
+    Layer.succeed(
+      MCP.Service,
+      MCP.Service.of({ tools: () => Effect.succeed({}), clients: () => Effect.succeed({}) } as Partial<MCP.Interface> as MCP.Interface),
+    ),
+    RuntimeFlags.layer(),
+    Layer.succeed(
+      ToolRegistry.Service,
+      ToolRegistry.Service.of({
+        ids: () => Effect.succeed([]),
+        all: () => Effect.succeed([]),
+        named: () => Effect.die("unused"),
+        tools: () => Effect.succeed([]),
+      }),
+    ),
+  )
+  const tools = LayerNode.compile(
+    LayerNode.group([LSP.node, FSUtil.node, EventV2Bridge.node, Format.node, CrossSpawnSpawner.node, Truncate.node, Agent.node]),
+  )
+  // Edit tools without the Skill service: only what is known before the call (fixed roots, the resolve record) holds.
+  const bare = testEffect(tools)
+  const withSkills = testEffect(Layer.mergeAll(tools, stubs, skillStub))
+
+  const asking = (asked: string[]) => ({
+    sessionID: SessionID.make("ses_test-ske40h"),
+    messageID: MessageID.make("msg_test"),
+    callID: "",
+    agent: "build",
+    abort: AbortSignal.any([]),
+    messages: [],
+    metadata: () => Effect.void,
+    trust: { canUndo: true },
+    ask: (input: { permission: string }) => Effect.sync(() => void asked.push(input.permission)),
+  })
+  const failure = (exit: Exit.Exit<unknown, unknown>) => {
+    if (!Exit.isFailure(exit)) return "succeeded"
+    const error = Cause.squash(exit.cause)
+    return error instanceof Error ? error.message : String(error)
+  }
+  const SESSION = SessionID.make("ses_test-ske40h")
+  const resolve = () =>
+    SessionToolsModule.SessionTools.resolve({
+      agent: { name: "build", mode: "primary", permission: Permission.fromConfig({ "*": "allow" }), options: {} } as never,
+      model: { providerID: "test", api: { id: "test-model" } } as never,
+      session: { id: SESSION, permission: [] } as never,
+      processor: {
+        message: { id: MessageID.make("msg_test"), sessionID: SESSION, role: "assistant" },
+        updateToolCall: () => Effect.succeed(undefined),
+        completeToolCall: () => Effect.void,
+      } as never,
+      bypassAgentCheck: false,
+      messages: [],
+      promptOps: {} as never,
+    })
+
+  bare.instance("~/.agents/skills outside the project: write, edit and apply_patch refused with N8-058, nothing asked first", () =>
+    Effect.gen(function* () {
+      const skillDir = path.join(home, ".agents/skills/x")
+      const asked: string[] = []
+      const ctx = asking(asked) as never
+      const write = yield* (yield* WriteTool).init()
+      const edit = yield* (yield* EditTool).init()
+      const patch = yield* (yield* ApplyPatchTool).init()
+      const results = [
+        yield* write.execute({ filePath: path.join(skillDir, "SKILL.md"), content: "new\n" }, ctx).pipe(Effect.exit),
+        yield* write.execute({ filePath: path.join(skillDir, "extra.md"), content: "new\n" }, ctx).pipe(Effect.exit),
+        yield* edit.execute({ filePath: path.join(skillDir, "SKILL.md"), oldString: "body", newString: "new" }, ctx).pipe(Effect.exit),
+        yield* patch
+          .execute({ patchText: `*** Begin Patch\n*** Add File: ${path.join(skillDir, "added.md")}\n+new\n*** End Patch` }, ctx)
+          .pipe(Effect.exit),
+      ]
+      for (const exit of results) expect(failure(exit)).toContain(N8_058)
+      // No external_directory prompt (or any other) came before the refusal.
+      expect(asked).toEqual([])
+      expect(existsSync(path.join(skillDir, "extra.md"))).toBe(false)
+      expect(existsSync(path.join(skillDir, "added.md"))).toBe(false)
+    }),
+  )
+
+  bare.instance("a plain folder outside the project still gets its outside-folder prompt (unchanged)", () =>
+    Effect.gen(function* () {
+      const asked: string[] = []
+      const write = yield* (yield* WriteTool).init()
+      const exit = yield* write
+        .execute({ filePath: path.join(home, "plain/notes.md"), content: "new\n" }, asking(asked) as never)
+        .pipe(Effect.exit)
+      expect(failure(exit)).not.toContain(N8_058)
+      expect(asked[0]).toBe("external_directory")
+    }),
+  )
+
+  withSkills.instance("a skills.paths folder is a skill folder once the session's tools resolve, before any edit tool ran", () =>
+    Effect.gen(function* () {
+      const context = yield* InstanceStateModule.InstanceState.context
+      const file = path.join(extra(), "x/run.sh")
+      Reach.forgetSkillFolders?.()
+      expect(Reach.skillFolder?.(file, context) ?? false).toBe(false)
+      yield* resolve()
+      expect(Reach.skillFolder?.(file, context) ?? false).toBe(true)
+      // The autonomy table (mode on, no service to ask) refuses a shell write there on this first call.
+      const command = `echo synthetic > ${file}`
+      const verdict = AutonomyTable.classifyBase({
+        permission: "bash",
+        patterns: [command],
+        metadata: { command, workdir: context.directory, steps: yield* Effect.promise(() => readSteps(command, context.directory)) },
+        instance: context,
+        cwd: context.directory,
+        canUndo: true,
+        folder: "clean",
+      } as TableModule.AutonomyTable.Input)
+      expect([verdict.class, verdict.category]).toEqual(["X", "skill_folder"])
+    }),
+  )
+
+  withSkills.instance("a skills.paths folder outside the project: the first write is refused with nothing asked", () =>
+    Effect.gen(function* () {
+      yield* resolve()
+      const asked: string[] = []
+      const write = yield* (yield* WriteTool).init()
+      const exit = yield* write
+        .execute({ filePath: path.join(extra(), "x/SKILL.md"), content: "new\n" }, asking(asked) as never)
+        .pipe(Effect.exit)
+      expect(failure(exit)).toContain(N8_058)
+      expect(asked).toEqual([])
+      expect(existsSync(path.join(extra(), "x/SKILL.md"))).toBe(false)
     }),
   )
 })

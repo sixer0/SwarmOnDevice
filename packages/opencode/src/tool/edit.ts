@@ -192,6 +192,9 @@ export const EditTool = Tool.define(
           const filePath = target.written
           const label = path.relative(instance.worktree, filePath)
           if (target.landing === undefined) throw new Error(`Cannot resolve ${label}: a link on the way loops`)
+          // 1.2.8 row 40h (SK-e, C82): a skill folder is refused before the outside-folder prompt, so an edit in
+          // ~/.agents/skills asks nothing first (Reach.editTrust checks again with the service's newest list).
+          if ([filePath, target.landing].some((file) => Reach.skillFolder(file, instance))) throw new Reach.SkillFolderRefused()
           yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), filePath)
           if (target.landing !== filePath) yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), target.landing)
 

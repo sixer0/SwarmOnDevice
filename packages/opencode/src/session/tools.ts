@@ -32,6 +32,7 @@ import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceState } from "@/effect/instance-state"
 import { Secrets } from "@/tool/secrets"
+import { Reach } from "@/tool/reach"
 import { missionTypeSuggestion } from "./system"
 import { Memory } from "@/memory/memory"
 import { VaultMirror } from "@/memory/vault-mirror"
@@ -124,6 +125,14 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   const sessions = Option.getOrUndefined(yield* Effect.serviceOption(Session.Service))
   // SK-g (N8-048): optional too; without it no mission-type line is added.
   const skills = Option.getOrUndefined(yield* Effect.serviceOption(Skill.Service))
+  // 1.2.8 row 40h (SK-e, C82): the Skill service's folder list (skills.paths, URL-cache folders) is recorded now, so the
+  // edit tools' skill-folder check and the autonomy table hold those folders from the first call, not only after an
+  // edit tool asked the service. A failed lookup leaves the fixed roots, which hold without it.
+  if (skills)
+    yield* Effect.gen(function* () {
+      const instance = yield* InstanceState.context
+      Reach.rememberSkillFolders(instance, yield* skills.folders())
+    }).pipe(Effect.catchCause(() => Effect.void))
   // MEM-e (01e §4.2): optional too; without it the done close carries no memory check and the host warns.
   const memory = Option.getOrUndefined(yield* Effect.serviceOption(Memory.Service))
 

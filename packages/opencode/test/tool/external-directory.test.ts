@@ -474,19 +474,6 @@ describe("R18 rows through the real tools", () => {
       second: "asks",
     }),
     withheld({
-      id: "T2",
-      run: (ctx, e) =>
-        Effect.gen(function* () {
-          const tool = yield* (yield* EditTool).init()
-          return yield* tool.execute(
-            { filePath: `${e.S}/3 Skills/a/SKILL.md`, oldString: "one", newString: "two" },
-            ctx,
-          )
-        }),
-      passes: false,
-      second: "asks",
-    }),
-    withheld({
       id: "T3",
       run: (ctx, e) =>
         Effect.gen(function* () {
@@ -573,6 +560,24 @@ describe("R18 rows through the real tools", () => {
       }),
     )
   }
+
+  // 1.2.8 row 40h (C82, INTENT): a SKILL.md in the library's skills folder is a skill-folder write, refused with the
+  // N8-058 text before the outside-folder gate, so nothing is asked (until 1.2.8 the gate withheld and the edit asked).
+  kit.live("T2", () =>
+    Effect.gen(function* () {
+      const env = yield* install
+      const asked: Asked[] = []
+      const ctx = session((request) => Effect.sync(() => void asked.push(request)), { canUndo: true, library: env.S })
+      const exit = yield* Effect.gen(function* () {
+        const tool = yield* (yield* EditTool).init()
+        return yield* tool.execute({ filePath: `${env.S}/3 Skills/a/SKILL.md`, oldString: "one", newString: "two" }, ctx)
+      }).pipe(provideInstance(env.project), (effect) => onLibrary(env.S, effect), Effect.exit)
+      expect(Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : "succeeded").toContain(
+        "skills are saved only from Settings > Skills",
+      )
+      expect(asked).toEqual([])
+    }),
+  )
 
   // The gate on its own, then through `read`, which must not open anything on the way to or past it.
   kit.live("L2: a real link loop asks, with always withheld", () =>
