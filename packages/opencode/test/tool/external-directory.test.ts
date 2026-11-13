@@ -347,7 +347,7 @@ const install = Effect.gen(function* () {
   }
   for (const file of ["library.json", "a.md", "b.md", "f.md", "a.ts", "3 Skills/a/SKILL.md", "4 Knowledge Bank/k.md"])
     put(path.join(S, file))
-  put(path.join(S, "x/.env"), "KEY=synthetic\n")
+  put(path.join(S, "x/.env"), "KEY=synthetic-extdir-w4n8c2j6\n")
   put(path.join(S, "x/.git/config"))
   fs.mkdirSync(path.join(S, "a"))
   put(path.join(R, "app.asar"))
