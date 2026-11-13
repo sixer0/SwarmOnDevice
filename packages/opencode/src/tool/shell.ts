@@ -1836,43 +1836,49 @@ export const ShellTool = Tool.define(
                     },
                     posix ? Reach.alwaysFor(params.command, cwd, instanceCtx) : undefined,
                   )
-                  return { ...scan, deletion: found, scripts, copy, copyGate, saving }
+                  // 1.2.7 F-5: a call that archives or checkpoints holds the folder's checkpoint hold from that step to its
+                  // exit. Other commands do not (residual R-F5: a build writing during a revert is not held up).
+                  const holds = Boolean(on) && (typeof found === "object" || Boolean(copy) || Boolean(saving))
+                  return { ...scan, deletion: found, scripts, copy, copyGate, saving, holds }
                 }),
               )
               scanned.secretFiles.forEach(Secrets.learnFile)
 
-              if (scanned.deletion) {
-                const archived = yield* archive(scanned.deletion, params.command, cwd, ctx)
-                if (archived) return archived
-              }
+              const rest = Effect.gen(function* () {
+                if (scanned.deletion) {
+                  const archived = yield* archive(scanned.deletion, params.command, cwd, ctx)
+                  if (archived) return archived
+                }
 
-              const env = yield* shellEnv(ctx, cwd)
-              if (scanned.scripts && scanned.scripts.size > 0) {
-                const changed = yield* scriptChanged(scanned.scripts, cwd, instanceCtx, ctx)
-                if (changed) return { ...changed, title: params.command }
-              }
-              const kept =
-                scanned.copy && scanned.copyGate
-                  ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx, scanned.copyGate)
-                  : undefined
-              if (kept && "stopped" in kept) return kept.stopped
-              // 1.2.6 row 37b: the checkpoint exists before anything of the command runs, or the command does not run.
-              const saved = scanned.saving ? yield* checkpoint(scanned.saving, params.command, cwd, ctx) : undefined
-              if (saved && "stopped" in saved) return saved.stopped
-              const result = yield* run(
-                {
-                  shell,
-                  command: saved?.command ?? params.command,
-                  cwd,
-                  env,
-                  timeout,
-                  withheld: scanned.withheld,
-                  masked: scanned.masked,
-                },
-                ctx,
-              )
-              const told = [kept && "text" in kept ? kept.text : undefined, saved?.text].filter(Boolean).join("\n")
-              return told ? { ...result, output: `${told}\n${result.output}` } : result
+                const env = yield* shellEnv(ctx, cwd)
+                if (scanned.scripts && scanned.scripts.size > 0) {
+                  const changed = yield* scriptChanged(scanned.scripts, cwd, instanceCtx, ctx)
+                  if (changed) return { ...changed, title: params.command }
+                }
+                const kept =
+                  scanned.copy && scanned.copyGate
+                    ? yield* archiveReplaced(scanned.copy, params.command, cwd, ctx, scanned.copyGate)
+                    : undefined
+                if (kept && "stopped" in kept) return kept.stopped
+                // 1.2.6 row 37b: the checkpoint exists before anything of the command runs, or the command does not run.
+                const saved = scanned.saving ? yield* checkpoint(scanned.saving, params.command, cwd, ctx) : undefined
+                if (saved && "stopped" in saved) return saved.stopped
+                const result = yield* run(
+                  {
+                    shell,
+                    command: saved?.command ?? params.command,
+                    cwd,
+                    env,
+                    timeout,
+                    withheld: scanned.withheld,
+                    masked: scanned.masked,
+                  },
+                  ctx,
+                )
+                const told = [kept && "text" in kept ? kept.text : undefined, saved?.text].filter(Boolean).join("\n")
+                return told ? { ...result, output: `${told}\n${result.output}` } : result
+              })
+              return yield* scanned.holds ? rest.pipe(ActionCheckpoint.checkpointWriteHold(instanceCtx.directory)) : rest
             }),
         }
       })

@@ -329,6 +329,8 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
       )
       if (!result.ok) {
         if (result.reason === "not_found") return yield* notFound(result.message)
+        // 1.2.7 F-5: agents kept writing in the folder, so the revert did not start and nothing reached the files.
+        if (result.reason === "busy") return yield* failed(result.message)
         yield* recordResult("failed")
         return yield* failed(result.message)
       }

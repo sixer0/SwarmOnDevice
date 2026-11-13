@@ -12,6 +12,7 @@ import { Format } from "../format"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { InstanceState } from "@/effect/instance-state"
 import { checkpointBefore, followedByEdit, lock, trimDiff } from "./edit"
+import { ActionCheckpoint } from "./checkpoint"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
 import { assertExternalDirectoryEffect } from "./external-directory"
@@ -74,7 +75,8 @@ export const WriteTool = Tool.define(
             editClass: trust.editClass,
           })
 
-          // Two agents may be here at once, and an answer to the prompt above may have taken a while.
+          // Two agents may be here at once, and an answer to the prompt above may have taken a while. 1.2.7 F-5: the write
+          // also waits for a revert of this folder, and a revert waits for it.
           let saved: string | undefined
           const merged = yield* lock(filepath).withPermits(1)(
             Effect.gen(function* () {
@@ -87,7 +89,7 @@ export const WriteTool = Tool.define(
               const final = (yield* format.file(filepath)) ? yield* Bom.syncFile(fs, filepath, desiredBom) : decision.text
               FileSeen.wrote(ctx.sessionID, filepath, final)
               return decision.merged
-            }),
+            }).pipe(ActionCheckpoint.checkpointWriteHold(instance.directory)),
           )
           yield* events.publish(FileSystem.Event.Edited, { file: filepath })
           yield* events.publish(Watcher.Event.Updated, {

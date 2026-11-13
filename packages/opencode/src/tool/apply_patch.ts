@@ -9,6 +9,7 @@ import { createTwoFilesPatch, diffLines } from "diff"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Reach } from "./reach"
 import { checkpointBefore, lock, trimDiff } from "./edit"
+import { ActionCheckpoint } from "./checkpoint"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
 import { LSP } from "@/lsp/lsp"
@@ -411,7 +412,11 @@ export const ApplyPatchTool = Tool.define(
       // Keyed the way `lock` keys them: a file and a link to it, or a rename that only changes case, are one lock.
       yield* [...new Set(touched.map((file) => FSUtil.resolve(file)))]
         .sort()
-        .reduce<Effect.Effect<void, Error>>((inner, file) => lock(file).withPermits(1)(inner), apply)
+        .reduce<Effect.Effect<void, Error>>(
+          (inner, file) => lock(file).withPermits(1)(inner),
+          // 1.2.7 F-5: the re-check, checkpoint and writes wait for a revert of this folder, and a revert waits for them.
+          apply.pipe(ActionCheckpoint.checkpointWriteHold(instance.directory)),
+        )
 
       for (const change of fileChanges) {
         if (change.type === "delete") continue

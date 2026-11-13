@@ -16,6 +16,7 @@ import { execFile } from "node:child_process"
 import { createReadStream } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { Effect } from "effect"
 import { Archive } from "./archive"
 import { Secrets } from "./secrets"
 import { withoutServerCredentials } from "@/util/server-credentials"
@@ -152,7 +153,15 @@ export interface RevertInput {
   readonly now?: Date
 }
 
-export type RevertFailure = "not_found" | "tampered" | "invalid" | "pre_revert" | "failed" | "mismatch"
+export type RevertFailure =
+  | "not_found"
+  | "tampered"
+  | "invalid"
+  | "pre_revert"
+  | "failed"
+  | "mismatch"
+  /** 1.2.7 F-5 (N7-137): agents kept writing in the folder for `REVERT_LOCK_WAIT_MS`; nothing was touched. */
+  | "busy"
 
 export type RevertResult =
   | {
@@ -305,29 +314,157 @@ export async function create(input: CreateInput): Promise<CreateResult> {
  * Puts a checkpoint back: first a new checkpoint of the current bytes of the same targets (so this can be undone), then
  * every entry and ref, then a sha check of every restored file. Person-only: the agent is never given a way to call it.
  * Reverts in one folder run one after the other (gate M1 S4): two windows or two clicks never interleave their restores,
- * and the second one's pre-revert checkpoint holds what the first one restored.
+ * and the second one's pre-revert checkpoint holds what the first one restored. Agent writes in the folder wait for it,
+ * and it waits for them (1.2.7 F-5, `withCheckpointLock`).
  */
 export async function revert(input: RevertInput): Promise<RevertResult> {
   const root = await fs.realpath(input.directory).catch(() => undefined)
   if (!root || !ID.test(input.id)) return fail("not_found")
-  return serial(root, () => revertIn(root, input))
+  // 1.2.7 F-5: exclusive, so no agent write lands between the pre-revert copy and the sha check. The pre-revert `create`
+  // below is called directly and takes no hold of its own, so it never waits for the hold this revert has.
+  const locked = await withCheckpointLock(root, "exclusive", () => revertIn(root, input))
+  return locked.ok ? locked.value : fail("busy")
 }
 
-// One queue per real folder path. Every session of a folder writes the same files, so the folder is the key.
-const queues = new Map<string, Promise<void>>()
+/**
+ * 1.2.7 F-5 (N7-058): how long an agent's write waits for a revert of its folder before it is refused with
+ * `REVERT_IN_PROGRESS`, and how long a revert waits for the agents' writes in it before it returns `busy`. Equal to the
+ * checkpoint's git timeout.
+ */
+export const REVERT_LOCK_WAIT_MS = 30_000
+/** The wait in force. Tests lower it; the product never changes it. */
+export const revertLockWait = { ms: REVERT_LOCK_WAIT_MS }
+/** 1.2.7 F-5 (N7-059): the refusal an agent's write gets when a revert of its folder held it up for the whole wait. */
+export const REVERT_IN_PROGRESS =
+  "This write did not run: a revert of this folder is in progress. Try again after it finishes."
 
-function serial<T>(key: string, run: () => Promise<T>) {
-  const result = (queues.get(key) ?? Promise.resolve()).then(run)
-  const tail = result.then(
-    () => undefined,
-    () => undefined,
-  )
-  queues.set(key, tail)
-  void tail.then(() => {
-    if (queues.get(key) === tail) queues.delete(key)
+// 1.2.7 F-5 (SR7-10). The key is the real path of the checkpoint's project root (the folder its `.swarm/checkpoint` is
+// in); a hold covers that folder and every folder in it, so a revert of a folder and a write in a folder inside it (or
+// around it) are kept apart. Reverts are exclusive and run one after the other (gate M1 S4); agent writes are shared and
+// run together. Requests are served in order: a writer that arrives after a waiting revert waits behind it, so writers
+// cannot starve a revert. The hold lives in this server process only (release-note residual R-F5).
+type Ticket = {
+  readonly key: string
+  readonly mode: "shared" | "exclusive"
+  granted: boolean
+  readonly grant: () => void
+}
+const holding: Ticket[] = []
+const queued: Ticket[] = []
+
+const within = (child: string, parent: string) =>
+  child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep)
+const clash = (a: Ticket, b: Ticket) =>
+  (a.mode === "exclusive" || b.mode === "exclusive") && (within(a.key, b.key) || within(b.key, a.key))
+
+function pump() {
+  for (let index = 0; index < queued.length; ) {
+    const ticket = queued[index]
+    if (holding.some((other) => clash(other, ticket)) || queued.slice(0, index).some((other) => clash(other, ticket))) {
+      index++
+      continue
+    }
+    queued.splice(index, 1)
+    holding.push(ticket)
+    ticket.granted = true
+    ticket.grant()
+  }
+}
+
+/**
+ * Waits for the hold. Resolves to its release (call it once; more calls do nothing), or to undefined when the wait ran
+ * out or `signal` aborted first. An abort after the hold was given releases it, so an interrupted caller never keeps it.
+ * A revert's wait runs out only while agent writes hold it up: behind another revert it waits its turn.
+ */
+async function enterCheckpointLock(directory: string, mode: Ticket["mode"], signal?: AbortSignal) {
+  const key = await fs.realpath(directory).catch(() => path.resolve(directory))
+  return new Promise<(() => void) | undefined>((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
+      signal?.removeEventListener("abort", aborted)
+      const at = holding.indexOf(ticket)
+      if (at >= 0) holding.splice(at, 1)
+      pump()
+    }
+    const giveUp = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener("abort", aborted)
+      const at = queued.indexOf(ticket)
+      if (at >= 0) queued.splice(at, 1)
+      pump()
+      resolve(undefined)
+    }
+    function aborted() {
+      if (ticket.granted) release()
+      else giveUp()
+    }
+    const expire = () => {
+      if (ticket.granted) return
+      const index = queued.indexOf(ticket)
+      const behindRevert =
+        mode === "exclusive" &&
+        [...holding, ...queued.slice(0, Math.max(index, 0))].some(
+          (other) => other.mode === "exclusive" && clash(other, ticket),
+        )
+      if (behindRevert) timer = setTimeout(expire, revertLockWait.ms)
+      else giveUp()
+    }
+    const ticket: Ticket = {
+      key,
+      mode,
+      granted: false,
+      grant: () => {
+        clearTimeout(timer)
+        resolve(release)
+      },
+    }
+    if (signal?.aborted) return resolve(undefined)
+    // Kept after the grant: an abort that comes before the caller saw the hold still gives it back.
+    signal?.addEventListener("abort", aborted, { once: true })
+    queued.push(ticket)
+    pump()
+    if (!ticket.granted) timer = setTimeout(expire, revertLockWait.ms)
   })
-  return result
 }
+
+/**
+ * 1.2.7 F-5 (N7-057; replaces the revert-only queue). Runs `run` under the folder's checkpoint hold: `"exclusive"` for a
+ * revert, `"shared"` for an agent's write. `{ ok: false }` when the wait ran out (or `signal` aborted) and `run` did not run.
+ * The hold is given back however `run` ends.
+ */
+export async function withCheckpointLock<T>(
+  directory: string,
+  mode: "shared" | "exclusive",
+  run: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false }> {
+  const release = await enterCheckpointLock(directory, mode, signal)
+  if (!release) return { ok: false }
+  try {
+    return { ok: true, value: await run() }
+  } finally {
+    release()
+  }
+}
+
+/**
+ * 1.2.7 F-5: an agent writer's shared hold around an Effect (edit, write, apply_patch, and the shell from its
+ * checkpoint or archive step to the command's exit). Interruptible while it waits; an interrupted writer gives the hold
+ * back (SR7-10). A writer a revert held up for the whole wait dies with `REVERT_IN_PROGRESS`, and nothing of it ran.
+ */
+export const checkpointWriteHold =
+  (directory: string) =>
+  <A, E, R>(self: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+    Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const release = yield* restore(Effect.promise((signal) => enterCheckpointLock(directory, "shared", signal)))
+        if (!release) return yield* Effect.die(new Error(REVERT_IN_PROGRESS))
+        return yield* restore(self).pipe(Effect.ensuring(Effect.sync(release)))
+      }),
+    )
 
 async function revertIn(root: string, input: RevertInput): Promise<RevertResult> {
   const area = await folder(root)
@@ -797,6 +934,7 @@ const REVERT_MESSAGES: Record<RevertFailure, string> = {
   failed: "Restoring stopped part way. The files as they were just before are in the pre-revert checkpoint.",
   mismatch:
     "A restored file does not match the checkpoint. The files as they were just before are in the pre-revert checkpoint.",
+  busy: "Revert not started: agents are still writing in this folder. Try again in a moment.",
 }
 
 function refuse(reason: Failure, at?: string): CreateResult {

@@ -210,10 +210,13 @@ export const EditTool = Tool.define(
                   harmless: trust.harmless,
                   editClass: trust.editClass,
                 })
-                yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
-                if (yield* format.file(filePath)) {
-                  contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
-                }
+                // 1.2.7 F-5: the write, not the prompt above, waits for a revert of this folder.
+                yield* Effect.gen(function* () {
+                  yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
+                  if (yield* format.file(filePath)) {
+                    contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
+                  }
+                }).pipe(ActionCheckpoint.checkpointWriteHold(instance.directory))
                 FileSeen.wrote(ctx.sessionID, filePath, contentNew)
                 yield* events.publish(FileSystem.Event.Edited, { file: filePath })
                 yield* events.publish(Watcher.Event.Updated, {
@@ -268,11 +271,14 @@ export const EditTool = Tool.define(
                 editClass: trust.editClass,
               })
 
-              saved = yield* checkpointBefore(ctx, instance, filePath, "edit")
-              yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
-              if (yield* format.file(filePath)) {
-                contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
-              }
+              // 1.2.7 F-5: checkpoint and write wait for a revert of this folder, and a revert waits for them.
+              yield* Effect.gen(function* () {
+                saved = yield* checkpointBefore(ctx, instance, filePath, "edit")
+                yield* afs.writeWithDirs(filePath, Bom.join(contentNew, desiredBom))
+                if (yield* format.file(filePath)) {
+                  contentNew = yield* Bom.syncFile(afs, filePath, desiredBom)
+                }
+              }).pipe(ActionCheckpoint.checkpointWriteHold(instance.directory))
               FileSeen.wrote(ctx.sessionID, filePath, contentNew)
               yield* events.publish(FileSystem.Event.Edited, { file: filePath })
               yield* events.publish(Watcher.Event.Updated, {
