@@ -923,7 +923,11 @@ const layer = Layer.effect(
       // Row 29d (C46): a subagent's deploy or registry add leaves that path and goes to the main agent; the root's is unchanged.
       const runsLikeRoot =
         shellCall && SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed as string) && !AutonomyTable.subagentSendsAnyway(tableInput)
-      const forSubagent = overlaid && bypass.caller === "subagent" && !runsLikeRoot
+      // Row 47e (M1-18, C61): a P-01a grant lifts a subagent's call to the root's, but never past that rule: a granted
+      // deploy, add or indirect send is still the subagent's own and goes to the main agent.
+      const grantedSends =
+        granted && natural === "subagent" && AutonomyTable.subagentSendsAnyway({ ...tableInput, bypass: { caller: "subagent" } })
+      const forSubagent = overlaid && ((bypass.caller === "subagent" && !runsLikeRoot) || grantedSends)
       const mainAgent = `agent:main/${last?.agent ?? "build"}` as const
       const asked =
         verdict.class === "P"
@@ -1076,7 +1080,7 @@ const layer = Layer.effect(
               ? "grant"
               : into
                 ? "duplicate"
-                : granted
+                : granted && !forSubagent
                   ? "task_grant"
                   : overlaid
                   ? forSubagent
