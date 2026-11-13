@@ -765,6 +765,9 @@ export function render(input: RenderInput): RenderResult {
 
 export type SyncCode = "VAULT_PATH_UNSAFE" | "VAULT_NOTE_FOREIGN"
 
+/** Note paths already reported as VAULT_NOTE_FOREIGN in this process (absolute key; the log stays relative, C108). */
+const foreignLogged = new Set<string>()
+
 /** Points in one write where a test hook can change the disk (SR8-12 swap test); never set in production. */
 export type SyncStage = "temp" | "written" | "rename"
 
@@ -960,6 +963,13 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
     dirStat.set(target, { dev: stat.dev, ino: stat.ino })
     return true
   }
+  const logForeign = (rel: string, reason: string) => {
+    if (!input.log) return
+    const key = path.join(folderPath, rel)
+    if (foreignLogged.has(key)) return
+    foreignLogged.add(key)
+    input.log({ code: "VAULT_NOTE_FOREIGN", path: rel, reason })
+  }
   const subPath = (sub: string) => path.join(folderPath, sub)
   const dirOf = (rel: string) => (rel === HUB ? folderPath : subPath(path.dirname(rel)))
   const chain = (dir: string) => (dir === folderPath ? [mirror, folderPath] : [mirror, folderPath, dir])
@@ -975,7 +985,7 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
         const content = hub.isFile() ? await io.readFile(path.join(folderPath, HUB), "utf8") : undefined
         if (content === undefined || !owned(content, input.key)) {
           foreign.push(HUB)
-          input.log?.({ code: "VAULT_NOTE_FOREIGN", path: HUB, reason: "hub not owned; folder skipped" })
+          logForeign(HUB, "hub not owned; folder skipped")
           return result("foreign-hub", notCopied)
         }
         existing.set(HUB, content)
@@ -1005,7 +1015,7 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
     if (now === content) continue
     if (now !== undefined && !owned(now, input.key)) {
       foreign.push(rel)
-      input.log?.({ code: "VAULT_NOTE_FOREIGN", path: rel, reason: "not owned" })
+      logForeign(rel, "not owned")
       continue
     }
     writes.push([rel, content])
@@ -1021,7 +1031,7 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
     if (stat) {
       writes.splice(writes.findIndex(([r]) => r === rel), 1)
       foreign.push(rel)
-      input.log?.({ code: "VAULT_NOTE_FOREIGN", path: rel, reason: "not a file" })
+      logForeign(rel, "not a file")
     }
   }
   if (!writes.length && !removals.length && !temps.length) return result("ok", notCopied)

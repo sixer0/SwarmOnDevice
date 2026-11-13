@@ -300,6 +300,19 @@ describe("AC-OBSb OBS-b-2 only Swarm-owned files", () => {
     expect(seeded()).toEqual(snapshot)
   })
 
+  test("a foreign note met by two runs is logged once (VAULT_NOTE_FOREIGN, relative path)", async () => {
+    const a = plainNote("a1b2c3")
+    fs.mkdirSync(path.join(folderPath, "notes"), { recursive: true })
+    fs.writeFileSync(path.join(folderPath, a.path), "# My own note\n\nno marker here\n")
+    const logs: string[] = []
+    const log = (e: { code: string; path: string }) => logs.push(`${e.code} ${e.path}`)
+    const first = await VaultMirror.sync(input({ log }))
+    const second = await VaultMirror.sync(input({ log }))
+    expect(first.foreign).toContain(a.path)
+    expect(second.foreign).toContain(a.path)
+    expect(logs.filter((l) => l === `VAULT_NOTE_FOREIGN ${a.path}`).length).toBe(1)
+  })
+
   test("a foreign index.md: the folder is the person's, no file written in it", async () => {
     fs.mkdirSync(folderPath, { recursive: true })
     fs.writeFileSync(path.join(folderPath, "index.md"), "# My hub\n")
