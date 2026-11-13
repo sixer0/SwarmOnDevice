@@ -208,7 +208,9 @@ describe("1.2.8 row 46b C98: retry an answered placement whose move did not fini
     const { el, calls } = mount([answeredPlacement()], { place: async () => ({ ok: true, data: { decision: "U1", group: "DEMS" } }) })
     expect(el.querySelectorAll("[data-mission-decision]").length).toBe(1)
     expect(el.querySelectorAll("[data-mission-retry]").length).toBe(1)
-    expect(el.querySelector("[data-mission-retry]")?.textContent === tr("session.mission.placement.join", { group: "DEMS" })).toBe(true)
+    // row 24a (C99): the card's own keys, not the borrowed move-error / option labels.
+    expect(el.querySelector("[data-mission-unplaced]")?.textContent === tr("session.mission.placement.unplaced")).toBe(true)
+    expect(el.querySelector("[data-mission-retry]")?.textContent === tr("session.mission.placement.retry", { group: "DEMS" })).toBe(true)
     el.querySelector<HTMLButtonElement>("[data-mission-retry]")!.click()
     await settle()
     expect(calls.place.length).toBe(1)

@@ -1873,4 +1873,6 @@ export const dict = {
   "session.mission.move.error.rollbackFailed": "Pemindahan gagal dan tidak dapat dibatalkan sepenuhnya. Cadangan disimpan; lihat {{path}}.",
   "session.mission.placement.waitIdle": "Tersedia setelah sesi misi selesai bekerja.",
   "session.mission.decision.unattested": "Dicatat oleh agen atas nama Anda",
+  "session.mission.placement.unplaced": "Jawaban Anda tersimpan, tetapi misi belum dipindahkan.",
+  "session.mission.placement.retry": "Coba lagi pindahkan ke {{group}}",
 }

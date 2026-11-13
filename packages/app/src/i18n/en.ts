@@ -1713,4 +1713,6 @@ export const dict = {
   "session.mission.move.error.rollbackFailed": "The move failed and could not be fully undone. A backup was kept; see {{path}}.",
   "session.mission.placement.waitIdle": "Available when the mission's session is idle.",
   "session.mission.decision.unattested": "Recorded by an agent on your behalf",
+  "session.mission.placement.unplaced": "Your answer is saved, but the mission has not moved yet.",
+  "session.mission.placement.retry": "Try the move to {{group}} again",
 }

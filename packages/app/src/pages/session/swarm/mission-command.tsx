@@ -225,7 +225,7 @@ export function MissionCommand(props: {
           >
             <div class="flex items-baseline justify-between gap-2">
               <p data-mission-unplaced class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base">
-                {t("session.mission.move.error.failed", { reason: t(`session.mission.placement.${item().option}`, { group: item().group }) })}
+                {t("session.mission.placement.unplaced")}
               </p>
               <span class="shrink-0 text-v2-text-text-faint">{item().id}</span>
             </div>
@@ -237,7 +237,7 @@ export function MissionCommand(props: {
                 class="flex min-w-0 flex-[1_1_8rem] flex-col items-stretch gap-0.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2 py-1.5 text-left text-v2-text-text-base [font-weight:500] disabled:opacity-60"
                 onClick={() => void command.retry(props.model.id, item())}
               >
-                {t(`session.mission.placement.${item().option}`, { group: item().group })}
+                {t("session.mission.placement.retry", { group: item().group })}
               </button>
             </div>
             <Show when={waitIdleAny()}>

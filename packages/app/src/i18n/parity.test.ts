@@ -153,9 +153,10 @@ const pluralCategories = new Map(
 //     `ui.promptInput.addFolder` (EN and ID only).
 //   - ninety more for 1.2.8 (row 24 of docs/2026-11-13_swarm_1_2_8_patch, AC-I18N): the mission memory index (7), the Skills
 //     settings tab (49), the Obsidian action (5) and project placement, tidy and move (29), EN and ID only; the two 1.2.7
-//     keys `session.mission.decision.answered`/`.recorded` are removed (R-6, unused), so the list ends at 322.
+//     keys `session.mission.decision.answered`/`.recorded` are removed (R-6, unused), so the list ends at 322;
+//     two more for row 24a (C99): the placement retry card `session.mission.placement.unplaced`/`.retry`, ending at 324.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// three-hundred-and-twenty-third entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// three-hundred-and-twenty-fifth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -479,6 +480,8 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.mission.move.error.rollbackFailed",
   "session.mission.placement.waitIdle",
   "session.mission.decision.unattested",
+  "session.mission.placement.unplaced",
+  "session.mission.placement.retry",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.
