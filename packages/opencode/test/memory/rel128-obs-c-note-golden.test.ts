@@ -1,14 +1,43 @@
 // 1.2.8 row 43b, AC-OBSc (N8-359): the vault mirror note format, rendered pure (01c §4, 01_specs §5.2 and §5.6, C7,
 // SR8-13, SR8-14). Red at BASE e1f9673772: `src/memory/vault-mirror.ts` does not exist.
 //
-// The describe "triggers" of this file (AC-OBSd) belongs to row 43d. Inputs are synthetic (fixtures/rel128-obs-c).
-// `render` touches no disk; `readReport` reads only inside a mkdtemp folder. Nothing here reads HOME or the vault.
-import { afterAll, describe, expect, test } from "bun:test"
+// The describe "triggers" of this file (AC-OBSd, and the OBS-g close nudge N8-437) belongs to row 43d. Inputs are
+// synthetic (fixtures/rel128-obs-c). `render` touches no disk; `readReport` reads only inside a mkdtemp folder. The
+// "triggers" describe runs the real memory service against a mkdtemp vault (SWARM_VAULT_DIR) with os.homedir stubbed
+// to a mkdtemp HOME; it never reaches the person's ~/.swarm/vault.
+import { afterAll, beforeAll, describe, expect, jest, spyOn, test } from "bun:test"
 import { createHash } from "node:crypto"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { Effect, Layer } from "effect"
+import { ModelV2 } from "@opencode-ai/core/model"
+import { ProviderV2 } from "@opencode-ai/core/provider"
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"
+import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
+import { Vault } from "@opencode-ai/core/vault"
+import type { Agent } from "@/agent/agent"
+import { InstanceState } from "@/effect/instance-state"
+import { RuntimeFlags } from "@/effect/runtime-flags"
+import { MCP } from "@/mcp"
+import { DatumStudioMcp } from "@/mcp/datum-studio"
+import { Memory } from "@/memory/memory"
+import { Permission } from "@/permission"
+import { Plugin } from "@/plugin"
+import { InstanceBootstrap } from "@/project/bootstrap"
+import { InstanceStore } from "@/project/instance-store"
+import { Provider } from "@/provider/provider"
+import { MessageID, SessionID } from "@/session/schema"
+import type { Session } from "@/session/session"
+import type { SessionProcessor } from "@/session/processor"
+import { SessionTools } from "@/session/tools"
+import { ToolRegistry } from "@/tool/registry"
+import * as Truncate from "@/tool/truncate"
 import { VaultMirror } from "../../src/memory/vault-mirror"
+import { provideTmpdirInstance } from "../fixture/fixture"
+import { testEffect } from "../lib/effect"
 
 const FIXTURES = path.join(import.meta.dir, "fixtures", "rel128-obs-c")
 const store = JSON.parse(fs.readFileSync(path.join(FIXTURES, "store.json"), "utf8"))
@@ -405,4 +434,413 @@ describe("AC-OBSc OBS-c-3 labels per language", () => {
     expect(en["notes/tabel-tarif-dibaca-dari-lampiran-b-bukan-a-a1b2c3.md"]).toContain("**References**:")
     expect(en["notes/tabel-tarif-dibaca-dari-lampiran-b-bukan-a-a1b2c3.md"]).toContain("## Related")
   })
+})
+
+// ---------------------------------------------------------------------------------------------------------------
+// AC-OBSd (row 43d): when the mirror runs (01c §5), and the OBS-g close nudge N8-437 (01c §8.3).
+
+const SET_STATUS = "datum-studio_studio_mission_set_status"
+const RECORD = "datum-studio_studio_mission_record_decision"
+const INBOX = "swarm-web_vault_inbox"
+const MISSION = "2026-11-14_r43d-tarif-check"
+const indexLine = (id: string) => `2026-11-14 ${id} | tarif check closed | triggers: tarif, lampiran | docs/${id}/10_report/report.md`
+
+type Params = { name: string; arguments?: Record<string, unknown> }
+const failing = new Set<string>()
+const client = {
+  callTool: async (params: Params) =>
+    failing.has(params.name)
+      ? { content: [{ type: "text", text: "MISSION_NOT_FOUND" }], isError: true }
+      : { content: [{ type: "text", text: "ok" }] },
+} as unknown as MCP.McpTool["client"]
+const mcpTool = (name: string) => ({ name, description: name, inputSchema: { type: "object" as const, properties: {} } })
+const studioSource: MCP.Source = { server: DatumStudioMcp.DATUM_STUDIO_MCP, transport: "remote", origin: "global" }
+const webSource: MCP.Source = { server: "swarm-web", transport: "local", origin: "global" }
+
+const triggerLayer = Layer.mergeAll(
+  AppNodeBuilder.build(
+    LayerNode.group([Memory.node, CrossSpawnSpawner.node, LayerNodePlatform.filesystem, InstanceStore.node]),
+    [
+      [
+        Provider.node,
+        Layer.succeed(
+          Provider.Service,
+          Provider.Service.of({ getProvider: () => Effect.succeed({ options: {} }) } as unknown as Provider.Interface),
+        ),
+      ],
+      [InstanceBootstrap.node, Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))],
+    ],
+  ),
+  Layer.succeed(
+    Plugin.Service,
+    Plugin.Service.of({
+      init: () => Effect.void,
+      list: () => Effect.succeed([]),
+      trigger: (_name, _input, output) => Effect.succeed(output),
+    } satisfies Plugin.Interface),
+  ),
+  Layer.succeed(
+    Permission.Service,
+    Permission.Service.of({
+      ask: () => Effect.void,
+      reply: () => Effect.succeed(undefined),
+      grant: () => Effect.void,
+      list: () => Effect.succeed([]),
+    } satisfies Permission.Interface),
+  ),
+  Layer.succeed(
+    MCP.Service,
+    MCP.Service.of({
+      tools: () =>
+        Effect.succeed({
+          [SET_STATUS]: { def: mcpTool("studio_mission_set_status"), client, source: studioSource },
+          [RECORD]: { def: mcpTool("studio_mission_record_decision"), client, source: studioSource },
+          [INBOX]: { def: mcpTool("vault_inbox"), client, source: webSource },
+        }),
+      clients: () => Effect.succeed({}),
+    } as Partial<MCP.Interface> as MCP.Interface),
+  ),
+  Layer.succeed(
+    Truncate.Service,
+    Truncate.Service.of({
+      cleanup: () => Effect.void,
+      write: () => Effect.succeed("output.txt"),
+      output: (text: string) => Effect.succeed({ content: text, truncated: false }),
+      limits: () => Effect.succeed({ maxLines: 2000, maxBytes: 50 * 1024 }),
+    } satisfies Truncate.Interface),
+  ),
+  RuntimeFlags.layer(),
+  Layer.succeed(
+    ToolRegistry.Service,
+    ToolRegistry.Service.of({
+      ids: () => Effect.succeed([]),
+      all: () => Effect.succeed([]),
+      named: () => Effect.die("unused"),
+      tools: () => Effect.succeed([]),
+    }),
+  ),
+)
+const it = testEffect(triggerLayer)
+
+const SESSION = SessionID.make("ses_r43dtriggers")
+const agent: Agent.Info = {
+  name: "build",
+  mode: "primary",
+  options: {},
+  permission: [{ permission: "*", pattern: "*", action: "allow" }],
+}
+const model = {
+  providerID: ProviderV2.ID.make("test"),
+  id: "test-model",
+  api: { id: "test-model", url: "https://model.invalid/v1" },
+} as unknown as Provider.Model
+
+const resolveTools = Effect.gen(function* () {
+  const processor = {
+    message: {
+      id: MessageID.ascending(),
+      sessionID: SESSION,
+      role: "assistant",
+      parentID: MessageID.ascending(),
+      agent: "build",
+      mode: "build",
+      path: { cwd: "/tmp", root: "/tmp" },
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      modelID: ModelV2.ID.make("test-model"),
+      providerID: ProviderV2.ID.make("test"),
+      time: { created: 1 },
+    },
+    updateToolCall: () => Effect.succeed(undefined),
+    completeToolCall: () => Effect.void,
+  } as unknown as Pick<SessionProcessor.Handle, "message" | "updateToolCall" | "completeToolCall">
+  return yield* SessionTools.resolve({
+    agent,
+    model,
+    session: { id: SESSION, directory: "/tmp/r43d", permission: [] } as unknown as Session.Info,
+    processor,
+    bypassAgentCheck: false,
+    messages: [],
+    promptOps: {} as never,
+  })
+})
+
+type Tools = Record<string, { execute?: (...a: any[]) => any }>
+const callTool = (tools: Tools, key: string, args: Record<string, unknown>) =>
+  Effect.promise(async () => {
+    const out = await tools[key]!.execute!(args, { toolCallId: "c43d", abortSignal: new AbortController().signal, messages: [] })
+    return String(out.output)
+  })
+
+// Runs of the mirror, recorded per store key; each test reads only its own project's key.
+const runs: { key: string; result: VaultMirror.SyncResult }[] = []
+const storeKeyNow = Effect.gen(function* () {
+  const ctx = yield* InstanceState.context
+  return Memory.storeKey(ctx.project.id, ctx.directory)
+})
+const runsAfter = (key: string, ms: number) =>
+  Effect.promise(() => Bun.sleep(ms)).pipe(Effect.map(() => runs.filter((run) => run.key === key)))
+const listing = (dir: string) => (fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [])
+const AFTER_DEBOUNCE = VaultMirror.MIRROR_DEBOUNCE_MS + 600
+const SOON = 700
+const add = (memory: Memory.Interface, text: string) => memory.add({ text, source: "agent" })
+const addIndex = (memory: Memory.Interface, id = MISSION) =>
+  memory.add({ text: indexLine(id), source: "agent", kind: "index", missionId: id })
+
+describe("AC-OBSd triggers", () => {
+  let parent = ""
+  let vault = ""
+  let restoreHome: (() => void) | undefined
+  let stop: (() => void) | undefined
+  const before = { vault: process.env.SWARM_VAULT_DIR, off: process.env.SWARM_DISABLE_MEMORY }
+  beforeAll(() => {
+    parent = fs.mkdtempSync(path.join(os.tmpdir(), "o43d-"))
+    vault = path.join(parent, "vault")
+    fs.mkdirSync(vault)
+    fs.mkdirSync(path.join(parent, "home"))
+    const spy = spyOn(os, "homedir").mockReturnValue(path.join(parent, "home"))
+    restoreHome = () => spy.mockRestore()
+    process.env.SWARM_VAULT_DIR = vault
+    delete process.env.SWARM_DISABLE_MEMORY
+    stop = VaultMirror.onRun((key, result) => runs.push({ key, result }))
+  })
+  afterAll(() => {
+    stop?.()
+    restoreHome?.()
+    if (before.vault === undefined) delete process.env.SWARM_VAULT_DIR
+    else process.env.SWARM_VAULT_DIR = before.vault
+    if (before.off !== undefined) process.env.SWARM_DISABLE_MEMORY = before.off
+    fs.rmSync(parent, { recursive: true, force: true })
+  })
+  const folderOf = (run: { result: VaultMirror.SyncResult }) => path.join(vault, "swarm-memory", run.result.folder)
+
+  test("scheduler (fake timers): three triggers within 2000 ms -> one run; immediate runs now and replaces a pending one", () => {
+    jest.useFakeTimers()
+    try {
+      let count = 0
+      const job = async () => {
+        count++
+        return undefined
+      }
+      expect(VaultMirror.MIRROR_DEBOUNCE_MS).toBe(2000)
+      VaultMirror.schedule("k-fake", job)
+      jest.advanceTimersByTime(800)
+      VaultMirror.schedule("k-fake", job)
+      jest.advanceTimersByTime(800)
+      VaultMirror.schedule("k-fake", job)
+      jest.advanceTimersByTime(1999)
+      expect(count).toBe(0)
+      jest.advanceTimersByTime(1)
+      expect(count).toBe(1)
+      jest.advanceTimersByTime(10000)
+      expect(count).toBe(1)
+      VaultMirror.schedule("k-fake", job)
+      VaultMirror.schedule("k-fake", job, { immediate: true })
+      expect(count).toBe(2)
+      jest.advanceTimersByTime(10000)
+      expect(count).toBe(2)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it.live(
+    "T1: three add calls in a burst -> one debounced run that writes the notes",
+    () =>
+      provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          const memory = yield* Memory.Service
+          const key = yield* storeKeyNow
+          yield* add(memory, "Tabel tarif dibaca dari lampiran B")
+          yield* add(memory, "Lampiran C memakai tarif lama")
+          yield* add(memory, "Rekap tarif dikirim tiap Jumat")
+          expect(yield* runsAfter(key, 300)).toHaveLength(0)
+          const done = yield* runsAfter(key, AFTER_DEBOUNCE)
+          expect(done).toHaveLength(1)
+          expect(done[0]!.result.status).toBe("ok")
+          expect(listing(path.join(folderOf(done[0]!), "notes"))).toHaveLength(3)
+          expect(fs.existsSync(path.join(folderOf(done[0]!), "index.md"))).toBe(true)
+        }),
+      ),
+    15000,
+  )
+
+  it.live(
+    "T2: an add of kind index runs without waiting, and only once",
+    () =>
+      provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          const memory = yield* Memory.Service
+          const key = yield* storeKeyNow
+          expect((yield* addIndex(memory)).item).toBeDefined()
+          const soon = yield* runsAfter(key, SOON)
+          expect(soon).toHaveLength(1)
+          expect(listing(path.join(folderOf(soon[0]!), "missions"))).toEqual([VaultMirror.noteName("mission", MISSION)!])
+          expect(yield* runsAfter(key, AFTER_DEBOUNCE)).toHaveLength(1)
+        }),
+      ),
+    15000,
+  )
+
+  it.live(
+    "T3 + N8-437: a done close runs now and the nudge names the exact notes the mirror wrote",
+    () =>
+      provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          const memory = yield* Memory.Service
+          const key = yield* storeKeyNow
+          yield* addIndex(memory)
+          yield* runsAfter(key, SOON)
+          const tools = (yield* resolveTools) as Tools
+          const output = yield* callTool(tools, SET_STATUS, { mission: MISSION, to: "done" })
+          const closed = yield* runsAfter(key, SOON)
+          expect(closed).toHaveLength(2)
+          const folder = folderOf(closed[1]!)
+          const [mission] = listing(path.join(folder, "missions"))
+          const [report] = listing(path.join(folder, "reports"))
+          expect(mission).toBeDefined()
+          expect(report).toBeDefined()
+          const nudge = `next: write the vault note for this mission (skill obsidian-memory); link [[${mission!.slice(0, -3)}]] and [[${report!.slice(0, -3)}]].`
+          expect(output).toBe(`ok\n\n${nudge}`)
+          expect(VaultMirror.closeNudge(MISSION, true)).toBe(nudge)
+        }),
+      ),
+    15000,
+  )
+
+  it.live(
+    "T3: a cancelled close runs too; without an index entry the nudge has no link clause; without the inbox tool no nudge",
+    () =>
+      provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          const key = yield* storeKeyNow
+          const tools = (yield* resolveTools) as Tools
+          const output = yield* callTool(tools, SET_STATUS, { mission: MISSION, to: "cancelled" })
+          expect(output).toBe("ok\n\nnext: write the vault note for this mission (skill obsidian-memory).")
+          expect(yield* runsAfter(key, SOON)).toHaveLength(1)
+          delete tools[INBOX]
+          expect(yield* callTool(tools, SET_STATUS, { mission: MISSION, to: "done" })).toBe("ok")
+          expect(yield* runsAfter(key, SOON)).toHaveLength(2)
+          expect(yield* callTool(tools, SET_STATUS, { mission: MISSION, to: "running" })).toBe("ok")
+          expect(yield* runsAfter(key, SOON)).toHaveLength(2)
+        }),
+      ),
+    15000,
+  )
+
+  it.live(
+    "T3: the same close with an error result -> no run and no nudge",
+    () =>
+      provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          const key = yield* storeKeyNow
+          const tools = (yield* resolveTools) as Tools
+          // An error result reaches the agent as a thrown tool error (McpCatalog.convertTool): no text, no nudge.
+          failing.add("studio_mission_set_status")
+          const exit = yield* callTool(tools, SET_STATUS, { mission: MISSION, to: "done" }).pipe(
+            Effect.exit,
+            Effect.ensuring(Effect.sync(() => failing.delete("studio_mission_set_status"))),
+          )
+          expect(exit._tag).toBe("Failure")
+          expect(String(exit._tag === "Failure" ? exit.cause : "")).toContain("MISSION_NOT_FOUND")
+          expect(yield* runsAfter(key, AFTER_DEBOUNCE)).toHaveLength(0)
+        }),
+      ),
+    15000,
+  )
+
+  test("label language: remembered per store key, else the owned hub's swarm-lang; a stale language makes backfill due", async () => {
+    const dir = path.join(parent, "Lang Project")
+    const key = "dir-abc123def456abc123def456"
+    expect(await VaultMirror.backfillDue(dir, key)).toBe(true)
+    expect(await VaultMirror.labelLanguage(dir, key)).toBeUndefined()
+    const result = await VaultMirror.sync({ key, directory: dir, projectRoot: dir, items: [], language: "en" })
+    expect(result.status).toBe("ok")
+    expect(await VaultMirror.hubState(dir, key)).toEqual({ exists: true, language: "en" })
+    expect(await VaultMirror.labelLanguage(dir, key)).toBe("en")
+    expect(await VaultMirror.backfillDue(dir, key)).toBe(false)
+    VaultMirror.rememberLanguage(key, "id")
+    expect(VaultMirror.rememberedLanguage(key)).toBe("id")
+    expect(await VaultMirror.labelLanguage(dir, key)).toBe("id")
+    expect(await VaultMirror.backfillDue(dir, key)).toBe(true)
+  })
+
+  it.live(
+    "a recorded decision refreshes the mirror (debounced)",
+    () =>
+      provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          const key = yield* storeKeyNow
+          const tools = (yield* resolveTools) as Tools
+          expect(yield* callTool(tools, RECORD, { mission: MISSION, title: "tarif B" })).toBe("ok")
+          expect(yield* runsAfter(key, 300)).toHaveLength(0)
+          expect(yield* runsAfter(key, AFTER_DEBOUNCE)).toHaveLength(1)
+        }),
+      ),
+    15000,
+  )
+
+  it.live(
+    "T4: the first prompt with the hub absent -> one run; later prompts and a present hub -> none",
+    () =>
+      provideTmpdirInstance(() =>
+        Effect.gen(function* () {
+          const memory = yield* Memory.Service
+          const key = yield* storeKeyNow
+          const block = yield* memory.prompt(model)
+          expect(yield* memory.prompt(model)).toBe(block)
+          const first = yield* runsAfter(key, AFTER_DEBOUNCE)
+          expect(first).toHaveLength(1)
+          expect(fs.existsSync(path.join(folderOf(first[0]!), "index.md"))).toBe(true)
+          yield* memory.prompt(model)
+          expect(yield* runsAfter(key, AFTER_DEBOUNCE)).toHaveLength(1)
+        }),
+      ),
+    15000,
+  )
+
+  it.live(
+    "memory off: store enabled false -> no run, nothing in the vault",
+    () =>
+      provideTmpdirInstance((dir) =>
+        Effect.gen(function* () {
+          const memory = yield* Memory.Service
+          const key = yield* storeKeyNow
+          yield* memory.setEnabled(false)
+          yield* add(memory, "Catatan saat memori mati")
+          yield* addIndex(memory)
+          const tools = (yield* resolveTools) as Tools
+          yield* callTool(tools, SET_STATUS, { mission: MISSION, to: "done" })
+          yield* memory.prompt(model)
+          expect(yield* runsAfter(key, AFTER_DEBOUNCE)).toHaveLength(0)
+          expect(listing(path.join(vault, "swarm-memory"))).not.toContain(Vault.vaultProjectFolder(dir, key))
+        }),
+      ),
+    15000,
+  )
+
+  it.live(
+    "memory off: SWARM_DISABLE_MEMORY -> no run, nothing in the vault",
+    () =>
+      provideTmpdirInstance((dir) =>
+        Effect.gen(function* () {
+          const memory = yield* Memory.Service
+          const key = yield* storeKeyNow
+          const tools = (yield* resolveTools) as Tools
+          process.env.SWARM_DISABLE_MEMORY = "1"
+          try {
+            yield* add(memory, "Catatan kedua saat memori mati")
+            yield* addIndex(memory)
+            yield* callTool(tools, SET_STATUS, { mission: MISSION, to: "done" })
+            yield* callTool(tools, RECORD, { mission: MISSION, title: "tarif B" })
+            yield* memory.prompt(model)
+            expect(yield* runsAfter(key, AFTER_DEBOUNCE)).toHaveLength(0)
+          } finally {
+            delete process.env.SWARM_DISABLE_MEMORY
+          }
+          expect(listing(path.join(vault, "swarm-memory"))).not.toContain(Vault.vaultProjectFolder(dir, key))
+        }),
+      ),
+    15000,
+  )
 })

@@ -8,9 +8,11 @@ import { Global } from "@opencode-ai/core/global"
 import { Flock } from "@opencode-ai/core/util/flock"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { InstanceState } from "@/effect/instance-state"
+import { EffectBridge } from "@/effect/bridge"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Provider } from "@/provider/provider"
 import { MemoryLearn } from "./learn"
+import { VaultMirror } from "./vault-mirror"
 
 // One file per project under the user's data directory: never inside the repository, so it cannot be committed by
 // accident, and shared by every worktree of a project. Plain JSON the user can read, and mode 0600.
@@ -110,6 +112,11 @@ export interface Interface {
    */
   readonly recall: (input: { query: string; model?: Provider.Model }) => Effect.Effect<string | undefined>
   readonly onDevice: (model: Provider.Model) => Effect.Effect<boolean>
+  /**
+   * OBS-d (01c §5): refresh this project's vault mirror in the background, now (`immediate`, T2/T3) or debounced
+   * (`VaultMirror.MIRROR_DEBOUNCE_MS`). Never fails and never waits for the run; nothing runs while memory is off.
+   */
+  readonly mirror: (options?: { immediate?: boolean }) => Effect.Effect<void>
   /** Watches what the shell tool ran and turns "that failed to start, this worked" into a note. */
   readonly observeCommand: (input: {
     sessionID: string
@@ -157,7 +164,74 @@ export const layer = Layer.effect(
         }),
       )
 
-    const publish = (added?: Item) => events.publish(Event.Updated, { added })
+    /**
+     * OBS-d (01c §5). The job reads the store fresh when it runs, so a debounced run sees the last write of a burst.
+     * Refusals of the writer are logged as warnings, any failure as an error: the memory write has already succeeded and
+     * a close is never blocked. Nothing is scheduled while memory is off; a disabled store makes the run a no-op.
+     */
+    const refresh = (options: { immediate?: boolean; backfill?: boolean }) =>
+      Effect.gen(function* () {
+        if (disabled()) return
+        const ctx = yield* InstanceState.context
+        const key = storeKey(ctx.project.id, ctx.directory)
+        const target = path.join(Global.Path.data, "memory", `${key}.json`)
+        const directory = ctx.directory
+        const projectRoot = ctx.worktree === "/" ? ctx.directory : ctx.worktree
+        const bridge = yield* EffectBridge.make()
+        const run = Effect.gen(function* () {
+          if (disabled()) return undefined
+          const store = yield* read(target)
+          if (!store.enabled) return undefined
+          const refusals: { code: VaultMirror.SyncCode; path: string; reason: string }[] = []
+          const result = yield* Effect.promise(async () =>
+            VaultMirror.sync({
+              key,
+              directory,
+              projectRoot,
+              items: store.items,
+              enabled: store.enabled,
+              language: await VaultMirror.labelLanguage(directory, key),
+              log: (entry) => refusals.push(entry),
+            }),
+          )
+          for (const entry of refusals)
+            yield* Effect.logWarning("vault mirror refused a path", {
+              source: "ProjectMemory.mirror",
+              store: key,
+              code: entry.code,
+              path: entry.path,
+              reason: entry.reason,
+            })
+          return result
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("vault mirror failed", {
+              source: "ProjectMemory.mirror",
+              store: key,
+              cause: Cause.pretty(cause),
+            }).pipe(Effect.as(undefined)),
+          ),
+        )
+        const job = () => bridge.promise(run)
+        if (!options.backfill) return VaultMirror.schedule(key, job, { immediate: options.immediate })
+        // T4: checked in the background, so the prompt never waits for the disk.
+        void VaultMirror.backfillDue(directory, key).then(
+          (due) => (due ? VaultMirror.schedule(key, job) : undefined),
+          () => undefined,
+        )
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError("vault mirror not scheduled", { source: "ProjectMemory.mirror", cause: Cause.pretty(cause) }),
+        ),
+      )
+
+    const mirror: Interface["mirror"] = (options) => refresh({ immediate: options?.immediate })
+    // T4: stores whose first prompt in this process has been seen.
+    const prompted = new Set<string>()
+
+    /** Every store write is announced here, so it is also where the mirror is refreshed (T1, debounced). */
+    const publish = (added?: Item) =>
+      events.publish(Event.Updated, { added }).pipe(Effect.andThen(mirror()))
 
     /**
      * Cleanup once a store is large (C6): merges duplicates and drops references whose target is gone. It never refuses
@@ -250,6 +324,8 @@ export const layer = Layer.effect(
       if ("refused" in result) return { refused: result.refused } satisfies Result
       // A replacement is no new note: no toast. A new entry announces itself like any agent note; the roll-up is silent.
       yield* publish(result.fresh && input.source !== "user" ? result.item : undefined)
+      // T2 (01c §5): the report was written before its index entry (MEM-f), so the mirror copies it now, no debounce.
+      yield* mirror({ immediate: true })
       return { item: result.item } satisfies Result
     })
 
@@ -407,8 +483,15 @@ export const layer = Layer.effect(
       }),
       prompt: Effect.fn("ProjectMemory.prompt")(function* (model, focus) {
         if (disabled()) return undefined
-        const store = yield* read(yield* file())
+        const target = yield* file()
+        const store = yield* read(target)
         if (!store.enabled) return undefined
+        // T4 (01c §5): the first prompt of a store in this process brings existing memory to the vault when the hub is
+        // absent or its language is stale. Background only; the returned block does not depend on it (P-05).
+        if (!prompted.has(target)) {
+          prompted.add(target)
+          yield* refresh({ backfill: true })
+        }
         const local = yield* onDevice(model)
         const items = store.items.filter((item) => local || !item.deviceOnly)
         if (!focus) return MemoryLearn.promptBlock(items, { budget: LOAD_BUDGET_TOKENS })
@@ -450,6 +533,7 @@ export const layer = Layer.effect(
         return MemoryLearn.recallNote(found, refs)
       }),
       onDevice,
+      mirror,
       observeCommand: Effect.fn("ProjectMemory.observeCommand")(function* (input) {
         if (disabled()) return
         const ctx = yield* InstanceState.context

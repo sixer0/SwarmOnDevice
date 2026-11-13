@@ -34,6 +34,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { Secrets } from "@/tool/secrets"
 import { missionTypeSuggestion } from "./system"
 import { Memory } from "@/memory/memory"
+import { VaultMirror } from "@/memory/vault-mirror"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -41,6 +42,8 @@ const MCP_RESOURCE_TOOLS = {
   read: "read_mcp_resource",
 } as const
 const MAX_MCP_RESOURCE_BLOB_BYTES = 10 * 1024 * 1024
+/** The swarm-web vault inbox tool (setup mcpproxy wiring); the close nudge is added only when the session has it. */
+const VAULT_INBOX_TOOL = "swarm-web_vault_inbox"
 const SUPPORTED_MCP_RESOURCE_ATTACHMENT_MIMES = new Set([
   "application/pdf",
   "image/gif",
@@ -523,6 +526,23 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     )
   }
 
+  // N8-437: whether the closed mission has an index entry in this project's memory, so the close nudge can name its
+  // vault notes. Memory off, a disabled store or a failed lookup give the nudge without links (logged).
+  const missionIndexed = (missionId: string): Effect.Effect<boolean> =>
+    Effect.gen(function* () {
+      if (!memory || process.env.SWARM_DISABLE_MEMORY) return false
+      const store = yield* memory.get()
+      return store.enabled && store.items.some((item) => item.kind === "index" && item.missionId === missionId)
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logError("mission index lookup failed", {
+          source: "SessionTools.missionIndexed",
+          sessionID: input.session.id,
+          cause: Cause.pretty(cause),
+        }).pipe(Effect.as(false)),
+      ),
+    )
+
   for (const [key, entry] of Object.entries(yield* mcp.tools())) {
     // L51: the built-in datum-studio server (global origin only, never a project's look-alike entry) gets the calling
     // session in _meta, so a mission it writes links to this session without the agent inventing an id.
@@ -619,6 +639,19 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
                 })
               }
             }
+          }
+
+          // OBS-d T3 and the OBS-g close nudge (01c §5, §8.3, N8-437): a successful close (done or cancelled) refreshes
+          // the vault mirror now and, when this session can write to the vault inbox, names the notes to link. A recorded
+          // decision refreshes it too (debounced). Neither waits for the run, and neither can fail or change the close.
+          if (studio && memory && !result.isError) {
+            const call = toRecord(args)
+            if (entry.def.name === "studio_mission_set_status" && (call.to === "done" || call.to === "cancelled")) {
+              yield* memory.mirror({ immediate: true })
+              if (VAULT_INBOX_TOOL in tools && typeof call.mission === "string")
+                textParts.push(VaultMirror.closeNudge(call.mission, yield* missionIndexed(call.mission)))
+            }
+            if (entry.def.name === "studio_mission_record_decision") yield* memory.mirror()
           }
 
           // SK-g (N8-048): a created mission's type suggests skills; a line in the result, never a load, and never in

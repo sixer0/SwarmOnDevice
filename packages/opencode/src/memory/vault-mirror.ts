@@ -5,6 +5,7 @@
 // should contain, as pure text with no clock read and no disk access, so golden files can pin it byte for byte.
 // `readReport` is the one read it needs (a final report inside the project). Writing, ownership, renames and the
 // symlink checks under the vault are the SYNC half (`sync`, row 43c, 01c §3.1-§3.2, SR8-12), which builds on `render`.
+// When it runs (`schedule`, debounce, label language, the close nudge text) is the TRIGGER half (row 43d, 01c §5, §8.3).
 //
 // What reaches the vault is less than the store holds (01c §3.3): deviceOnly, secret-looking and classified items are
 // never copied (only counted, L6); memory text is data, so every ASCII punctuation mark in it is backslash-escaped and
@@ -1066,6 +1067,105 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
     throw error
   }
   return result("ok", notCopied)
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// When the mirror runs (OBS-d, 01c §5, AC-OBSd; row 43d). The callers (Memory, the wrapped Studio close in
+// session/tools.ts) hand a job to `schedule`; it runs in the background and never blocks or fails the caller. Per store
+// key: a debounced job waits `MIRROR_DEBOUNCE_MS` after the last trigger (T1, T4); an immediate one runs now and
+// replaces any pending one (T2 index entry, T3 mission close). Two runs of one store are serialised by `sync`'s lock.
+
+/** N8-111: one mirror refresh per burst of store writes. */
+export const MIRROR_DEBOUNCE_MS = 2000
+
+/** A scheduled run: returns the sync result, or undefined when nothing ran (memory off, store disabled, failure). */
+export type MirrorJob = () => Promise<SyncResult | undefined>
+
+const timers = new Map<string, ReturnType<typeof setTimeout>>()
+const listeners = new Set<(key: string, result: SyncResult) => void>()
+// Label language per store key, as the app last asked for it (`GET /memory/vault?language=`, 01c §4.5 tier 1).
+const languages = new Map<string, Language>()
+
+function start(key: string, job: MirrorJob) {
+  // A job handles its own errors; this catch only keeps a broken job from becoming an unhandled rejection.
+  void job().then(
+    (result) => {
+      if (result) for (const listener of listeners) listener(key, result)
+    },
+    () => undefined,
+  )
+}
+
+/** Run the mirror of one store in the background: now (`immediate`) or after `MIRROR_DEBOUNCE_MS` without a new trigger. */
+export function schedule(key: string, job: MirrorJob, options: { readonly immediate?: boolean } = {}): void {
+  const pending = timers.get(key)
+  if (pending !== undefined) clearTimeout(pending)
+  timers.delete(key)
+  if (options.immediate) return start(key, job)
+  const timer = setTimeout(() => {
+    timers.delete(key)
+    start(key, job)
+  }, MIRROR_DEBOUNCE_MS)
+  // A pending refresh never keeps the process alive.
+  ;(timer as { unref?: () => void }).unref?.()
+  timers.set(key, timer)
+}
+
+/** Called after every completed run (tests, diagnostics). Returns the unsubscribe function. */
+export function onRun(listener: (key: string, result: SyncResult) => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+/** Remember the app's label language for a store (kept in process; the next run writes it as the hub's `swarm-lang`). */
+export function rememberLanguage(key: string, language: Language): void {
+  languages.set(key, language)
+}
+
+/** The label language the app last asked for this store in this process, if any. */
+export function rememberedLanguage(key: string): Language | undefined {
+  return languages.get(key)
+}
+
+/**
+ * The project folder's hub as it is on disk: whether an owned hub exists and its `swarm-lang`. No write; a hub that is
+ * missing, not a regular file, foreign or unreadable counts as absent.
+ */
+export async function hubState(directory: string, key: string): Promise<{ exists: boolean; language?: Language }> {
+  const rootReal = await Vault.realRoot()
+  if (!rootReal) return { exists: false }
+  const hub = path.join(rootReal, Vault.VAULT_MIRROR_DIR, Vault.vaultProjectFolder(directory, key), HUB)
+  const stat = await fs.lstat(hub).catch(() => undefined)
+  if (!stat?.isFile()) return { exists: false }
+  const content = await fs.readFile(hub, "utf8").catch(() => undefined)
+  if (content === undefined || !owned(content, key)) return { exists: false }
+  const match = /^swarm-lang: "(en|id)"$/m.exec(content.slice(0, content.indexOf("\n---\n", 3)))
+  return { exists: true, ...(match ? { language: match[1] as Language } : {}) }
+}
+
+/** The label language of the next run (01c §4.5): the app's, else the hub's `swarm-lang`, else undefined (= `id`). */
+export async function labelLanguage(directory: string, key: string): Promise<Language | undefined> {
+  return languages.get(key) ?? (await hubState(directory, key)).language
+}
+
+/** T4 (01c §5): the first prompt of a store refreshes the mirror when the hub is absent or its language is stale. */
+export async function backfillDue(directory: string, key: string): Promise<boolean> {
+  const hub = await hubState(directory, key)
+  if (!hub.exists) return true
+  const wanted = languages.get(key)
+  return wanted !== undefined && wanted !== (hub.language ?? "id")
+}
+
+/**
+ * N8-437 (OBS-g close nudge, 01c §8.3): the line appended to a successful mission close when the session has
+ * `swarm-web_vault_inbox`. With an index entry it names the two vault notes the mirror writes for the mission, exactly
+ * as `render` names them (without `.md`); without one, or with an id that cannot be named, no link clause.
+ */
+export function closeNudge(missionId: string, indexed: boolean): string {
+  const mission = indexed && missionIdOk(missionId) ? noteName("mission", missionId) : undefined
+  const report = mission ? noteName("report", missionId) : undefined
+  if (!mission || !report) return "next: write the vault note for this mission (skill obsidian-memory)."
+  return `next: write the vault note for this mission (skill obsidian-memory); link [[${mission.slice(0, -3)}]] and [[${report.slice(0, -3)}]].`
 }
 
 export * as VaultMirror from "./vault-mirror"
