@@ -1715,4 +1715,5 @@ export const dict = {
   "session.mission.decision.unattested": "Recorded by an agent on your behalf",
   "session.mission.placement.unplaced": "Your answer is saved, but the mission has not moved yet.",
   "session.mission.placement.retry": "Try the move to {{group}} again",
+  "session.mission.placement.otherFolder": "A session of this mission now lives in another folder, so this move was not made.",
 }

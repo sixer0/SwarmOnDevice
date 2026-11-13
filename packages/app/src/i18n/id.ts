@@ -1875,4 +1875,5 @@ export const dict = {
   "session.mission.decision.unattested": "Dicatat oleh agen atas nama Anda",
   "session.mission.placement.unplaced": "Jawaban Anda tersimpan, tetapi misi belum dipindahkan.",
   "session.mission.placement.retry": "Coba lagi pindahkan ke {{group}}",
+  "session.mission.placement.otherFolder": "Sesi misi ini kini berada di folder lain, jadi pemindahan ini tidak dilakukan.",
 }

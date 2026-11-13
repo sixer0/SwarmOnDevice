@@ -346,6 +346,7 @@ const APPROVED_EXEMPT_KEYS = [
   "session.mission.decision.unattested",
   "session.mission.placement.unplaced",
   "session.mission.placement.retry",
+  "session.mission.placement.otherFolder",
 ]
 
 function arrayLiteral(name: string) {
@@ -363,10 +364,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the three-hundred-and-twenty-four approved keys and nothing else", () => {
+  test("the exemption holds exactly the three-hundred-and-twenty-five approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(324)
-    expect(new Set(exemptKeys).size).toBe(324)
+    expect(exemptKeys.length).toBe(325)
+    expect(new Set(exemptKeys).size).toBe(325)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -721,6 +722,7 @@ describe("i18n parity exemption guard", () => {
           "session.mission.decision.unattested",
           "session.mission.placement.unplaced",
           "session.mission.placement.retry",
+          "session.mission.placement.otherFolder",
         ],
       },
       {

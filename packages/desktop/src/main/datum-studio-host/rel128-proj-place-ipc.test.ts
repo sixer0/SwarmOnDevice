@@ -216,6 +216,21 @@ describe("1.2.8 row 46: the rehome caller (nonce header, local server only)", ()
     const r = await ipc.createRehomeCaller({ server, nonce: () => "n".repeat(43), fetch })(body)
     expect(`${r.ok} ${r.code}`).toBe("false REHOME_BUSY")
   })
+
+  test("row 24b (C128): a session-active refusal with detail 'lives in another folder' carries that detail; busy keeps the route text", async () => {
+    const refuse = (detail: string) => async () =>
+      new Response(
+        JSON.stringify({ name: "RehomeRefusedError", data: { code: "REHOME_SESSION_ACTIVE", message: "A session or terminal of this mission is still running.", detail } }),
+        { status: 409 },
+      )
+    const call = (detail: string) => ipc.createRehomeCaller({ server, nonce: () => "n".repeat(43), fetch: refuse(detail) })(body)
+    const elsewhere = await call(`session ${SESSION} lives in another folder`)
+    expect(elsewhere.ok).toBe(false)
+    if (!elsewhere.ok) expect(`${elsewhere.code} ${elsewhere.message}`).toBe(`REHOME_SESSION_ACTIVE session ${SESSION} lives in another folder`)
+    const busy = await call(`session ${SESSION} busy`)
+    if (!busy.ok) expect(`${busy.code} ${busy.message}`).toBe("REHOME_SESSION_ACTIVE A session or terminal of this mission is still running.")
+    expect(busy.ok).toBe(false)
+  })
 })
 
 describe("1.2.8 row 46 AC-SEC05 main half: place goes through the attested client", () => {

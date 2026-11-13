@@ -175,6 +175,9 @@ export function moveErrorText(result: { code: string; message: string }, t: Tran
     REHOME_ROLLED_BACK: "session.mission.move.error.rolledBack",
     REHOME_SESSION_ACTIVE: "session.mission.move.error.sessionActive",
   }
+  // row 24b (C128): rehome's own detail for an idle session outside the mission folder (desktop passes it as the message).
+  if (result.code === "REHOME_SESSION_ACTIVE" && result.message.endsWith("lives in another folder"))
+    return t("session.mission.placement.otherFolder")
   if (key[result.code]) return t(key[result.code]!)
   if (result.code === "REHOME_ROLLBACK_FAILED") return t("session.mission.move.error.rollbackFailed", { path: result.message })
   return t("session.mission.move.error.failed", { reason: result.message || result.code })

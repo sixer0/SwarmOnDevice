@@ -227,6 +227,23 @@ describe("1.2.8 row 46b C98: retry an answered placement whose move did not fini
     expect(el.querySelector("[data-mission-decision-error]")?.textContent === tr("session.mission.move.error.busy")).toBe(true)
   })
 
+  test("row 24b (C128): a session that lives in another folder gets its own text, not the 'still working' text", async () => {
+    const elsewhere = mount([answeredPlacement()], {
+      place: async () => ({ ok: false, code: "REHOME_SESSION_ACTIVE", message: "session ses_x lives in another folder" }),
+    })
+    elsewhere.el.querySelector<HTMLButtonElement>("[data-mission-retry]")!.click()
+    await settle()
+    const shown = elsewhere.el.querySelector("[data-mission-decision-error]")?.textContent
+    expect(shown === tr("session.mission.placement.otherFolder")).toBe(true)
+    expect(shown === tr("session.mission.move.error.sessionActive")).toBe(false)
+    dispose()
+    document.body.innerHTML = ""
+    const busy = mount([answeredPlacement()], { place: async () => ({ ok: false, code: "REHOME_SESSION_ACTIVE", message: "x" }) })
+    busy.el.querySelector<HTMLButtonElement>("[data-mission-retry]")!.click()
+    await settle()
+    expect(busy.el.querySelector("[data-mission-decision-error]")?.textContent === tr("session.mission.move.error.sessionActive")).toBe(true)
+  })
+
   test("no retry: already in the group, an answer not attested or by an agent, root, or while another request is open", () => {
     const cases: Array<[string, unknown[], string | undefined]> = [
       ["in group", [answeredPlacement()], `${ROOT}/DEMS`],

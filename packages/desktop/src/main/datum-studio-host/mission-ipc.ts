@@ -194,12 +194,15 @@ export function createRehomeCaller(opts: {
         json = text ? (JSON.parse(text) as Record<string, unknown>) : {}
       } catch {}
       if (response.ok) return { ok: true, data: json as RehomeOk }
-      const err = (json.data ?? {}) as { code?: unknown; message?: unknown; journal?: unknown }
+      const err = (json.data ?? {}) as { code?: unknown; message?: unknown; journal?: unknown; detail?: unknown }
+      // row 24b (C128): rehome's "session <id> lives in another folder" detail reaches the app, which gives it its own text.
+      const elsewhere =
+        err.code === "REHOME_SESSION_ACTIVE" && typeof err.detail === "string" && err.detail.endsWith("lives in another folder")
       if (response.status === 409 && typeof err.code === "string")
         return {
           ok: false,
           code: err.code,
-          message: typeof err.message === "string" ? err.message : err.code,
+          message: elsewhere ? (err.detail as string) : typeof err.message === "string" ? err.message : err.code,
           ...(typeof err.journal === "string" ? { journal: err.journal } : {}),
         }
       if (response.status === 403) return unavailable("the local Swarm server refused the move (desktop check); nothing was moved")
