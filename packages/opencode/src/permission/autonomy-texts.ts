@@ -159,6 +159,13 @@ export function checkpointFailedText(reason: string | undefined): string {
 }
 
 /**
+ * 1.2.8 row 40e (SK-e, N8-058 as corrected by R20-C15, S14-D2): an agent's write into a skill folder, refused in every
+ * mode. The edit tools give it as it is (`Reach.SkillFolderRefused`); a shell call gets it after "This call did not run."
+ */
+export const SKILL_FOLDER_HELD_TEXT =
+  "This write is not allowed: skills are saved only from Settings > Skills after the person approves them. Draft the skill with the skill_draft tool (see the skill-authoring skill) and tell the person it is waiting."
+
+/**
  * 1.1.3 (T6): appended, after one space, to the refusal of `credential_change` and `admin_rights` on the consented path
  * only (`consentedRefusalText`). Without consent those refusals stay as 1.1.0 words them.
  */
@@ -191,7 +198,8 @@ export const REFUSED_TEXT: Readonly<
     | "app_state"
     | "folder_not_trusted"
     | "checkpoint_failed"
-    | "own_api",
+    | "own_api"
+    | "skill_folder",
     string
   >
 > = {
@@ -211,6 +219,8 @@ export const REFUSED_TEXT: Readonly<
   checkpoint_failed: CHECKPOINT_FAILED_TEXT,
   // 1.2.7 F-4: the text without a reason; `ownApiText` picks N7-135 for a reason.
   own_api: OWN_API_TEXT,
+  // 1.2.8 row 40e (SK-e): a shell write into a skill folder (an edit tool's write is refused before any prompt).
+  skill_folder: `This call did not run. ${SKILL_FOLDER_HELD_TEXT}`,
 }
 
 /**

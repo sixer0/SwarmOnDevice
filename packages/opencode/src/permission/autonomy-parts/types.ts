@@ -31,8 +31,11 @@ export type AllowedCategory = RoutineCategory | "edit-not-ordinary" | OwnApiRead
 export type OwnApiReadCategory = "own_api_read"
 export type HeldCategory = PermissionV1.DeferredCategory
 
-/** What the edit tools learned from `Reach.editTrust`. Absent means nobody said, and that is held. */
-export type EditClass = "ordinary" | "not_ordinary" | "no_undo" | "sensitive" | "secret"
+/**
+ * What the edit tools learned from `Reach.editTrust`. Absent means nobody said, and that is held. 1.2.8 row 40e (SK-e,
+ * N8-411): `skill_folder` never reaches a prompt from the edit tools (`Reach.SkillFolderRefused`); the table refuses it.
+ */
+export type EditClass = "ordinary" | "not_ordinary" | "no_undo" | "sensitive" | "secret" | "skill_folder"
 
 export type Verdict = {
   class: Class

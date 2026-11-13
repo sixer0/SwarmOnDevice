@@ -117,6 +117,7 @@ export function classifyConsented(input: Input, files: readonly string[], catego
 }
 
 function classifyEdit(input: Input): Verdict {
+  if (input.editClass === "skill_folder") return refused("skill_folder")
   if (input.editClass === "secret") return classifyConsented(input, editTargets(input), "secret_file")
   if (input.editClass === "sensitive") return classifyConsented(input, editTargets(input), "sensitive_file")
   // Not the absence of `risk`: an edit nothing can undo carries no risk label either.
@@ -124,6 +125,65 @@ function classifyEdit(input: Input): Verdict {
   if (input.editClass === "not_ordinary") return { class: "P", decidedBy: "agent", category: "edit-not-ordinary" }
   if (input.editClass === "ordinary") return QUIET
   return held("not_routine")
+}
+
+/** 1.2.8 row 40e (SK-e): programs whose only operand that changes anything is the destination (the last, or `-t`'s). */
+const COPIES: ReadonlySet<string> = new Set(["cp", "install", "ln", "rsync", "ditto", "scp"])
+
+/**
+ * 1.2.8 row 40e (SK-e): the places a shell call may write, as far as a skill folder is concerned: every redirect, `tee`
+ * and `sed -i` landing of the shell's reading, a copy's destination, and every operand of any other program that is not
+ * a look (`READS`), in each folder the step may run in (a `cd`/`pushd` walk included, row 27). Without the shell's
+ * reading, the words of the text itself. Stricter only: a name it adds can only lead to a refusal of a skill-folder write.
+ */
+function shellWriteNames(input: Input): string[] {
+  const reading = shellReading(input.metadata.steps, input.instance)
+  if (reading) {
+    const names = [...reading.writes]
+    for (const step of reading.steps) {
+      const argv = DeletionWords.program(step.argv)
+      if (argv.length === 0) continue
+      for (const cwd of step.cwds) names.push(...stepWriteNames(argv, cwd, input.instance))
+    }
+    return names
+  }
+  const command = input.metadata.command
+  if (typeof command !== "string") return []
+  const words = command
+    .split(/[\s;&|()<]+/)
+    .map((word) => word.replace(/^\d*>+/, "").replace(/^['"]|['"]$/g, ""))
+    .filter(Boolean)
+  if (READS.has(path.basename(words[0] ?? "")) && !command.includes(">")) return []
+  return stepWriteNames(words, input.cwd, input.instance, true)
+}
+
+function stepWriteNames(argv: readonly string[], cwd: string, instance: InstanceContext, text = false): string[] {
+  const program = path.basename(argv[0] ?? "")
+  const operands = argv
+    .slice(1)
+    .map((word) => (word.startsWith("-") || /^[a-z]+=/.test(word) ? word.replace(/^[^=]*=/, "") : word))
+    .filter((word) => word !== "" && !word.startsWith("-"))
+    .map((word) => path.resolve(cwd, word.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, homedir())))
+  if (!text && READS.has(program)) return shellWrites(argv, cwd, instance) ?? []
+  if (!text && COPIES.has(program)) {
+    const target = argv.indexOf("-t")
+    if (target > 0 && argv[target + 1] !== undefined) return [path.resolve(cwd, argv[target + 1]!)]
+    return operands.slice(-1)
+  }
+  return operands
+}
+
+function writesSkillFolder(input: Input) {
+  const instance = input.instance
+  if (input.permission === "edit")
+    return input.editClass === "skill_folder" || editTargets(input).some((file) => Reach.skillFolder(file, instance))
+  // A file tool's write outside the project asks `external_directory` first (row 202), with the edit following it.
+  if (input.permission === "external_directory" && input.follows?.some((prompt) => prompt.permission === "edit")) {
+    const filepath = input.metadata.filepath
+    return typeof filepath === "string" && Reach.skillFolder(filepath, instance)
+  }
+  if (input.permission !== "bash") return false
+  return shellWriteNames(input).some((file) => Reach.skillFolder(file, instance))
 }
 
 /**
@@ -864,6 +924,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   // 1.2.7 row 47k (U9-7, C76): a write that reaches the state folder only through a glob, a link or a variable is held
   // for the person (D), as in 1.2.6; spelled out, or under the consent (where nothing waits for a person), it is refused.
   if (!planFile && writesAppState(input)) return indirectStateWrite(input) ? held("app_state") : refused("app_state")
+  // 1.2.8 row 40e (SK-e, S14-D2, N8-411): a write into a skill folder, an edit's or the shell's, is refused in every mode;
+  // a consent item never opens it (`underConsent` keeps every X but `outside_write`). Reads stay as they are.
+  if (writesSkillFolder(input)) return refused("skill_folder")
   // 1.2.7 U-10 (C63): only the person turns the mode on (1.1.1 rule); an agent's `swarm autonomy` never runs.
   if (input.permission === "bash" && runsAutonomyCommand(input.metadata.command))
     return { ...refused("own_api"), reason: "person_only" }
