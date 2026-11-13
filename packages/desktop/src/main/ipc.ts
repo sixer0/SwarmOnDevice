@@ -31,7 +31,7 @@ import { obsidianVaultRoot, registerOpenObsidianNoteHandler } from "./external-u
 import { isSetupToolsOfferPending, markSetupToolsOffered } from "./onboarding"
 import { createSetupRunner, setupDir, type SetupRunner } from "./setup-runner"
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
-import { registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
+import { createRehomeCaller, registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
 import { registerDesktopNonceHandler } from "./desktop-nonce"
 import { revealInFolder } from "./reveal-path"
 import { registerMissingDirectoryHandlers } from "./missing-directory"
@@ -160,6 +160,8 @@ export function registerIpcHandlers(deps: Deps) {
     windowOf: (sender) => BrowserWindow.fromWebContents(sender),
     isRendererUrl,
     client: () => deps.missionControl?.(),
+    // 1.2.8 row 46 (01d §7): the placement's move on the local sidecar with this launch's desktop nonce.
+    rehome: createRehomeCaller({ server: () => deps.awaitInitialization(), nonce: () => deps.desktopNonce?.() }),
     log: (level, message, context) => getLogger()[level](message, { source: "mission-control", ...context }),
   })
   // Row 38b (SEC-06): the app's renderer reads the nonce for the revert and archive-empty calls; other senders get null.

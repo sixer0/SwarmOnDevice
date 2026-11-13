@@ -11,15 +11,20 @@ import { homedir } from "node:os"
 import { posix } from "node:path"
 import type { BrowserWindow, IpcMain, IpcMainInvokeEvent, WebContents } from "electron"
 import { MISSION_CONTROL_IPC } from "../../preload/mission-control-channels"
-import type { MissionControlPlatform, MissionControlResult } from "../../preload/types"
-import { MISSION_CONTROL_AGENT } from "./mission-client"
+import type { MissionControlPlatform, MissionControlResult, ServerReadyData } from "../../preload/types"
+import { MISSION_CONTROL_AGENT, parseAnswerInput, SESSION_ID_RE, type MissionControlClient } from "./mission-client"
 
 export type MissionIpcDeps = {
   ipcMain: Pick<IpcMain, "handle">
   windowOf: (sender: WebContents) => Pick<BrowserWindow, "isDestroyed" | "webContents"> | null
   isRendererUrl: (url: string | undefined) => boolean
-  /** The running host's client, or undefined while DATUM Studio is not running. */
-  client: () => MissionControlPlatform | undefined
+  /**
+   * The running host's client, or undefined while DATUM Studio is not running. 1.2.8 row 46: the real client also has
+   * `setProjectDir` (mission-client.ts), which the `place` channel needs.
+   */
+  client: () => (MissionControlPlatform & Partial<Pick<MissionControlClient, "setProjectDir">>) | undefined
+  /** 1.2.8 row 46 (01d §6, §7): POST /project/rehome on the local server with this launch's desktop nonce (ipc.ts). */
+  rehome?: Rehome
   log: (level: "warn" | "error", message: string, context?: Record<string, unknown>) => void
 }
 
@@ -92,6 +97,181 @@ function stillInScope(data: unknown, basis: Basis) {
   return links.some((l) => l?.client === MISSION_CONTROL_AGENT && typeof l.ref === "string" && basis.sessions.includes(l.ref))
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// 1.2.8 row 46 (AC-PROJf; 01d §4, §6, §7; SR8-05, SR8-17, SR8-18 d): the placement of a mission on the person's click.
+//
+// Main is the one place holding both the desktop nonce (the rehome route's person proof) and the attested Mission Control
+// client (studio_mission_place's person proof), and it is out of the agent's reach. One IPC per click runs, in order:
+//   1. studio_mission_get: the request is OPEN, topic project-placement, the option is join or new of that request and
+//      its `group` passes the group-name rule (an answered request is refused: only a click on an open one moves).
+//   2. POST /project/rehome dryRun (preflight). A refusal returns here: no answer is recorded, nothing moves.
+//   3. The answer, by user, through the client's `answer` (attested session). SR8-18(d): a failed recording stops here,
+//      before any move.
+//   4. POST /project/rehome (the move; the primitive rolls itself back on a fault).
+//   5. studio_mission_place (projectDir = the group folder). If it fails, the move is reversed with `compensates`
+//      (01d §7.4): REHOME_ROLLED_BACK when the reverse worked, REHOME_ROLLBACK_FAILED when it did not.
+
+/** The rehome route's person-proof header (OC server/desktop-nonce.ts, row 38b). */
+export const DESKTOP_NONCE_HEADER = "x-swarm-desktop-nonce"
+export const REHOME_PATH = "/project/rehome"
+/** A move copies a mission folder and memory stores; longer than a store call (mission-client.ts 5 s). */
+export const REHOME_TIMEOUT_MS = 60_000
+export const PLACEMENT_TOPIC = "project-placement"
+/** Options of a placement request that move something; `root` is answered through the ordinary `answer` channel. */
+export const PLACE_OPTIONS = ["join", "new"] as const
+
+/** Desktop mirror of opencode project/rehome.ts and datum-studio validate.ts (N8-150 + SR8-17); drift test N8-458. */
+export const GROUP_NAME_PATTERN = /^[^./\\][^/\\]{0,59}$/
+export const RESERVED_GROUP_NAMES = ["docs"] as const
+export function groupNameOk(name: unknown): name is string {
+  if (typeof name !== "string" || !GROUP_NAME_PATTERN.test(name)) return false
+  if (name.normalize("NFC") !== name) return false
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(name)) return false
+  if (name.trim() !== name || name.endsWith(".")) return false
+  return !RESERVED_GROUP_NAMES.some((reserved) => reserved === name.toLowerCase())
+}
+
+export type RehomeBody = {
+  missionId: string
+  from: string
+  to: string
+  sessions: string[]
+  approvalRef: string
+  dryRun?: boolean
+  compensates?: string
+  groupKind?: string
+}
+export type RehomeOk = { journalId?: string; replayed?: boolean; planned?: Record<string, unknown>; moved?: Record<string, unknown> }
+/** A refusal carries the route's register code (N8-135..N8-141, N8-449, N8-450) or HOST_UNAVAILABLE. */
+export type RehomeResult = { ok: true; data: RehomeOk } | { ok: false; code: string; message: string; journal?: string }
+export type Rehome = (body: RehomeBody) => Promise<RehomeResult>
+
+type RehomeFetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal; redirect: "error" }) => Promise<Response>
+
+/** `http://127.0.0.1:<port>` of the local sidecar, or null: the nonce is never sent anywhere else. */
+function loopbackServer(raw: string) {
+  try {
+    const u = new URL(raw)
+    if (u.protocol !== "http:" || u.hostname !== "127.0.0.1" || u.port === "" || u.username || u.password || u.search || u.hash) return null
+    return u.origin
+  } catch {
+    return null
+  }
+}
+
+/** The rehome caller ipc.ts hands to the handlers: local sidecar only, nonce header, Basic auth, bounded time. */
+export function createRehomeCaller(opts: {
+  server: () => Promise<ServerReadyData>
+  nonce: () => string | undefined
+  fetch?: RehomeFetch
+  timeoutMs?: number
+}): Rehome {
+  const doFetch: RehomeFetch = opts.fetch ?? ((u, init) => fetch(u, init))
+  const timeoutMs = opts.timeoutMs ?? REHOME_TIMEOUT_MS
+  const unavailable = (message: string): RehomeResult => ({ ok: false, code: "HOST_UNAVAILABLE", message })
+  return async (body) => {
+    const nonce = opts.nonce()
+    if (!nonce) return unavailable("the local Swarm server was not started by this app; nothing was moved")
+    const data = await opts.server()
+    const origin = loopbackServer(data.url)
+    if (!origin) return unavailable("moves run only on this app's local Swarm server; nothing was moved")
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "x-opencode-directory": encodeURIComponent(body.from),
+      [DESKTOP_NONCE_HEADER]: nonce,
+    }
+    if (data.password) headers.authorization = `Basic ${Buffer.from(`${data.username ?? "opencode"}:${data.password}`).toString("base64")}`
+    const abort = new AbortController()
+    const timer = setTimeout(() => abort.abort(), timeoutMs)
+    try {
+      const response = await doFetch(`${origin}${REHOME_PATH}`, { method: "POST", headers, body: JSON.stringify(body), signal: abort.signal, redirect: "error" })
+      const text = await response.text()
+      let json: Record<string, unknown> = {}
+      try {
+        json = text ? (JSON.parse(text) as Record<string, unknown>) : {}
+      } catch {}
+      if (response.ok) return { ok: true, data: json as RehomeOk }
+      const err = (json.data ?? {}) as { code?: unknown; message?: unknown; journal?: unknown }
+      if (response.status === 409 && typeof err.code === "string")
+        return {
+          ok: false,
+          code: err.code,
+          message: typeof err.message === "string" ? err.message : err.code,
+          ...(typeof err.journal === "string" ? { journal: err.journal } : {}),
+        }
+      if (response.status === 403) return unavailable("the local Swarm server refused the move (desktop check); nothing was moved")
+      return { ok: false, code: "HOST_ERROR", message: `the local Swarm server answered HTTP ${response.status}` }
+    } catch (error) {
+      if (abort.signal.aborted) return { ok: false, code: "TIMEOUT", message: `the move did not answer within ${timeoutMs} ms` }
+      return unavailable(`the local Swarm server is not reachable (${error instanceof Error ? error.name : "error"})`)
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+}
+
+type PlaceData = { decision: string; group: string }
+type WireRequest = {
+  id?: unknown
+  status?: unknown
+  topic?: unknown
+  options?: Array<{ id?: unknown; group?: unknown; groupKind?: unknown }>
+}
+const refused = (reason: string): MissionControlResult<never> => ({ ok: false, code: "PLACE_DECISION_UNANSWERED", message: reason })
+const badArg = (message: string): MissionControlResult<never> => ({ ok: false, code: "BAD_ARGUMENT", message })
+
+/** Steps 1-5 above. `get` is the caller's scoped get (OUT_OF_SCOPE already applied). */
+export async function placeMission(
+  input: unknown,
+  get: (mission: string) => Promise<MissionControlResult<unknown>>,
+  client: Pick<MissionControlPlatform, "answer"> & Partial<Pick<MissionControlClient, "setProjectDir">>,
+  rehome: Rehome | undefined,
+): Promise<MissionControlResult<PlaceData>> {
+  const p = parseAnswerInput(input)
+  if (!p.ok) return { ok: false, code: p.code, message: p.message }
+  const { mission, request, option } = p.value
+  if (!rehome || typeof client.setProjectDir !== "function") return unavailable
+  const got = await get(mission)
+  if (!got.ok) return got
+  const data = got.data as { mission?: { project?: { dir?: unknown }; sessions?: unknown }; requests?: unknown }
+  const req = (Array.isArray(data.requests) ? (data.requests as WireRequest[]) : []).find((r) => r?.id === request)
+  if (!req) return refused("the placement request is not in this mission")
+  if (req.topic !== PLACEMENT_TOPIC) return badArg("only a placement request moves a mission")
+  // S-6: an agent may have answered it itself; only a click on an OPEN request moves anything.
+  if (req.status !== "open") return refused("the placement request is already answered; nothing was moved")
+  if (!(PLACE_OPTIONS as readonly string[]).includes(option)) return badArg("only join or new move a mission")
+  const chosen = (req.options ?? []).find((o) => o?.id === option)
+  if (!chosen) return badArg("option is not one of the request's options")
+  if (!groupNameOk(chosen.group)) return badArg("the group name is not valid")
+  const from = data.mission?.project?.dir
+  if (typeof from !== "string" || !from.startsWith("/") || posix.normalize(from) !== from || from === "/" || from.endsWith("/"))
+    return badArg("the mission's project folder is not valid")
+  const to = posix.join(from, chosen.group)
+  if (posix.dirname(to) !== from) return badArg("the group name is not valid")
+  const links = Array.isArray(data.mission?.sessions) ? (data.mission.sessions as Array<{ client?: unknown; ref?: unknown }>) : []
+  const sessions = [
+    ...new Set(links.filter((l) => l?.client === MISSION_CONTROL_AGENT && typeof l.ref === "string" && SESSION_ID_RE.test(l.ref)).map((l) => l.ref as string)),
+  ]
+  const groupKind = option === "new" && typeof chosen.groupKind === "string" ? { groupKind: chosen.groupKind } : {}
+  const base: RehomeBody = { missionId: mission, from, to, sessions, approvalRef: request, ...groupKind }
+
+  const dry = await rehome({ ...base, dryRun: true })
+  if (!dry.ok) return { ok: false, code: dry.code, message: dry.message }
+  const answered = await client.answer({ mission, request, option })
+  // SR8-18(d): no recorded answer, no move.
+  if (!answered.ok) return answered
+  const moved = await rehome(base)
+  if (!moved.ok) return { ok: false, code: moved.code, message: moved.journal ?? moved.message }
+  const placed = await client.setProjectDir({ mission, projectDir: to, decision: request })
+  if (placed.ok) return { ok: true, data: { decision: answered.data.decision, group: chosen.group } }
+  // 01d §7.4: the move carries its own rollback; the store update is one row. Reverse the move, report the outcome.
+  const journalId = moved.data.journalId
+  if (typeof journalId !== "string") return { ok: false, code: "REHOME_ROLLBACK_FAILED", message: placed.message }
+  const back = await rehome({ missionId: mission, from: to, to: from, sessions, approvalRef: request, compensates: journalId })
+  if (back.ok) return { ok: false, code: "REHOME_ROLLED_BACK", message: placed.message }
+  return { ok: false, code: "REHOME_ROLLBACK_FAILED", message: back.journal ?? journalId }
+}
+
 export function registerMissionControlHandlers(deps: MissionIpcDeps) {
   const scopes = new WeakMap<object, Scope>()
   const scopeOf = (sender: object) => {
@@ -115,6 +295,19 @@ export function registerMissionControlHandlers(deps: MissionIpcDeps) {
         const mission = method === "list" ? undefined : missionOf(input)
         // A missing or malformed id is left to the client's own check (BAD_ARGUMENT, no host call).
         if (mission !== undefined && !scope.has(mission)) return OUT_OF_SCOPE
+        // 1.2.8 row 46: the placement runs in main (placeMission); its read is the scoped get below.
+        if ((method as string) === "place") {
+          const scopedGet = async (id: string) => {
+            const got = await client.get({ mission: id })
+            const basis = scope.get(id)
+            if (got.ok && (!basis || !stillInScope(got.data, basis))) return OUT_OF_SCOPE
+            return got
+          }
+          const placed = await placeMission(input, scopedGet, client, deps.rehome)
+          if (!placed.ok)
+            deps.log(placed.code === "REHOME_ROLLBACK_FAILED" ? "error" : "warn", "mission placement refused or failed", { channel, code: placed.code })
+          return placed
+        }
         // The client validates `input` itself (§3.3) before any host call.
         const result = await (client[method] as (input: unknown) => Promise<MissionControlResult<unknown>>)(input)
         if (method === "list") remember(scope, input, result)

@@ -59,12 +59,14 @@ const client = (fetch: FetchLike, extra: Partial<Parameters<typeof createMission
   createMissionControlClient({ url: URL_OK, token: TOKEN, callerCwd: join(dir, "mc"), fetch, ...extra })
 
 describe("allow-list", () => {
-  test("exactly the four tools of spec §3.3", () => {
+  // 1.2.8 row 46 (CHAR-MC INTENT: 5 allowed tools): studio_mission_place joins for the person's placement click.
+  test("exactly the five tools of spec §3.3 + 1.2.8 01d §7.2", () => {
     expect([...MISSION_CONTROL_TOOLS]).toEqual([
       "studio_mission_list",
       "studio_mission_get",
       "studio_mission_answer_decision",
       "studio_mission_update_row",
+      "studio_mission_place",
     ])
   })
 
@@ -218,7 +220,8 @@ describe("token isolation", () => {
     for (const text of [block, channels, typeBlock]) {
       expect(text).not.toMatch(/token|bearer|authorization|datum-studio\.env|127\.0\.0\.1|callTool|tools\/call/i)
     }
-    expect(channels.match(/"mission-control:[a-z]+"/g)).toEqual(['"mission-control:list"', '"mission-control:get"', '"mission-control:answer"', '"mission-control:instruct"'])
+    // 1.2.8 row 46 (CHAR-MC INTENT: `place` meaning, N8-144): the person's placement click is the fifth channel.
+    expect(channels.match(/"mission-control:[a-z]+"/g)).toEqual(['"mission-control:list"', '"mission-control:get"', '"mission-control:answer"', '"mission-control:instruct"', '"mission-control:place"'])
     expect(preload).not.toMatch(/datum-studio-host|mission-client/)
   })
 })

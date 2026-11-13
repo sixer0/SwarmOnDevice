@@ -33,6 +33,8 @@ export type MissionControlMount = {
   prompt: (text: string) => Promise<unknown>
   /** `(p) => tabs().open(file.tab(p))` */
   openFile?: (path: string) => void
+  /** 1.2.8 row 46 (01d §4): whether any of these sessions is busy (the placement's join/new wait for idle) */
+  sessionBusy?: (sessions: string[]) => boolean
   /**
    * Row 133b (C175): the header toggle that widens the existing Activity pane (session-map-view.tsx) so the radial HQ
    * (stage >= 540 px) and the sidebar (>= 761 px) can show. `wide` is the remembered choice; absent = no toggle.
@@ -316,6 +318,7 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
                         refresh={() => props.control.refresh()}
                         prompt={props.prompt}
                         selected={row()}
+                        sessionBusy={props.sessionBusy}
                       />
                     )}
                   </Show>

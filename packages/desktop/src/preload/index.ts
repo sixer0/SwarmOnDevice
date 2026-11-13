@@ -92,6 +92,13 @@ const api: ElectronAPI = {
         text: input?.text,
         ...(input?.row === undefined ? {} : { row: input.row }),
       }),
+    // 1.2.8 row 46 (N8-144): the person's join/new click on an open placement request.
+    place: (input) =>
+      ipcRenderer.invoke(MISSION_CONTROL_IPC.place, {
+        mission: input?.mission,
+        request: input?.request,
+        option: input?.option,
+      }),
   },
   consumeInitialDeepLinks: () => ipcRenderer.invoke("consume-initial-deep-links"),
   getDefaultServerUrl: () => ipcRenderer.invoke("get-default-server-url"),

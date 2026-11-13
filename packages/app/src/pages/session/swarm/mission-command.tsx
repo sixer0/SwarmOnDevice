@@ -1,6 +1,7 @@
 // Decision card + command channel (row 131; masterplan/01_specs_mission_control_ui.md §6 items 20-31, V6:140-147, :362-384).
 // All mission text is agent-written: rendered as text nodes only (§12). Logic lives in mission-command-model.ts.
 import { useLanguage } from "@/context/language"
+import { showToast } from "@/utils/toast"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { createMemo, For, Show } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
@@ -10,6 +11,7 @@ import {
   decisionOptions,
   emptyCommandState,
   feedWho,
+  isPlacement,
   type MissionWriter,
   type Translate,
 } from "./mission-command-model"
@@ -41,6 +43,13 @@ export function MissionCommand(props: {
   prompt: (text: string) => Promise<unknown>
   /** row id of the selected agent (row 130 selection), for the detail line */
   selected?: string
+  /**
+   * 1.2.8 row 46 (01d §4): true while a session linked to the mission is busy; the placement's join/new then wait
+   * (N8-453). Absent = not known (the rehome route still refuses an active session).
+   */
+  sessionBusy?: (sessions: string[]) => boolean
+  /** 1.2.8 row 46: the placement success toast (N8-168); default the app toast */
+  toast?: (text: string) => void
 }) {
   const language = useLanguage()
   const t = language.t as Translate
@@ -51,9 +60,12 @@ export function MissionCommand(props: {
     prompt: (text) => props.prompt(text),
     t,
     onState: (next) => setState(reconcile(next)),
+    toast: (text) => (props.toast ? props.toast(text) : showToast({ title: text, variant: "success" })),
   })
 
   const options = createMemo(() => (props.model.decision ? decisionOptions(props.model.decision, t) : []))
+  const placement = () => !!props.model.decision && isPlacement(props.model.decision)
+  const waitIdle = () => placement() && !!props.sessionBusy?.(props.model.sessions ?? [])
   const answerLocked = () => {
     state.busy
     state.answered.length
@@ -91,7 +103,9 @@ export function MissionCommand(props: {
             {/* 1.2.7 U-5 (C6, D-11): the question and its context scroll in a bounded body; the options stay outside it. */}
             <div data-mission-decision-body class="flex max-h-[min(40vh,240px)] min-h-0 shrink flex-col gap-1.5 overflow-y-auto overscroll-contain">
               <div class="flex items-baseline justify-between gap-2">
-                <h2 data-mission-question class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">{decision().question}</h2>
+                <h2 data-mission-question class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">
+                  {placement() ? t("session.mission.placement.title") : decision().question}
+                </h2>
                 <span class="shrink-0 text-v2-text-text-faint">{decision().id}</span>
               </div>
               <Show when={decision().context}>
@@ -105,12 +119,24 @@ export function MissionCommand(props: {
                     type="button"
                     data-mission-option={option.id}
                     data-recommended={option.tag ? "" : undefined}
-                    disabled={answerLocked()}
+                    data-mission-moves={option.moves ? "" : undefined}
+                    disabled={answerLocked() || (option.moves === true && (waitIdle() || !props.writer.place))}
                     class="flex min-w-0 flex-[1_1_8rem] flex-col items-stretch gap-0.5 rounded-[6px] bg-v2-overlay-simple-overlay-hover px-2 py-1.5 text-left disabled:opacity-60"
-                    onClick={() => void command.answer(props.model.id, decision(), option.id)}
+                    onClick={() =>
+                      void (option.moves
+                        ? command.place(props.model.id, decision(), option.id)
+                        : command.answer(props.model.id, decision(), option.id))
+                    }
                   >
                     <span class="flex min-w-0 flex-wrap items-center gap-1.5 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">
                       {option.label}
+                      <Show when={option.kind}>
+                        {(kind) => (
+                          <span data-mission-group-kind class="rounded-[4px] px-1 text-v2-text-text-muted [font-weight:440]">
+                            {kind()}
+                          </span>
+                        )}
+                      </Show>
                       <Show when={option.tag}>
                         {(tag) => (
                           <span data-mission-recommended class="rounded-[4px] px-1 text-v2-state-fg-success [font-weight:440]">
@@ -119,11 +145,20 @@ export function MissionCommand(props: {
                         )}
                       </Show>
                     </span>
-                    <span data-mission-consequence class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{option.consequence}</span>
+                    <Show when={option.consequence}>
+                      <span data-mission-consequence class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{option.consequence}</span>
+                    </Show>
                   </button>
                 )}
               </For>
             </div>
+            {/* 1.2.8 row 46 (01d §4): the placement note (N8-155) and, while a linked session works, the wait hint (N8-453). */}
+            <Show when={placement()}>
+              <p data-mission-placement-note class="text-v2-text-text-muted">{t("session.mission.placement.note")}</p>
+            </Show>
+            <Show when={waitIdle()}>
+              <p data-mission-placement-wait class="text-v2-text-text-faint">{t("session.mission.placement.waitIdle")}</p>
+            </Show>
             <Show when={props.model.openDecisions > 1}>
               <div class="text-v2-text-text-faint">
                 {t("session.mission.decision.more", { count: props.model.openDecisions - 1 })}
@@ -157,6 +192,10 @@ export function MissionCommand(props: {
               <li class="flex min-w-0 flex-col" data-local={line.local ? "" : undefined}>
                 <span class="text-v2-text-text-faint">{feedWho(line, t)}</span>
                 <span class="break-words text-v2-text-text-base">{line.text}</span>
+                {/* 1.2.8 row 46 (SR8-05, N8-462): a by-user answer recorded from a session that was not attested. */}
+                <Show when={line.unattested}>
+                  <span data-mission-unattested class="text-v2-state-fg-warning">{t("session.mission.decision.unattested")}</span>
+                </Show>
               </li>
             )}
           </For>

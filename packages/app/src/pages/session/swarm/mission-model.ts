@@ -36,13 +36,17 @@ export type DecisionRequestWire = {
   id: string
   question: string
   context?: string
-  options: Array<{ id: string; label: string; consequence: string }>
+  /** 1.2.8 row 46: `group`/`groupKind` on project-placement join/new options (N8-454, N8-149). */
+  options: Array<{ id: string; label: string; consequence: string; group?: string; groupKind?: string }>
   recommended?: string
   blockingRows?: string[]
+  /** 1.2.8 row 46 (N8-146): absent = an ordinary decision. */
+  topic?: string
   status: "open" | "answered" | "withdrawn"
   createdAt: string
   closedAt?: string
-  answer?: { option: string; by: "user" | "controller"; decision: string }
+  /** 1.2.8 row 46 (SR8-05, N8-461): `attested` absent for answers recorded before 1.2.8. */
+  answer?: { option: string; by: "user" | "controller"; decision: string; via?: string; attested?: boolean }
 }
 
 export type MissionMessageWire = {
@@ -97,7 +101,15 @@ export type MissionDerivedWire = {
 }
 
 export type MissionGetWire = {
-  mission: { id: string; title: string; type: string; status: MissionStatus; rows: MissionRowWire[] }
+  mission: {
+    id: string
+    title: string
+    type: string
+    status: MissionStatus
+    rows: MissionRowWire[]
+    /** 1.2.8 row 46: the linked sessions (host SessionLink); absent from tests and older callers. */
+    sessions?: Array<{ client: string; ref: string }>
+  }
   derived: MissionDerivedWire
   requests?: DecisionRequestWire[]
   messages?: MissionMessageWire[]
@@ -143,7 +155,9 @@ export type MissionDecisionVM = {
   id: string
   question: string
   context?: string
-  options: Array<{ id: string; label: string; consequence: string; recommended: boolean }>
+  options: Array<{ id: string; label: string; consequence: string; recommended: boolean; group?: string; groupKind?: string }>
+  /** 1.2.8 row 46: "project-placement" renders the placement card (01d §4). */
+  topic?: string
 }
 export type MissionFeedLine = {
   key: string
@@ -154,6 +168,8 @@ export type MissionFeedLine = {
   text: string
   at: string
   local?: true
+  /** 1.2.8 row 46 (SR8-05, N8-462): a by-user answer the host recorded from a session that is not attested. */
+  unattested?: true
 }
 export type MissionDeliverableVM = {
   documentId: string
@@ -186,6 +202,8 @@ export type MissionVM = {
   waves: MissionWaveVM[]
   decision: MissionDecisionVM | null
   openDecisions: number
+  /** 1.2.8 row 46: Swarm sessions linked to the mission (join/new wait while one of them is busy, 01d §4). */
+  sessions?: string[]
   feed: MissionFeedLine[]
   deliverables: MissionDeliverableVM[]
   finalCount: number
@@ -499,7 +517,10 @@ export function buildMission(
           label: opt.label,
           consequence: opt.consequence,
           recommended: opt.id === oldestOpen.recommended,
+          ...(opt.group === undefined ? {} : { group: opt.group }),
+          ...(opt.groupKind === undefined ? {} : { groupKind: opt.groupKind }),
         })),
+        ...(oldestOpen.topic === undefined ? {} : { topic: oldestOpen.topic }),
       }
     : null
 
@@ -527,6 +548,8 @@ export function buildMission(
       to: "controller" as const,
       text: `${req.id}: ${labelOf(req)}`,
       at: req.closedAt ?? req.createdAt,
+      // C67: the label only when the host says explicitly that the session was not attested.
+      ...(req.answer?.by === "user" && req.answer.attested === false ? { unattested: true as const } : {}),
     })),
   ]
     .sort((a, b) => timeOf(a.at) - timeOf(b.at))
@@ -549,6 +572,7 @@ export function buildMission(
     waves,
     decision,
     openDecisions: open.length,
+    sessions: (mission.sessions ?? []).filter((link) => link?.client === "swarm" && typeof link.ref === "string").map((link) => link.ref),
     feed,
     deliverables,
     finalCount: deliverables.filter((d) => d.status === "final").length,

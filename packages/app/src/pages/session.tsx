@@ -1232,6 +1232,8 @@ export default function Page() {
           >[0])
         },
         openFile: (path) => tabs().open(file.tab(path)),
+        // 1.2.8 row 46 (01d §4): placement join/new wait while a session linked to the mission works.
+        sessionBusy: (ids) => ids.some((id) => (sync().data.session_status[id]?.type ?? "idle") !== "idle"),
       }
     : undefined
   // Leaving a run for a session with no agents (and no mission) leaves nothing to show on that tab. Missions still
