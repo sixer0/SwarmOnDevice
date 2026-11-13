@@ -2,7 +2,7 @@
 // Shared by the main-side lifecycle (lifecycle.ts) and the host-side runner (host-runner.ts). No Electron import.
 
 export const STUDIO_HOST_SERVICE_NAME = "datum-studio-host"
-export const STUDIO_RELEASE = "1.2.7"
+export const STUDIO_RELEASE = "1.2.8"
 
 /** main -> host. The endpoint token travels only in this message: never in env, argv or a log line. */
 export type HostStartCommand = {
