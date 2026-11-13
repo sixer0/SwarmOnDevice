@@ -14,6 +14,8 @@ import { verificationLines } from "../../src/mcp-host/verify/render-wrapper"
 import type { OutputVerificationReport, VerifiedOutput, VerifyCheck } from "../../src/mcp-host/verify/types"
 
 const SHA = "0123456789abcdef".repeat(4)
+// 1.2.7 row 51b (INTENT change, N7-065/AC-M03): each render output line ends with ` sha256=<64 hex>`; out() fixtures carry this sha.
+const OUT_SHA = ` sha256=${"a".repeat(64)}`
 /** A verification word with no family label in front: TERVERIFIKASI, or VERIFIED/UNVERIFIED not inside `<FAMILY>_..(..)`. */
 const BARE = /TERVERIFIKASI|terverifikasi|(?<![A-Z_])(UN)?VERIFIED(?!\()/
 
@@ -50,8 +52,8 @@ describe("M-07 render verdict labels (MH verify/render-wrapper.ts verificationLi
   it("all outputs verified: summary and every output line carry RENDER_VERIFIED(U24)", () => {
     const t = lines([out("HTML", "o-html", [pass("LINT")]), out("PDF", "o-pdf", [pass("LINT")])])
     expect(t[0]).toBe("verification: RENDER_VERIFIED(U24) (2/2 outputs verified)")
-    expect(t).toContain("  HTML o-html RENDER_VERIFIED(U24)")
-    expect(t).toContain("  PDF o-pdf RENDER_VERIFIED(U24)")
+    expect(t).toContain(`  HTML o-html RENDER_VERIFIED(U24)${OUT_SHA}`)
+    expect(t).toContain(`  PDF o-pdf RENDER_VERIFIED(U24)${OUT_SHA}`)
     for (const l of t) expect(l, l).not.toMatch(BARE)
   })
 
@@ -59,8 +61,8 @@ describe("M-07 render verdict labels (MH verify/render-wrapper.ts verificationLi
     const bad = out("DOCX", "o-docx", [{ id: "LINT", status: "FAIL", findings: [] } as unknown as VerifyCheck, { id: "PAGE_COUNT", status: "UNKNOWN", reason: "BRIDGE_UNAVAILABLE" } as unknown as VerifyCheck])
     const t = lines([out("HTML", "o-html", [pass("LINT")]), bad])
     expect(t[0]).toBe("verification: RENDER_UNVERIFIED(U24) (1/2 outputs verified)")
-    expect(t).toContain("  HTML o-html RENDER_VERIFIED(U24)")
-    expect(t).toContain("  DOCX o-docx RENDER_UNVERIFIED(U24) fail=LINT unknown=PAGE_COUNT:BRIDGE_UNAVAILABLE")
+    expect(t).toContain(`  HTML o-html RENDER_VERIFIED(U24)${OUT_SHA}`)
+    expect(t).toContain(`  DOCX o-docx RENDER_UNVERIFIED(U24) fail=LINT unknown=PAGE_COUNT:BRIDGE_UNAVAILABLE${OUT_SHA}`)
     for (const l of t) expect(l, l).not.toMatch(BARE)
   })
 })
