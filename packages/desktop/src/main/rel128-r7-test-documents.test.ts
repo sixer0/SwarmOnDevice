@@ -25,7 +25,7 @@ mock.module("electron", () => ({
 }))
 
 const onboarding = await import("./onboarding")
-const { prepareOnboardingTestRoot } = await import("./onboarding-test-root")
+const { prepareOnboardingTestRoot, registerRealDocuments } = await import("./onboarding-test-root")
 const { createSidecarEnv } = await import("./sidecar-env")
 
 const KEY = "SWARM_DEFAULT_PROJECT_DIR"
@@ -43,6 +43,9 @@ function inside(path: string, root: string) {
 
 beforeEach(() => {
   values.clear()
+  // The electron mock is process-wide and onboarding.ts is cached from whichever file imported it first, so this file
+  // registers its own Documents resolver instead of relying on that mock (1.2.8 row 49e).
+  registerRealDocuments(() => realDocuments)
 })
 
 afterEach(() => {
