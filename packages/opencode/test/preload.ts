@@ -99,3 +99,8 @@ initProjectors()
 // Most suites are about what a project's config does, so their temp folders count as trusted. test/project/trust.test.ts turns this off.
 const { ProjectTrust } = await import("@opencode-ai/core/project/trust")
 ProjectTrust.assumeTrustedForTests(true)
+
+// The shell reader starts asynchronously and the table answers "not read" until it is ready. The live gate waits for it
+// before judging, so every file starts with it ready; otherwise a verdict depends on which file ran first (row 28f).
+const { ScriptReader } = await import("../src/permission/script-reader")
+await ScriptReader.prepare()
