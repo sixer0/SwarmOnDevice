@@ -20,7 +20,7 @@ import { applyChartIntent, orientationTarget } from "@/lib/studio/engine/chart/c
 import { figureGrid } from "@/lib/studio/engine/chart/core/guards";
 import type { ChartLang } from "@/lib/studio/engine/chart/core/lang";
 import { buildDiagramSvgAuto } from "@/lib/studio/engine/diagram/elk";
-import type { DiagramBuildOptions } from "@/lib/studio/engine/diagram/build";
+import type { DiagramBuildOptions, DiagramBuildReport } from "@/lib/studio/engine/diagram/build";
 import { APPARATUS_TEXT, provenanceMarkLabelText } from "@/lib/studio/engine/front/texts";
 import { glyphSet, mapBlock, storedComposeContext } from "@/lib/studio/services/compose";
 import { templateForDoc } from "@/lib/studio/services/render/common";
@@ -165,7 +165,7 @@ export interface FigurePreview {
    * Row 165C (F56-3): set when the figure was drawn stand-alone (`standalone: true`): the figure number and title
    * the SVG prints, and the DATUM figure file name stem (`Gambar <n> <Judul>`, naming.ts figureFileName).
    */
-  standalone?: { id: string; title: string; fileName: { svg: string; png: string } };
+  standalone?: { id: string; title: string; fileName: { svg: string; png: string }; furniture?: NonNullable<DiagramBuildReport["furniture"]> };
   /** Row 165C (F56-3): base64 PNG (300 dpi) of the stand-alone figure, only with `png: true`. */
   png?: string;
 }
@@ -422,18 +422,20 @@ export async function renderResolved(
     data,
     rendered,
     ...(o.withSvg ? { svg: r.svg } : {}),
-    ...(solo !== null ? { standalone: standaloneInfo(solo, block.artifactLabel ?? null) } : {}),
+    // Swarm 1.2.7 row 36b (T-12, N7-068): the engine's furniture report (N7-138) travels with the stand-alone info.
+    ...(solo !== null ? { standalone: standaloneInfo(solo, block.artifactLabel ?? null, (r.report as Partial<DiagramBuildReport>).furniture) } : {}),
     // Row 165C (F56-3): PNG through the render bridge (same raster as the document figures: 300 dpi).
     ...(solo !== null && o.png === true ? { png: Buffer.from(await rasterizeSvg(r.svg, { widthMm: r.widthMm, heightMm: r.heightMm, dpi: 300, tpl })).toString("base64") } : {}),
   };
 }
 
 /** Row 165C (F56-3): number, title and DATUM file names (`Gambar 4.1 <Judul>.svg`, p.11-12) of a stand-alone figure. */
-function standaloneInfo(spec: StudioDiagramV1, label: string | null): NonNullable<FigurePreview["standalone"]> {
+function standaloneInfo(spec: StudioDiagramV1, label: string | null, furniture?: DiagramBuildReport["furniture"]): NonNullable<FigurePreview["standalone"]> {
   const id = String(spec.id);
   const word = label !== null && /^\s*\D+?\s+\d/.test(label) ? label.trim().replace(/\s+\d[\d.]*$/, "") : "Gambar";
   const title = String(spec.title);
-  return { id, title, fileName: { svg: figureFileName(`${word} ${id}`, title, 1, "svg"), png: figureFileName(`${word} ${id}`, title, 1, "png") } };
+  const fu = furniture ? { furniture: { keyLines: furniture.keyLines, sourceLines: furniture.sourceLines, heightMm: furniture.heightMm } } : {};
+  return { id, title, fileName: { svg: figureFileName(`${word} ${id}`, title, 1, "svg"), png: figureFileName(`${word} ${id}`, title, 1, "png") }, ...fu };
 }
 
 /**

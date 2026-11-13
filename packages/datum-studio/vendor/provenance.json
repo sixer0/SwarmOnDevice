@@ -111,7 +111,8 @@
   "row38": "2026-11-13: 1.2.7 row 38 (N-10 part 1, AC-N10, N7-144; C8 D-14). 1 vendor file re-patched (files[].patch_row38, before = previous sha256; status unchanged): scripts/studio/mcp/write-client-run.ts (finishDoc: a failed R17 render names the first server error code plus its check id, e.g. FIGURE_OVER_CAPACITY (DT-10a), instead of NO_DOCX_OUTPUT; the server messages go only into an untrusted galat-render block and renderErrors (untrustedFields); NO_DOCX_OUTPUT stays when the reply has no error). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/38_row38_diffs/. counts by delta: bytes 9970514 -> 9972254 (+1740); files/copied/patched/replaced/added unchanged. patch_rows += 38",
   "row39": "2026-11-13: 1.2.7 row 39 (T-11 + SF-2, AC-T11; N-9 description, AC-N9; T-12 text line for row 36b; C8 D-14). 1 vendor file re-patched (files[].patch_row39, before = previous sha256; status unchanged): scripts/studio/mcp/figure-tools.ts (INLINE_V2_DIAGRAM_REQUIRED; mergeFigurePatch checks a spec without $schema against it; top-level direction refusal names the spec route; N7-070/N7-072 description text; perabot line). Default tools/list 29974 -> 29960 B (texts shortened, no pin moved). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/39_row39_diffs/. counts by delta: bytes 9972254 -> 9973784 (+1530); files/copied/patched/replaced/added unchanged. patch_rows += 39",
   "row40": "2026-11-13: 1.2.7 row 40 (N-11, AC-N11, C12 O-6). 3 vendor files re-patched (files[].patch_row40, before = previous sha256; status unchanged, table-fit.ts stays added): engine/table-fit.ts (TABLE_BREAK_AFTER, TABLE_BREAK_MIN_CHARS = 16, breakableSegments, tableBreakRuns; longestWord measures the longest segment; DT-10a suggestion names the ID-list break), engine/html/tables/table.ts (<wbr> after each separator of a long ID list in wrapping cells), engine/docx/tables/render.ts (U+200B at the same positions). Not lint closure (skillSha unchanged). Diffs in docs/2026-11-13_swarm_1_2_7_patch/implementation/40_row40_diffs/. counts by delta: bytes 9973784 -> 9977681 (+3897); files/copied/patched/replaced/added unchanged. patch_rows += 40",
-  "row41": "2026-11-13: 1.2.7 row 41 (T-18, AC-T18, N7-074; C3 no new codes). 1 vendor file re-patched (files[].patch_row41, before = previous sha256; status unchanged): scripts/studio/mcp/write-tools.ts (studio_write description names D22 and figure.quota.exceptionReason; one-section example and shorter wording keep it <= 450 chars). studio_write is in toolset write only: default tools/list 29960 -> 29960 B, list with write 39638 -> 39624 B (no pin moved). Not lint closure (skillSha unchanged); registry 103 unchanged. Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/41_row41_diffs/. counts by delta: bytes 9977681 -> 9977858 (+177); files/copied/patched/replaced/added unchanged. patch_rows += 41"
+  "row41": "2026-11-13: 1.2.7 row 41 (T-18, AC-T18, N7-074; C3 no new codes). 1 vendor file re-patched (files[].patch_row41, before = previous sha256; status unchanged): scripts/studio/mcp/write-tools.ts (studio_write description names D22 and figure.quota.exceptionReason; one-section example and shorter wording keep it <= 450 chars). studio_write is in toolset write only: default tools/list 29960 -> 29960 B, list with write 39638 -> 39624 B (no pin moved). Not lint closure (skillSha unchanged); registry 103 unchanged. Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/41_row41_diffs/. counts by delta: bytes 9977681 -> 9977858 (+177); files/copied/patched/replaced/added unchanged. patch_rows += 41",
+  "row36b": "2026-11-13: 1.2.7 row 36b (T-12, AC-T12, N7-138 feeding N7-068). 1 vendor file re-patched (files[].patch_row36b, before = previous sha256; status unchanged): engine/diagram/build/svg.ts (DiagramBuildReport.furniture {keyLines, sourceLines, heightMm} set only for apparatus figure from keyTexts, srcLines and furnitureMm; report only, SVG bytes unchanged). Not lint closure (guard.ts isLintClosurePath; skillSha unchanged). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/36b_row36b_diffs/. counts by delta: bytes 9977858 -> 9978454 (+596); files/copied/patched/replaced/added unchanged. patch_rows += 36b"
  },
  "counts": {
   "files": 608,
@@ -119,7 +120,7 @@
   "patched": 157,
   "replaced": 12,
   "added": 30,
-  "bytes": 9977858
+  "bytes": 9978454
  },
  "files": [
   {
@@ -2403,9 +2404,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 32855,
+   "bytes": 33451,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "c2fd6e9f8a915bbee1af43127a28b2e1738405bc3ef4ac62a9086ef4e2a89c6b",
+   "sha256": "24ec6c45b053f4bb5418068fd9aa54a48201fa0d0a45aebaffcaa371d69f58d5",
+   "patch_row36b": {"id": "127-36b-T12", "row": "36b", "decision": "1.2.7 P-6 / CH-6 (T-12, AC-T12, N7-138)", "summary": "DiagramBuildReport.furniture?: {keyLines, sourceLines, heightMm}, set only when apparatus === figure: keyLines = keyTexts.length (KUNCI lines drawn), sourceLines = srcLines.length (SUMBER lines after wrapping), heightMm = furnitureMm (caption, KUNCI, SUMBER height); feeds the preview route's standalone.furniture (N7-068); report only, SVG bytes unchanged", "before_sha256": "c2fd6e9f8a915bbee1af43127a28b2e1738405bc3ef4ac62a9086ef4e2a89c6b", "after_sha256": "24ec6c45b053f4bb5418068fd9aa54a48201fa0d0a45aebaffcaa371d69f58d5", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/36b_row36b_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "f5ef3702d1aead47d115063d6d2e7deaa2d5fe22fd9eaab2b11beaeb5262f5bd"},
    "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "DiagramBuildOptions.provenance (SUMBER + PROVENANS part with coloured glyphs); caption lines marked, NEW withCaptionAbove moves them above the drawing; foot order KUNCI then SUMBER", "before_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "after_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "diff": "implementation/146_row165P_diffs/engine_diagram_build_svg.ts.diff"},
    "patch_row165C": {"id": "row165C-figure-engine", "row": "165C", "decision": "C188 F113-9 (CP-37), F113-10 (CP-47)", "summary": "buildOnce: no hatch <pattern> defined (diagramDefs hatch45/hatch135 false; hatches are vector lines from nodeSvg); nodeSvg gets the sheet size (canvas W x H) for the half-stroke edge inset", "before_sha256": "d00ed096ae2ee9775dac86045c845ca532b89833c469df1f9889c1af434ba100", "after_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/136_row165C_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "b0eb988881e88aef2e4615a4ae468d623d9292de9cc04a839b681a797f20f8f9"},
    "patch_row124b": {
@@ -6228,6 +6230,7 @@
   "38",
   "39",
   "40",
-  "41"
+  "41",
+  "36b"
  ]
 }
