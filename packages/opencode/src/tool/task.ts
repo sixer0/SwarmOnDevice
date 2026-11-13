@@ -22,6 +22,8 @@ import { existsSync } from "node:fs"
 import * as path from "path"
 import { MCP } from "@/mcp"
 import { RoleAlias } from "../agent/role-alias"
+import { Permission } from "@/permission"
+import type { PermissionV1 } from "@opencode-ai/core/v1/permission"
 
 export interface TaskPromptOps {
   cancel(sessionID: SessionID): Effect.Effect<void>
@@ -61,6 +63,15 @@ const BaseParameterFields = {
     description:
       "Paths the subagent must produce (absolute, or relative to the session directory). After the run, any path that does not exist makes the task return SUBAGENT_OUTPUT_MISSING naming it.",
   }),
+  // 1.2.7 P-01a (N7-055, K7-07).
+  permissions: Schema.optional(
+    Schema.Struct({
+      bash: Schema.optional(Schema.Array(Schema.String)),
+    }),
+  ).annotate({
+    description:
+      'Extra shell command patterns this subagent may run without asking, e.g. ["sh ./scripts/check.sh"]. Only patterns this session may run itself are accepted. planner and data-collector stay limited to the read class (U4).',
+  }),
 }
 
 const BaseParameters = Schema.Struct(BaseParameterFields)
@@ -98,6 +109,57 @@ export {
   SUBAGENT_STOPPED,
   subagentStoppedMessage,
 } from "@/permission/autonomy-texts"
+
+/** 1.2.7 P-01a (N7-131): a `permissions` entry that is not one literal command. */
+export const TASK_GRANT_INVALID = "TASK_GRANT_INVALID"
+/** 1.2.7 P-01a (N7-132): a `permissions` entry the child's role may not run. */
+export const TASK_GRANT_ROLE_DENIED = "TASK_GRANT_ROLE_DENIED"
+/** 1.2.7 P-01a (N7-056): a `permissions` entry the parent session may not run itself. */
+export const TASK_GRANT_EXCEEDS_PARENT = "TASK_GRANT_EXCEEDS_PARENT"
+
+const GRANT_MAX_ENTRIES = 20
+const GRANT_MAX_LENGTH = 500
+// SR7-04: anything whose runtime meaning can differ from the string the parent vouched for.
+const GRANT_NOT_LITERAL = /[*?$`<>|;&(){}[\]]/
+const GRANT_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/
+const GRANT_ASSIGNMENT = /^\s*[A-Za-z_][A-Za-z0-9_]*=/
+// The read roles (U4): a grant never widens them past their read class, so they take none.
+const GRANT_READ_ROLES: ReadonlySet<string> = new Set(["planner", "data-collector"])
+
+const shown = (pattern: string) => JSON.stringify(pattern.length > 120 ? pattern.slice(0, 120) + "…" : pattern)
+
+/**
+ * 1.2.7 P-01a (SR7-04): the refusal for the first `permissions` entry that may not be granted, or undefined. Order: the
+ * literal rule, then the parent's own effective rules (never wider than the parent), then the child's effective merged
+ * ruleset as it will be created and the read-role limit. A role deny is final: a grant never reopens it.
+ */
+export function taskGrantRefusal(input: {
+  patterns: readonly string[]
+  role: string
+  parent: PermissionV1.Ruleset
+  child: PermissionV1.Ruleset
+}): string | undefined {
+  const invalid = (pattern: string) =>
+    `${TASK_GRANT_INVALID} Task not started: permissions entry ${shown(pattern)} is not one literal command (no * ? $ backquote < > | ; & ( ) { } [ ], no leading NAME=value, no control characters, one line, at most ${GRANT_MAX_LENGTH} characters, at most ${GRANT_MAX_ENTRIES} entries).`
+  if (input.patterns.length > GRANT_MAX_ENTRIES) return invalid(input.patterns[GRANT_MAX_ENTRIES]!)
+  for (const pattern of input.patterns) {
+    if (
+      pattern.trim() === "" ||
+      pattern.length > GRANT_MAX_LENGTH ||
+      GRANT_NOT_LITERAL.test(pattern) ||
+      GRANT_CONTROL.test(pattern) ||
+      GRANT_ASSIGNMENT.test(pattern)
+    )
+      return invalid(pattern)
+  }
+  for (const pattern of input.patterns.map((item) => item.trim())) {
+    if (Permission.evaluate("bash", pattern, input.parent).action === "deny")
+      return `${TASK_GRANT_EXCEEDS_PARENT} Task not started: permissions grants ${shown(pattern)}, which this session may not run itself.`
+    if (GRANT_READ_ROLES.has(input.role) || Permission.evaluate("bash", pattern, input.child).action === "deny")
+      return `${TASK_GRANT_ROLE_DENIED} Task not started: the ${input.role} role may not run ${shown(pattern)}. Hand it to a coder subagent.`
+  }
+  return undefined
+}
 
 /** S-03b: the `expected_outputs` paths that do not exist, resolved against `root`. Existence only; content is never read. */
 export function missingOutputs(root: string, paths: readonly string[] | undefined) {
@@ -287,22 +349,37 @@ export const TaskTool = Tool.define(
           action: "deny" as const,
         })) ?? []),
       ]
+      const childSessionPermission = [
+        ...childPermission,
+        ...childToolDenies.filter(
+          (deny) =>
+            !childPermission.some(
+              (rule) => rule.permission === deny.permission && rule.pattern === deny.pattern && rule.action === deny.action,
+            ),
+        ),
+      ]
+      // 1.2.7 P-01a: validated before any child session exists, so a refused grant starts nothing.
+      const grantPatterns = (params.permissions?.bash ?? []).map((pattern) => pattern.trim())
+      if ((params.permissions?.bash ?? []).length > 0) {
+        const parentAgent = yield* agent.get(ctx.agent)
+        const refusal = taskGrantRefusal({
+          patterns: params.permissions?.bash ?? [],
+          role: next.name,
+          // Unknown parent agent: nothing is vouched for (fail-closed).
+          parent: parentAgent
+            ? Permission.merge(parentAgent.permission, parent.permission ?? [])
+            : [{ permission: "*", pattern: "*", action: "deny" }],
+          child: Permission.merge(next.permission, session?.permission ?? childSessionPermission),
+        })
+        if (refusal) return yield* Effect.fail(new Error(refusal))
+      }
       const nextSession =
         session ??
         (yield* sessions.create({
           parentID: ctx.sessionID,
           title: params.description + ` (@${next.name} subagent)`,
           agent: next.name,
-          permission: [
-            ...childPermission,
-            ...childToolDenies.filter(
-              (deny) =>
-                !childPermission.some(
-                  (rule) =>
-                    rule.permission === deny.permission && rule.pattern === deny.pattern && rule.action === deny.action,
-                ),
-            ),
-          ],
+          permission: childSessionPermission,
         }))
 
       const msg = yield* MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID }).pipe(
@@ -343,6 +420,13 @@ export const TaskTool = Tool.define(
       // S-03b: captured here, so a background run checks `expected_outputs` against the same session directory.
       const root = (yield* InstanceState.context).directory
 
+      // 1.2.7 P-01a (N7-133): the grant lives in the permission service's memory for this child only; a call without
+      // `permissions` (a resume included) drops any earlier one. Without the service nothing is granted (fail-closed).
+      const permissionService = Option.getOrUndefined(yield* Effect.serviceOption(Permission.Service))
+      const setGrant = (patterns: readonly string[]) =>
+        permissionService?.grantTask?.(nextSession.id, patterns, parent.parentID ? "subagent" : "root") ?? Effect.void
+      yield* setGrant(grantPatterns)
+
       const runTask = Effect.fn("TaskTool.runTask")(function* () {
         const parts = yield* ops.resolvePromptParts(prefix + params.prompt)
         const result = yield* ops.prompt({
@@ -366,6 +450,8 @@ export const TaskTool = Tool.define(
           return yield* Effect.fail(new Error(subagentOutputMissingText(nextSession.id, missing, outcome.text)))
         return outcome.text
       })
+      // The grant ends with the child's run, finished, failed or aborted.
+      const runGranted = () => runTask().pipe(Effect.ensuring(setGrant([])))
 
       const inject = Effect.fn("TaskTool.injectBackgroundResult")(function* (
         state: "completed" | "error",
@@ -407,7 +493,7 @@ export const TaskTool = Tool.define(
         )
       })
 
-      if (yield* background.extend({ id: nextSession.id, run: runTask() })) {
+      if (yield* background.extend({ id: nextSession.id, run: runGranted() })) {
         return {
           title: params.description,
           metadata: {
@@ -436,7 +522,7 @@ export const TaskTool = Tool.define(
           }),
           notify(nextSession.id),
         ]),
-        run: runTask().pipe(Effect.onInterrupt(() => ops.cancel(nextSession.id))),
+        run: runGranted().pipe(Effect.onInterrupt(() => ops.cancel(nextSession.id))),
       })
 
       function backgroundResult() {

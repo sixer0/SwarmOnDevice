@@ -19,6 +19,7 @@ import { ScriptScreen } from "./script-screen"
 import { Unattended } from "./unattended"
 import { Reach } from "../tool/reach"
 import { Risk } from "../tool/risk"
+import { Secrets } from "@/tool/secrets"
 import {
   MAIN_AGENT_UNAVAILABLE_TEXT,
   REFUSED_TEXT,
@@ -109,6 +110,19 @@ export interface Interface {
    * for the caller to run (C98). Optional only so stand-ins elsewhere need not change; the real service always has it.
    */
   readonly consentTicked?: (root: SessionID) => Effect.Effect<ReadonlyArray<Answered>>
+  /**
+   * 1.2.7 P-01a (N7-133, SR7-04): the literal shell commands a task's parent vouched for, for that child session only.
+   * Memory only: never a session allow rule, gone on restart, dropped when the child ends or is aborted (an empty
+   * `patterns` drops it), and never copied to a grandchild (keyed by the child's own id). `caller` is the parent's kind.
+   * It acts only in the gate, only under consent, and only by judging an exactly granted call with that caller: the
+   * table, `noWait`, X, `forged` and `unsaved` run unchanged. One audit line is written when a grant is issued.
+   * Optional only so stand-ins elsewhere need not change; the real service always has it.
+   */
+  readonly grantTask?: (
+    child: SessionID,
+    patterns: readonly string[],
+    caller: "root" | "subagent",
+  ) => Effect.Effect<void>
 }
 
 interface PendingEntry {
@@ -573,6 +587,8 @@ const layer = Layer.effect(
     const sessions = yield* Session.Service
     const autonomy = yield* Autonomy.Service
     const decider = yield* Decider
+    // 1.2.7 P-01a (N7-133): per-task grants, by child session id. Memory only (fail-closed on restart).
+    const taskGrants = new Map<SessionID, { readonly patterns: ReadonlySet<string>; readonly caller: "root" | "subagent" }>()
     const state = yield* InstanceState.make<State>(
       Effect.fn("Permission.state")(function* (ctx) {
         const state = {
@@ -793,9 +809,20 @@ const layer = Layer.effect(
               .bypassOf({ root: root.id, directory })
               .pipe(Effect.catchCause(() => Effect.succeed(undefined)))
           : undefined
-      const bypass = consentNow
-        ? ({ caller: root.id === input.sessionID ? "root" : "subagent" } as const)
-        : undefined
+      const natural = root.id === input.sessionID ? ("root" as const) : ("subagent" as const)
+      // 1.2.7 P-01a (N7-133): a shell call that is, to the letter, a command the task's parent granted this child is judged
+      // with the parent's caller kind, under consent only. Never wider than the parent: the table and every refusal below
+      // run unchanged, and a nested parent passes on only "subagent".
+      const taskGrant = consentNow && input.permission === "bash" ? taskGrants.get(input.sessionID) : undefined
+      const grantCommand = (input.metadata as Record<string, unknown> | undefined)?.command
+      const granted =
+        taskGrant !== undefined &&
+        taskGrant.caller !== natural &&
+        typeof grantCommand === "string" &&
+        taskGrant.patterns.has(grantCommand.trim()) &&
+        input.patterns.length > 0 &&
+        input.patterns.every((pattern) => taskGrant.patterns.has(pattern))
+      const bypass = consentNow ? ({ caller: granted ? taskGrant.caller : natural } as const) : undefined
       // The table reads project scripts synchronously; its shell reader starts asynchronously, so wait for it once.
       // 1.1.1 F12a (P4, m29): for at most `SCRIPT_READER_WAIT`; a reader still not ready leaves scripts at 1.1.0.
       // 1.1.1 F14 (G5-P4): the bound counts from when the start began, so a start that hangs is waited for once in all.
@@ -1038,7 +1065,9 @@ const layer = Layer.effect(
               ? "grant"
               : into
                 ? "duplicate"
-                : overlaid
+                : granted
+                  ? "task_grant"
+                  : overlaid
                   ? forSubagent
                     ? "for_subagent"
                     : "main_agent"
@@ -1801,7 +1830,42 @@ const layer = Layer.effect(
       return answers
     })
 
-    return Service.of({ ask, reply, grant, list, consentTicked })
+    /** 1.2.7 P-01a (N7-133, SR7-04): holds a task's grant in memory, or drops it on empty `patterns`; one audit line at issue. */
+    const grantTask = Effect.fn("Permission.grantTask")(function* (
+      child: SessionID,
+      patterns: readonly string[],
+      caller: "root" | "subagent",
+    ) {
+      if (patterns.length === 0) {
+        taskGrants.delete(child)
+        return
+      }
+      taskGrants.set(child, { patterns: new Set(patterns), caller })
+      const instance = yield* InstanceState.context
+      const root = yield* rootOf(child)
+      const session = yield* sessions.get(child).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+      yield* autonomy
+        .record(root.id, {
+          type: "decision",
+          sessionID: child,
+          requestID: PermissionV1.ID.ascending(),
+          agent: session?.agent ?? "unknown",
+          directory: root.directory ?? instance.directory,
+          permission: "task",
+          // SR7-04: through `scrubAssigned`, so a value typed into a granted command never reaches the file.
+          patterns: patterns.map((pattern) => Secrets.scrubAssigned(pattern)),
+          class: "A",
+          canUndo: false,
+          decidedBy: "gate",
+          decision: "allow",
+          reason: `task grant from parent session ${session?.parentID ?? "unknown"} (judged as ${caller})`,
+          via: "task_grant",
+        })
+        // The grant changes no answer outside the consented gate, and a missing line is logged by record.
+        .pipe(Effect.ignore)
+    })
+
+    return Service.of({ ask, reply, grant, list, consentTicked, grantTask })
   }),
 )
 

@@ -203,8 +203,10 @@ const Decision = Schema.Struct({
   // Under the consented bypass: the category the call had before the overlay changed it (S1.43).
   bypassed: Schema.optional(DecisionCategory),
   // `main_agent`: the root's own call, decided by the main agent; `for_subagent`: the main agent decided for a subagent.
+  // `task_grant` (1.2.7 P-01a, N7-134): a child's call judged with its parent's caller through a task grant, or the grant's
+  // own line when it was issued.
   via: Schema.optional(
-    Schema.Literals(["grant", "duplicate", "consent", "outward", "user_request", "main_agent", "for_subagent"]),
+    Schema.Literals(["grant", "duplicate", "consent", "outward", "user_request", "main_agent", "for_subagent", "task_grant"]),
   ),
   duplicateOf: Schema.optional(Schema.String),
   consentID: Schema.optional(Schema.String),
