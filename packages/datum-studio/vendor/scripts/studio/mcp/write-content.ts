@@ -14,7 +14,7 @@ import { getContractKindDef } from "../../../src/lib/studio/registry/contracts";
 import { CONTRACT_ACTOR_PATTERN, CONTRACT_KEY_PATTERN } from "../../../src/lib/studio/contract/env";
 import { mdReportRules, MD_REPORT_DEFAULT_KIND } from "../../../src/lib/studio/services/draft/md-report";
 import { normalizeHeading } from "../../../src/lib/studio/services/import/contract/parse";
-import { breakableSegments, cellTexts, tableBreakBudget, tableSpanLimitMm } from "../../../src/lib/studio/engine/table-fit";
+import { breakableSegments, cellTexts, COLUMN_GAP_MM, TABLE_NUMERALS_PT_DEFAULT, TEXT_PT, tableBreakBudget, tableSpanLimitMm } from "../../../src/lib/studio/engine/table-fit";
 import type { ParamMap, TableBlock } from "../../../src/lib/studio/contract";
 import { McpToolError } from "./safety";
 import type { ToolWarning } from "./tool-kit";
@@ -146,14 +146,14 @@ function likelyEm(ch: string): number {
   if (/\p{Nd}/u.test(ch)) return 0.54;
   return 0.35;
 }
-const LIKELY_TEXT_PT = 7.5; // = TEXT_PT table-fit.ts (teks sel)
+const LIKELY_TEXT_PT = TEXT_PT; // teks sel, dibagi dengan table-fit.ts
 const LIKELY_MONO_EM = 0.6; // IBM Plex Mono, angka satu baris
-const LIKELY_MONO_PT = 7.8; // = type.scale.tableNumerals.size bawaan table-fit.ts
-const LIKELY_GAP_MM = 2.5; // = COLUMN_GAP_MM table-fit.ts (celah antarkolom HTML)
+const LIKELY_MONO_PT = TABLE_NUMERALS_PT_DEFAULT; // type.scale.tableNumerals.size bawaan, dibagi dengan table-fit.ts
+const LIKELY_GAP_MM = COLUMN_GAP_MM; // celah antarkolom HTML, dibagi dengan table-fit.ts
 const MM_PER_PT = 25.4 / 72;
 const likelyMm = (s: string, pt: number): number => Array.from(s).reduce((a, ch) => a + likelyEm(ch), 0) * pt * MM_PER_PT;
-/** Sel angka (sama dengan `NUMERAL` write-client.ts): kolom yang seluruh isinya angka tidak dibungkus. */
-const LIKELY_NUMERAL = /^[−+-]?(?:\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d+)?\s*%?$/;
+/** Sel angka: kolom yang seluruh isinya angka tidak dibungkus. Satu sumber: write-client.ts mengimpornya sebagai `NUMERAL`. */
+export const NUMERAL_CELL = /^[−+-]?(?:\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d+)?\s*%?$/;
 
 type FitShape = Pick<TableBlock, "columns" | "rows">;
 
@@ -163,7 +163,7 @@ export function rowsTableShape(rows: Rows): FitShape {
   const body = rows.slice(1);
   const columns = Array.from({ length: width }, (_, c) => {
     const vals = body.map((r) => String(r[c] ?? "").trim()).filter((v) => v !== "");
-    return { role: vals.length > 0 && vals.every((v) => LIKELY_NUMERAL.test(v)) ? "numeral" : "text" };
+    return { role: vals.length > 0 && vals.every((v) => NUMERAL_CELL.test(v)) ? "numeral" : "text" };
   });
   return {
     columns,

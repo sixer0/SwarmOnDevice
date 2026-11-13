@@ -125,7 +125,7 @@
   "patched": 164,
   "replaced": 12,
   "added": 30,
-  "bytes": 10112528
+  "bytes": 10112968
  },
  "files": [
   {
@@ -488,20 +488,22 @@
   {
    "path": "scripts/studio/mcp/write-client.ts",
    "status": "patched",
-   "bytes": 41492,
+   "bytes": 41460,
    "source_sha256": "fb302265284ff31a548215442d02bb646dec8ddf7021f763f7024a500577aaf2",
-   "sha256": "24f6c169922610dcbc0987aee1499a70c98b804ec3f933b2a1c01e92f1337955",
+   "sha256": "6928c8c95eee41acbfa19eb3af86fa4353dffff5b21b4f07a36290349cf92922",
    "patch_row34": {"id": "128-34-hn15", "row": "34", "decision": "1.2.8 row 34 (AC-HN15, H-N15; N8-210)", "summary": "tableBlock (studio_write and studio_edit {append} client tables): warnTableOverflow (write-content.ts) on the built {columns, rows} -> TABLE_OVERFLOW_LIKELY naming the caption with the estimate against the text column; the stored block is unchanged. Out-of-area for row 34", "diff_base": "sha256 before this row", "before_sha256": "03fc5ea5490d4e04f7195bff82e3764d3ec304ae6ee9dd82fe2ac0d7091d001a", "after_sha256": "24f6c169922610dcbc0987aee1499a70c98b804ec3f933b2a1c01e92f1337955", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34_row34_diffs/scripts_studio_mcp_write-client.ts.diff", "diff_sha256": "b06f8ac20046967812187d073c066f4196b128c71ee198b2e023f24edc051fbe"},
-   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206)", "summary": "NEW diagramBlock(): studio_write/studio_edit client block {diagram:{spec|artifactId, caption, source, keyRow}} -> DiagramV2 (spec untouched, fixed key order; caption/source text -> InlineV2, caption number prefix stripped, source from the block or meta.source, never invented), checked by the shared v2 validator validateBlockV2 (refusal = issue SCHEMA_INVALID with up to 5 validator messages); chapterOf maps it; ClientBlock gains {diagram}; 'blok tidak dikenal' list names {diagram}. Copied -> patched", "before_sha256": "fb302265284ff31a548215442d02bb646dec8ddf7021f763f7024a500577aaf2", "after_sha256": "03fc5ea5490d4e04f7195bff82e3764d3ec304ae6ee9dd82fe2ac0d7091d001a", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-client.ts.diff", "diff_sha256": "a8c94243e67d5e137aa6a8661d3433da9659b52159f8c8675b7004f637a9e28c"}
+   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206)", "summary": "NEW diagramBlock(): studio_write/studio_edit client block {diagram:{spec|artifactId, caption, source, keyRow}} -> DiagramV2 (spec untouched, fixed key order; caption/source text -> InlineV2, caption number prefix stripped, source from the block or meta.source, never invented), checked by the shared v2 validator validateBlockV2 (refusal = issue SCHEMA_INVALID with up to 5 validator messages); chapterOf maps it; ClientBlock gains {diagram}; 'blok tidak dikenal' list names {diagram}. Copied -> patched", "before_sha256": "fb302265284ff31a548215442d02bb646dec8ddf7021f763f7024a500577aaf2", "after_sha256": "03fc5ea5490d4e04f7195bff82e3764d3ec304ae6ee9dd82fe2ac0d7091d001a", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-client.ts.diff", "diff_sha256": "a8c94243e67d5e137aa6a8661d3433da9659b52159f8c8675b7004f637a9e28c"},
+   "patch_row34d": {"id": "128-34d-g1-03", "row": "34d", "decision": "1.2.8 row 34d (G1-03, C106)", "summary": "NUMERAL = NUMERAL_CELL imported from write-content.ts (hand copy of the regex removed)", "diff_base": "sha256 before this row", "before_sha256": "24f6c169922610dcbc0987aee1499a70c98b804ec3f933b2a1c01e92f1337955", "after_sha256": "6928c8c95eee41acbfa19eb3af86fa4353dffff5b21b4f07a36290349cf92922", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34d_row34d_diffs/scripts_studio_mcp_write-client.ts.diff", "diff_sha256": "4c524ab6d1a101fee4fe369ed8205dfefe96682d2d12e4effad4f64676dd5fe3"}
   },
   {
    "path": "scripts/studio/mcp/write-content.ts",
    "status": "patched",
-   "bytes": 49074,
+   "bytes": 49198,
    "source_sha256": "f383ea10cd07a03b65cc4e76e0340d8fd327c021be1825bd8ea300913174875c",
-   "sha256": "65a06db2db9641d0e16afb6f77134464f0c0d0b3da079f6356c2ff0b7c5692e5",
+   "sha256": "ce3fbc4104792ea0bb2b4e30069223cf25303a93ee8386c0a5c54c338a07b48c",
    "patch_row34": {"id": "128-34-hn15", "row": "34", "decision": "1.2.8 row 34 (AC-HN15, H-N15; N8-210)", "summary": "NEW tableOverflowLikely / warnTableOverflow / rowsTableShape / tableNameOf: estimated table width at a likely glyph advance (IBM Plex Sans Condensed class averages, 7.5 pt text, mono 0.6 em numerals, 2.5 mm gaps; words broken exactly as the renderers via table-fit breakableSegments + tableBreakBudget) against tableSpanLimitMm (166 mm); over it -> warning TABLE_OVERFLOW_LIKELY naming the table and the estimate. blockLines (work-report studio_write and studio_edit append) warns for rows and {table}. DT-10a lower bound and render-side TABLE_OVERFLOW unchanged", "diff_base": "sha256 before this row", "before_sha256": "69ddb9d58c014094469b7561391a908226e2491f6ca3fd4afde56aca48ae9685", "after_sha256": "65a06db2db9641d0e16afb6f77134464f0c0d0b3da079f6356c2ff0b7c5692e5", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34_row34_diffs/scripts_studio_mcp_write-content.ts.diff", "diff_sha256": "8df07440fe2871dc4f11fc970c8e5a4dacca6a1eefdb1636ee18a8ba71c93ae4"},
-   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206)", "summary": "NEW DiagramInput; Block union gains {diagram}; a work report refuses {diagram} with INVALID_ARGUMENT 'laporan kerja tidak memuat figur; {diagram} hanya untuk dokumen klien (studio_write dengan template)'; 'blok tidak dikenal' list names {diagram}. Copied -> patched", "before_sha256": "f383ea10cd07a03b65cc4e76e0340d8fd327c021be1825bd8ea300913174875c", "after_sha256": "69ddb9d58c014094469b7561391a908226e2491f6ca3fd4afde56aca48ae9685", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-content.ts.diff", "diff_sha256": "1cdc3cc980fbd45081eecbbb2b3362f528fbb3941687db6d62bf287cc4bcd38c"}
+   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206)", "summary": "NEW DiagramInput; Block union gains {diagram}; a work report refuses {diagram} with INVALID_ARGUMENT 'laporan kerja tidak memuat figur; {diagram} hanya untuk dokumen klien (studio_write dengan template)'; 'blok tidak dikenal' list names {diagram}. Copied -> patched", "before_sha256": "f383ea10cd07a03b65cc4e76e0340d8fd327c021be1825bd8ea300913174875c", "after_sha256": "69ddb9d58c014094469b7561391a908226e2491f6ca3fd4afde56aca48ae9685", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-content.ts.diff", "diff_sha256": "1cdc3cc980fbd45081eecbbb2b3362f528fbb3941687db6d62bf287cc4bcd38c"},
+   "patch_row34d": {"id": "128-34d-g1-03", "row": "34d", "decision": "1.2.8 row 34d (G1-03, C106)", "summary": "TEXT_PT / COLUMN_GAP_MM / TABLE_NUMERALS_PT_DEFAULT imported from table-fit.ts into LIKELY_TEXT_PT / LIKELY_GAP_MM / LIKELY_MONO_PT; LIKELY_NUMERAL becomes exported NUMERAL_CELL (single source of the numeral regex)", "diff_base": "sha256 before this row", "before_sha256": "65a06db2db9641d0e16afb6f77134464f0c0d0b3da079f6356c2ff0b7c5692e5", "after_sha256": "ce3fbc4104792ea0bb2b4e30069223cf25303a93ee8386c0a5c54c338a07b48c", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34d_row34d_diffs/scripts_studio_mcp_write-content.ts.diff", "diff_sha256": "5cd99776c1f4b23ccbb1a92c288f692b2a180fb57b10db78a8aa2a7b69e45200"}
   },
   {
    "path": "scripts/studio/mcp/write-edit.ts",
@@ -3539,14 +3541,15 @@
   {
    "path": "src/lib/studio/engine/table-fit.ts",
    "status": "added",
-   "bytes": 14393,
+   "bytes": 14741,
    "source_sha256": null,
-   "sha256": "837470212c72241bff6e3699655b65f464283f581d6eb946594d25bdad8ef6e2",
+   "sha256": "be16bbd9e162393c5e5a4284a1120fbc9524d206b956a14e05cd0d9e3ad16910",
    "added_by": "143a",
    "patch_row40": {"id": "127-40-N11", "row": "40", "decision": "1.2.7 C12 O-6 (N-11, AC-N11)", "summary": "TABLE_BREAK_AFTER [, ; /] and TABLE_BREAK_MIN_CHARS 16; exported breakableSegments (a whitespace-free run longer than 16 characters splits after each separator, kept on the left) and tableBreakRuns (inserts a break mark at those positions across a paragraph's runs, null when none); longestWord measures the longest segment, so an ID list joined without spaces is no longer one unbreakable word; DT-10a suggestion adds the ID-list break sentence", "before_sha256": "6f83370593c9eb50a530cb903a57327a2bb8b977fb9366bc8eb8072595f7b349", "after_sha256": "0bbf3b7767a0155dcde0ca2d47d53a350a1efae6803e071d1aac05a42abd67d3", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/40_row40_diffs/engine_table-fit.ts.diff", "diff_sha256": "d03cc554a63f601829c6faceb9b24918b11fa2eac19660813e98255d11cd7666"},
    "patch_row40b": {"id": "127-40b-N11-url", "row": "40b", "decision": "1.2.7 C39 (AC-N11 follow-up)", "summary": "NEW exported isUrlToken (contains \"://\", or starts with \"www.\" / \"mailto:\" after leading brackets/quotes, case-insensitive); breakableSegments returns a URL whole, so tableBreakRuns never marks it: no U+200B in DOCX, no <wbr> in HTML, and DT-10a counts the URL as one unbreakable word (one shared rule for the estimate and both renderers). ID lists unchanged", "before_sha256": "0bbf3b7767a0155dcde0ca2d47d53a350a1efae6803e071d1aac05a42abd67d3", "after_sha256": "43469ecafc035029f42c91f22a5c47dab82294e93a7dfaed028e5ea1b22374a8", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/40b_row40b_diffs/engine_table-fit.ts.diff", "diff_sha256": "4e4d7559a802e1308812c669ecdb43c3c7d5834ed63e1dcc191a1f0610215806"},
    "patch_row40d": {"id": "127-40d-N11-overflow", "row": "40d", "decision": "1.2.7 C50 (M2-01, M2-08; AC-N11)", "summary": "NEW exported isDocumentNumberToken (house-style NNN/letters/.../roman month/YYYY), isPathToken (backslash, leading / ./ ../ ~/, or a / with a file extension), tableTokenMm, tableBreakBudget (per-column room before an ID list breaks: the span's slack over the all-broken lower bound shared in proportion to each column's need, so a table that fit before row 40 gets no break) and tableBreakSuggestion (M2-08: DT-10a suggestion clause built from TABLE_BREAK_AFTER / TABLE_BREAK_MIN_CHARS); breakableSegments(word, budgetMm = 0) keeps URLs, document numbers, path-like tokens and runs that fit budgetMm whole; tableBreakRuns takes budgetMm; tableMinWidthMm counts breaks per tableBreakBudget (a token that cannot break counts unbroken)", "before_sha256": "43469ecafc035029f42c91f22a5c47dab82294e93a7dfaed028e5ea1b22374a8", "after_sha256": "837470212c72241bff6e3699655b65f464283f581d6eb946594d25bdad8ef6e2", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/40d_row40d_diffs/engine_table-fit.ts.diff", "diff_sha256": "63de2cabc64a692f01096b48c995235cdbdfd30b549da97c0a65b02bc6f82c30"},
-   "note": "NEW Swarm file of row 143a (C177 F143-1 (b), Manual Rev A ID p.51 DT-10a; no clone original): tableMinWidthMm (lower bound of a table's width from its unbreakable content: single-column numeral/id cells in Plex Mono 0.6 em, unit/header cells 0.42 em, longest word elsewhere, 2.5 mm gaps), tableSpanLimitMm (largest grid.allowedFigureWidthsMm, 166 mm on A4), assertTableFits (throws TableOverCapacity, code FIGURE_OVER_CAPACITY, figure table, checkId DT-10a). Used by engine/html/tables/table.ts and engine/docx/tables/render.ts. Copy: implementation/132_row143a_diffs/engine_table-fit.ts.new"
+   "note": "NEW Swarm file of row 143a (C177 F143-1 (b), Manual Rev A ID p.51 DT-10a; no clone original): tableMinWidthMm (lower bound of a table's width from its unbreakable content: single-column numeral/id cells in Plex Mono 0.6 em, unit/header cells 0.42 em, longest word elsewhere, 2.5 mm gaps), tableSpanLimitMm (largest grid.allowedFigureWidthsMm, 166 mm on A4), assertTableFits (throws TableOverCapacity, code FIGURE_OVER_CAPACITY, figure table, checkId DT-10a). Used by engine/html/tables/table.ts and engine/docx/tables/render.ts. Copy: implementation/132_row143a_diffs/engine_table-fit.ts.new",
+   "patch_row34d": {"id": "128-34d-g1-03", "row": "34d", "decision": "1.2.8 row 34d (G1-03, C106)", "summary": "exports TEXT_PT, COLUMN_GAP_MM and new TABLE_NUMERALS_PT_DEFAULT (7.8, used for the type.scale.tableNumerals.size default); values unchanged, render behaviour unchanged", "diff_base": "sha256 before this row", "before_sha256": "837470212c72241bff6e3699655b65f464283f581d6eb946594d25bdad8ef6e2", "after_sha256": "be16bbd9e162393c5e5a4284a1120fbc9524d206b956a14e05cd0d9e3ad16910", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34d_row34d_diffs/engine_table-fit.ts.diff", "diff_sha256": "55379e40a015d11edd3ac1dcc25e7da2f7efdc019bd4b2bc3492e25707c54542"}
   },
   {
    "path": "src/lib/studio/engine/front/alt-text.ts",
@@ -6324,6 +6327,7 @@
   "35c",
   "54",
   "54b",
-  "56b"
+  "56b",
+  "34d"
  ]
 }

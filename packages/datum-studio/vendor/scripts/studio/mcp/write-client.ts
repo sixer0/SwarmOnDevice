@@ -13,7 +13,7 @@ import { parseInline } from "../../../src/lib/studio/services/import/inline";
 import { validateBlockV2 } from "../../../src/lib/studio/services/revisions/v2/body";
 import { McpToolError } from "./safety";
 import { tok, type ToolWarning } from "./tool-kit";
-import { isRows, warnTableOverflow, type Cell, type ChartInput, type DiagramInput, type Rows } from "./write-content";
+import { isRows, NUMERAL_CELL, warnTableOverflow, type Cell, type ChartInput, type DiagramInput, type Rows } from "./write-content";
 
 type Rec = Record<string, unknown>;
 const NOOP = { warn: () => undefined, drop: () => undefined };
@@ -359,7 +359,7 @@ export function diagramBlock(d: DiagramInput, metaSource: string | null, warn: (
 
 // ── tabel ───────────────────────────────────────────────────────────────
 
-const NUMERAL = /^[−+-]?(?:\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d+)?\s*%?$/;
+const NUMERAL = NUMERAL_CELL;
 export const cellOf = (c: Cell): Rec => {
   const s = String(c ?? "").replace(/\s+/g, " ").trim();
   if (s === "") return {};
