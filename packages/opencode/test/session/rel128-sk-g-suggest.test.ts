@@ -36,6 +36,8 @@ import { SystemPrompt } from "../../src/session/system"
 import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { TestLLMServer } from "../lib/llm-server"
+import { MISSION_TOOL_SCHEMAS } from "../../../datum-studio/src/mcp-host/mission/schemas"
+import { MISSION_SCHEMA_V1 } from "../../../datum-studio/src/store/mission/schema"
 
 type Lists = { keywords: string[]; files: string[]; missionTypes: string[] }
 const NONE: Lists = { keywords: [], files: [], missionTypes: [] }
@@ -328,16 +330,40 @@ const call = (tools: Record<string, { execute?: (...a: any[]) => any }>, key: st
   })
 
 const CREATE = "datum-studio_studio_mission_create"
-const LINE = 'Skills suggested for mission type "Research": invoice-check, report-format. Load one with the skill tool if it helps.'
+const LINE = 'Skills suggested for mission type "research": invoice-check, report-format. Load one with the skill tool if it helps.'
+// Row 51b (LS-11): the real input of studio_mission_create is {mission: MissionDoc}; the type lives in mission.type.
+const created = (mission: Record<string, unknown>) => ({ mission: { id: "2026-11-14_syn", ...mission } })
 
 describe("SK-g mission-type line (N8-048)", () => {
   withTools.instance("a created mission whose type skills list gets one line, names sorted", () =>
     Effect.gen(function* () {
       available = [REPORT, PLAIN, INVOICE]
       reply = { content: [{ type: "text", text: "ok" }] }
-      const output = yield* call(yield* resolve(), CREATE, { id: "2026-11-14_syn", type: "Research" })
+      const output = yield* call(yield* resolve(), CREATE, created({ type: "research" }))
       expect(output).toBe(`ok\n\n${LINE}`)
       expect(output.split("Skills suggested for").length).toBe(2)
+    }),
+  )
+
+  // Row 51b: the arguments come from the real Studio tool schema, so the test cannot drift from the tool again.
+  withTools.instance("arguments built from the real studio_mission_create schema get the line", () =>
+    Effect.gen(function* () {
+      const create = MISSION_TOOL_SCHEMAS.studio_mission_create as {
+        required: string[]
+        additionalProperties: boolean
+        properties: Record<string, unknown>
+      }
+      const doc = (MISSION_SCHEMA_V1.$defs as Record<string, { required: string[]; properties: Record<string, unknown> }>)
+        .MissionDoc
+      expect(create.additionalProperties).toBe(false)
+      expect(create.required).toEqual(["mission"])
+      expect(Object.keys(create.properties)).not.toContain("type")
+      expect(doc.required).toContain("type")
+      expect(Object.keys(doc.properties)).toContain("type")
+      available = [REPORT, PLAIN, INVOICE]
+      reply = { content: [{ type: "text", text: "ok" }] }
+      const args = Object.fromEntries(create.required.map((key) => [key, { id: "2026-11-14_syn", type: "research" }]))
+      expect(yield* call(yield* resolve(), CREATE, args)).toBe(`ok\n\n${LINE}`)
     }),
   )
 
@@ -346,13 +372,16 @@ describe("SK-g mission-type line (N8-048)", () => {
       available = [REPORT, PLAIN, INVOICE]
       reply = { content: [{ type: "text", text: "ok" }] }
       const tools = yield* resolve()
-      expect(yield* call(tools, CREATE, { type: "Engineering" })).toBe("ok")
+      expect(yield* call(tools, CREATE, created({ type: "engineering" }))).toBe("ok")
       expect(yield* call(tools, CREATE, {})).toBe("ok")
-      expect(yield* call(tools, "datum-studio_studio_mission_get", { type: "Research" })).toBe("ok")
-      expect(yield* call(tools, "lookalike_studio_mission_create", { type: "Research" })).toBe("ok")
+      expect(yield* call(tools, CREATE, { mission: "2026-11-14_syn" })).toBe("ok")
+      // INTENT (row 51b): a flat {type} is not a shape the tool accepts (additionalProperties: false), so it adds nothing.
+      expect(yield* call(tools, CREATE, { type: "research" })).toBe("ok")
+      expect(yield* call(tools, "datum-studio_studio_mission_get", created({ type: "research" }))).toBe("ok")
+      expect(yield* call(tools, "lookalike_studio_mission_create", created({ type: "research" }))).toBe("ok")
       // A refused create surfaces as the tool error, with no suggestion in it.
       reply = { content: [{ type: "text", text: "refused" }], isError: true }
-      const failed = yield* call(tools, CREATE, { type: "Research" }).pipe(
+      const failed = yield* call(tools, CREATE, created({ type: "research" })).pipe(
         Effect.map(() => "resolved"),
         Effect.catchCause((cause) => Effect.succeed(String(cause))),
       )
@@ -366,7 +395,7 @@ describe("SK-g mission-type line (N8-048)", () => {
       const type = `<b>${"r".repeat(80)}`
       available = [info("odd-type", { missionTypes: [type.toLowerCase()] })]
       reply = { content: [{ type: "text", text: "ok" }] }
-      const output = yield* call(yield* resolve(), CREATE, { type })
+      const output = yield* call(yield* resolve(), CREATE, created({ type }))
       expect(output).toBe(
         `ok\n\nSkills suggested for mission type "&lt;b&gt;${"r".repeat(61)}": odd-type. Load one with the skill tool if it helps.`,
       )

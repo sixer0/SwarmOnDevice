@@ -664,7 +664,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
           }
 
           // SK-g (N8-048): a created mission's type suggests skills; a line in the result, never a load, and never in
-          // the cached system prompt.
+          // the cached system prompt. The tool's input is {mission: MissionDoc} (additionalProperties: false, so there is
+          // no flat `type`); the type is mission.type (row 51b, LS-11).
           if (
             studio &&
             skills &&
@@ -672,7 +673,10 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
             !result.isError &&
             !Permission.disabled(["skill"], input.agent.permission).has("skill")
           ) {
-            const line = missionTypeSuggestion(yield* skills.available(input.agent), toRecord(args).type)
+            const line = missionTypeSuggestion(
+              yield* skills.available(input.agent),
+              toRecord(toRecord(args).mission).type,
+            )
             if (line) textParts.push(line)
           }
 
