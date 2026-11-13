@@ -107,7 +107,8 @@
   "row36": "2026-11-13: 1.2.7 row 36 (T-06 chart half, AC-T06, C8 / D-11b). 1 vendor file patched for the first time (files[].patch_row36, status copied -> patched): engine/chart/family-w1/render.ts (line-count refusal lists each counted series with its colour and the remainder, colourCountDetail). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/36_row36_diffs/. counts by delta: copied 410 -> 409, patched 156 -> 157, bytes 9963798 -> 9965366 (+1568); files/replaced/added unchanged. patch_rows += 36",
   "row37": "2026-11-13: 1.2.7 row 37 (N-6/F-6 guide sentence, N-9 and T-18 guide lines; AC-N6, C3). 1 vendor file re-patched (files[].patch_row37, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (Cakupan sentence after the T-03 table in 4.1.2; png-needs-standalone line in 8.4; no separate quota code line in 8.6). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9965366 -> 9965779 (+413). patch_rows += 37",
   "row35b": "2026-11-13: 1.2.7 row 35b (N-3 AC-N3, N-7 AC-N7; N7-063, N7-067, N7-139, K7-09). 4 vendor files re-patched (files[].patch_row35b, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts and registry/lint-explain.ts (FAIL per kode and lint findingsTotal count findings, not rows; labelled <CODE>: total N (dirinci I, tidak dirinci R) line), engine/diagram/build/autofit.ts and capacity.ts (AUTO_FIT remainder counts T-03 defects via autoFitRestText). None is a lint-closure file (guard.ts isLintClosurePath): skillSha unchanged. Diffs in docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/. counts by delta: bytes 9965779 -> 9970083 (+4304); files/copied/patched/replaced/added unchanged. patch_rows += 35b",
-  "row37f": "2026-11-13: 1.2.7 row 37 follow-up (controller request: DS-guide sentences for rows 35/35b). 1 vendor file re-patched (files[].patch_row37f, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (8.4: full sha256 and fail per code line in the studio_render text (M-03/M-08), html added as measured source when formats lack html (N-4), witness-pNNN.png is a witness image (N-5); 8.5: total/dirinci line and FAIL per kode counts findings (N-3)). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/STUDIO-AGENT-GUIDE.md.followup.diff. counts by delta: bytes 9970083 -> 9970514 (+431); files/copied/patched/replaced/added unchanged. patch_rows += 37f"
+  "row37f": "2026-11-13: 1.2.7 row 37 follow-up (controller request: DS-guide sentences for rows 35/35b). 1 vendor file re-patched (files[].patch_row37f, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (8.4: full sha256 and fail per code line in the studio_render text (M-03/M-08), html added as measured source when formats lack html (N-4), witness-pNNN.png is a witness image (N-5); 8.5: total/dirinci line and FAIL per kode counts findings (N-3)). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/STUDIO-AGENT-GUIDE.md.followup.diff. counts by delta: bytes 9970083 -> 9970514 (+431); files/copied/patched/replaced/added unchanged. patch_rows += 37f",
+  "row38": "2026-11-13: 1.2.7 row 38 (N-10 part 1, AC-N10, N7-144; C8 D-14). 1 vendor file re-patched (files[].patch_row38, before = previous sha256; status unchanged): scripts/studio/mcp/write-client-run.ts (finishDoc: a failed R17 render names the first server error code plus its check id, e.g. FIGURE_OVER_CAPACITY (DT-10a), instead of NO_DOCX_OUTPUT; the server messages go only into an untrusted galat-render block and renderErrors (untrustedFields); NO_DOCX_OUTPUT stays when the reply has no error). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/38_row38_diffs/. counts by delta: bytes 9970514 -> 9972254 (+1740); files/copied/patched/replaced/added unchanged. patch_rows += 38"
  },
  "counts": {
   "files": 608,
@@ -115,7 +116,7 @@
   "patched": 157,
   "replaced": 12,
   "added": 30,
-  "bytes": 9970514
+  "bytes": 9972254
  },
  "files": [
   {
@@ -430,9 +431,10 @@
   {
    "path": "scripts/studio/mcp/write-client-run.ts",
    "status": "patched",
-   "bytes": 37674,
+   "bytes": 39414,
    "source_sha256": "4dd6e435a198099949e8edf86e3f8856629f4a52a245b9da458cb32b2108750b",
-   "sha256": "9854db23537884c016f105c7131217b8d1225ae370035a8ae8ee181821150389",
+   "sha256": "4ee25437fefa3be73d2e2066d65b5c9fd63ff53e413f4d0b628868af451fd7ac",
+   "patch_row38": {"id": "127-38-N10", "row": "38", "decision": "1.2.7 C8 D-14 (N-10 part 1, AC-N10, N7-144)", "summary": "finishDoc: R17 reply without a DOCX output and with errors -> renderError = first error code (safe token) + ' (<check id>)' when the message holds (DT-nn[a]) or (DATUM-nn); text 'berkas: tidak dirender (galat FIGURE_OVER_CAPACITY (DT-10a))'; the server messages only in an untrusted galat-render block and structuredContent renderErrors (untrustedFields); NO_DOCX_OUTPUT only when the reply carries no error", "before_sha256": "9854db23537884c016f105c7131217b8d1225ae370035a8ae8ee181821150389", "after_sha256": "4ee25437fefa3be73d2e2066d65b5c9fd63ff53e413f4d0b628868af451fd7ac", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/38_row38_diffs/write-client-run.ts.diff", "diff_sha256": "24302280de32e6e27d43ef39dbd468257a912cf867b356a351f2139125bb77c5"},
    "patch_row69c": {
     "id": "row69c-write-preflight-archived-code",
     "row": "69c",
@@ -6214,6 +6216,7 @@
   "36",
   "37",
   "35b",
-  "37f"
+  "37f",
+  "38"
  ]
 }
