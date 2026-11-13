@@ -199,6 +199,7 @@ export const layer = Layer.effect(
               source: "ProjectMemory.mirror",
               store: key,
               code: entry.code,
+              // G2-02 (row 43f): the sync hands a vault-relative path and a reason without paths; never the home folder.
               path: entry.path,
               reason: entry.reason,
             })
@@ -833,7 +834,9 @@ async function withTimeout<A>(work: Promise<A>, ms: number, fallback: A): Promis
 }
 
 async function resolvePath(ref: { path: string; line?: number }, root: string): Promise<ResolvedRef> {
-  const full = path.isAbsolute(ref.path) ? ref.path : path.join(root, ref.path)
+  // `~/x` (a global skill's SKILL.md, row 43f) is under the home folder, not the project root.
+  const home = ref.path === "~" || ref.path.startsWith("~/") ? path.join(Global.Path.home, ref.path.slice(2)) : undefined
+  const full = home ?? (path.isAbsolute(ref.path) ? ref.path : path.join(root, ref.path))
   const stat = await fs.lstat(full).catch((error: NodeJS.ErrnoException) => error)
   if (stat instanceof Error) {
     if (stat.code === "ENOENT" || stat.code === "ENOTDIR") return { ref, stale: true }

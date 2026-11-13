@@ -340,7 +340,10 @@ export function noteBody(location: string, triggers?: Triggers) {
   ].join("\n")
 }
 
-/** The note of a skill: its text names the skill and one ref is its SKILL.md (relative refs start at the project root). */
+/**
+ * The note of a skill: its text names the skill and one ref is its SKILL.md (relative refs start at the project root,
+ * `~/` refs at the home folder; an older absolute ref still matches).
+ */
 export function isNoteOf(
   item: { text: string; refs?: readonly { path?: string }[] },
   input: { name: string; location: string; place: Place },
@@ -348,8 +351,14 @@ export function isNoteOf(
   if (!item.text.startsWith(`Skill ${input.name} (`)) return false
   const root = projectRoot(input.place)
   return (item.refs ?? []).some(
-    (ref) => typeof ref.path === "string" && path.resolve(root, ref.path) === path.resolve(input.location),
+    (ref) => typeof ref.path === "string" && path.resolve(root, expandHome(ref.path)) === path.resolve(input.location),
   )
+}
+
+/** `~/x` is `<home>/x` (refs of global skills are stored that way, row 43f); anything else is returned as it is. */
+function expandHome(value: string) {
+  if (value === "~") return Global.Path.home
+  return value.startsWith("~/") ? path.join(Global.Path.home, value.slice(2)) : value
 }
 
 export * as SkillManage from "./manage"

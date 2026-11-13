@@ -110,7 +110,9 @@ export const skillHandlers = HttpApiBuilder.group(InstanceHttpApi, "skill", (han
         text: SkillManage.noteText(input),
         source: input.source,
         body: SkillManage.noteBody(SkillManage.shownPath(input.location, input.where), input.triggers),
-        refs: [{ path: input.location }],
+        // G2-01 (row 43f): the ref is stored as the note shows it (project-relative or `~/...`), never the absolute
+        // home path; isNoteOf expands `~/` back to the home folder to match.
+        refs: [{ path: SkillManage.shownPath(input.location, input.where) }],
         untrusted: input.untrusted,
       })
       if ("refused" in result) return "skipped" as const

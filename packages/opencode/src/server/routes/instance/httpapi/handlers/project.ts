@@ -16,7 +16,7 @@ import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { Pty } from "@opencode-ai/core/pty"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { InstanceStore } from "@/project/instance-store"
-import { Effect, Layer, Schema } from "effect"
+import { Cause, Effect, Layer, Schema } from "effect"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import { ProjectNotFoundError } from "../errors"
@@ -27,6 +27,23 @@ type DesktopNonceHeaders = { readonly [DesktopNonce.HEADER]?: string | undefined
 
 // ---------------------------------------------------------------------------------------------------------------
 // 1.2.8 row 44b: the re-home primitive (row 44, `Rehome.make(ports)`) over the running server's services.
+
+/**
+ * G2-02 (row 43f): what a failed re-home logs. fs errors carry absolute paths (home folder, user name), so the line
+ * keeps the error code and the message with every absolute path replaced by `<path>`.
+ */
+function logSafe(error: unknown) {
+  const code = (error as { code?: unknown } | undefined)?.code
+  const message = error instanceof Error ? error.message : String(error)
+  return {
+    ...(typeof code === "string" ? { code } : {}),
+    error: message
+      .replace(/'(?:[A-Za-z]:)?[\\/][^']*'/g, "'<path>'")
+      .replace(/(?:[A-Za-z]:)?[\\/][^\s'"`,;)]*/g, (match, offset: number, text: string) =>
+        offset > 0 && /[\w.~<-]/.test(text[offset - 1]!) ? match : "<path>",
+      ),
+  }
+}
 
 const REFUSAL_TEXT: Record<Rehome.Code, string> = {
   REHOME_SOURCE_MISSING: "The mission folder is no longer there.",
@@ -112,7 +129,9 @@ export const rehomeRecovery = Layer.effectDiscard(
       Effect.tap((done) =>
         done.length ? Effect.logWarning("re-home: interrupted moves rolled back at start", { journals: done }) : Effect.void,
       ),
-      Effect.catchCause((cause) => Effect.logError("re-home: start-time recovery failed", { cause })),
+      Effect.catchCause((cause) =>
+        Effect.logError("re-home: start-time recovery failed", logSafe(Cause.squash(cause))),
+      ),
       Effect.forkScoped,
     )
   }),
@@ -219,7 +238,7 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
         }),
       ).pipe(
         Effect.tapError((error) =>
-          Effect.logError("re-home failed", { missionId: body.missionId, error: String(error.cause ?? error) }),
+          Effect.logError("re-home failed", { missionId: body.missionId, ...logSafe(error.cause ?? error) }),
         ),
         Effect.mapError(() => new HttpApiError.InternalServerError({})),
       )

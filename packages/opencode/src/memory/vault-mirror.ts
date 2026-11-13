@@ -15,6 +15,7 @@
 import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { Global } from "@opencode-ai/core/global"
 import { Flock } from "@opencode-ai/core/util/flock"
 import { Vault } from "@opencode-ai/core/vault"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
@@ -254,9 +255,33 @@ export function escapeText(text: string): string {
 const linkLabel = (text: string, fallback: string) =>
   text.replace(/[[\]|#^\\<>\r\n]+/g, " ").replace(/\s+/g, " ").trim() || fallback
 
+/**
+ * G2-01 (row 43f): a ref outside the project is shown as `~/...` under the home folder, else by its basename; the vault
+ * is read by Obsidian plugins and sync (SR8-20), so it never carries the home folder or another absolute path.
+ */
+function refPath(value: string) {
+  if (!path.isAbsolute(value)) return value
+  const home = Global.Path.home
+  const relative = home && path.isAbsolute(home) ? path.relative(home, value) : ""
+  if (relative && !relative.startsWith("..") && !path.isAbsolute(relative))
+    return "~/" + relative.split(path.sep).join("/")
+  return path.basename(value)
+}
+
 function refLabel(ref: Ref) {
-  if ("symbol" in ref) return ref.path ? `${ref.symbol} (${ref.path})` : ref.symbol
-  return ref.line ? `${ref.path}:${ref.line}` : ref.path
+  if ("symbol" in ref) return ref.path ? `${ref.symbol} (${refPath(ref.path)})` : ref.symbol
+  return ref.line ? `${refPath(ref.path)}:${ref.line}` : refPath(ref.path)
+}
+
+/** Defence in depth (G2-01): the home folder, raw or Markdown-escaped, becomes `~` in every rendered note. */
+function withoutHome(text: string) {
+  const home = Global.Path.home
+  if (!home || !path.isAbsolute(home) || path.dirname(home) === home) return text
+  const literal = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const tail = "(?![A-Za-z0-9_-])"
+  return text
+    .replace(new RegExp(literal(escapeText(home)) + tail, "g"), escapeText("~"))
+    .replace(new RegExp(literal(home) + tail, "g"), "~")
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -619,9 +644,9 @@ export function render(input: RenderInput): RenderResult {
 
   const files: RenderedFile[] = []
   const emit = (note: Note | undefined, meta: Omit<Parameters<typeof frontmatter>[0], "hash" | "key">, lines: string[]) => {
-    const body = lines.join("\n") + "\n"
+    const body = withoutHome(lines.join("\n") + "\n")
     const file = note ? `${note.dir}/${note.name}.md` : "index.md"
-    files.push({ path: file, content: frontmatter({ ...meta, key: input.key, hash: bodyHash(body) }) + body })
+    files.push({ path: file, content: withoutHome(frontmatter({ ...meta, key: input.key, hash: bodyHash(body) })) + body })
   }
   const head = (untrusted: boolean | undefined) => [hubLink, "", L.banner, "", ...(untrusted ? [L.untrusted, ""] : [])]
   const section = (title: string, notes: readonly Note[]) => (notes.length ? ["", title, ...notes.map((n) => `- ${link(n)}`)] : [])
@@ -785,6 +810,17 @@ const SUBFOLDERS: readonly string[] = ["notes", "missions", "reports", "skills"]
 /** A temp file of an interrupted run: `.<name>.swarm-<pid>-<8 hex>.tmp`. */
 const TEMP_FILE = /^\.[a-z0-9][a-z0-9.-]{0,80}\.swarm-\d{1,10}-[0-9a-f]{8}\.tmp$/
 
+/** A log reason without absolute paths: the vault root becomes `<vault>`, any other absolute path `<path>`. */
+function withoutPaths(reason: string, rootReal: string) {
+  return reason
+    .split(rootReal)
+    .join("<vault>")
+    .replace(/'(?:[A-Za-z]:)?[\\/][^']*'/g, "'<path>'")
+    .replace(/(?:[A-Za-z]:)?[\\/][^\s'"`,;)]*/g, (match, offset: number, text: string) =>
+      offset > 0 && /[\w.~>-]/.test(text[offset - 1]!) ? match : "<path>",
+    )
+}
+
 class Unsafe extends Error {
   constructor(
     readonly at: string,
@@ -881,8 +917,17 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
 
   const mirror = path.join(rootReal, Vault.VAULT_MIRROR_DIR)
   const folderPath = path.join(mirror, folder)
+  // G2-02 (row 43f): the refusal is logged with the path inside the vault (`<vault>/...`) or its basename, and a reason
+  // with every absolute path replaced (fs error messages carry them); never the home folder.
+  const shown = (at: string) => {
+    const relative = path.isAbsolute(at) ? path.relative(rootReal, at) : at
+    if (!path.isAbsolute(at)) return at.split(path.sep).join("/")
+    return relative && !relative.startsWith("..") && !path.isAbsolute(relative)
+      ? "<vault>/" + relative.split(path.sep).join("/")
+      : path.basename(at)
+  }
   const unsafe = (at: string, reason: string) => {
-    input.log?.({ code: "VAULT_PATH_UNSAFE", path: at, reason })
+    input.log?.({ code: "VAULT_PATH_UNSAFE", path: shown(at), reason: withoutPaths(reason, rootReal) })
     return result("unsafe", notCopied)
   }
   if (path.dirname(folderPath) !== mirror || !Vault.contains(rootReal, folderPath)) return unsafe(folderPath, "folder name")
