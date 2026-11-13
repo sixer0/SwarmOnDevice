@@ -125,7 +125,7 @@
   "patched": 164,
   "replaced": 12,
   "added": 30,
-  "bytes": 10149402
+  "bytes": 10152433
  },
  "files": [
   {
@@ -2624,9 +2624,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/svg.ts",
    "status": "patched",
-   "bytes": 70899,
+   "bytes": 73930,
    "source_sha256": "6c1846b3c5b2966476dbe1fff3fe44283daea1c70eb7bf12d5b3fbece817c741",
-   "sha256": "2e4fd3ac098cfa674e0c5096b275c385e104bb058b7ba4ea626d3ac903d59481",
+   "sha256": "8bffe2a67ed2220a830c4f2dedfbb7e866205a748535478e69cd12e1016f33e8",
+   "patch_row53b": {"id": "128-53b-shadow-double", "row": "53b", "decision": "1.2.8 row 53b (C75 item 3, Visio minimum; defects predating 1.2.8)", "summary": "NEW shadowUnderlaySvg (shadow rect + paper rect over the node box) drawn by nodeSvg before the hatch, so the offset shadow no longer shows through a shadowed node or crosses its tag (shapeSvg option shadowUnderlay); NEW DOUBLED_DIVIDER_CLEAR_MM (0.4) and doubledDividerY: the doubled divider sits centred in the band between the text block's ink bottom (nodeTextBottom, shapeSvg option textBottomMm) and the inner rectangle, or is omitted when that band is < 0.8 mm (was h/2 through the label)", "diff_base": "sha256 before this row", "before_sha256": "2e4fd3ac098cfa674e0c5096b275c385e104bb058b7ba4ea626d3ac903d59481", "after_sha256": "8bffe2a67ed2220a830c4f2dedfbb7e866205a748535478e69cd12e1016f33e8", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53b_row53b_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "a978e213cf1721a0d39474b58e07afb0988b45aa0a89acfc9fe6cdc12a0fc569"},
    "patch_row57b": {"id": "128-57b-vis8-vis9", "row": "57b", "decision": "1.2.8 row 57b (AC-VIS8, AC-VIS9; 01f 3.1-3.5; C78, C86, C101, C111; N8-212, N8-262..266, N8-468, N8-471, N8-477..479)", "summary": "EdgeLine {dash?, weight?} (only values other than the kind's: explicit default = absent); EdgeArrows gains line and labelAt; edgeArrowsOf reads dash/weight/label_at; NEW edgeLineOf, edgeLineWidth (WEIGHT_MM or kind width), edgeLineDash, edgeArrowsOfPaths (row 57's path-edge matching, shared); edgePathSvg draws the effective dash and width (attribute order unchanged); edgeMarkerId appends -<weight> for a non-default weight (C111) and arrowMarkerSvg strokes the head at the line width; diagramDefs defines weighted kind heads as their own ids; hopSvg(arrows?) strokes a hop at the edge weight, else STROKE_PRIMARY; C119: headTrimMm + trimPolyline: under a triangle head on a line wider than STROKE_PRIMARY (accent 0.72, thick 0.70) the drawn path stops w L / W before the tip and the head refX moves back by the same amount (tip unchanged, no stub beside the tip)", "diff_base": "sha256 before this row", "before_sha256": "2940191cc6ea0beed1b11d91add7d508ea9aabeaf8008eb62bc222af9c9264f6", "after_sha256": "2e4fd3ac098cfa674e0c5096b275c385e104bb058b7ba4ea626d3ac903d59481", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57b_row57b_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "95ce8a5d4bbfe04de54f7325af791d5d36763a37564590c94c92f1fb3dc16e4f"},
    "patch_row57": {"id": "128-57-harw", "row": "57", "decision": "1.2.8 row 57 (AC-HARW, AC-VIS7; 01f 5.2, 5.3, 7 (a); C10 OP13-5, C12 OP-18-2, C56, C101)", "summary": "H-ARW: edgeMarkerSvg draws head-<kind> in markerUnits=\"userSpaceOnUse\" mm at ARROW_SIZES_MM.m (3.2 mm, W 0.89 L, 1 mm margin, outermost point L/18 past the path end as refX 3.4 of 3.6); VIS-7: EdgeHead/EdgeArrows, kindHeadType, edgeArrowsOf (explicit default = absent), edgeMarkerId (head-<kind> | arrow-<start|end>-<type>-<size>-<kind>, N8-468), arrowMarkerSvg (triangle filled, open stroked >= 0.30 mm, diamond and circle hollow in paper, start markers mirrored, no auto-start-reverse); edgePathSvg writes marker-start only with a start head and no marker-end for arrow_end none; diagramDefs(use.arrows) defines only drawn heads, extra ids sorted", "diff_base": "sha256 before this row", "before_sha256": "05b5586f7e314161b870b5d0d80a4a490714f8883526e381dca3e140e0b6f95a", "after_sha256": "2940191cc6ea0beed1b11d91add7d508ea9aabeaf8008eb62bc222af9c9264f6", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57_row57_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "cda46f955efa79e7a50dac82576beb0edbf738bcae793e1114812c8efc8afec1"},
    "patch_row54b": {"id": "128-54b-vis3b", "row": "54b", "decision": "1.2.8 row 54b (AC-VIS3b BPMN task, sub-process, gateways, data object, annotation; C86 gateway exits spread)", "summary": "shapeSvg: task / subprocess rounded rect (rx = ry = min(1.6, h/4)) with the subprocess [+] (2.4 mm hair square centred at the bottom inside), data_object folded polygon + hair fold line, annotation invisible node rect + open bracket; gateways get their centred marker (X, +, O r 0.45 R, * = X + +) at GATEWAY_GLYPH_FRAC 0.5 of the half-diagonal, primary stroke; clipShapeSvg for task/subprocess/data_object; tagAnchor task/subprocess x + rx + 0.53; firstRenderLayout includes subprocess", "diff_base": "sha256 before this row", "before_sha256": "f7994c408a81a4bd4f62dcad2335f72859aa15980ec6c9d167b477281f6af5b9", "after_sha256": "05b5586f7e314161b870b5d0d80a4a490714f8883526e381dca3e140e0b6f95a", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/54b_row54b_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "9fb9b7d22e83669d76e3a224b6ccdaee856965afd932e215c1428c0196ab91bd"},
@@ -6345,6 +6346,7 @@
   "34d",
   "57",
   "55b",
-  "56c"
+  "56c",
+  "53b"
  ]
 }

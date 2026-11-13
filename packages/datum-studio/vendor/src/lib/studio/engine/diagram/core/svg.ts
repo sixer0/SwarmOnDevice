@@ -213,6 +213,43 @@ function outlineD(pts: readonly OutlinePt[]): string {
 }
 
 /**
+ * Swarm 1.2.8 row 53b (C75 item 3, Visio minimum). `shadowed`: the offset shadow rectangle (ink200 hair, offset half a
+ * lattice line) and then a paper rectangle over the node box, both before the node's hatch and outline, so the shadow
+ * shows only beside and below the node. `doubled`: the inner divider lies in the free band between the text block's
+ * ink bottom and the inner rectangle's bottom line, centred in it, at least `DOUBLED_DIVIDER_CLEAR_MM` from both.
+ */
+export const DOUBLED_DIVIDER_CLEAR_MM = 0.4;
+const DOUBLED_INSET_MM = 1.2;
+
+export function shadowUnderlaySvg(x: number, y: number, w: number, h: number): string {
+  const off = snap(LATTICE_Y / 2, 0.1);
+  return (
+    `<rect x="${r2(x + off)}" y="${r2(y + off)}" width="${r2(w)}" height="${r2(h)}" fill="none" stroke="${colourOf("ink200")}" stroke-width="${r2(STROKE_HAIR)}"/>` +
+    `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" fill="${PAPER}"/>`
+  );
+}
+
+/** Row 53b: y of the doubled divider below a text block whose ink ends at `textBottom`, or null when no band fits. */
+export function doubledDividerY(y: number, h: number, textBottom: number): number | null {
+  const innerBottom = y + h - DOUBLED_INSET_MM;
+  if (innerBottom - textBottom < 2 * DOUBLED_DIVIDER_CLEAR_MM) return null;
+  return (textBottom + innerBottom) / 2;
+}
+
+/** Row 53b: ink bottom (mm) of a node's label/sub block, from the fit layout or the one-line centred texts. */
+function nodeTextBottom(nd: SheetNode, fit: ReturnType<typeof nodeTextLayout>): number {
+  const desc = (r: "caption" | "source_line") => FONT_DESCENT_EM * pt2mm(role(r).size);
+  if (fit) {
+    if (fit.sub) return fit.sub.y + (fit.sub.lines.length - 1) * fit.sub.lineMm + desc("source_line");
+    const labelBottom = fit.label.y + (fit.label.lines.length - 1) * fit.label.lineMm + desc("caption");
+    // nodeSvg draws a sub without a fit sub layout one caption line below the centre
+    return nd.spec.sub ? Math.max(labelBottom, nd.y + nd.h / 2.0 + pt2mm(role("caption").size) + desc("source_line")) : labelBottom;
+  }
+  const cy = nd.y + nd.h / 2.0;
+  return nd.spec.sub ? cy + pt2mm(role("caption").size) + desc("source_line") : cy + desc("caption");
+}
+
+/**
  * Bentuk simpul (`_shape_svg`): 10 bentuk P3; bentuk tak dikenal jatuh ke box.
  * Hanya `stadium` beradius. Row 53: + predefined, document, offpage (01f §1.1).
  */
@@ -220,7 +257,7 @@ export function shapeSvg(
   nd: SheetNode,
   strokeToken: string,
   fill: string,
-  opts: SvgMarkOptions & { strokeW?: number } = {},
+  opts: SvgMarkOptions & { strokeW?: number; shadowUnderlay?: boolean; textBottomMm?: number } = {},
 ): string {
   const shape = nd.spec.shape ?? "box";
   const { x, y, w, h } = nd;
@@ -261,19 +298,24 @@ export function shapeSvg(
       // P3: rel berat, garis tebal penuh lebar (Python tidak memberi data-node).
       // Swarm row 165O (C204 item 4): stroke-only line with an explicit fill="none" (no default black fill).
       return `<line x1="${r2(x)}" y1="${r2(y + h / 2)}" x2="${r2(x + w)}" y2="${r2(y + h / 2)}" fill="none" stroke="${col}" stroke-width="${r2(STROKE_PRIMARY * 3)}"${markAttrs("node", opts)}/>`;
-    case "doubled":
+    case "doubled": {
+      // Row 53b (C75 item 3): the divider sits in the free band below the text block (`doubledDividerY`), never at
+      // h/2 through the label; no band of at least 2 x DOUBLED_DIVIDER_CLEAR_MM -> no divider (double border only).
+      const dy = doubledDividerY(y, h, opts.textBottomMm ?? y + h / 2 + FONT_DESCENT_EM * pt2mm(role("caption").size));
+      const divider =
+        dy === null
+          ? ""
+          : `<line x1="${r2(x + 1.2)}" y1="${r2(dy)}" x2="${r2(x + w - 1.2)}" y2="${r2(dy)}" fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"/>`;
       return (
         `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>` +
         `<rect x="${r2(x + 1.2)}" y="${r2(y + 1.2)}" width="${r2(w - 2.4)}" height="${r2(h - 2.4)}" fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"/>` +
-        `<line x1="${r2(x + 1.2)}" y1="${r2(y + h / 2)}" x2="${r2(x + w - 1.2)}" y2="${r2(y + h / 2)}" fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"/>`
-      );
-    case "shadowed": {
-      const off = snap(LATTICE_Y / 2, 0.1);
-      return (
-        `<rect x="${r2(x + off)}" y="${r2(y + off)}" width="${r2(w)}" height="${r2(h)}" fill="none" stroke="${colourOf("ink200")}" stroke-width="${r2(STROKE_HAIR)}"/>` +
-        `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>`
+        divider
       );
     }
+    case "shadowed":
+      // Row 53b (C75 item 3): shadow + paper interior first (`shadowUnderlaySvg`), so the offset rectangle does not
+      // show through the node or cross its tag; `nodeSvg` draws the underlay itself before the hatch.
+      return (opts.shadowUnderlay === false ? "" : shadowUnderlaySvg(x, y, w, h)) + `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>`;
     // Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1, G-1/G-2): Basic Flowchart predefined process, document, off-page reference.
     case "predefined": {
       // outline = the box; two hair side bars at the `doubled` inset (G-2: no data-node, no data-mark)
@@ -963,6 +1005,9 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
   const capMm = pt2mm(role("caption").size);
   // FIG-02b: hanya saat fit dan hanya bila label tidak muat satu baris (atau rel bus).
   const fit = diagramFitActive() ? nodeTextLayout(nd) : firstRenderLayout(nd);
+  // Row 53b (C75 item 3): a shadowed node's shadow and paper interior go first, under the hatch and the outline.
+  const shadowed = (n.shape ?? "box") === "shadowed";
+  if (shadowed) out.push(shadowUnderlaySvg(g.x, g.y, g.w, g.h));
   if (angle !== null) {
     const shape = n.shape ?? "box";
     const clipShape = BOX_SHAPES.has(shape) ? null : clipShapeSvg(shape, g.x, g.y, g.w, g.h);
@@ -976,7 +1021,7 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
       if (ground) out.push(ground);
     }
   }
-  out.push(shapeSvg(g, nodeStrokeToken(nd), "none", { ...markOpts, strokeW: STROKE_PRIMARY }));
+  out.push(shapeSvg(g, nodeStrokeToken(nd), "none", { ...markOpts, strokeW: STROKE_PRIMARY, shadowUnderlay: !shadowed, textBottomMm: nodeTextBottom(nd, fit) }));
   const sym = nodeSymbolSvg(nd); // row 124 (CP-45): specified symbol, drawn before the texts
   if (sym) out.push(sym);
   if (fit) {
