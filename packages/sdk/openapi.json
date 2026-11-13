@@ -621,7 +621,16 @@
       "patch": {
         "tags": ["global"],
         "operationId": "global.config.update",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successfully updated global config",
@@ -649,9 +658,19 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "ConfigPersonOnlyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPersonOnlyError"
+                }
+              }
+            }
           }
         },
-        "description": "Update global Swarm configuration settings and preferences.",
+        "description": "Update global Swarm configuration settings and preferences. While the server holds the desktop app's per-launch nonce, the request needs the matching x-swarm-desktop-nonce header, else 403 CONFIG_PERSON_ONLY; a server started without the app takes it as before.",
         "summary": "Update global configuration",
         "requestBody": {
           "content": {
@@ -1728,6 +1747,14 @@
         "operationId": "config.update",
         "parameters": [
           {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
             "name": "directory",
             "in": "query",
             "schema": {
@@ -1771,9 +1798,19 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "ConfigPersonOnlyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPersonOnlyError"
+                }
+              }
+            }
           }
         },
-        "description": "Update Swarm configuration settings and preferences.",
+        "description": "Update Swarm configuration settings and preferences. While the server holds the desktop app's per-launch nonce, the request needs the matching x-swarm-desktop-nonce header, else 403 CONFIG_PERSON_ONLY; a server started without the app takes it as before.",
         "summary": "Update configuration",
         "requestBody": {
           "content": {
@@ -4105,6 +4142,44 @@
                       },
                       "content": {
                         "type": "string"
+                      },
+                      "triggers": {
+                        "type": "object",
+                        "properties": {
+                          "keywords": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "files": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "missionTypes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["keywords", "files", "missionTypes"],
+                        "additionalProperties": false
+                      },
+                      "disabled": {
+                        "type": "boolean"
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "scope": {
+                        "type": "string",
+                        "enum": ["builtin", "global", "project", "other"]
+                      },
+                      "hash": {
+                        "type": "string"
                       }
                     },
                     "required": ["name", "location", "content"],
@@ -4132,6 +4207,290 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.app.skills({\n  ...\n})"
+          }
+        ]
+      },
+      "put": {
+        "tags": ["skill"],
+        "operationId": "skill.save",
+        "parameters": [
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where the skill was saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillSaved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SkillForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SkillChangedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillChangedError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "SkillTooLargeError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTooLargeError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "InternalServerError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_InternalServerError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Write <scope root>/skills/<name>/SKILL.md atomically after the shared checks, record the approval and keep one memory note for the skill. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "summary": "Save a skill",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": ["global", "project"]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "baseHash": {
+                    "type": "string"
+                  }
+                },
+                "required": ["scope", "name", "content"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.save({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["skill"],
+        "operationId": "skill.delete",
+        "parameters": [
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["global", "project"]
+            },
+            "required": true
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The archive entry, relative to the scope root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDeleted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SkillForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SkillChangedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillChangedError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "SkillTooLargeError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTooLargeError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "InternalServerError | SkillArchiveError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_InternalServerError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SkillArchiveError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Move the skill's folder to the archive (never deleted outright) and remove its memory note. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "summary": "Delete a skill",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.delete({\n  ...\n})"
           }
         ]
       }
@@ -10278,6 +10637,405 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.part.update({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/source": {
+      "get": {
+        "tags": ["skill"],
+        "operationId": "skill.source",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["global", "project"]
+            },
+            "required": true
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The SKILL.md text and its sha256",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillSource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          }
+        },
+        "description": "The raw SKILL.md (frontmatter included) of a global or project skill Swarm saved, with the hash PUT /skill takes as baseHash. Show it as plain text.",
+        "summary": "Read a skill's source",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.source({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/drafts": {
+      "get": {
+        "tags": ["skill"],
+        "operationId": "skill.drafts",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Drafts waiting for the person",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SkillDraft"
+                  },
+                  "description": "Drafts waiting for the person"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Skills an agent drafted, global and project. A draft is never loaded until the person approves it. Show the content as plain text.",
+        "summary": "List skill drafts",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.drafts({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/drafts/{name}/approve": {
+      "post": {
+        "tags": ["skill"],
+        "operationId": "skill.draftApprove",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where the skill was saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillSaved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SkillForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SkillChangedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillChangedError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "SkillTooLargeError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTooLargeError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "InternalServerError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_InternalServerError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "summary": "Approve a skill draft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": ["global", "project"]
+                  },
+                  "acceptCommands": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["scope"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.draftApprove({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/drafts/{name}": {
+      "delete": {
+        "tags": ["skill"],
+        "operationId": "skill.draftDiscard",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["global", "project"]
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The draft was removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDraftRemoved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SkillForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove one draft, named by scope and name. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "summary": "Discard a skill draft",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.draftDiscard({\n  ...\n})"
           }
         ]
       }
@@ -20429,6 +21187,15 @@
           },
           "untrusted": {
             "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "missionId": {
+            "type": "string"
+          },
+          "rolledInto": {
+            "type": "string"
           }
         },
         "required": ["id", "text", "source", "deviceOnly", "time"],
@@ -24404,6 +25171,12 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "disabled": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": false
@@ -24808,6 +25581,31 @@
             "additionalProperties": false
           }
         },
+        "additionalProperties": false
+      },
+      "ConfigPersonOnlyError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["ConfigPersonOnlyError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["CONFIG_PERSON_ONLY"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
         "additionalProperties": false
       },
       "AutonomyMode": {
@@ -26620,7 +27418,18 @@
       },
       "MemoryRefusal": {
         "type": "string",
-        "enum": ["empty", "long", "secret", "full", "body_long", "too_many_refs"]
+        "enum": [
+          "empty",
+          "long",
+          "secret",
+          "full",
+          "body_long",
+          "too_many_refs",
+          "index_long",
+          "index_body_long",
+          "index_format",
+          "index_full"
+        ]
       },
       "MemoryResult": {
         "type": "object",
@@ -27194,6 +28003,274 @@
           }
         },
         "required": ["_tag", "sessionID", "message"],
+        "additionalProperties": false
+      },
+      "SkillSource": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["global", "project"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          }
+        },
+        "required": ["location", "scope", "content", "hash"],
+        "additionalProperties": false
+      },
+      "SkillInvalidError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillInvalidError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "SKILL_NAME_INVALID",
+                  "SKILL_NAME_RESERVED",
+                  "SKILL_FRONTMATTER_INVALID",
+                  "SKILL_TRIGGERS_INVALID",
+                  "SKILL_PATH_UNSAFE",
+                  "SKILL_SHELL_UNCONFIRMED"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillMissingError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillMissingError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_NOT_FOUND", "SKILL_DRAFT_MISSING"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillSaved": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "enum": ["added", "updated", "skipped"],
+            "description": "The skill's memory note: skipped when memory is off or refused it; the skill is saved either way"
+          }
+        },
+        "required": ["location", "hash", "note"],
+        "additionalProperties": false
+      },
+      "SkillForbiddenError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillForbiddenError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_PERSON_ONLY", "SKILL_SHELL_UNTRUSTED"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillChangedError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillChangedError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_CHANGED"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillTooLargeError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillTooLargeError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_TOO_LARGE"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillDeleted": {
+        "type": "object",
+        "properties": {
+          "archive": {
+            "type": "string"
+          }
+        },
+        "required": ["archive"],
+        "additionalProperties": false
+      },
+      "SkillArchiveError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillArchiveError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_ARCHIVE_FAILED"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillDraft": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["global", "project"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["NaN"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["-Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "untrusted": {
+            "type": "boolean"
+          },
+          "runsCommands": {
+            "type": "boolean"
+          },
+          "replaces": {
+            "type": "boolean"
+          }
+        },
+        "required": ["name", "scope", "content", "time", "untrusted", "runsCommands", "replaces"],
+        "additionalProperties": false
+      },
+      "SkillDraftRemoved": {
+        "type": "object",
+        "properties": {
+          "removed": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        },
+        "required": ["removed"],
         "additionalProperties": false
       },
       "EventTuiPromptAppend": {
@@ -27846,6 +28923,15 @@
           },
           "untrusted": {
             "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "missionId": {
+            "type": "string"
+          },
+          "rolledInto": {
+            "type": "string"
           }
         },
         "required": ["id", "text", "source", "deviceOnly", "time"],
@@ -41220,6 +42306,10 @@
     {
       "name": "session",
       "description": "Experimental HttpApi session routes."
+    },
+    {
+      "name": "skill",
+      "description": "Person-managed skill routes."
     },
     {
       "name": "sync",

@@ -985,6 +985,9 @@ export type MemoryItem = {
   body?: string
   refs?: Array<MemoryRef>
   untrusted?: boolean
+  kind?: string
+  missionId?: string
+  rolledInto?: string
 }
 
 export type Todo = {
@@ -2234,6 +2237,7 @@ export type Config = {
   skills?: {
     paths?: Array<string>
     urls?: Array<string>
+    disabled?: Array<string>
   }
   references?: {
     [key: string]: string | ConfigV2ReferenceGit | ConfigV2ReferenceLocal
@@ -2363,6 +2367,14 @@ export type Config = {
     continue_loop_on_deny?: boolean
     mcp_timeout?: number
     policies?: Array<ConfigV2ExperimentalPolicy>
+  }
+}
+
+export type ConfigPersonOnlyError = {
+  name: "ConfigPersonOnlyError"
+  data: {
+    code: "CONFIG_PERSON_ONLY"
+    message: string
   }
 }
 
@@ -3030,7 +3042,17 @@ export type MemoryInfo = {
   items: Array<MemoryItem>
 }
 
-export type MemoryRefusal = "empty" | "long" | "secret" | "full" | "body_long" | "too_many_refs"
+export type MemoryRefusal =
+  | "empty"
+  | "long"
+  | "secret"
+  | "full"
+  | "body_long"
+  | "too_many_refs"
+  | "index_long"
+  | "index_body_long"
+  | "index_format"
+  | "index_full"
 
 export type MemoryResult = {
   item?: MemoryItem
@@ -3225,6 +3247,95 @@ export type SessionBusyError = {
   _tag: "SessionBusyError"
   sessionID: string
   message: string
+}
+
+export type SkillSource = {
+  location: string
+  scope: "global" | "project"
+  content: string
+  hash: string
+}
+
+export type SkillInvalidError = {
+  name: "SkillInvalidError"
+  data: {
+    code:
+      | "SKILL_NAME_INVALID"
+      | "SKILL_NAME_RESERVED"
+      | "SKILL_FRONTMATTER_INVALID"
+      | "SKILL_TRIGGERS_INVALID"
+      | "SKILL_PATH_UNSAFE"
+      | "SKILL_SHELL_UNCONFIRMED"
+    message: string
+  }
+}
+
+export type SkillMissingError = {
+  name: "SkillMissingError"
+  data: {
+    code: "SKILL_NOT_FOUND" | "SKILL_DRAFT_MISSING"
+    message: string
+  }
+}
+
+export type SkillSaved = {
+  location: string
+  hash: string
+  /**
+   * The skill's memory note: skipped when memory is off or refused it; the skill is saved either way
+   */
+  note: "added" | "updated" | "skipped"
+}
+
+export type SkillForbiddenError = {
+  name: "SkillForbiddenError"
+  data: {
+    code: "SKILL_PERSON_ONLY" | "SKILL_SHELL_UNTRUSTED"
+    message: string
+  }
+}
+
+export type SkillChangedError = {
+  name: "SkillChangedError"
+  data: {
+    code: "SKILL_CHANGED"
+    message: string
+  }
+}
+
+export type SkillTooLargeError = {
+  name: "SkillTooLargeError"
+  data: {
+    code: "SKILL_TOO_LARGE"
+    message: string
+  }
+}
+
+export type SkillDeleted = {
+  archive: string
+}
+
+export type SkillArchiveError = {
+  name: "SkillArchiveError"
+  data: {
+    code: "SKILL_ARCHIVE_FAILED"
+    message: string
+  }
+}
+
+export type SkillDraft = {
+  name: string
+  scope: "global" | "project"
+  content: string
+  time: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  sessionID?: string
+  untrusted: boolean
+  runsCommands: boolean
+  replaces: boolean
+}
+
+export type SkillDraftRemoved = {
+  removed: true
 }
 
 export type EventTuiPromptAppend = {
@@ -3438,6 +3549,9 @@ export type MemoryItem1 = {
   body?: string
   refs?: Array<MemoryRef>
   untrusted?: boolean
+  kind?: string
+  missionId?: string
+  rolledInto?: string
 }
 
 export type SessionStatus2 = {
@@ -8195,6 +8309,9 @@ export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfi
 
 export type GlobalConfigUpdateData = {
   body?: Config
+  headers?: {
+    "x-swarm-desktop-nonce"?: string
+  }
   path?: never
   query?: never
   url: "/global/config"
@@ -8205,6 +8322,10 @@ export type GlobalConfigUpdateErrors = {
    * BadRequest | InvalidRequestError
    */
   400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * ConfigPersonOnlyError
+   */
+  403: ConfigPersonOnlyError
 }
 
 export type GlobalConfigUpdateError = GlobalConfigUpdateErrors[keyof GlobalConfigUpdateErrors]
@@ -8669,6 +8790,9 @@ export type ConfigGetResponse = ConfigGetResponses[keyof ConfigGetResponses]
 
 export type ConfigUpdateData = {
   body?: Config
+  headers?: {
+    "x-swarm-desktop-nonce"?: string
+  }
   path?: never
   query?: {
     directory?: string
@@ -8682,6 +8806,10 @@ export type ConfigUpdateErrors = {
    * BadRequest | InvalidRequestError
    */
   400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * ConfigPersonOnlyError
+   */
+  403: ConfigPersonOnlyError
 }
 
 export type ConfigUpdateError = ConfigUpdateErrors[keyof ConfigUpdateErrors]
@@ -9665,6 +9793,59 @@ export type AppAgentsResponses = {
 
 export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
 
+export type SkillDeleteData = {
+  body?: never
+  headers?: {
+    "x-swarm-desktop-nonce"?: string
+  }
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    scope: "global" | "project"
+    name: string
+  }
+  url: "/skill"
+}
+
+export type SkillDeleteErrors = {
+  /**
+   * SkillInvalidError | InvalidRequestError
+   */
+  400: SkillInvalidError | InvalidRequestError
+  /**
+   * SkillForbiddenError
+   */
+  403: SkillForbiddenError
+  /**
+   * SkillMissingError
+   */
+  404: SkillMissingError
+  /**
+   * SkillChangedError
+   */
+  409: SkillChangedError
+  /**
+   * SkillTooLargeError
+   */
+  413: SkillTooLargeError
+  /**
+   * InternalServerError | SkillArchiveError
+   */
+  500: EffectHttpApiErrorInternalServerError | SkillArchiveError
+}
+
+export type SkillDeleteError = SkillDeleteErrors[keyof SkillDeleteErrors]
+
+export type SkillDeleteResponses = {
+  /**
+   * The archive entry, relative to the scope root
+   */
+  200: SkillDeleted
+}
+
+export type SkillDeleteResponse = SkillDeleteResponses[keyof SkillDeleteResponses]
+
 export type AppSkillsData = {
   body?: never
   path?: never
@@ -9693,10 +9874,75 @@ export type AppSkillsResponses = {
     description?: string
     location: string
     content: string
+    triggers?: {
+      keywords: Array<string>
+      files: Array<string>
+      missionTypes: Array<string>
+    }
+    disabled?: boolean
+    required?: boolean
+    scope?: "builtin" | "global" | "project" | "other"
+    hash?: string
   }>
 }
 
 export type AppSkillsResponse = AppSkillsResponses[keyof AppSkillsResponses]
+
+export type SkillSaveData = {
+  body?: {
+    scope: "global" | "project"
+    name: string
+    content: string
+    baseHash?: string
+  }
+  headers?: {
+    "x-swarm-desktop-nonce"?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/skill"
+}
+
+export type SkillSaveErrors = {
+  /**
+   * SkillInvalidError | InvalidRequestError
+   */
+  400: SkillInvalidError | InvalidRequestError
+  /**
+   * SkillForbiddenError
+   */
+  403: SkillForbiddenError
+  /**
+   * SkillMissingError
+   */
+  404: SkillMissingError
+  /**
+   * SkillChangedError
+   */
+  409: SkillChangedError
+  /**
+   * SkillTooLargeError
+   */
+  413: SkillTooLargeError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type SkillSaveError = SkillSaveErrors[keyof SkillSaveErrors]
+
+export type SkillSaveResponses = {
+  /**
+   * Where the skill was saved
+   */
+  200: SkillSaved
+}
+
+export type SkillSaveResponse = SkillSaveResponses[keyof SkillSaveResponses]
 
 export type LspStatusData = {
   body?: never
@@ -12199,6 +12445,166 @@ export type PartUpdateResponses = {
 }
 
 export type PartUpdateResponse = PartUpdateResponses[keyof PartUpdateResponses]
+
+export type SkillSourceData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    scope: "global" | "project"
+    name: string
+  }
+  url: "/skill/source"
+}
+
+export type SkillSourceErrors = {
+  /**
+   * SkillInvalidError | InvalidRequestError
+   */
+  400: SkillInvalidError | InvalidRequestError
+  /**
+   * SkillMissingError
+   */
+  404: SkillMissingError
+}
+
+export type SkillSourceError = SkillSourceErrors[keyof SkillSourceErrors]
+
+export type SkillSourceResponses = {
+  /**
+   * The SKILL.md text and its sha256
+   */
+  200: SkillSource
+}
+
+export type SkillSourceResponse = SkillSourceResponses[keyof SkillSourceResponses]
+
+export type SkillDraftsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/skill/drafts"
+}
+
+export type SkillDraftsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SkillDraftsError = SkillDraftsErrors[keyof SkillDraftsErrors]
+
+export type SkillDraftsResponses = {
+  /**
+   * Drafts waiting for the person
+   */
+  200: Array<SkillDraft>
+}
+
+export type SkillDraftsResponse = SkillDraftsResponses[keyof SkillDraftsResponses]
+
+export type SkillDraftApproveData = {
+  body?: {
+    scope: "global" | "project"
+    acceptCommands?: boolean
+  }
+  headers?: {
+    "x-swarm-desktop-nonce"?: string
+  }
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/skill/drafts/{name}/approve"
+}
+
+export type SkillDraftApproveErrors = {
+  /**
+   * SkillInvalidError | InvalidRequestError
+   */
+  400: SkillInvalidError | InvalidRequestError
+  /**
+   * SkillForbiddenError
+   */
+  403: SkillForbiddenError
+  /**
+   * SkillMissingError
+   */
+  404: SkillMissingError
+  /**
+   * SkillChangedError
+   */
+  409: SkillChangedError
+  /**
+   * SkillTooLargeError
+   */
+  413: SkillTooLargeError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type SkillDraftApproveError = SkillDraftApproveErrors[keyof SkillDraftApproveErrors]
+
+export type SkillDraftApproveResponses = {
+  /**
+   * Where the skill was saved
+   */
+  200: SkillSaved
+}
+
+export type SkillDraftApproveResponse = SkillDraftApproveResponses[keyof SkillDraftApproveResponses]
+
+export type SkillDraftDiscardData = {
+  body?: never
+  headers?: {
+    "x-swarm-desktop-nonce"?: string
+  }
+  path: {
+    name: string
+  }
+  query: {
+    directory?: string
+    workspace?: string
+    scope: "global" | "project"
+  }
+  url: "/skill/drafts/{name}"
+}
+
+export type SkillDraftDiscardErrors = {
+  /**
+   * SkillInvalidError | InvalidRequestError
+   */
+  400: SkillInvalidError | InvalidRequestError
+  /**
+   * SkillForbiddenError
+   */
+  403: SkillForbiddenError
+  /**
+   * SkillMissingError
+   */
+  404: SkillMissingError
+}
+
+export type SkillDraftDiscardError = SkillDraftDiscardErrors[keyof SkillDraftDiscardErrors]
+
+export type SkillDraftDiscardResponses = {
+  /**
+   * The draft was removed
+   */
+  200: SkillDraftRemoved
+}
+
+export type SkillDraftDiscardResponse = SkillDraftDiscardResponses[keyof SkillDraftDiscardResponses]
 
 export type SyncStartData = {
   body?: never
