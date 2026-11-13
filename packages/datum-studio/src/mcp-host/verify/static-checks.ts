@@ -317,6 +317,9 @@ export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   "arrowTangent",
   // Swarm 1.2.8 row 55c (C133): a container frame clipped by the figure box (9 -> 10).
   "frameOutside",
+  // Swarm 1.2.8 row 58b (C134, G3-08): a label band over an arrowhead, node outline or container rule (row 57c kind,
+  // GEOM_LABEL_COLLISION) fails FIGURE_FIT too, not only the preview (10 -> 11).
+  "labelCollision",
 ])
 
 /**
