@@ -366,6 +366,22 @@ const scenarios: Scenario[] = [
     .mutating()
     .at((ctx) => ({ path: "/project/trust", headers: ctx.headers(), body: { decision: "later" } }))
     .json(200, object, "status"),
+  // 1.2.8 row 44b (AC-PROJi): the runner holds no desktop nonce, so a move is refused person-only before anything is read.
+  http.protected
+    .post("/project/rehome", "project.rehome")
+    .at((ctx) => ({
+      path: "/project/rehome",
+      headers: ctx.headers(),
+      body: { missionId: "m", from: "/nowhere", to: "/nowhere/g", sessions: [], approvalRef: "D-1" },
+    }))
+    .json(
+      403,
+      (value) => {
+        object(value)
+        check(value.name === "RehomeForbiddenError", "a re-home without the desktop nonce is refused")
+      },
+      "status",
+    ),
   http.protected
     .post("/project/git/init", "project.initGit")
     .mutating()
