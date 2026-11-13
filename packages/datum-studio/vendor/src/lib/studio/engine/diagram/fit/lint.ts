@@ -200,6 +200,8 @@ interface Scan {
   linkOrder: number[];
   /** Swarm 1.2.8 row 56 (VIS-4, OP-18-6): true for a link drawn with `data-route="curved"` (sampled Bezier). */
   linkCurved: boolean[];
+  /** Swarm 1.2.8 row 57 (VIS-7, 01f §7 (a)): true for a link drawn with a `marker-start` head. */
+  linkStart: boolean[];
   /** T-03: label knockout bands (paper rect right before a `<text>`) with their document order. */
   bands: { box: Box; order: number }[];
 }
@@ -215,6 +217,7 @@ function scan(svg: string): Scan {
   const linkHalf: number[] = [];
   const linkOrder: number[] = [];
   const linkCurved: boolean[] = [];
+  const linkStart: boolean[] = [];
   const bands: { box: Box; order: number }[] = [];
   let pendingBand: { box: Box; order: number } | null = null;
   let inDefs = 0;
@@ -341,6 +344,7 @@ function scan(svg: string): Scan {
         linkHalf.push((Number(a["stroke-width"] ?? 0) || 0) / 2);
         linkOrder.push(k.index);
         linkCurved.push(a["data-route"] === "curved");
+        linkStart.push(a["marker-start"] !== undefined);
       }
       continue;
     }
@@ -374,7 +378,7 @@ function scan(svg: string): Scan {
     if (!Number.isFinite(box[0])) continue;
     nodes.push({ id: nodeId ?? null, outline, circle, ...(rx !== undefined ? { rx } : {}), half, box });
   }
-  return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, bands };
+  return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands };
 }
 
 function segX(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
@@ -616,10 +620,17 @@ function stubSegments(
  * T-03 `arrowTangent`: a connector whose last straight piece lands on a node border within
  * `ARROW_TANGENT_TOL_DEG` of that border's direction (it runs along the border, or into a corner
  * along the next side, instead of meeting the border head-on).
+ * Swarm 1.2.8 row 57 (VIS-7, 01f §7 (a)): a link with a start head (`marker-start`) is checked at its first piece too,
+ * read from the start backwards (a second entry for the same link when both ends graze a border).
  */
-function arrowTangents(links: ReadonlyArray<ReadonlyArray<Pt>>, nodes: readonly NodeShape[]): Array<{ link: number; node: number; deg: number }> {
+function arrowTangents(
+  links: ReadonlyArray<ReadonlyArray<Pt>>,
+  nodes: readonly NodeShape[],
+  starts: ReadonlyArray<boolean> = [],
+): Array<{ link: number; node: number; deg: number }> {
   const out: Array<{ link: number; node: number; deg: number }> = [];
-  links.forEach((raw, li) => {
+  const ends = links.flatMap((raw, li) => (starts[li] ? [{ raw, li }, { raw: [...raw].reverse(), li }] : [{ raw, li }]));
+  ends.forEach(({ raw, li }) => {
     const pl = straightPieces(raw);
     if (pl.length < 2) return;
     const e = pl[pl.length - 1];
@@ -704,7 +715,7 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
 
 /** Lint geometri SVG diagram (tanpa browser). `score` = jumlah semua cacat. */
 export function lintDiagramGeometry(svg: string): DiagramGeomLint {
-  const { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, bands } = scan(svg);
+  const { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands } = scan(svg);
   const defects: DiagramGeomDefect[] = [];
   // teks-teks
   for (let i = 0; i < texts.length; i++) {
@@ -819,7 +830,7 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
   for (const s of stubSegments(links, bandsOver, linkCurved)) {
     defects.push({ kind: "stubSegment", text: `konektor ${s.link}`, amount: Number(s.length.toFixed(2)) });
   }
-  for (const t of arrowTangents(links, nodes)) {
+  for (const t of arrowTangents(links, nodes, linkStart)) {
     defects.push({ kind: "arrowTangent", text: `konektor ${t.link}`, other: nodeName(t.node), amount: Number(t.deg.toFixed(1)) });
   }
   const counts = emptyCounts();

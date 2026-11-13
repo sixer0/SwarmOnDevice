@@ -109,12 +109,17 @@ describe("row 158: at-capacity figures render unchanged (sha256 before the patch
   const BEFORE: Record<keyof typeof AT_CAPACITY, string> = {
     // Row 165O consequence edit (C204 item 4, C23 recorded diff): the 4 lane lines (lineSvg) now carry fill="none";
     // removing that attribute gives the before bytes exactly. Before: 6d9b0b5f257a9f70...
-    swimlane6: "2da10275ebe1460c7e27bc0e9b4baa93d12563f44e8e66b7aeb1f46580d08eb6",
+    // Swarm 1.2.8 row 57 (AC-HARW INTENT, C10 OP13-5 / C12 OP-18-2): the arrowhead markers are drawn in mm
+    // (userSpaceOnUse, 3.2 mm); only the <marker> elements changed, the bytes outside them are equal (sha256 without
+    // markers f5ce6c1c902c7fd4... before and after). Before: 2da10275ebe1460c...
+    swimlane6: "d380829ffd2c726b9d81af1df84829570421610134f2f594a3547d79311fb5cf",
     // Row 165C (F113-9, C23 recorded diff): node g0 sits on the sheet edge, its outline is now drawn half a stroke
     // inside (x 0.0 -> 0.23, width 21.33 -> 21.1); the only changed line. Before: 28b63edf50ac499f...
     // Swarm 1.2.6 row 59 (T-02, N-016, controller ruling): the compacted block (x0 = 0) is translated inside the
     // 2 mm edge inset (centred, lattice spacing kept). Before: cd9dc8569bbc20b8...
-    graph5: "d53b6de116c453f1d6bcb53cf3598d2d0e7588eba17c78b847976ec988b3a2d4",
+    // Swarm 1.2.8 row 57 (AC-HARW INTENT): <marker> elements only (sha256 without markers fd07a1a3f0e509c3... before
+    // and after). Before: d53b6de116c453f1...
+    graph5: "83560e3921069988ff4b76600f8e7a293053c0f2599d52b3d0b566bd5542bc8b",
     bars30: "4c083a8330ada122686d85bce992ef43590e83479b0261f0c01eca1bb956390f",
     columns12: "1060e9b9d8043480cde380c532614a7f5ec3331e64590f5e20217cc19f90a107",
     // Swarm 1.2.6 row 66 (T-10, N-030, controller ruling): the 20 long labels now wrap to two lines under the

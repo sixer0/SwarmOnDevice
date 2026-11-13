@@ -10,7 +10,7 @@
  * `data-mark="node"`, jalur konektor `data-mark="link"` + `data-series=<jenis>`.
  * Opsi `dataMarks: false` menghasilkan keluaran Python murni.
  */
-import type { DiagramEdgeKind, FaceRole, ProvenanceMark } from "../../../contract";
+import type { DiagramArrowSize, DiagramArrowType, DiagramEdge, DiagramEdgeKind, FaceRole, ProvenanceMark } from "../../../contract";
 import { symbolBody } from "../../symbols";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure, tspanLines } from "../../chart/core/textfit";
 import { diagramFitActive } from "../fit/state";
@@ -32,6 +32,7 @@ import { nodeStrokeToken, nodeSymbolId } from "./sheet";
 import { DiagramDefect } from "./defect";
 import { xmlCommentText, xmlEscapeText } from "./xml";
 import {
+  ARROW_SIZES_MM,
   DASH_PATTERNS,
   DIAGRAM_TOKENS,
   EDGE_KINDS,
@@ -79,6 +80,11 @@ export interface SvgMarkOptions {
    * absent for orthogonal, so a default edge keeps its bytes (01f §3.2.4). Read by `edgePathSvg` only.
    */
   route?: "straight" | "curved";
+  /**
+   * Swarm 1.2.8 row 57 (VIS-7, 01f §5.2, register N8-468): the connector's arrowheads (`edgeArrowsOf`). Absent = the
+   * kind's head at the end (`head-<kind>`), none at the start. Read by `edgePathSvg` only.
+   */
+  arrows?: EdgeArrows;
 }
 
 export interface SvgTextOptions {
@@ -1042,17 +1048,101 @@ export function edgePathSvg(
   let attrs = `fill="none" stroke="${colourOf(meta.colour)}" stroke-width="${r2(edgeStrokeWidth(kind))}"`;
   if (dash) attrs += ` stroke-dasharray="${dash}"`;
   const route = opts.route === "straight" || opts.route === "curved" ? ` data-route="${opts.route}"` : "";
-  return `<path d="${polylineD(pts)}" ${attrs} marker-end="url(#head-${kind})"${markAttrs("link", opts, kind)}${route}/>`;
+  // Row 57 (VIS-7, 01f §3.2.4): `marker-start` only with a start head; no `marker-end` for `arrow_end: "none"`.
+  const arrows = opts.arrows ?? DEFAULT_ARROWS;
+  const start = arrows.start ? ` marker-start="url(#${edgeMarkerId(kind, arrows.start, "start")})"` : "";
+  const end = arrows.end ? ` marker-end="url(#${edgeMarkerId(kind, arrows.end, "end")})"` : "";
+  return `<path d="${polylineD(pts)}" ${attrs}${start}${end}${markAttrs("link", opts, kind)}${route}/>`;
 }
 
-/** Kepala panah satu jenis (P4: solid terisi, open bergaris). */
+/** Swarm 1.2.8 row 57 (VIS-7, D-V4, 01f §5.2): one drawn arrowhead (type other than `none`, size key). */
+export interface EdgeHead {
+  type: Exclude<DiagramArrowType, "none">;
+  size: DiagramArrowSize;
+}
+
+/** Row 57: the heads of one connector; null = no head at that end. */
+export interface EdgeArrows {
+  start: EdgeHead | null;
+  end: EdgeHead | "kind" | null;
+}
+
+/** Today's connector: the kind's head at the end (`head-<kind>`), nothing at the start. */
+const DEFAULT_ARROWS: EdgeArrows = { start: null, end: "kind" };
+
+/** Row 57: the end-head type a kind draws when `arrow_end` is absent (EDGE_KINDS head: solid = triangle, open). */
+export function kindHeadType(kind: DiagramEdgeKind): EdgeHead["type"] {
+  return EDGE_KINDS[kind].head === "solid" ? "triangle" : "open";
+}
+
+/**
+ * Row 57 (VIS-7, 01f §3.2.2 "explicit default = absent"): the heads of an edge from its `arrow_*` fields. An end head
+ * equal to the kind's default type at size `m` is the kind head (`head-<kind>`), so a spec that writes the defaults
+ * renders byte-identical to one that omits them.
+ */
+export function edgeArrowsOf(
+  e: Pick<DiagramEdge, "kind" | "arrow_start" | "arrow_end" | "arrow_start_size" | "arrow_end_size">,
+): EdgeArrows {
+  const startType = e.arrow_start ?? "none";
+  const endType = e.arrow_end ?? kindHeadType(e.kind);
+  const endSize = e.arrow_end_size ?? "m";
+  return {
+    start: startType === "none" ? null : { type: startType, size: e.arrow_start_size ?? "m" },
+    end: endType === "none" ? null : endType === kindHeadType(e.kind) && endSize === "m" ? "kind" : { type: endType, size: endSize },
+  };
+}
+
+/** Row 57 (register N8-468): `head-<kind>` for the kind head, else `arrow-<end>-<type>-<size>-<kind>`. */
+export function edgeMarkerId(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end"): string {
+  if (head === "kind") return `head-${kind}`;
+  return `arrow-${at}-${head.type}-${head.size}-${kind}`;
+}
+
+/**
+ * Kepala panah satu jenis (P4: solid terisi, open bergaris).
+ * Swarm 1.2.8 row 57 (H-ARW, AC-HARW, 01f §5.3): drawn in `markerUnits="userSpaceOnUse"` mm at size `m` (3.2 mm),
+ * no longer in stroke-width units (a 0.45 mm `control` edge drew a 1.62 mm head, under `ARROW_HEAD_MIN_MM`).
+ */
 export function edgeMarkerSvg(kind: DiagramEdgeKind): string {
-  const meta = EDGE_KINDS[kind];
-  const col = colourOf(meta.colour);
-  if (meta.head === "solid") {
-    return `<marker id="head-${kind}" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="${col}"/></marker>`;
-  }
-  return `<marker id="head-${kind}" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="${col}" stroke-width="0.35"/></marker>`;
+  return arrowMarkerSvg(kind, "kind", "end");
+}
+
+/**
+ * Row 57 (VIS-7, 01f §5.2): one arrowhead marker in mm. Length L = `ARROW_SIZES_MM[size]`, width W = 0.89 L; the
+ * shape is drawn inside a 1 mm margin (P) so a stroked head is not clipped by the marker viewport. Shapes: triangle
+ * filled in the kind colour; open = the triangle's two sides stroked at the edge width (>= 0.30 mm); diamond and
+ * circle hollow (paper fill, kind-colour stroke). The outermost point of the head lies L/18 past the path end, as
+ * the original `refX="3.4"` of 3.6 did, so the tip meets the node outline inside its stroke. Start markers are
+ * separate definitions with the shape mirrored (tip towards the source); `orient="auto-start-reverse"` is not used
+ * (support in the DOCX/PDF chain unverified, 01f risk R3).
+ */
+export function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end"): string {
+  const type = head === "kind" ? kindHeadType(kind) : head.type;
+  const L = ARROW_SIZES_MM[head === "kind" ? "m" : head.size];
+  const W = 0.89 * L;
+  const P = 1;
+  const sw = Math.max(0.3, edgeStrokeWidth(kind));
+  const col = colourOf(EDGE_KINDS[kind].colour);
+  const mir = at === "start";
+  // x of a point of the end-pointing shape (tip at x = L), mirrored for a start head, shifted by the margin
+  const X = (x: number) => r2(P + (mir ? L - x : x));
+  const Y = (y: number) => r2(P + y);
+  // how far the drawn outline reaches past its geometric tip: the miter of a stroked vertex, half the stroke of a circle
+  const reach = type === "triangle" ? 0 : type === "open" ? sw / 2 / Math.sin(Math.atan(W / 2 / L)) : type === "diamond" ? sw / 2 / Math.sin(Math.atan(W / L)) : sw / 2;
+  const tip = type === "circle" ? L / 2 + W / 2 : L;
+  const ref = tip + reach - L / 18;
+  const body =
+    type === "triangle"
+      ? `<path d="M${X(0)},${Y(0)} L${X(L)},${Y(W / 2)} L${X(0)},${Y(W)} Z" fill="${col}"/>`
+      : type === "open"
+        ? `<path d="M${X(0)},${Y(0)} L${X(L)},${Y(W / 2)} L${X(0)},${Y(W)}" fill="none" stroke="${col}" stroke-width="${r2(sw)}"/>`
+        : type === "diamond"
+          ? `<path d="M${X(0)},${Y(W / 2)} L${X(L / 2)},${Y(0)} L${X(L)},${Y(W / 2)} L${X(L / 2)},${Y(W)} Z" fill="${PAPER}" stroke="${col}" stroke-width="${r2(sw)}"/>`
+          : `<circle cx="${X(L / 2)}" cy="${Y(W / 2)}" r="${r2(W / 2)}" fill="${PAPER}" stroke="${col}" stroke-width="${r2(sw)}"/>`;
+  return (
+    `<marker id="${edgeMarkerId(kind, head, at)}" markerUnits="userSpaceOnUse" markerWidth="${r2(L + 2 * P)}" ` +
+    `markerHeight="${r2(W + 2 * P)}" refX="${X(ref)}" refY="${Y(W / 2)}" orient="auto">${body}</marker>`
+  );
 }
 
 /** Pola arsiran 45/135 derajat (isian diagram tahan fotokopi). */
@@ -1068,6 +1158,11 @@ export interface DiagramDefsUse {
   kinds: Iterable<DiagramEdgeKind>;
   hatch45: boolean;
   hatch135: boolean;
+  /**
+   * Swarm 1.2.8 row 57 (VIS-7): the heads of each connector, in the order of `kinds` (`edgeArrowsOf`). Absent = every
+   * connector draws its kind head. A kind head is defined only when a connector draws it.
+   */
+  arrows?: ReadonlyArray<EdgeArrows>;
 }
 
 /**
@@ -1078,11 +1173,21 @@ export interface DiagramDefsUse {
  */
 export function diagramDefs(use?: DiagramDefsUse): string[] {
   if (!use) return ["<defs>", hatchPatternSvg(45), hatchPatternSvg(135), ...EDGE_KIND_NAMES_SORTED.map(edgeMarkerSvg), "</defs>"];
-  const kinds = new Set(use.kinds);
+  const all = [...use.kinds];
+  const arrows = all.map((_, i) => use.arrows?.[i] ?? DEFAULT_ARROWS);
+  const kinds = new Set(all.filter((_, i) => arrows[i].end === "kind"));
   const out: string[] = [];
   if (use.hatch45) out.push(hatchPatternSvg(45));
   if (use.hatch135) out.push(hatchPatternSvg(135));
   out.push(...EDGE_KIND_NAMES_SORTED.filter((k) => kinds.has(k)).map(edgeMarkerSvg));
+  // Row 57 (VIS-7): the other heads after the kind heads, one definition per id, sorted by id (stable bytes).
+  const extra = new Map<string, string>();
+  all.forEach((k, i) => {
+    const a = arrows[i];
+    if (a.start) extra.set(edgeMarkerId(k, a.start, "start"), arrowMarkerSvg(k, a.start, "start"));
+    if (a.end && a.end !== "kind") extra.set(edgeMarkerId(k, a.end, "end"), arrowMarkerSvg(k, a.end, "end"));
+  });
+  out.push(...[...extra.keys()].sort().map((id) => extra.get(id)!));
   return out.length ? ["<defs>", ...out, "</defs>"] : [];
 }
 

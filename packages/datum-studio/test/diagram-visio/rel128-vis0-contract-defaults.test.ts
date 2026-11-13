@@ -318,7 +318,8 @@ describe("guide", () => {
 // first 16 hex) and compared with CHAR_BASE, which was generated with this describe at BASE e1f9673772 (red-base
 // worktree, REL128_VIS0_CHAR_PRINT=1). Green at BASE by construction, green at HEAD while the engine keeps old output.
 // - "outside markers": every path, node, text, hop and label byte of BASE (clause 1). No exception.
-// - "marker elements": the BASE marker set. Row 57 (AC-HARW) replaces the `mk` hashes with the H-ARW set as INTENT.
+// - "marker elements": the H-ARW marker set (row 57, AC-HARW INTENT): each BASE `mk` hash maps to its H-ARW hash in
+//   CHAR_HARW_MK; CHAR_BASE keeps the BASE hashes as generated.
 // - "verdicts": validateSpec non-PASS ids, build issues, geometry ids, ELK decision, refusal id (clause 5); an entry may
 //   also match its CHAR_INTENT value, which names the AC line that owns the change.
 // - "twins": the same spec with every 1.2.8 field set to its default (01f §3.2.2) renders byte-equal to the spec without
@@ -529,6 +530,19 @@ const CHAR_BASE: Record<string, string> = {
   "fixtures/syn128/r18g_lr_166.json#/spec":
     "2619dc383ad9cffc 3efe8a70ab24fdc4 2619dc383ad9cffc 3efe8a70ab24fdc4 | V[] I[] G[AUTO_FIT:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT] E[R2]",
 }
+/**
+ * Swarm 1.2.8 row 57 (AC-HARW INTENT, C10 OP13-5, C12 OP-18-2, 01f §5.3): the H-ARW marker set. Every BASE marker block
+ * of the corpus (sha256 first 16 hex of the joined <marker> elements, CHAR_BASE `mk` columns) maps to the block row 57
+ * draws (`head-<kind>` in userSpaceOnUse mm at size m). Three distinct BASE blocks occur (the case04 one holds
+ * head-control, head-data, head-sync); a refused spec ("-") draws none. Generated with REL128_VIS0_CHAR_PRINT=1 at row 57;
+ * the bytes outside <marker> and the verdicts stayed BASE's for every key.
+ */
+const CHAR_HARW_MK: Record<string, string> = {
+  "5951e475e7e785a8": "ea8f7d397f16783f",
+  eea8450c80a2d003: "d88b640769644364",
+  "3efe8a70ab24fdc4": "411292684f467f10",
+  "-": "-",
+}
 /** Intended verdict changes (01_specs §3.6 clause 5), key -> [AC line, HEAD line]; bytes outside markers stay BASE's. */
 const CHAR_INTENT: Record<string, [string, string]> = {
   // AC-HNB4 (row 35b, 4dcd95b64c): one meaning per DATUM-37 id; the refusal stays, its id is split.
@@ -562,11 +576,11 @@ describe("char", () => {
     }
   })
 
-  test("marker elements equal the BASE set (row 57 AC-HARW replaces them with the H-ARW set as INTENT)", () => {
+  test("marker elements equal the H-ARW set (row 57 AC-HARW INTENT: each BASE marker block -> CHAR_HARW_MK)", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      expect([n.sm, n.am], c.key).toEqual([b.sm, b.am])
+      expect([n.sm, n.am], c.key).toEqual([CHAR_HARW_MK[b.sm], CHAR_HARW_MK[b.am]])
     }
   })
 

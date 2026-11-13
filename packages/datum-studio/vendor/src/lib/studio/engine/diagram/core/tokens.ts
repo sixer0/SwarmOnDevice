@@ -133,6 +133,12 @@ export const POOLS_MAX = LIMITS.max_pools;
 export const VIA_MAX = LIMITS.max_via;
 export const CURVE_SAMPLES = LIMITS.curve_samples;
 export const ARROW_SIZES_MM = LIMITS.arrow_sizes_mm;
+/**
+ * Swarm 1.2.8 row 57 (H-ARW, AC-HARW, register N8-216, value R20-C36): the shortest arrowhead length (mm) at print size.
+ * Heads are drawn in `markerUnits="userSpaceOnUse"` mm (core/svg.ts), so every size of `ARROW_SIZES_MM` is a printed
+ * length; the smallest (`s`) equals this floor.
+ */
+export const ARROW_HEAD_MIN_MM = 2.5;
 export const WEIGHT_MM = LIMITS.weight_mm;
 export const SHAPE_GLYPH_MM = LIMITS.shape_glyph_mm;
 export const LABEL_AT_FRACTION = LIMITS.label_at_fraction;

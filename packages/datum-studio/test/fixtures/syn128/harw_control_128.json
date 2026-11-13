@@ -1,0 +1,208 @@
+{
+  "$comment": "Swarm 1.2.8 row 57 (AC-HARW, AT-HARW, register N8-378 / N8-475). Synthetic labels only. `spec`: one `control` edge on a 128 mm flow (the defect case: at BASE its open head is 3.6 stroke units x 0.45 mm = 1.62 mm long). `kinds`: one edge of every kind (6 kinds, 2 figures within DATUM-25L) for the per-kind head size.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "id": "9.7",
+    "title": "Gambar sintetis kepala panah kendali.",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "picu"
+      }
+    ]
+  },
+  "kinds_a": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.8",
+    "title": "Gambar sintetis jenis konektor A.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "data"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "control",
+        "label": "kendali"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "sync",
+        "label": "salin"
+      }
+    ]
+  },
+  "kinds_b": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.9",
+    "title": "Gambar sintetis jenis konektor B.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "accent",
+        "label": "utama"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "alert",
+        "label": "tolak"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "verify",
+        "label": "periksa"
+      }
+    ]
+  }
+}

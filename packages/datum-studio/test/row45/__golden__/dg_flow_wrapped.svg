@@ -3,8 +3,8 @@
 <!-- generator studio engine/diagram (port datum_diagram.py v2.0.0 Garis A, rebuild DHS-RB-04) | family=flow | token=tokens.json -->
 <!-- DATUM-APPARATUS-REQUIRED: caption, source dan baris kunci dicetak oleh halaman, bukan oleh SVG ini (P6, lint cek 36) -->
 <defs>
-<marker id="head-data" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2 Z" fill="#101418"/></marker>
-<marker id="head-verify" markerWidth="4" markerHeight="4" refX="3.4" refY="1.6" orient="auto"><path d="M0,0 L3.6,1.6 L0,3.2" fill="none" stroke="#2F6F6B" stroke-width="0.35"/></marker>
+<marker id="head-data" markerUnits="userSpaceOnUse" markerWidth="5.2" markerHeight="4.85" refX="4.02" refY="2.42" orient="auto"><path d="M1.0,1.0 L4.2,2.42 L1.0,3.85 Z" fill="#101418"/></marker>
+<marker id="head-verify" markerUnits="userSpaceOnUse" markerWidth="5.2" markerHeight="4.85" refX="4.58" refY="2.42" orient="auto"><path d="M1.0,1.0 L4.2,2.42 L1.0,3.85" fill="none" stroke="#2F6F6B" stroke-width="0.45"/></marker>
 </defs>
 <rect x="0" y="0" width="166.0" height="61.912" fill="#FCFCFB"/>
 <path d="M 53.33 16.67 L 58.1 16.67 L 64.0 16.67 L 64.0 16.67 L 59.24 16.67 L 64.0 16.67" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="0"/>
