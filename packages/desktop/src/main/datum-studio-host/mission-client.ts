@@ -30,6 +30,8 @@ export const MISSION_CONTROL_TOOLS = [
 export type MissionControlTool = (typeof MISSION_CONTROL_TOOLS)[number]
 
 export const MISSION_CONTROL_AGENT = "swarm"
+/** N8-459 (1.2.8 SR8-05): header carrying the per-launch Mission Control key, sent on the initialize request only. */
+export const MISSION_CONTROL_KEY_HEADER = "x-swarm-mission-control-key"
 export const MISSION_CONTROL_ACTOR = "mission-control"
 export const MISSION_CALL_TIMEOUT_MS = 5_000
 export const MISSION_LIST_STATUSES = ["draft", "approved", "running", "paused", "done"] as const
@@ -143,6 +145,11 @@ export type MissionControlClientOptions = {
   /** `http://127.0.0.1:<port>/mcp` from the host's ready message. */
   url: string
   token: string
+  /**
+   * 1.2.8 SR8-05 (row 45c): the per-launch Mission Control key from lifecycle.ts. Sent as MISSION_CONTROL_KEY_HEADER on
+   * each initialize request (so a re-initialise is attested too), never on other requests; scrubbed like the token.
+   */
+  missionControlKey?: string
   /** The folder main owns and sends as X-Studio-Caller-Cwd (created 0700 on first use, never a renderer path). */
   callerCwd: string
   /** False once the host stopped or exited: calls answer HOST_UNAVAILABLE without a request. */
@@ -184,7 +191,12 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
   let nextId = 1
   let cwdReady: Promise<void> | undefined
 
-  const scrub = (text: string) => (token ? text.split(token).join("[token]") : text)
+  const missionKey = opts.missionControlKey
+  const scrub = (text: string) => {
+    let out = token ? text.split(token).join("[token]") : text
+    if (missionKey) out = out.split(missionKey).join("[key]")
+    return out
+  }
 
   function headers(extra: Record<string, string> = {}) {
     const h: Record<string, string> = {
@@ -223,8 +235,10 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
   }
 
   async function post(body: Json, signal: AbortSignal): Promise<Response> {
+    // SR8-05: the key rides only on initialize, the request whose session the host attests.
+    const extra: Record<string, string> = body.method === "initialize" && missionKey ? { [MISSION_CONTROL_KEY_HEADER]: missionKey } : {}
     try {
-      return await doFetch(url!, { method: "POST", headers: headers(), body: JSON.stringify(body), signal, redirect: "error" })
+      return await doFetch(url!, { method: "POST", headers: headers(extra), body: JSON.stringify(body), signal, redirect: "error" })
     } catch (error) {
       if (signal.aborted) throw new MissionControlError("TIMEOUT", `DATUM Studio did not answer within ${timeoutMs} ms`)
       throw new MissionControlError("HOST_UNAVAILABLE", `DATUM Studio is not reachable (${error instanceof Error ? error.name : "error"})`)

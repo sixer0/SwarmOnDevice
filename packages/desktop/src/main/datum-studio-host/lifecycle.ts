@@ -1,5 +1,5 @@
 // Main-side lifecycle of the datum-studio-host utility process (row 111; Studio spec §3.1, §9.1, §10.1).
-//   fork(entry, cwd = layout.root, env = minimal + DATUM_RENDER_* + STUDIO_*) -> {type:"start", token, ...}
+//   fork(entry, cwd = layout.root, env = minimal + DATUM_RENDER_* + STUDIO_*) -> {type:"start", token, missionControlKey, ...}
 //   <- {type:"ready", url, pid, cwd}  (cwd must equal layout.root: M4)  -> write <stateHome>/swarm/datum-studio.env 0600
 //   stop(): remove the descriptor (sync), {type:"stop"}, wait for "stopped"/exit, kill after the timeout.
 // No Electron import: `fork` is injected (start.ts passes utilityProcess.fork; tests pass a double).
@@ -137,6 +137,9 @@ export async function startStudioHost(opts: StudioHostStartOptions): Promise<Stu
   // The descriptor is not touched before ready: a refused second host (STORE_LOCKED) must leave the live host's file
   // alone. A file left by a crash is replaced by the rename at ready; until then the launcher's PID check rejects it.
   const token = randomBytes(32).toString("hex")
+  // 1.2.8 SR8-05 (row 45c): per-launch Mission Control key. Lives only in the start message and the mission client's
+  // closure: never in createHostEnv, the descriptor (datum-studio.env) or a log line.
+  const missionControlKey = randomBytes(32).toString("hex")
   const child = opts.fork(opts.entryPath, [], {
     cwd: opts.layout.root,
     env: createHostEnv(opts),
@@ -202,6 +205,7 @@ export async function startStudioHost(opts: StudioHostStartOptions): Promise<Stu
       templatesDir: opts.layout.templatesDir,
       assetRepoRoot: opts.layout.assetRepoRoot,
       release: STUDIO_RELEASE,
+      missionControlKey,
     })
   }).catch(async (error) => {
     await stopChild()
@@ -247,6 +251,7 @@ export async function startStudioHost(opts: StudioHostStartOptions): Promise<Stu
   const missions = createMissionControlClient({
     url: ready.url,
     token,
+    missionControlKey,
     callerCwd: opts.missionCallerCwd ?? join(dirname(opts.descriptorPath), "datum-studio-mission-control"),
     running: () => !exited && !stopping,
     log: opts.log,

@@ -48,7 +48,15 @@ export function runStudioHost(port: ParentPortLike, load: () => Promise<StudioHo
         ...(opts.isLiveHost ? { isLiveHost: opts.isLiveHost } : {}),
       })
       mod.configureTemplateSource({ templatesDir: command.templatesDir, assetRepoRoot: command.assetRepoRoot, release: command.release })
-      server = await mod.startStudioHostServer({ store, token: command.token, hostname: command.hostname, port: 0, log })
+      // 1.2.8 SR8-05 (row 45c): the per-launch Mission Control key goes to the server only (attestation: row 45b).
+      server = await mod.startStudioHostServer({
+        store,
+        token: command.token,
+        hostname: command.hostname,
+        port: 0,
+        ...(command.missionControlKey ? { missionControlKey: command.missionControlKey } : {}),
+        log,
+      })
       state = { phase: "running", store, server, mod }
       port.postMessage({ type: "ready", url: server.url, pid: process.pid, cwd: process.cwd() })
     } catch (error) {
