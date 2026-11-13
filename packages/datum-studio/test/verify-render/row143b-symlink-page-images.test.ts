@@ -21,7 +21,7 @@ beforeAll(() => {
     if (req.op === "hello") return { ok: true, electron: "42", chrome: "142", sandbox: true, contextIsolation: true, nodeIntegration: false, network: "blocked" }
     if (req.op === "pagePng") {
       const dstDir = realpathSync(String(req.dstDir)) // what checkOutputPath does
-      const dst = join(dstDir, "p001.png")
+      const dst = join(dstDir, "witness-p001.png")
       writeFileSync(dst, "png")
       return { ok: true, layout: "paged", pageCount: 1, pageSizeMm: { wMm: 210, hMm: 297 }, pageSizeSource: "css", dpi: 150, pages: [{ n: 1, dst, width: 10, height: 10, sha256: SHA }] }
     }
@@ -36,13 +36,13 @@ describe("row 143b: page images through a symlinked store path", () => {
     const r = await rasterizeHtmlPages({ src: join(REAL, "x.html"), dstDir })
     expect(r.pages).toHaveLength(1)
     expect(existsSync(r.pages[0]!.png)).toBe(true)
-    expect(r.pages[0]!.png).toBe(join(REAL, "verify", "o1", "p001.png"))
+    expect(r.pages[0]!.png).toBe(join(REAL, "verify", "o1", "witness-p001.png"))
   })
 
   it("a reply path outside dstDir is still refused", async () => {
     setRenderBridgeTransport(async (req) => {
       if (req.op === "hello") return { ok: true, electron: "42", chrome: "142", sandbox: true, contextIsolation: true, nodeIntegration: false, network: "blocked" }
-      return { ok: true, layout: "paged", pageCount: 1, pageSizeMm: { wMm: 1, hMm: 1 }, pageSizeSource: "css", dpi: 150, pages: [{ n: 1, dst: join(WORK, "elsewhere", "p001.png"), width: 1, height: 1, sha256: SHA }] }
+      return { ok: true, layout: "paged", pageCount: 1, pageSizeMm: { wMm: 1, hMm: 1 }, pageSizeSource: "css", dpi: 150, pages: [{ n: 1, dst: join(WORK, "elsewhere", "witness-p001.png"), width: 1, height: 1, sha256: SHA }] }
     })
     await expect(rasterizeHtmlPages({ src: join(REAL, "x.html"), dstDir: join(LINK, "verify", "o1") })).rejects.toThrow()
   })

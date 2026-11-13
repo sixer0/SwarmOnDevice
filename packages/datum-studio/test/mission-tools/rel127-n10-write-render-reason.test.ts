@@ -9,10 +9,10 @@
 //     for the docKey); a renderable write still returns render.fileId, sha256 and verified.
 // Through the REAL host server (startStudioHostServer, streamable HTTP on 127.0.0.1, MCP SDK client) over a temp store
 // with missionGuard: true (row 86 / row 174 pattern). Needs the command sandbox off (binds an ephemeral port).
-// Fixture: syn127/n10_write_dt10a.json (row 20). The table cells are used with "/" replaced by "-" so the 59-character
-// tokens stay unbreakable after row 40 (N-11 breaks only after , ; /; its CHAR (a) keeps such tokens refused DT-10a).
+// Fixture: syn127/n10_write_dt10a.json (row 20, cells re-made unbreakable in row 48c: 60 characters, no separator).
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
@@ -21,9 +21,7 @@ const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
 const TEMPLATES = path.join(PKG, "templates")
 const FIXTURE = path.join(PKG, "test", "fixtures", "syn127", "n10_write_dt10a.json")
-const BASE = process.env.REL127_N10_TEST_DIR ?? "/private/tmp/claude-501/rel127n10/tests"
-mkdirSync(BASE, { recursive: true })
-const WORK = realpathSync(mkdtempSync(path.join(BASE, "n10-")))
+const WORK = realpathSync(mkdtempSync(path.join(tmpdir(), "n10-")))
 const STORE = path.join(WORK, "datum-studio")
 const LOG = path.join(WORK, "logs", "store.jsonl")
 const HOME = path.join(WORK, "home")
@@ -81,9 +79,9 @@ function row(id: string) {
 }
 
 const fx = JSON.parse(readFileSync(FIXTURE, "utf8")) as { args: S; expected: { renderError: string; checkId: string } }
-/** The fixture's studio_write args under this mission and `docKey`; "/" -> "-" keeps each cell one unbreakable token. */
+/** The fixture's studio_write args under this mission and `docKey` (each cell is one unbreakable token). */
 function failingArgs(docKey: string): S {
-  const a = JSON.parse(JSON.stringify(fx.args).replace(/(R-\d\d)\//g, "$1-")) as S
+  const a = JSON.parse(JSON.stringify(fx.args)) as S
   return { ...a, mission: M, docKey }
 }
 /** Same document shape, short cells: renders. */
@@ -132,6 +130,7 @@ afterAll(async () => {
     else process.env[k] = savedEnv[k]
   }
   await resetEnvCache()
+  rmSync(WORK, { recursive: true, force: true })
 })
 
 let failedA = ""

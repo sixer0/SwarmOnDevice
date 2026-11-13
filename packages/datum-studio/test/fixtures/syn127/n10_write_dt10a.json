@@ -1,5 +1,5 @@
 {
-  "$comment": "Swarm 1.2.7 row 20 (N-10): studio_write args of probe9 N-10 (add `mission`). The 3-column table of R-01/.../R-12 lists joined without spaces is refused DT-10a at render (FIGURE_OVER_CAPACITY, unbreakable 201.7 mm > 166 mm).",
+  "$comment": "Swarm 1.2.7 row 20 / 48c (N-10): studio_write args of probe9 N-10 (add `mission`). Cells are one unbreakable token each (R01R02...R20, 60 characters, no separator at all, so no break rule of rows 40/40b/40d can split them); the 3-column table is refused DT-10a at render (FIGURE_OVER_CAPACITY, unbreakable wider than the 166 mm text width).",
   "args": {
     "docKey": "syn127-n10",
     "template": "datum-nota",
@@ -26,14 +26,14 @@
                 "Kode C"
               ],
               [
-                "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12",
-                "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12",
-                "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12"
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20",
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20",
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20"
               ],
               [
-                "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12",
-                "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12",
-                "R-01/R-02/R-03/R-04/R-05/R-06/R-07/R-08/R-09/R-10/R-11/R-12"
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20",
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20",
+                "R01R02R03R04R05R06R07R08R09R10R11R12R13R14R15R16R17R18R19R20"
               ]
             ],
             "caption": "Daftar kode sintetis",

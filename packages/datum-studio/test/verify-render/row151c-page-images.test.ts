@@ -21,7 +21,7 @@ describe("row 151c L5: page images are pruned like row 70a's previews", () => {
     for (let i = 0; i < 25; i++) {
       const d = join(v, `out${String(i).padStart(3, "0")}`)
       mkdirSync(d)
-      writeFileSync(join(d, "p001.png"), "png")
+      writeFileSync(join(d, "witness-p001.png"), "png")
       utimesSync(d, t0 + i, t0 + i)
     }
     symlinkSync(outside, join(v, "linked"))
@@ -54,13 +54,13 @@ describe("row 151c (DEFECT-157-1): a page without an image is never silent", () 
       overall: "verified",
       scope: "DOCUMENT",
       layoutWitness: true,
-      outputs: [{ outputId: "o1", format: "HTML", state: "verified", checks: [], pages: [{ n: 1, png: "/s/verify/o1/p001.png", findings: 0 }, { n: 2, png: null, findings: 0 }] }],
+      outputs: [{ outputId: "o1", format: "HTML", state: "verified", checks: [], pages: [{ n: 1, png: "/s/verify/o1/witness-p001.png", findings: 0 }, { n: 2, png: null, findings: 0 }] }],
     } as unknown as OutputVerificationReport
     const lines = verificationLines(report, { made: 1, reason: null, note: "pages 2 not imaged (the image layout has 1 pages, the print has 2)" })
     expect(lines).toContain("  pages note: pages 2 not imaged (the image layout has 1 pages, the print has 2)")
     expect(verificationLines(report, { made: 1, reason: null }).some((l) => l.includes("pages note"))).toBe(false)
-    // The images line stays the only page line when there is no note (no "none imaged" next to real images).
-    expect(verificationLines(report, { made: 1, reason: null }).filter((l) => l.startsWith("  pages"))).toEqual(["  pages: /s/verify/o1/p001.png", "  pages are witness images (approximation of the printed page; not a deliverable)"]) // 1.2.7 row 35 (N-5, N7-140)
+    // The images line and the witness line are the only page lines when there is no note (no "none imaged" next to real images).
+    expect(verificationLines(report, { made: 1, reason: null }).filter((l) => l.startsWith("  pages"))).toEqual(["  pages: /s/verify/o1/witness-p001.png", "  pages are witness images (approximation of the printed page; not a deliverable)"]) // 1.2.7 row 35 (N-5, N7-140)
     // The bridge's approximation text (with an apostrophe) is printed.
     expect(verificationLines(report, { made: 1, reason: null, note: "images approximate: pages cut by the bridge's line-break estimate, not by the printer" })).toContain("  pages note: images approximate: pages cut by the bridge's line-break estimate, not by the printer")
   })
@@ -70,7 +70,7 @@ describe("row 151c (DEFECT-157-1): the bridge's approximation note reaches the h
   const rt = await import("../../vendor/src/lib/studio/engine/browser/runtime")
   const HELLO = { ok: true, electron: "42.3.3", chrome: "x", sandbox: true, contextIsolation: true, nodeIntegration: false, network: "blocked" }
   const reply = (extra: Record<string, unknown>) => async (req: { op: string }) =>
-    (req.op === "hello" ? HELLO : { ok: true, layout: "flow", media: "print", pageCount: 1, pageSizeMm: { wMm: 210, hMm: 297 }, pageSizeSource: "css", dpi: 150, pages: [{ n: 1, dst: "/s/verify/o1/p001.png", width: 1239, height: 1753, bytes: 1, sha256: "a".repeat(64) }], ...extra }) as never
+    (req.op === "hello" ? HELLO : { ok: true, layout: "flow", media: "print", pageCount: 1, pageSizeMm: { wMm: 210, hMm: 297 }, pageSizeSource: "css", dpi: 150, pages: [{ n: 1, dst: "/s/verify/o1/witness-p001.png", width: 1239, height: 1753, bytes: 1, sha256: "a".repeat(64) }], ...extra }) as never
   it("rasterizeHtmlPages carries `approximate` when the bridge sends it, and leaves it out otherwise", async () => {
     try {
       rt.setRenderBridgeTransport(reply({ approximate: "pages cut by the bridge's line-break estimate, not by the printer" }))

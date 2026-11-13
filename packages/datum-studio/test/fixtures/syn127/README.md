@@ -16,7 +16,7 @@ Defect equivalence below was measured at the engine and verify code of 04067a9d0
 | `t03_two_line_colours.svg` | AC-T03 | hand SVG | a data line (#101418) and a dashed control line (#B4532A) share one trunk into one port: `edgeCollinear` 1 (NOTE, report-only) + `edgeEntryCollision` 1 (FAIL). FIGURE_FIT has no colour code; the FAIL raised is `FIG_GEOMETRY` edgeEntryCollision (GEOM_ENTRY_COLLISION) |
 | `f6_fan_in_specs.json` | F-6 | `specs[]`: `{name, spec}` | the 8 probe9 fan-in configurations; `buildDiagramSvgAuto` gives `edgeEntryCollision` 0 for all 8 |
 | `n7_autofit_t03_rest.json` | N-7 | `spec`, `buildOptions`, `expected` | first render score 1; AUTO_FIT -> `sisa 0`, suggest `tidak ada`, and 1 `GEOM_STUB_SEGMENT` follows (buildDiagramSvg and buildDiagramSvgAuto) |
-| `n10_write_dt10a.json` | N-10 | `args`: `studio_write` arguments (add `mission`) | 3 columns of `R-01/.../R-12`: render refused FIGURE_OVER_CAPACITY (DT-10a) |
+| `n10_write_dt10a.json` | N-10 | `args`: `studio_write` arguments (add `mission`) | 3 columns of one 60-character token `R01R02...R20` (no separator, unbreakable under any break rule of rows 40/40b/40d; row 48c replaced the `/`-joined cells that row 40 made breakable): render refused FIGURE_OVER_CAPACITY (DT-10a) |
 | `n11_id_list_table.json` | N-11 | `variants.{slash,comma,semicolon}`: table rows | each variant `minMm` 201.7, refused DT-10a |
 | `t06_chart_w03_five_lines.json` | T-06 | `spec`: W-03 chart | refused `DATUM-25` "5 garis > 3" |
 | `t06_diagram_six_colours.json` | T-06 | `spec`: diagram | refused DATUM-25, `dihitung 6:` and `sisa −1` |
