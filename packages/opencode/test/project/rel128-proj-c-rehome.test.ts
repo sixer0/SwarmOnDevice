@@ -345,3 +345,78 @@ describe("Rehome.recover (crash recovery, SR8-18 c)", () => {
     expect(again).toEqual({ refused: "REHOME_ROLLBACK_FAILED", journal: file })
   })
 })
+
+// 1.2.8 row 51c (LP-4, N8-364 shared-session case): a tidy list (one approval) of two missions that share one session.
+// Red at the pre-fix HEAD: the second move refused REHOME_SESSION_ACTIVE because the first had moved the session.
+describe("Rehome.run: a session shared by two missions of one tidy list (row 51c, LP-4)", () => {
+  const lumen = () => path.join(R, "Lumen")
+  const dinas = () => path.join(R, "Dinas Contoh")
+  const first = () => call({ sessions: ["ses_mission"], approvalRef: "D-2" })
+  const second = (over: Partial<Rehome.Input> = {}) =>
+    call({ missionId: OTHER, to: dinas(), sessions: ["ses_mission"], approvalRef: "D-2", groupKind: "institution", ...over })
+  const journalFiles = async () => (await fs.readdir(path.join(data, "rehome")).catch(() => [])).filter((n) => n.endsWith(".json"))
+
+  test("idle shared session: both dry runs pass, both moves succeed, the session moves once (with the first)", async () => {
+    const rehome = Rehome.make(ports())
+    // The desktop tidy loop dry-runs every item before any move (C99): both must pass and both moves must then succeed.
+    expect(await rehome.run({ ...first(), dryRun: true })).toMatchObject({ planned: { folder: true } })
+    expect(await rehome.run({ ...second(), dryRun: true })).toMatchObject({ planned: { folder: true, createsGroup: true } })
+    const a = await rehome.run(first())
+    if (!("journalId" in a)) throw new Error(JSON.stringify(a))
+    expect(a.moved.sessions).toBe(1)
+    expect(sessions.get("ses_mission")?.directory).toBe(lumen())
+    // After the first move the dry run of the second still predicts success, and the move succeeds.
+    expect(await rehome.run({ ...second(), dryRun: true })).toEqual({
+      planned: { folder: true, notes: 0, sessions: 0, createsGroup: true },
+    })
+    const b = await rehome.run(second())
+    expect(`${"journalId" in b} ${JSON.stringify("moved" in b ? b.moved : b)}`).toBe(
+      `true ${JSON.stringify({ folder: true, notes: 0, sessions: 0 })}`,
+    )
+    expect(sessions.get("ses_mission")?.directory).toBe(lumen())
+    expect((await fs.stat(path.join(lumen(), "docs", MISSION))).isDirectory()).toBe(true)
+    expect((await fs.stat(path.join(dinas(), "docs", OTHER))).isDirectory()).toBe(true)
+    expect(published.map((e) => (e as { sessions: string[] }).sessions)).toEqual([["ses_mission"], []])
+    // A compensation of the second move (its place failed) leaves the shared session where the first move put it.
+    if (!("journalId" in b)) throw new Error("no journal")
+    const back = await rehome.run({ missionId: OTHER, from: dinas(), to: R, sessions: ["ses_mission"], approvalRef: "D-2", compensates: b.journalId })
+    expect("journalId" in back).toBe(true)
+    expect(sessions.get("ses_mission")?.directory).toBe(lumen())
+    expect((await fs.stat(path.join(R, "docs", OTHER))).isDirectory()).toBe(true)
+  })
+
+  test("a busy shared session still refuses before anything moves: tree, store and journals unchanged", async () => {
+    const rehome = Rehome.make(ports())
+    sessions.set("ses_mission", { directory: R, projectID: "global", busy: true })
+    const tree = await treeHash(R)
+    const store = await fileHash(storeOf(R))
+    expect(await rehome.run({ ...first(), dryRun: true })).toMatchObject({ refused: "REHOME_SESSION_ACTIVE" })
+    expect(await rehome.run({ ...second(), dryRun: true })).toMatchObject({ refused: "REHOME_SESSION_ACTIVE" })
+    expect(await rehome.run(first())).toMatchObject({ refused: "REHOME_SESSION_ACTIVE", detail: "session ses_mission busy" })
+    expect(await treeHash(R)).toBe(tree)
+    expect(await fileHash(storeOf(R))).toBe(store)
+    expect(await journalFiles()).toEqual([])
+
+    // Idle for the first move, busy again (in its new folder) before the second: the second refuses, changes nothing.
+    sessions.set("ses_mission", { directory: R, projectID: "global", busy: false })
+    if (!("journalId" in (await rehome.run(first())))) throw new Error("first move failed")
+    sessions.set("ses_mission", { directory: lumen(), projectID: "global", busy: true })
+    const after = [await treeHash(R), await fileHash(storeOf(R)), await fileHash(storeOf(lumen())), (await journalFiles()).length]
+    expect(await rehome.run(second())).toMatchObject({ refused: "REHOME_SESSION_ACTIVE", detail: "session ses_mission busy" })
+    expect([await treeHash(R), await fileHash(storeOf(R)), await fileHash(storeOf(lumen())), (await journalFiles()).length]).toEqual(after)
+    expect(sessions.get("ses_mission")?.directory).toBe(lumen())
+  })
+
+  test("a session another approval moved away still refuses (its own text), nothing changes", async () => {
+    const rehome = Rehome.make(ports())
+    if (!("journalId" in (await rehome.run(call({ approvalRef: "D-9" }))))) throw new Error("first move failed")
+    const tree = await treeHash(R)
+    const store = await fileHash(storeOf(R))
+    expect(await rehome.run(second())).toEqual({
+      refused: "REHOME_SESSION_ACTIVE",
+      detail: "session ses_mission lives in another folder",
+    })
+    expect(await treeHash(R)).toBe(tree)
+    expect(await fileHash(storeOf(R))).toBe(store)
+  })
+})

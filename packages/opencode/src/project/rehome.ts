@@ -311,6 +311,7 @@ async function linksStayInside(folder: string): Promise<boolean> {
 async function preflight(ports: Ports, input: Input): Promise<Plan> {
   const root = await realRoot(ports)
   const compensating = input.compensates !== undefined
+  let original: Journal | undefined
 
   // Direction: root -> group, or (compensation, §7.4) the group -> root reverse of a completed move.
   if (!path.isAbsolute(input.from)) throw new Refusal("REHOME_OUTSIDE_ROOT", "from")
@@ -320,7 +321,7 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
     await childOfRoot(input.from, root)
     if (!(await isGroup(root.real, input.from))) throw new Refusal("REHOME_OUTSIDE_ROOT", "from is not a group")
     if (input.to !== root.real && input.to !== root.given) throw new Refusal("REHOME_OUTSIDE_ROOT", "to is not R")
-    const original = (await readJournals(ports)).find((j) => j.journal.journalId === input.compensates)?.journal
+    original = (await readJournals(ports)).find((j) => j.journal.journalId === input.compensates)?.journal
     if (!original || original.state !== "complete" || original.to !== input.from || original.from !== input.to)
       throw new Refusal("REHOME_APPROVAL_MISSING", "compensates")
   } else {
@@ -366,14 +367,39 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
     if (device !== targetDevice) throw new Refusal("REHOME_OUTSIDE_ROOT", "other volume")
   }
 
-  // Sessions: present, at `from`, idle; no terminal started inside the mission folder; same project as `to` (F8).
+  // Sessions: present, idle, at `from`; no terminal started inside the mission folder; same project as `to` (F8).
+  // 1.2.8 row 51c (LP-4): one session may run several missions. When a move of the SAME approval (one tidy list) already
+  // took such a shared session from this root into a group, it stays there: the later moves of that approval leave it
+  // out instead of refusing. Every other session that is not at `from` still refuses, and a busy one always refuses.
+  // A compensation (§7.4) moves back only the sessions its original move moved.
   const toProject = await ports.projectId(toStat ? to : root.real)
-  for (const id of input.sessions) {
+  let completed: Journal[] | undefined
+  const movedByThisApproval = async (id: string, directory: string) => {
+    completed ??= (await readJournals(ports)).map((j) => j.journal).filter((j) => j.state === "complete")
+    const done = completed
+    return done.some(
+      (j) =>
+        !j.compensates &&
+        j.approvalRef === input.approvalRef &&
+        j.missionId !== input.missionId &&
+        path.resolve(j.from) === path.resolve(from) &&
+        path.resolve(j.to) === path.resolve(directory) &&
+        j.sessions.includes(id) &&
+        !done.some((back) => back.compensates === j.journalId),
+    )
+  }
+  const moving: string[] = []
+  for (const id of new Set(input.sessions)) {
+    if (original && !original.sessions.includes(id)) continue
     const session = await ports.session(id)
     if (!session) throw new Refusal("REHOME_SESSION_ACTIVE", `session ${id} not found`)
-    if (path.resolve(session.directory) !== path.resolve(from)) throw new Refusal("REHOME_SESSION_ACTIVE", `session ${id}`)
     if (session.busy) throw new Refusal("REHOME_SESSION_ACTIVE", `session ${id} busy`)
+    if (path.resolve(session.directory) !== path.resolve(from)) {
+      if (!compensating && (await movedByThisApproval(id, session.directory))) continue
+      throw new Refusal("REHOME_SESSION_ACTIVE", `session ${id} lives in another folder`)
+    }
     if (session.projectID !== toProject) throw new Refusal("REHOME_OUTSIDE_ROOT", "project boundary")
+    moving.push(id)
   }
   if (sourceStat && ports.terminals) {
     const realSource = await fs.realpath(source)
@@ -387,7 +413,7 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
   // Store keys. For a new group the folder does not exist yet: its project is R's (one level, same volume, no git).
   const fromProject = await ports.projectId(from)
   const stores = { from: Memory.storeKey(fromProject, from), to: Memory.storeKey(toProject, to) }
-  const sessionSet = new Set(input.sessions)
+  const sessionSet = new Set(moving)
   const sourceStore = await readRaw(storeFile(ports, stores.from)).catch(() => undefined)
   const notes =
     stores.from === stores.to
@@ -407,7 +433,7 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
     needsDocs: !toDocsStat,
     groupKind: input.groupKind,
     stores,
-    sessions: [...input.sessions],
+    sessions: moving,
     notes,
   }
 }
