@@ -4,16 +4,17 @@
 // This file holds the RENDER half (1.2.8 row 43b): `render` turns a memory store into the full set of files the folder
 // should contain, as pure text with no clock read and no disk access, so golden files can pin it byte for byte.
 // `readReport` is the one read it needs (a final report inside the project). Writing, ownership, renames and the
-// symlink checks under the vault are the SYNC half (row 43c), which builds on `render` and `noteName`.
+// symlink checks under the vault are the SYNC half (`sync`, row 43c, 01c §3.1-§3.2, SR8-12), which builds on `render`.
 //
 // What reaches the vault is less than the store holds (01c §3.3): deviceOnly, secret-looking and classified items are
 // never copied (only counted, L6); memory text is data, so every ASCII punctuation mark in it is backslash-escaped and
 // nothing in it can become a link, embed, tag or HTML; report copies keep their Markdown but lose raw HTML, image
 // auto-load, embeds, runnable code blocks and inline queries (SR8-13), and non-web link targets (SR8-13); a report that
 // carries a classification word is link-only (SR8-14); secrets in a copied report are masked line by line.
-import { createHash } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { Flock } from "@opencode-ai/core/util/flock"
 import { Vault } from "@opencode-ai/core/vault"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { Secrets } from "@/tool/secrets"
@@ -721,6 +722,350 @@ export function render(input: RenderInput): RenderResult {
 
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
   return { files, notCopied, unsafe }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Sync (01c §3.1-§3.2, SR8-12; 1.2.8 row 43c)
+//
+// Writes the rendered set under `realpath(Vault.root())/swarm-memory/<folder>/` and nowhere else: `index.md` and regular
+// `.md` files in `notes/`, `missions/`, `reports/`, `skills/`, only files Swarm owns. The vault root is never created.
+// A symlink (or a non-directory) at `swarm-memory`, the folder, a subfolder, or any file the run reads, writes or deletes
+// refuses the whole run (`VAULT_PATH_UNSAFE`) before anything is written. Every write is a temp file opened exclusive
+// (`wx`, mode 0600) in the target's folder and renamed over the target; the folder chain is re-`lstat`ed (same device
+// and inode as at the check) before the temp file is opened and again before the rename, and after the open and after
+// the rename the real path of the file must lie under the real project folder, else that file is removed and the run
+// stops with `VAULT_PATH_UNSAFE`. A component swapped for a symlink between a check and a write therefore never leaves
+// a file outside the folder (SR8-12).
+
+export type SyncCode = "VAULT_PATH_UNSAFE" | "VAULT_NOTE_FOREIGN"
+
+/** Points in one write where a test hook can change the disk (SR8-12 swap test); never set in production. */
+export type SyncStage = "temp" | "written" | "rename"
+
+/** The file system calls `sync` makes; tests pass a wrapped `fs/promises` to count or interfere. */
+export type SyncIO = Pick<typeof fs, "lstat" | "realpath" | "mkdir" | "chmod" | "readdir" | "readFile" | "open" | "rename" | "unlink">
+
+export interface SyncInput {
+  /** The memory store key (`Memory.storeKey`); also names the folder with `directory`. */
+  readonly key: string
+  /** The project folder the store belongs to (`Vault.vaultProjectFolder(directory, key)`). */
+  readonly directory: string
+  /** Where report paths of index entries start (worktree, or the folder for a project without git). */
+  readonly projectRoot: string
+  /** Hub heading; default the folder's base name. */
+  readonly projectName?: string
+  readonly language?: Language
+  /** The store's items, read fresh by the caller. */
+  readonly items: readonly Item[]
+  /** The store's `enabled` flag; false (or `SWARM_DISABLE_MEMORY`) = the mirror does not run. */
+  readonly enabled?: boolean
+  readonly io?: SyncIO
+  readonly hook?: (stage: SyncStage, target: string) => void | Promise<void>
+  /** One call per refusal (`VAULT_PATH_UNSAFE` once per run, `VAULT_NOTE_FOREIGN` once per file). */
+  readonly log?: (entry: { readonly code: SyncCode; readonly path: string; readonly reason: string }) => void
+}
+
+export interface SyncResult {
+  /** ok; disabled; absent = no vault root; foreign-hub = `index.md` is the person's; unsafe = `VAULT_PATH_UNSAFE`. */
+  readonly status: "ok" | "disabled" | "absent" | "foreign-hub" | "unsafe"
+  readonly folder: string
+  /** Paths relative to the project folder. */
+  readonly written: readonly string[]
+  readonly deleted: readonly string[]
+  /** Target files left alone because they are not owned (`VAULT_NOTE_FOREIGN`). */
+  readonly foreign: readonly string[]
+  /** Rendered files dropped because their path failed the name check (`VAULT_PATH_UNSAFE`). */
+  readonly skipped: number
+  readonly notCopied: number
+}
+
+const HUB = "index.md"
+const SUBFOLDERS: readonly string[] = ["notes", "missions", "reports", "skills"]
+/** A temp file of an interrupted run: `.<name>.swarm-<pid>-<8 hex>.tmp`. */
+const TEMP_FILE = /^\.[a-z0-9][a-z0-9.-]{0,80}\.swarm-\d{1,10}-[0-9a-f]{8}\.tmp$/
+
+class Unsafe extends Error {
+  constructor(
+    readonly at: string,
+    readonly reason: string,
+  ) {
+    super(`VAULT_PATH_UNSAFE: ${reason}`)
+  }
+}
+
+const missingError = (error: unknown) => (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
+
+/** A rendered path is written only when it is the hub or `<subfolder>/<name matching N8-438>`. */
+function safeRelative(rel: string) {
+  if (rel === HUB) return true
+  const parts = rel.split("/")
+  return parts.length === 2 && SUBFOLDERS.includes(parts[0]!) && VAULT_NOTE_NAME_PATTERN.test(parts[1]!)
+}
+
+/**
+ * Ownership triple (01c §3.1, N8-107, N8-433): `swarm-mirror: true`, `swarm-key` equal to this store's key, and
+ * `swarm-hash` equal to the hash of the body as it is now. A note the person edited is no longer owned.
+ */
+export function owned(content: string, key: string): boolean {
+  if (!content.startsWith("---\n")) return false
+  const end = content.indexOf("\n---\n", 3)
+  if (end < 0) return false
+  const fields = new Map<string, string>()
+  for (const line of content.slice(4, end).split("\n")) {
+    const match = /^(swarm-[a-z]+):[ \t]*(.*)$/.exec(line)
+    if (!match || fields.has(match[1]!)) continue
+    let value: unknown = match[2]!.trim()
+    if ((value as string).startsWith('"')) {
+      try {
+        value = JSON.parse(value as string)
+      } catch {
+        continue
+      }
+    }
+    if (typeof value === "string") fields.set(match[1]!, value)
+  }
+  return (
+    fields.get("swarm-mirror") === "true" &&
+    fields.get("swarm-key") === key &&
+    fields.get("swarm-hash") === bodyHash(content.slice(end + 5))
+  )
+}
+
+/**
+ * Mirror the store into the vault (01c §3.1-§3.2). Serialised per store across processes with
+ * `Flock.withLock("vault-mirror:<key>")`. A second run on unchanged input writes and deletes nothing.
+ */
+export async function sync(input: SyncInput): Promise<SyncResult> {
+  const folder = Vault.vaultProjectFolder(input.directory, input.key)
+  if (input.enabled === false || process.env.SWARM_DISABLE_MEMORY)
+    return { status: "disabled", folder, written: [], deleted: [], foreign: [], skipped: 0, notCopied: 0 }
+  return Flock.withLock(`vault-mirror:${input.key}`, () => syncLocked(input, folder))
+}
+
+async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult> {
+  const io = input.io ?? fs
+  const written: string[] = []
+  const deleted: string[] = []
+  const foreign: string[] = []
+  let skipped = 0
+  const result = (status: SyncResult["status"], notCopied = 0): SyncResult => ({
+    status,
+    folder,
+    written,
+    deleted,
+    foreign,
+    skipped,
+    notCopied,
+  })
+
+  const rootReal = await Vault.realRoot()
+  if (!rootReal) return result("absent")
+
+  // Reports are read only inside the project (readReport), then the whole folder is rendered in memory.
+  const reports = new Map<string, ReportSource>()
+  for (const item of input.items) {
+    if (item.kind !== "index") continue
+    const where = reportPath(item)
+    if (where !== undefined && !reports.has(where)) reports.set(where, await readReport(input.projectRoot, where))
+  }
+  const rendered = render({
+    key: input.key,
+    folder,
+    projectName: input.projectName ?? path.basename(input.directory),
+    language: input.language,
+    items: input.items,
+    reports: Object.fromEntries(reports),
+  })
+  const notCopied = rendered.notCopied
+
+  const mirror = path.join(rootReal, Vault.VAULT_MIRROR_DIR)
+  const folderPath = path.join(mirror, folder)
+  const unsafe = (at: string, reason: string) => {
+    input.log?.({ code: "VAULT_PATH_UNSAFE", path: at, reason })
+    return result("unsafe", notCopied)
+  }
+  if (path.dirname(folderPath) !== mirror || !Vault.contains(rootReal, folderPath)) return unsafe(folderPath, "folder name")
+
+  const desired = new Map<string, string>()
+  for (const file of rendered.files) {
+    if (safeRelative(file.path) && Vault.contains(folderPath, path.join(folderPath, file.path))) {
+      desired.set(file.path, file.content)
+      continue
+    }
+    skipped++
+    input.log?.({ code: "VAULT_PATH_UNSAFE", path: file.path, reason: "name" })
+  }
+
+  // ---- Check: nothing is written before the whole tree we touch is known to hold no symlink.
+  const dirStat = new Map<string, { dev: number; ino: number }>()
+  const lstatOrNone = async (target: string) => {
+    try {
+      return await io.lstat(target)
+    } catch (error) {
+      if (missingError(error)) return undefined
+      throw error
+    }
+  }
+  const checkDir = async (target: string) => {
+    const stat = await lstatOrNone(target)
+    if (!stat) return false
+    if (stat.isSymbolicLink()) throw new Unsafe(target, "symlink")
+    if (!stat.isDirectory()) throw new Unsafe(target, "not a directory")
+    dirStat.set(target, { dev: stat.dev, ino: stat.ino })
+    return true
+  }
+  const subPath = (sub: string) => path.join(folderPath, sub)
+  const dirOf = (rel: string) => (rel === HUB ? folderPath : subPath(path.dirname(rel)))
+  const chain = (dir: string) => (dir === folderPath ? [mirror, folderPath] : [mirror, folderPath, dir])
+
+  /** rel -> current content of a regular file; foreign entries are recorded but never read further. */
+  const existing = new Map<string, string>()
+  const temps: string[] = []
+  try {
+    if ((await checkDir(mirror)) && (await checkDir(folderPath))) {
+      const hub = await lstatOrNone(path.join(folderPath, HUB))
+      if (hub?.isSymbolicLink()) throw new Unsafe(path.join(folderPath, HUB), "symlink")
+      if (hub) {
+        const content = hub.isFile() ? await io.readFile(path.join(folderPath, HUB), "utf8") : undefined
+        if (content === undefined || !owned(content, input.key)) {
+          foreign.push(HUB)
+          input.log?.({ code: "VAULT_NOTE_FOREIGN", path: HUB, reason: "hub not owned; folder skipped" })
+          return result("foreign-hub", notCopied)
+        }
+        existing.set(HUB, content)
+      }
+      for (const sub of SUBFOLDERS) {
+        if (!(await checkDir(subPath(sub)))) continue
+        for (const name of await io.readdir(subPath(sub))) {
+          const target = path.join(subPath(sub), name)
+          const stat = await lstatOrNone(target)
+          if (!stat) continue
+          if (stat.isSymbolicLink()) throw new Unsafe(target, "symlink")
+          if (!stat.isFile()) continue
+          if (TEMP_FILE.test(name)) temps.push(`${sub}/${name}`)
+          else if (name.endsWith(".md")) existing.set(`${sub}/${name}`, await io.readFile(target, "utf8"))
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof Unsafe) return unsafe(error.at, error.reason)
+    throw error
+  }
+
+  // ---- Plan: write absent or owned-and-different targets; delete owned notes no longer rendered.
+  const writes: [string, string][] = []
+  for (const [rel, content] of desired) {
+    const now = existing.get(rel)
+    if (now === content) continue
+    if (now !== undefined && !owned(now, input.key)) {
+      foreign.push(rel)
+      input.log?.({ code: "VAULT_NOTE_FOREIGN", path: rel, reason: "not owned" })
+      continue
+    }
+    writes.push([rel, content])
+  }
+  const removals = [...existing]
+    .filter(([rel, content]) => rel !== HUB && !desired.has(rel) && owned(content, input.key))
+    .map(([rel]) => rel)
+  // A target name that exists as a directory (or other non-file) is the person's: left alone.
+  for (const [rel] of [...writes]) {
+    if (existing.has(rel)) continue
+    const stat = await lstatOrNone(path.join(dirOf(rel), path.basename(rel)))
+    if (stat?.isSymbolicLink()) return unsafe(path.join(dirOf(rel), path.basename(rel)), "symlink")
+    if (stat) {
+      writes.splice(writes.findIndex(([r]) => r === rel), 1)
+      foreign.push(rel)
+      input.log?.({ code: "VAULT_NOTE_FOREIGN", path: rel, reason: "not a file" })
+    }
+  }
+  if (!writes.length && !removals.length && !temps.length) return result("ok", notCopied)
+
+  // ---- Write.
+  let folderReal = ""
+  const recheck = async (dir: string) => {
+    for (const step of chain(dir)) {
+      const stat = await lstatOrNone(step)
+      const was = dirStat.get(step)
+      if (!stat || stat.isSymbolicLink() || !stat.isDirectory() || !was || stat.dev !== was.dev || stat.ino !== was.ino)
+        throw new Unsafe(step, "changed since the check")
+    }
+  }
+  const ensureDir = async (dir: string) => {
+    if (dirStat.has(dir)) return
+    try {
+      await io.mkdir(dir, { mode: 0o700 })
+      await io.chmod(dir, 0o700)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | undefined)?.code !== "EEXIST") throw error
+    }
+    if (!(await checkDir(dir))) throw new Unsafe(dir, "vanished")
+  }
+  /** The real path of a file this run just created must lie under the real folder, else it is removed. */
+  const landed = async (target: string) => {
+    let real: string
+    try {
+      real = await io.realpath(target)
+    } catch {
+      throw new Unsafe(target, "moved after write")
+    }
+    if (Vault.contains(folderReal, real)) return
+    await io.unlink(real).catch(() => undefined)
+    throw new Unsafe(target, "landed outside the mirror folder")
+  }
+  const writeOne = async (rel: string, content: string) => {
+    const dir = dirOf(rel)
+    const name = path.basename(rel)
+    const target = path.join(dir, name)
+    const temp = path.join(dir, `.${name}.swarm-${process.pid}-${randomBytes(4).toString("hex")}.tmp`)
+    await recheck(dir)
+    await input.hook?.("temp", target)
+    const handle = await io.open(temp, "wx", 0o600)
+    try {
+      await handle.writeFile(content)
+      await handle.chmod(0o600)
+    } finally {
+      await handle.close()
+    }
+    await landed(temp)
+    await input.hook?.("written", target)
+    await recheck(dir)
+    const before = await lstatOrNone(target)
+    if (before && (before.isSymbolicLink() || !before.isFile())) throw new Unsafe(target, "target is not a regular file")
+    await input.hook?.("rename", target)
+    await io.rename(temp, target)
+    await landed(target)
+    written.push(rel)
+  }
+  const removeOne = async (rel: string, record = true) => {
+    const dir = dirOf(rel)
+    const target = path.join(dir, path.basename(rel))
+    await recheck(dir)
+    const stat = await lstatOrNone(target)
+    if (!stat) return
+    if (stat.isSymbolicLink() || !stat.isFile()) throw new Unsafe(target, "target is not a regular file")
+    await io.unlink(target)
+    if (record) deleted.push(rel)
+  }
+
+  try {
+    await ensureDir(mirror)
+    await ensureDir(folderPath)
+    folderReal = await io.realpath(folderPath)
+    if (!Vault.contains(rootReal, folderReal)) throw new Unsafe(folderPath, "folder resolves outside the vault")
+    for (const sub of new Set(writes.map(([rel]) => rel).filter((rel) => rel !== HUB).map((rel) => path.dirname(rel))))
+      await ensureDir(subPath(sub))
+    for (const [rel, content] of writes) await writeOne(rel, content)
+    for (const rel of removals) await removeOne(rel)
+    // Leftover temp files of an interrupted run (own pattern only); not counted as note deletes.
+    for (const rel of temps) await removeOne(rel, false)
+  } catch (error) {
+    if (error instanceof Unsafe) return unsafe(error.at, error.reason)
+    // An fs error mid-run after a swap (a rename whose temp file moved away) is the same refusal.
+    const swapped = await Promise.all([...dirStat.keys()].map((dir) => recheck(dir).then(() => false, () => true)))
+    if (swapped.some(Boolean)) return unsafe(folderPath, String((error as Error)?.message ?? error))
+    throw error
+  }
+  return result("ok", notCopied)
 }
 
 export * as VaultMirror from "./vault-mirror"
