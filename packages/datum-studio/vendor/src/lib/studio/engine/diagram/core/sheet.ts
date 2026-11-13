@@ -178,8 +178,8 @@ export class Sheet implements DiagramSheet {
       }
       if (nd.x < -1e-6 || nd.x >= this.widthMm || nd.w <= 0 || nd.x + nd.w > this.widthMm + 1e-6) {
         throw new DiagramDefect(
-          `DATUM-37: simpul ${nd.id} keluar lebar lembar (${pyFixed(nd.x, 3)}..${pyFixed(nd.x + nd.w, 3)} dari ${pyFixed(this.widthMm, 1)} mm) (P8)`,
-          { checkId: "DATUM-37-lebar" },
+          `DATUM-37-sheet: simpul ${nd.id} keluar lebar lembar (${pyFixed(nd.x, 3)}..${pyFixed(nd.x + nd.w, 3)} dari ${pyFixed(this.widthMm, 1)} mm) (P8)`,
+          { checkId: "DATUM-37-sheet" },
         );
       }
     }

@@ -2,7 +2,7 @@
 // the 14.1-shaped fixture (test/fixtures/anon126/t11_k1.json, ranks 1-4-2-1) renders TB at 128 mm
 // with the four parallel nodes in ONE rank (no serialisation) and zero geometry lint (A6 kinds and
 // the T-03 kinds, i.e. no GEOM_STUB_SEGMENT after the §4.3 jog removal); LR at 128 mm is refused
-// FIGURE_OVER_CAPACITY DATUM-37-lebar with limit 3 (sync and auto paths); a ranked flow passes the
+// FIGURE_OVER_CAPACITY DATUM-37-rank (1.2.8 row 35b, was DATUM-37-lebar) with limit 3 (sync and auto paths); a ranked flow passes the
 // ELK R1 gate of buildDiagramSvgAuto; a legacy flow (no direction) keeps its bytes and gains one
 // FLOW_SERIALISED REPORT line.
 import { describe, expect, test } from "bun:test"
@@ -148,10 +148,10 @@ describe("row 47 T-11 14.1 acceptance: direction TB at 128 mm", () => {
 describe("row 47 T-11 A13/A14: capacity refusals of the 14.1 fixture", () => {
   const expectA13 = (err: any) => {
     expect(err?.code).toBe("FIGURE_OVER_CAPACITY")
-    expect(err.details).toMatchObject({ checkId: "DATUM-37-lebar", quantity: "peringkat", measured: 4, limit: 3 })
+    expect(err.details).toMatchObject({ checkId: "DATUM-37-rank", quantity: "peringkat", measured: 4, limit: 3 })
     expect(err.details.suggestion).toContain('direction "TB"')
   }
-  test("A13: direction LR at 128 mm is refused DATUM-37-lebar, peringkat 4 > limit 3, suggestion TB (sync build)", () => {
+  test("A13: direction LR at 128 mm is refused DATUM-37-rank, peringkat 4 > limit 3, suggestion TB (sync build)", () => {
     expectA13(refusal(() => build.buildDiagramSvg(spec("LR", W), { release: false })))
   })
   test("A13: the auto (ELK) path refuses the same, ELK never retries a capacity refusal", async () => {
@@ -169,7 +169,7 @@ describe("row 47 T-11 A13/A14: capacity refusals of the 14.1 fixture", () => {
     s.edges.push({ from: "n1", to: "n9", kind: "control", label: "Echo 88" }, { from: "n9", to: "n7", kind: "verify", label: "echo" })
     const err = refusal(() => build.buildDiagramSvg(s, { release: false }))
     expect(err?.code).toBe("FIGURE_OVER_CAPACITY")
-    expect(err.details).toMatchObject({ checkId: "DATUM-37-lebar", measured: 5, limit: 4 })
+    expect(err.details).toMatchObject({ checkId: "DATUM-37-rank", measured: 5, limit: 4 })
     expect(err.details.suggestion).toContain("width_mm 166")
     expect(err.details.suggestion).toContain('direction "LR"')
   })

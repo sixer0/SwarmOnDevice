@@ -69,7 +69,7 @@ const EXPECTED: Record<string, { checkId: string; stage: 'spec' | 'build' }> = {
   'P3 keputusan tanpa keluaran berlabel': { checkId: 'P3-diamond-exits', stage: 'spec' },
   'DATUM-25 enam nilai warna dalam satu gambar': { checkId: 'DATUM-25', stage: 'build' },
   'DATUM-33 gambar lebih tinggi dari blok teks 247 mm': { checkId: 'DATUM-33', stage: 'build' },
-  'DATUM-37 simpul keluar lebar lembar': { checkId: 'DATUM-37-lebar', stage: 'build' },
+  'DATUM-37 simpul keluar lebar lembar': { checkId: 'DATUM-37-sheet', stage: 'build' }, // 1.2.8 row 35b (AT-HNB4): was DATUM-37-lebar
   'DATUM-32 konektor menembus kotak tak terkait dan detur gagal': { checkId: 'DATUM-32', stage: 'build' },
   'bentuk simpul di luar katalog P3': { checkId: 'P1-nodes+P3-shapes', stage: 'spec' },
   'jenis konektor di luar katalog P4': { checkId: 'DATUM-24', stage: 'spec' },

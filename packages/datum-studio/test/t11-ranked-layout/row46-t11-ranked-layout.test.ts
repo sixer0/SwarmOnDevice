@@ -90,7 +90,7 @@ describe("row 46 T-11 lattice capacity (01e §5)", () => {
     expect(flow.FLOW_LR_MAX_PARALLEL).toBe(6)
     expect([flow.FLOW_RANK_NODE_MIN_UNITS, flow.FLOW_RANK_GAP_BASELINES, flow.FLOW_LR_CORRIDOR_UNITS]).toEqual([2, 4, 2])
   })
-  test("LR at 128 mm (4 ranks) is refused FIGURE_OVER_CAPACITY DATUM-37-lebar, peringkat measured 4 limit 3, suggestion TB", () => {
+  test("LR at 128 mm (4 ranks) is refused FIGURE_OVER_CAPACITY DATUM-37-rank (1.2.8 row 35b, was -lebar), peringkat measured 4 limit 3, suggestion TB", () => {
     let err: any
     try {
       build.buildDiagramSvg(spec("LR", 128), { release: false })
@@ -98,7 +98,7 @@ describe("row 46 T-11 lattice capacity (01e §5)", () => {
       err = e
     }
     expect(err?.code).toBe("FIGURE_OVER_CAPACITY")
-    expect(err.details).toMatchObject({ checkId: "DATUM-37-lebar", quantity: "peringkat", unit: "peringkat", measured: 4, limit: 3 })
+    expect(err.details).toMatchObject({ checkId: "DATUM-37-rank", quantity: "peringkat", unit: "peringkat", measured: 4, limit: 3 })
     expect(err.details.suggestion).toContain('direction "TB"')
   })
   test("TB rank of 5 at 128 mm is refused (measured 5, limit 4, suggestions width_mm 166 and direction LR); fits at 166 mm", () => {
@@ -112,7 +112,7 @@ describe("row 46 T-11 lattice capacity (01e §5)", () => {
       err = e
     }
     expect(err?.code).toBe("FIGURE_OVER_CAPACITY")
-    expect(err.details).toMatchObject({ checkId: "DATUM-37-lebar", quantity: "simpul per peringkat", unit: "simpul", measured: 5, limit: 4 })
+    expect(err.details).toMatchObject({ checkId: "DATUM-37-rank", quantity: "simpul per peringkat", unit: "simpul", measured: 5, limit: 4 })
     expect(err.details.suggestion).toContain("width_mm 166")
     expect(err.details.suggestion).toContain('direction "LR"')
     const b = nodeBoxes(build.buildDiagramSvg({ ...s, width_mm: 166 }, { release: false }).svg)
@@ -131,7 +131,7 @@ describe("row 46 T-11 lattice capacity (01e §5)", () => {
       err = e
     }
     expect(err?.code).toBe("FIGURE_OVER_CAPACITY")
-    expect(err.details).toMatchObject({ checkId: "DATUM-37-lebar", quantity: "simpul per peringkat LR", measured: 7, limit: 6 })
+    expect(err.details).toMatchObject({ checkId: "DATUM-37-rank", quantity: "simpul per peringkat LR", measured: 7, limit: 6 })
   })
 })
 

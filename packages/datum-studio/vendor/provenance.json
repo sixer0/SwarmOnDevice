@@ -125,7 +125,7 @@
   "patched": 158,
   "replaced": 12,
   "added": 30,
-  "bytes": 10001392
+  "bytes": 10001458
  },
  "files": [
   {
@@ -2549,9 +2549,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/sheet.ts",
    "status": "patched",
-   "bytes": 18356,
+   "bytes": 18362,
    "source_sha256": "236608382b3497f2fa991d09dd9ef4bdc5df2f0198d9288407866b13951783d5",
-   "sha256": "c3f3c8db70f9937efc0b8bb9d61d5e26b7809b9d0456b698727a9d9d60187967",
+   "sha256": "c3a9b3664ae45a0b21443063f474b4d7f7f32a220df74f100f951396a3a3fb43",
+   "patch_row35b": {"id": "128-35-hnb4", "row": "35b", "decision": "1.2.8 row 35b (AC-HNB4, H-NB4, D-V5; N8-214, N8-215)", "summary": "snapToLattice: a node past the sheet width is refused DATUM-37-sheet (was DATUM-37-lebar; message prefix DATUM-37-sheet:); applyEdgeInset, the return id and the checksRun id unchanged", "before_sha256": "c3f3c8db70f9937efc0b8bb9d61d5e26b7809b9d0456b698727a9d9d60187967", "after_sha256": "c3a9b3664ae45a0b21443063f474b4d7f7f32a220df74f100f951396a3a3fb43", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35b_row35b_diffs/src_lib_studio_engine_diagram_core_sheet.ts.diff", "diff_sha256": "63a20cfdcd90d17088d7c770f34f3de60620976751140d5c7ed5235d71e5bc67"},
    "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "NEW GRAPH_EDGE_INSET_MM = 2, SheetEdgeInset {unit kolom|rank, groupOf}, Sheet.edgeInset; snapToLattice ends with applyEdgeInset: content inside 2..W-2 untouched, else one uniform translate centring it (lattice spacing kept; undone before a repeated snap); content wider than W - 4 refused DATUM-37-lebar naming the column/rank index, measured and limit mm. Sheets without edgeInset unchanged", "diff_base": "patch_row124b.after_sha256", "before_sha256": "46e1859aa7b9558b18e2a3839ee03aa1aa25ef0945c027dc82ed14e78cfb17b1", "after_sha256": "c3f3c8db70f9937efc0b8bb9d61d5e26b7809b9d0456b698727a9d9d60187967", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_core_sheet.ts.diff", "diff_sha256": "47d20f477d5d1d9760dd739bb21f1278249c20728aa698f29f4cfbba9664d736"},
    "patch_row124b": {
     "id": "row124b-diagram-core-sheet-key-text",
@@ -2731,9 +2732,10 @@
   {
    "path": "src/lib/studio/engine/diagram/layout-a/flow.ts",
    "status": "patched",
-   "bytes": 24720,
+   "bytes": 24732,
    "source_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a",
-   "sha256": "cd217a453f494e05432f13167d4b055fcf12ec36284eede2ab1e8c735b23efa3",
+   "sha256": "8eb7492507f3d36dba9eda255bc5b268a9bf730515e90fffbfef8b4d3e5b4c4a",
+   "patch_row35b": {"id": "128-35-hnb4", "row": "35b", "decision": "1.2.8 row 35b (AC-HNB4, H-NB4, D-V5; N8-214)", "summary": "ranked-flow rank overflow (flowRankOverload messages, assertRankCapacity checkId) is DATUM-37-rank (was DATUM-37-lebar; message prefix DATUM-37-rank:); measures, limits and suggestions unchanged", "before_sha256": "cd217a453f494e05432f13167d4b055fcf12ec36284eede2ab1e8c735b23efa3", "after_sha256": "8eb7492507f3d36dba9eda255bc5b268a9bf730515e90fffbfef8b4d3e5b4c4a", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35b_row35b_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "c3c1daa125524cb1c9f18e3645d76bc5a5becf9da2a3589359ba55081e96c3bf"},
    "patch_row63": {"id": "row63-t07-diamond-height", "row": "63", "decision": "1.2.6 patch T-07, U5 (01_specs T-07; register N-017)", "summary": "inline diamond h*1.25 removed from the per_row branch and ranked baseSize (nodeSize carries it; byte-identical there); legacy list flow diamonds now take the factor (INTENT dg_flow)", "before_sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40", "after_sha256": "4a6c826d67d971b7382d44f78da98de66dd5bc867bf8801ddd731d3ee23d2a4c", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "4a1da80da71d7402a4bba48a0281a4c7ce994f08e9ba781828748ed91437e268"},
    "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "direction present (flowDirectionOf: flow + TB/LR) -> NEW ranked flow layout (layoutRankedFlow); absent -> legacy list layout unchanged (byte-identical, row 45 A15 goldens). NEW exports FLOW_RANK_NODE_MIN_UNITS 2, FLOW_RANK_GAP_BASELINES 4, FLOW_LR_CORRIDOR_UNITS 2, FLOW_LR_MAX_PARALLEL 6, flowRanks (DFS back edges, longest path, mean-predecessor order), flowTbCap/flowTbMaxPerRank/flowLrMaxRanks (lattice capacity inside the T-02 inset), flowRankOverload, rankedFlowSizes (shared with the ELK adapter); over-capacity refused before placement as DiagramOverCapacity DATUM-37-lebar; sheet.edgeInset unit rank (row 59 hook); ELK plan order (TB also x) when a plan for this spec is active", "diff_base": "sha256 before this row", "before_sha256": "90afeff371687137694305bba1d5cd595f80fb06f3bc3a79211001203e021b1a", "after_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "5867439cd7b5b766d838f16a4654d38956bc38257249c2cf714ba7db2e0ec261"},
    "patch_row47": {"id": "row47-t11-acceptance", "row": "47", "decision": "1.2.6 patch T-11 acceptance (U3, U5, D4=A, C7; register N-160; 01e §4.3-§4.5, §7.2 A2-A6, A9-A11, A13-A15)", "summary": "NEW FLOW_SERIALISED (N-160) + flowSerialisedNote (01e §4.4: legacy flow with a rank of >= 2 nodes, widest rank named, REPORT only); TB ranked flow: ranks r > 0 placed under their predecessors (underPredecessors, lattice window inside the T-02 inset, centred-row fallback) and the corridor above a rank grows by one baseline per extra edge-label row (corridorLabelRows, knockout widths at default places) so labels leave no GEOM_STUB_SEGMENT tick (01e §4.3 realised by placement)", "diff_base": "sha256 before this row", "before_sha256": "241e74568c19bb66ee9ed28ae506af204e78c86805c39c46a011a6a3734e7633", "after_sha256": "9b270e5d010022769d90836b7a1c82a1221909a33f9ce9ddf696f3d55555ea40", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/47_row47_diffs/src_lib_studio_engine_diagram_layout-a_flow.ts.diff", "diff_sha256": "ce3d2c8e6145595bb2ad59fd0c59cf80300b8d99ead69f199800f981340b20e3"},
@@ -2815,17 +2817,19 @@
   {
    "path": "src/lib/studio/engine/diagram/layout-c/graph.ts",
    "status": "patched",
-   "bytes": 12770,
+   "bytes": 12806,
    "source_sha256": "60b669014292c58c6f2f6571ccb51f98e3ad43eb2efc213083c64cc6fccd52ac",
-   "sha256": "3d1965391add5aef75099f70cc40ca3cb9738e4cdd10212a52d7f5f5bb73a7f3",
+   "sha256": "49d21d0ea4d8c9c02e6af859fd909d97ed2953e7d89f7691182a43e02be843e6",
+   "patch_row35b": {"id": "128-35-hnb4", "row": "35b", "decision": "1.2.8 row 35b (AC-HNB4, H-NB4, D-V5; N8-215)", "summary": "the three graph width refusals (columns do not fit, ROWPACK, node past the sheet after column placement) are DATUM-37-sheet (was DATUM-37; message prefix DATUM-37-sheet:)", "before_sha256": "3d1965391add5aef75099f70cc40ca3cb9738e4cdd10212a52d7f5f5bb73a7f3", "after_sha256": "49d21d0ea4d8c9c02e6af859fd909d97ed2953e7d89f7691182a43e02be843e6", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35b_row35b_diffs/src_lib_studio_engine_diagram_layout-c_graph.ts.diff", "diff_sha256": "3b69aed499bdfbe08bd7dc229ffe8e8794e642499c62cc589c6816a0e7ea1d9a"},
    "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "layoutGraphDetail sets sheet.edgeInset {unit kolom, groupOf = class.col per node} (both the default and the capacity path); the per-node DATUM-37 width refusal names the column ('simpul <id> (kolom graph <c>)'). Copied -> patched", "before_sha256": "60b669014292c58c6f2f6571ccb51f98e3ad43eb2efc213083c64cc6fccd52ac", "after_sha256": "3d1965391add5aef75099f70cc40ca3cb9738e4cdd10212a52d7f5f5bb73a7f3", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_layout-c_graph.ts.diff", "diff_sha256": "d2aa250b4cd92ac01f22ca1c365868bc236738d54ec811b47dbecc8bc10ccf33"}
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-c/graphcap.ts",
    "status": "patched",
-   "bytes": 3435,
+   "bytes": 3447,
    "source_sha256": "b64c0949e1687078e4beb752066ee61d2f13816b99f1281cd0c84a1d51a6df8f",
-   "sha256": "d2f70b89339f2ddc9d8fbc724f79a038183cc3e41a95eaa9fb014c383e7c008d",
+   "sha256": "8fcfa24ab167d7babb8823ea21da9a0c94235f9265e3aebfbeaf4a74d2f3e4b6",
+   "patch_row35b": {"id": "128-35-hnb4", "row": "35b", "decision": "1.2.8 row 35b (AC-HNB4, H-NB4, D-V5; N8-215)", "summary": "compacted graph columns that still do not fit are refused DATUM-37-sheet (was DATUM-37; message prefix DATUM-37-sheet:)", "before_sha256": "d2f70b89339f2ddc9d8fbc724f79a038183cc3e41a95eaa9fb014c383e7c008d", "after_sha256": "8fcfa24ab167d7babb8823ea21da9a0c94235f9265e3aebfbeaf4a74d2f3e4b6", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35b_row35b_diffs/src_lib_studio_engine_diagram_layout-c_graphcap.ts.diff", "diff_sha256": "24e0d69065f1a0999e4c51c66f1d6c35385ac06c1e4d467c89584dc827ab7fb1"},
    "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "graphMaxCols and the compacted-pitch fit test use W - 2 x GRAPH_EDGE_INSET_MM (same maximum at 128/166 mm: 4/5 columns). Copied -> patched", "before_sha256": "b64c0949e1687078e4beb752066ee61d2f13816b99f1281cd0c84a1d51a6df8f", "after_sha256": "d2f70b89339f2ddc9d8fbc724f79a038183cc3e41a95eaa9fb014c383e7c008d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_layout-c_graphcap.ts.diff", "diff_sha256": "e89034902379dfd6d3d53c5d58551ac4c63312812d6f2bdb4179b7fbac00f3d4"}
   },
   {
@@ -6262,6 +6266,7 @@
   "40d",
   "37c",
   "31",
-  "52"
+  "52",
+  "35b"
  ]
 }

@@ -39,9 +39,9 @@ export function layoutGraphCapacity(s: StudioDiagramV1, L: Lattice, padUnits: nu
   }
   if (!w) {
     throw diagramDefect(
-      `DATUM-37: ${k} kolom graph tidak muat di ${L.W.toFixed(1)} mm walau pitch dipadatkan; ` +
+      `DATUM-37-sheet: ${k} kolom graph tidak muat di ${L.W.toFixed(1)} mm walau pitch dipadatkan; ` +
         `maks ${graphMaxCols(L)} kolom pada ${L.W.toFixed(0)} mm; bagi menjadi dua gambar atau pakai layered (P8, P1-14)`,
-      "DATUM-37",
+      "DATUM-37-sheet",
     );
   }
   const p = w + L.x;
