@@ -1,6 +1,7 @@
 import { onMount } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import type { PromptInputV2Attachment, PromptInputV2Prompt } from "./types"
+import { flattenPastedImage, readPromptPaste } from "./paste-source"
 
 const accepted = [
   "image/png",
@@ -140,6 +141,8 @@ export function createPromptInputV2Attachments(
     if (!found && files.length > 0 && toast) input.warn()
     return found
   }
+  const pastedImage = (file: File) =>
+    input.getPathForFile?.(file) ? Promise.resolve(file) : flattenPastedImage(file, { onError: warnFlatten })
   const handlePaste = async (event: ClipboardEvent) => {
     const clipboardData = event.clipboardData
     if (!clipboardData) return
@@ -147,21 +150,19 @@ export function createPromptInputV2Attachments(
     if (!target) return
     event.preventDefault()
     event.stopPropagation()
-    const files = Array.from(clipboardData.items).flatMap((item) => {
-      if (item.kind !== "file") return []
-      const file = item.getAsFile()
-      return file ? [file] : []
-    })
-    if (files.length > 0) {
+    // U-13 (C63): text wins over a clipboard image; images with alpha are flattened onto white.
+    const pasted = readPromptPaste(clipboardData, input.getPathForFile)
+    if (pasted.kind === "files") {
+      const files = await Promise.all(pasted.files.map((file) => pastedImage(file)))
       await addAttachments(files, true, target)
       return
     }
-    const plainText = clipboardData.getData("text/plain") ?? ""
-    if (input.readClipboardImage && !plainText) {
+    if (pasted.kind === "empty" && input.readClipboardImage) {
       const file = await input.readClipboardImage()
-      if (file && (await add(file, true, target, true))) return
+      if (file && (await add(await pastedImage(file), true, target, true))) return
     }
-    if (!plainText) return
+    if (pasted.kind !== "text") return
+    const plainText = pasted.text
     const text = plainText.includes("\r") ? plainText.replace(/\r\n?/g, "\n") : plainText
     const put = () => {
       if (input.addPart({ type: "text", content: text, start: 0, end: 0 })) return true
@@ -217,6 +218,11 @@ export function createPromptInputV2Attachments(
         .catch(input.onError)
     },
   }
+}
+
+// A failed flatten keeps the original image; it is not a request failure, so no error toast.
+function warnFlatten(error: unknown) {
+  console.warn("[prompt-input] pasted image could not be flattened onto white", error)
 }
 
 const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])

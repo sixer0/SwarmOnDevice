@@ -9,6 +9,12 @@ import { getCursorPosition } from "./editor-dom"
 import { createBlobReference, type DraftStore } from "@/utils/draft-store"
 import { attachmentMime } from "./files"
 import { normalizePaste, pasteMode } from "./paste"
+import { flattenPastedImage, readPromptPaste } from "@opencode-ai/session-ui/v2/prompt-input/paste-source"
+
+// A failed flatten keeps the original image; the paste still goes through.
+function warnFlatten(error: unknown) {
+  console.warn("[prompt-input] pasted image could not be flattened onto white", error)
+}
 
 type PromptTarget = Pick<ReturnType<ReturnType<typeof usePrompt>["capture"]>, "current" | "cursor" | "set">
 type AttachmentTarget = { prompt: PromptTarget; cursor: number | undefined }
@@ -90,6 +96,9 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
     target.set(next, target.cursor())
   }
 
+  const pastedImage = (file: File) =>
+    input.getPathForFile?.(file) ? Promise.resolve(file) : flattenPastedImage(file, { onError: warnFlatten })
+
   const handlePaste = async (event: ClipboardEvent) => {
     const clipboardData = event.clipboardData
     if (!clipboardData) return
@@ -99,25 +108,24 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
     event.preventDefault()
     event.stopPropagation()
 
-    const files = Array.from(clipboardData.items).flatMap((item) => {
-      if (item.kind !== "file") return []
-      const file = item.getAsFile()
-      return file ? [file] : []
-    })
+    // U-13 (C63): text wins over a clipboard image (Word also offers a rendered PNG); images with an
+    // alpha channel are flattened onto white. Shared with the v2 composer.
+    const pasted = readPromptPaste(clipboardData, input.getPathForFile)
 
-    if (files.length > 0) {
+    if (pasted.kind === "files") {
+      const files = await Promise.all(pasted.files.map((file) => pastedImage(file)))
       await addAttachments(files, true, target)
       return
     }
 
-    const plainText = clipboardData.getData("text/plain") ?? ""
-
     // Desktop: Browser clipboard has no images and no text, try platform's native clipboard for images
-    if (input.readClipboardImage && !plainText) {
-      if (await addClipboardAttachment(input.readClipboardImage(), target)) return
+    if (pasted.kind === "empty" && input.readClipboardImage) {
+      const native = input.readClipboardImage().then((file) => (file ? pastedImage(file) : null))
+      if (await addClipboardAttachment(native, target)) return
     }
 
-    if (!plainText) return
+    if (pasted.kind !== "text") return
+    const plainText = pasted.text
 
     const text = normalizePaste(plainText)
 
