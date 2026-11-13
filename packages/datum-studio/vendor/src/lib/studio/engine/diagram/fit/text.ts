@@ -39,9 +39,63 @@ export function subWidthMm(s: string): number {
   return measure(s, subPt(), "struct");
 }
 
+// ---------------------------------------------------------------- row 54 (VIS-3a, label below)
+/**
+ * Swarm 1.2.8 row 54 (VIS-3a, C12 OP-18-4, 01_specs.md §5.3, register N8-477..N8-479): BPMN events and gateways are drawn
+ * at a fixed outline size, centred horizontally at the top of the node's layout cell, and their label block (tag line,
+ * label, sub) sits below the outline. Every other shape keeps its label inside. Values per OP20-6 (row 54 eye check).
+ * Kept here, not in `core/tokens.ts` (V-core-tokens held by row 35c in wave I3; file request row 54 -> tokens.ts).
+ */
+export const LABEL_BELOW_SHAPES: ReadonlySet<string> = new Set([
+  "event_start",
+  "event_intermediate",
+  "event_end",
+  "gateway_exclusive",
+  "gateway_parallel",
+  "gateway_inclusive",
+  "gateway_complex",
+]);
+/** Gap (mm) from the outline's outer stroke edge to the top of the label block. */
+export const LABEL_BELOW_GAP_MM = 1.0;
+/** Outline diameter (mm) of a BPMN event; side of the bounding square of a BPMN gateway (mm). */
+export const BPMN_EVENT_DIAMETER_MM = 8.0;
+export const BPMN_GATEWAY_SIZE_MM = 11.0;
+
+export function isLabelBelow(shape: string | undefined): boolean {
+  return shape !== undefined && LABEL_BELOW_SHAPES.has(shape);
+}
+
+/** Outline size (mm) of a label-below shape: event diameter or gateway square. */
+export function labelBelowSizeMm(shape: string | undefined): number {
+  return shape !== undefined && shape.startsWith("gateway_") ? BPMN_GATEWAY_SIZE_MM : BPMN_EVENT_DIAMETER_MM;
+}
+
+/** Stroke width (mm) of the outline of a label-below shape (01f §1.3: end event 2 x primary). */
+export function labelBelowStrokeMm(shape: string | undefined): number {
+  return shape === "event_end" ? STROKE_PRIMARY * 2 : STROKE_PRIMARY;
+}
+
+/**
+ * Outline box of a label-below node inside its layout cell: a square of `labelBelowSizeMm`, centred horizontally, its
+ * top on the cell top (the cell is never narrower: `nodeSize` keeps w >= 3 lattice columns).
+ */
+export function labelBelowOutline(nd: { x: number; y: number; w: number; spec: Pick<DiagramNode, "shape"> }): { x: number; y: number; w: number; h: number } {
+  const d = labelBelowSizeMm(nd.spec.shape);
+  return { x: nd.x + nd.w / 2 - d / 2, y: nd.y, w: d, h: d };
+}
+
+/**
+ * Top (mm, from the cell top) of the label block of a label-below shape: outline, the outer half of the thickest outline
+ * stroke (end event, 2 x primary), gap. One value for every event, so labels of one rank share their baseline.
+ */
+function labelBelowTop(shape: string | undefined): number {
+  return labelBelowSizeMm(shape) + STROKE_PRIMARY + LABEL_BELOW_GAP_MM;
+}
+
 /** Lebar dalam bentuk simpul tempat teks dibungkus (mm), di garis tengah vertikal. */
 export function innerWidthMm(shape: DiagramShape | undefined, w: number, h: number): number {
   const pad = padMm();
+  if (isLabelBelow(shape)) return w - pad; // row 54: the label block wraps to the layout cell width
   switch (shape) {
     case "diamond":
       return w * 0.5 - pad * 0.5;
@@ -104,6 +158,8 @@ function footFrac(shape: DiagramShape | undefined): number {
 /** Tinggi minimum simpul untuk `label`/`sub` berbaris (bentuk diamond butuh dua kali blok). */
 function neededHeight(n: Pick<DiagramNode, "shape" | "tag">, labelLines: number, subLines: number): number {
   const b = blockMm(labelLines, subLines);
+  // row 54 (VIS-3a, §5.3): cell = outline + gap + label block (+ tag line) + the bottom margin
+  if (isLabelBelow(n.shape)) return labelBelowTop(n.shape) + tagH(n) + b + V_MARGIN_MM;
   const core = n.shape === "diamond" || n.shape === "hexagon" ? b * 2 : b;
   // row 53: document / offpage need the text box above the wave / point (needed height / (1 - foot))
   return (core + 2 * V_MARGIN_MM + tagH(n)) / (1 - footFrac(n.shape));
@@ -216,6 +272,7 @@ export function nodeTextLayout(nd: { x: number; y: number; w: number; h: number;
     const plan: NodeTextPlan = { label: [textOf(n.label)], sub: [], needH: nd.h, overflow: false, wrapped: false };
     return { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
   }
+  if (isLabelBelow(n.shape)) return labelBelowLayout(nd);
   // Silinder: busur tutup atas (ry = 0,16 h, digambar sampai y + 2 ry) memotong label di pusat.
   const lid = n.shape === "cylinder" ? nd.h * 0.16 * 2 + 0.3 : 0;
   // Row 53 (VIS-1b): document / offpage keep their text above the wave / point, so they always get a layout.
@@ -241,4 +298,25 @@ export function nodeTextLayout(nd: { x: number; y: number; w: number; h: number;
   const out: NodeTextLayout = { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
   if (S > 0) out.sub = { x: cx, y: y + L * capLineMm(), lines: plan.sub, lineMm: subLineMm() };
   return out;
+}
+
+/**
+ * Row 54 (VIS-3a, §5.3): text layout of a label-below node, always present (outside fit too). The block starts
+ * `labelBelowTop` under the cell top: the tag line first (core/svg.ts `tagAnchor` puts the tag one line above the label),
+ * then the label lines wrapped to the cell width, then the sub line(s); all centred on the cell (= the outline) centre.
+ */
+function labelBelowLayout(nd: { x: number; y: number; w: number; h: number; spec: DiagramNode }): NodeTextLayout {
+  const n = nd.spec;
+  const probe = planNodeText(n, nd.w, nd.h, NODE_HARD_MAX_LINES);
+  const plan = planNodeText(n, nd.w, nd.h, linesForHeight(n, nd.h, probe.sub.length));
+  const cx = nd.x + nd.w / 2.0;
+  const y = nd.y + labelBelowTop(n.shape) + tagH(n) + FONT_ASCENT_EM * capMm();
+  const out: NodeTextLayout = { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
+  if (plan.sub.length > 0) out.sub = { x: cx, y: y + plan.label.length * capLineMm(), lines: plan.sub, lineMm: subLineMm() };
+  return out;
+}
+
+/** Row 54 (VIS-3a, §5.3): height (mm, not lattice-locked) of the layout cell of a label-below node of width `w`. */
+export function labelBelowHeightMm(n: Pick<DiagramNode, "label" | "sub" | "shape" | "tag">, w: number): number {
+  return planNodeText(n, w, Infinity, NODE_HARD_MAX_LINES).needH;
 }

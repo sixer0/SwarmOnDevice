@@ -17,6 +17,7 @@ import { activeElkRoutes } from "../elk/routes";
 import { edgeConflicts, ENTRY_COLLISION_MM } from "../fit/lint";
 import { flowDirectionOf, flowRanks } from "../layout-a/flow";
 import { CURVE_SAMPLES } from "../core/tokens";
+import { isLabelBelow, labelBelowOutline } from "../fit/text";
 import { clearFirstRender, noteFirstRender } from "./autofit";
 
 type Pt = readonly [number, number];
@@ -108,6 +109,15 @@ function anchor(node: SheetNode, side: Side, slot: number, slots: number): Pt {
   if (node.spec.shape === "bus" && (side === "bottom" || side === "top")) {
     return [node.x + node.w * frac, node.y + node.h / 2.0];
   }
+  // Swarm 1.2.8 row 54 (VIS-3a, §5.3): a BPMN event/gateway connects on its fixed outline at the top of the cell: side
+  // ends at the outline's centre height, top/bottom ends fanned over the middle half of the outline width. `glueEnd`
+  // then moves each end from the cell box onto the outline (a bottom end stays under the label block).
+  if (isLabelBelow(node.spec.shape)) {
+    const o = labelBelowOutline(node);
+    if (side === "right" || side === "left") return [side === "right" ? node.x + node.w : node.x, o.y + o.h / 2];
+    const x = o.x + o.w * (0.25 + 0.5 * frac);
+    return [x, side === "top" ? node.y : node.y + node.h];
+  }
   if (side === "bottom") return [node.x + node.w * frac, node.y + node.h];
   if (side === "top") return [node.x + node.w * frac, node.y];
   if (side === "right") return [node.x + node.w, node.y + node.h * frac];
@@ -131,6 +141,7 @@ function outlineBottomY(node: SheetNode, x: number): number | null {
   return null;
 }
 function glueEnd(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
+  if (pts.length >= 2 && isLabelBelow(node.spec.shape)) return glueLabelBelow(pts, node, atEnd);
   if (pts.length < 2 || (node.spec.shape !== "document" && node.spec.shape !== "offpage")) return pts;
   const k = atEnd ? pts.length - 1 : 0;
   const nb = atEnd ? pts.length - 2 : 1;
@@ -142,6 +153,58 @@ function glueEnd(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
   out[k] = [p[0], yy];
   return out;
 }
+/**
+ * Row 54 (VIS-3a, §5.3): an end on the cell box of a BPMN event/gateway lands on its outline. A horizontal last piece
+ * whose y crosses the outline is extended to the outline at that y (circle or diamond); one that misses it (ELK end at
+ * the cell centre) is moved, with its horizontal run back to the last bend, to the outline's centre height, or gets a
+ * jog at its middle when the run is the whole route. A vertical end on the cell top moves down onto the outline at the
+ * same x. An end on the cell bottom stays there: moving it up would draw the connector through the label block.
+ */
+function glueLabelBelow(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
+  const o = labelBelowOutline(node);
+  const cx = o.x + o.w / 2;
+  const cy = o.y + o.h / 2;
+  const R = o.w / 2;
+  const diamond = node.spec.shape?.startsWith("gateway_") === true;
+  // half-width of the outline at height y (circle chord or diamond), null outside it
+  const halfAt = (y: number): number | null => {
+    const dy = Math.abs(y - cy);
+    if (dy >= R - 1e-9) return null;
+    return diamond ? R - dy : Math.sqrt(R * R - dy * dy);
+  };
+  const out = atEnd ? [...pts].reverse() : [...pts];
+  const p = out[0];
+  const q = out[1];
+  const onSide = Math.abs(p[0] - node.x) < 1e-6 || Math.abs(p[0] - (node.x + node.w)) < 1e-6;
+  if (onSide && Math.abs(q[1] - p[1]) < 1e-6 && Math.abs(q[0] - p[0]) > 1e-9) {
+    const sign = p[0] > cx ? 1 : -1;
+    let y = p[1];
+    if (halfAt(y) === null || Math.abs(y - cy) > R * 0.5) {
+      // move the horizontal run to the centre height (keep the other end and the bends axis-aligned)
+      let k = 0;
+      while (k + 1 < out.length && Math.abs(out[k + 1][1] - p[1]) < 1e-6) k++;
+      if (k === out.length - 1) {
+        const mx = (out[0][0] + out[k][0]) / 2;
+        out.splice(1, k - 1, [mx, cy], [mx, p[1]]);
+        out[0] = [p[0], cy];
+      } else {
+        for (let i = 0; i <= k; i++) out[i] = [out[i][0], cy];
+      }
+      y = cy;
+    }
+    out[0] = [cx + sign * (halfAt(y) ?? 0), y];
+    return atEnd ? out.reverse() : out;
+  }
+  if (Math.abs(p[1] - node.y) < 1e-6 && Math.abs(q[0] - p[0]) < 1e-6) {
+    const hw = Math.abs(p[0] - cx);
+    if (hw >= R - 1e-9) return pts;
+    const top = diamond ? cy - (R - hw) : cy - Math.sqrt(R * R - hw * hw);
+    out[0] = [p[0], top];
+    return atEnd ? out.reverse() : out;
+  }
+  return pts;
+}
+
 /** Row 53: `glueEnd` over routes built elsewhere (ELK); `d` is rebuilt only for a moved edge. */
 function glueToOutlines(routes: RoutedEdge[], sheet: Sheet): RoutedEdge[] {
   return routes.map((r) => {
@@ -309,6 +372,24 @@ function throughEnds(pts: readonly Pt[], a: SheetNode, b: SheetNode): boolean {
 type SidePair = readonly [Side, Side];
 
 /**
+ * Swarm 1.2.8 row 54 (VIS-3a, §5.3): the bottom of a BPMN event/gateway cell is under its label block, so an end there
+ * cannot touch the outline (and an arrowhead would point at the label). When the other node lies beside the outline
+ * (centre offset beyond the outline half-width plus one stub), that end uses the side facing it instead: the route
+ * becomes an L (`cornerRoute`) that meets the outline at its centre height. Directly above/below: unchanged.
+ */
+function belowSides(pair: SidePair, a: SheetNode, b: SheetNode): SidePair {
+  const facing = (n: SheetNode, other: SheetNode): Side | null => {
+    const o = labelBelowOutline(n);
+    const dx = other.x + other.w / 2 - (o.x + o.w / 2);
+    return Math.abs(dx) > o.w / 2 + LATTICE_Y ? (dx > 0 ? "right" : "left") : null;
+  };
+  let [sa, sb] = pair;
+  if (sa === "bottom" && isLabelBelow(a.spec.shape)) sa = facing(a, b) ?? sa;
+  if (sb === "bottom" && isLabelBelow(b.spec.shape)) sb = facing(b, a) ?? sb;
+  return sa === pair[0] && sb === pair[1] ? pair : [sa, sb];
+}
+
+/**
  * Row 124 (CP-41): side pairs to try for one edge, primary (`sideOf`) first, then the opposite pair
  * on the other axis, then the two corner (L) pairs. Signs follow the centre offset of the boxes.
  */
@@ -356,7 +437,8 @@ export function routePlaced(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
     const b = nodeOf(sheet, e.to);
     const nodes = [...sheet.nodes.values()];
     let pick: SidePair | undefined;
-    for (const pair of sideCandidates(a, b).slice(1)) {
+    // Row 54 (VIS-3a): a candidate that ends on the bottom of an event/gateway cell is taken with `belowSides`.
+    for (const pair of sideCandidates(a, b).slice(1).map((p) => belowSides(p, a, b))) {
       const trial = new Map(over).set(bad, pair);
       let pts: Pt[];
       try {
@@ -522,7 +604,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       if (ra !== undefined && rb !== undefined && ra < rb) return dir === "LR" ? ["right", "left"] : ["bottom", "top"];
     }
     const sa = sideOf(nodeOf(sheet, e.from), nodeOf(sheet, e.to));
-    return [sa, OPP[sa]];
+    return belowSides([sa, OPP[sa]], nodeOf(sheet, e.from), nodeOf(sheet, e.to));
   };
   const grouped = new Map<string, DiagramEdge[]>();
   const gk = (id: string, side: Side) => `${side}\u0000${id}`;

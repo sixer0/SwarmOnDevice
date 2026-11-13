@@ -244,5 +244,31 @@ describe("H-TAG tag inset (N8-218, N8-371)", () => {
     }
   })
 
-  test.todo("label-below shapes (BPMN events, gateways; C12 OP-18-4) carry the tag in their label block above the label text (row 54, AC-VIS3a/b)", () => {})
+  // Row 54 (AC-VIS3a, C75): the events part of the former test.todo; gateways follow with row 54b (VIS-3b).
+  test("label-below events (C12 OP-18-4) carry the tag in their label block, centred one line above the label text, 0 defects", () => {
+    const shapes = ["event_start", "event_intermediate", "event_end"]
+    const spec = {
+      $schema: "studio.diagram/v1", family: "flow", direction: "LR", id: "9.9", title: "Uji tag peristiwa.", classification: "BIASA",
+      apparatus: "page", labels_verified: true, sources: ["Sumber sintetis uji"],
+      nodes: shapes.map((s, i) => ({ id: `n${i + 1}`, label: `Alfa ${i + 1}`, shape: s, tag: `T${i + 1}`, class: {} })),
+      edges: [{ from: "n1", to: "n2", kind: "data", label: "lanjut" }, { from: "n2", to: "n3", kind: "data", label: "lanjut" }],
+    }
+    for (const W of WIDTHS) {
+      const svg = (buildMod as J).buildDiagramSvg({ ...clone(spec), width_mm: W }, O).svg as string
+      shapes.forEach((_, i) => {
+        const circle = new RegExp(`<circle\\b[^>]*data-node="n${i + 1}"[^>]*/>`).exec(svg)![0]
+        const group = /<g data-label-pos="below">([\s\S]*?)<\/g>/.exec(svg.slice(svg.indexOf(circle)))![1]
+        const t = tags(group).find((x) => x.text === `T${i + 1}`)!
+        expect(t, `T${i + 1}`).toBeDefined()
+        expect(attr(t.el, "text-anchor")).toBe("middle")
+        expect(Number(attr(t.el, "x"))).toBeCloseTo(Number(attr(circle, "cx")), 1)
+        const cyBottom = Number(attr(circle, "cy")) + Number(attr(circle, "r")) + Number(attr(circle, "stroke-width")) / 2
+        expect(t.box[1]).toBeGreaterThanOrEqual(cyBottom + 1.0 - 1e-6)
+        const label = new RegExp(`<text\\b[^>]*>Alfa ${i + 1}</text>`).exec(group)![0]
+        expect(Number(attr(label, "y")) - Number(attr(t.el, "y"))).toBeCloseTo(2.68 * 1.2, 1) // one tag line (caption x 1.2)
+      })
+      expect((lintMod as J).lintDiagramGeometry(svg).defects).toEqual([])
+    }
+  })
+  test.todo("label-below gateways carry the tag in their label block above the label text (row 54b, AC-VIS3b)", () => {})
 })

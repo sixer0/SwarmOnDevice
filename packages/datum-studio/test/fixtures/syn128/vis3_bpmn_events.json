@@ -1,0 +1,329 @@
+{
+  "$comment": "Swarm 1.2.8 row 54 (AC-VIS3a, AT-V3-events, register N8-373, R18-8). Synthetic labels only. `events`: 3 events (start, intermediate, end) x 3 event_type (none, message, timer), ranked flow LR (BPMN convention). `events_tb`: ranked flow TB (connector entering an event from above, leaving downwards under its label). `events_graph`: graph family (1-baseline node pad: the label-below cell grows). `events_tagged`: tags and a sub line in the label block (H-TAG case of row 53, C75), and a hatched (accent) start event. `event_type_on_task`: P1-event_type. Built at 128 and 166 mm. Not part of the 52b CHAR corpus (new shape tokens).",
+  "events": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.6",
+    "title": "Gambar sintetis peristiwa BPMN.",
+    "nodes": [
+      {
+        "id": "s0",
+        "label": "Awal A",
+        "shape": "event_start",
+        "class": {}
+      },
+      {
+        "id": "m0",
+        "label": "Antara A",
+        "shape": "event_intermediate",
+        "class": {}
+      },
+      {
+        "id": "e0",
+        "label": "Akhir A",
+        "shape": "event_end",
+        "class": {}
+      },
+      {
+        "id": "s1",
+        "label": "Awal B",
+        "shape": "event_start",
+        "class": {},
+        "event_type": "message"
+      },
+      {
+        "id": "m1",
+        "label": "Antara B",
+        "shape": "event_intermediate",
+        "class": {},
+        "event_type": "message"
+      },
+      {
+        "id": "e1",
+        "label": "Akhir B",
+        "shape": "event_end",
+        "class": {},
+        "event_type": "message"
+      },
+      {
+        "id": "s2",
+        "label": "Awal C",
+        "shape": "event_start",
+        "class": {},
+        "event_type": "timer"
+      },
+      {
+        "id": "m2",
+        "label": "Antara C",
+        "shape": "event_intermediate",
+        "class": {},
+        "event_type": "timer"
+      },
+      {
+        "id": "e2",
+        "label": "Akhir C",
+        "shape": "event_end",
+        "class": {},
+        "event_type": "timer"
+      }
+    ],
+    "edges": [
+      {
+        "from": "s0",
+        "to": "m0",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "m0",
+        "to": "e0",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "s1",
+        "to": "m1",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "m1",
+        "to": "e1",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "s2",
+        "to": "m2",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "m2",
+        "to": "e2",
+        "kind": "data",
+        "label": "lanjut"
+      }
+    ]
+  },
+  "events_tb": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "TB",
+    "id": "9.7",
+    "title": "Gambar sintetis peristiwa BPMN tegak.",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Awal D",
+        "shape": "event_start",
+        "class": {}
+      },
+      {
+        "id": "b",
+        "label": "Langkah D",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "c",
+        "label": "Tunggu D",
+        "shape": "event_intermediate",
+        "event_type": "timer",
+        "class": {}
+      },
+      {
+        "id": "d",
+        "label": "Akhir D",
+        "shape": "event_end",
+        "event_type": "message",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "c",
+        "to": "d",
+        "kind": "data",
+        "label": "lanjut"
+      }
+    ]
+  },
+  "events_graph": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.8",
+    "title": "Gambar sintetis peristiwa BPMN graf.",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Awal E",
+        "shape": "event_start",
+        "event_type": "message",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah E",
+        "shape": "task",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "c",
+        "label": "Akhir E",
+        "shape": "event_end",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "data",
+        "label": "lanjut"
+      }
+    ]
+  },
+  "events_tagged": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.9",
+    "title": "Gambar sintetis peristiwa BPMN bertag.",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Awal F",
+        "shape": "event_start",
+        "tag": "T1",
+        "class": {
+          "accent": true
+        }
+      },
+      {
+        "id": "b",
+        "label": "Antara F",
+        "shape": "event_intermediate",
+        "event_type": "message",
+        "tag": "T2",
+        "sub": "anak F",
+        "class": {}
+      },
+      {
+        "id": "c",
+        "label": "Akhir F",
+        "shape": "event_end",
+        "event_type": "timer",
+        "tag": "T3",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "data",
+        "label": "lanjut"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "data",
+        "label": "lanjut"
+      }
+    ]
+  },
+  "event_type_on_task": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.10",
+    "title": "Gambar sintetis tugas salah.",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Awal G",
+        "shape": "event_start",
+        "class": {}
+      },
+      {
+        "id": "b",
+        "label": "Langkah G",
+        "shape": "task",
+        "event_type": "message",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "data",
+        "label": "lanjut"
+      }
+    ]
+  }
+}

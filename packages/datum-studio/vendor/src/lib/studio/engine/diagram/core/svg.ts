@@ -14,7 +14,7 @@ import type { DiagramEdgeKind, FaceRole, ProvenanceMark } from "../../../contrac
 import { symbolBody } from "../../symbols";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure, tspanLines } from "../../chart/core/textfit";
 import { diagramFitActive } from "../fit/state";
-import { nodeTextLayout, type TextBlockLayout } from "../fit/text";
+import { isLabelBelow, labelBelowOutline, labelBelowStrokeMm, nodeTextLayout, type TextBlockLayout } from "../fit/text";
 import { type PyNumber, pyLen, pyNum, pyStr, pyStrNum } from "./pyfmt";
 import type { SheetNode } from "./sheet";
 import { nodeStrokeToken, nodeSymbolId } from "./sheet";
@@ -257,9 +257,65 @@ export function shapeSvg(
       return `<path d="${outlineD(documentOutline(x, y, w, h))}" ${common}/>`;
     case "offpage":
       return `<polygon points="${offpageOutline(x, y, w, h).map(([px, py]) => `${r2(px)},${r2(py)}`).join(" ")}" ${common}/>`;
+    // Swarm 1.2.8 row 54 (VIS-3a, 01f §1.3, G-1/G-2): BPMN events; `nd` is the outline box (`labelBelowOutline`).
+    case "event_start":
+    case "event_intermediate":
+    case "event_end": {
+      const r = Math.min(w, h) / 2;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const ring = `<circle cx="${r2(cx)}" cy="${r2(cy)}" r="${r2(r)}" ${common}/>`;
+      const inner =
+        shape === "event_intermediate"
+          ? `<circle cx="${r2(cx)}" cy="${r2(cy)}" r="${r2(r - EVENT_INNER_GAP_MM)}" fill="none" stroke="${col}" stroke-width="${pyStrNum(sw)}"/>`
+          : "";
+      return ring + inner + eventGlyphSvg(nd.spec.event_type, cx, cy, r, col);
+    }
+    // Row 54: the gateway outline (diamond in its fixed square); the marker glyphs are row 54b (VIS-3b).
+    case "gateway_exclusive":
+    case "gateway_parallel":
+    case "gateway_inclusive":
+    case "gateway_complex": {
+      const pts = `${r2(x + w / 2)},${r2(y)} ${r2(x + w)},${r2(y + h / 2)} ${r2(x + w / 2)},${r2(y + h)} ${r2(x)},${r2(y + h / 2)}`;
+      return `<polygon points="${pts}" ${common}/>`;
+    }
     default:
       return `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>`;
   }
+}
+
+/** Row 54 (VIS-3a, 01f §1.3): ring distance (mm) of the intermediate event's inner circle (r - 0.6 mm). */
+const EVENT_INNER_GAP_MM = 0.6;
+
+/**
+ * Row 54 (VIS-3a, 01f §1.3 event trigger, G-2): marker of an event's `event_type`, centred on the circle centre, hair
+ * stroke in the node stroke colour, no fill, no data-node/data-mark. Size g = `EVENT_GLYPH_FRAC` x the circle diameter
+ * (row 54 eye check: `SHAPE_GLYPH_MM` 2.4 mm read as a speck inside the 8 mm circle; the 01f G-3 band is not used by
+ * events, 01_specs §5.3): message = envelope g wide, 0.7 g high, with its V flap to 0.45 of the height; timer = clock
+ * face of diameter g with a hand to 12 (0.75 r) and one to 3 o'clock (0.55 r). `none` / absent = "".
+ */
+const EVENT_GLYPH_FRAC = 0.5;
+function eventGlyphSvg(type: string | undefined, cx: number, cy: number, r: number, col: string): string {
+  const g = 2 * r * EVENT_GLYPH_FRAC;
+  const hair = `fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"`;
+  if (type === "message") {
+    const w = g;
+    const h = g * 0.7;
+    const x = cx - w / 2;
+    const y = cy - h / 2;
+    return (
+      `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${hair}/>` +
+      `<path d="M ${r2(x)} ${r2(y)} L ${r2(cx)} ${r2(y + h * 0.45)} L ${r2(x + w)} ${r2(y)}" ${hair}/>`
+    );
+  }
+  if (type === "timer") {
+    const r = g / 2;
+    return (
+      `<circle cx="${r2(cx)}" cy="${r2(cy)}" r="${r2(r)}" ${hair}/>` +
+      `<path d="M ${r2(cx)} ${r2(cy - r * 0.75)} L ${r2(cx)} ${r2(cy)} L ${r2(cx + r * 0.55)} ${r2(cy)}" ${hair}/>`
+    );
+  }
+  return "";
 }
 
 /**
@@ -429,6 +485,12 @@ export function markGlyphAnchor(nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spe
   const boxX = nd.x + nd.w - pad;
   const boxY = nd.y + capMm;
   const shape = nd.spec.shape;
+  // Swarm 1.2.8 row 54 (VIS-3a): beside a label-below outline (event/gateway), outside it at its top right, inside the cell.
+  if (isLabelBelow(shape)) {
+    const o = labelBelowOutline(nd);
+    const glyphW = nd.spec.mark ? measure(MARKS[nd.spec.mark] ?? "", role("register_block").size, "data") : 0;
+    return { x: o.x + o.w + labelBelowStrokeMm(shape) / 2 + pad + glyphW, y: boxY };
+  }
   // Swarm 1.2.8 row 53 (VIS-1b): on a predefined process the glyph sits inside the right side bar.
   if (shape === "predefined") return { x: boxX - PREDEFINED_BAR_MM, y: boxY };
   if (shape === "hexagon" || shape === "cylinder" || shape === "circle" || shape === "bus") {
@@ -590,7 +652,15 @@ function clipShapeSvg(shape: string, x: number, y: number, w: number, h: number)
       return `<path d="M${r2(x)} ${r2(y + ry)} a${r2(w / 2)} ${r2(ry)} 0 0 0 ${r2(w)} 0 L${r2(x + w)} ${r2(y + h - ry)} a${r2(w / 2)} ${r2(ry)} 0 0 1 -${r2(w)} 0 Z"/>`;
     }
     case "circle":
+    case "event_start": // row 54 (VIS-3a): x, y, w, h = the outline box
+    case "event_intermediate":
+    case "event_end":
       return `<circle cx="${r2(x + w / 2)}" cy="${r2(y + h / 2)}" r="${r2(Math.min(w, h) / 2)}"/>`;
+    case "gateway_exclusive":
+    case "gateway_parallel":
+    case "gateway_inclusive":
+    case "gateway_complex":
+      return `<polygon points="${r2(x + w / 2)},${r2(y)} ${r2(x + w)},${r2(y + h / 2)} ${r2(x + w / 2)},${r2(y + h)} ${r2(x)},${r2(y + h / 2)}"/>`;
     case "document": // row 53 (VIS-1b)
       return `<path d="${outlineD(documentOutline(x, y, w, h))}"/>`;
     case "offpage":
@@ -659,7 +729,15 @@ export function tagAnchor(
     case "cylinder":
       return { x: x + P, y: y + capMm + h * TAG_INSET_MM.cylinderLidFrac, anchor: "start" };
     case "diamond":
-    case "circle": {
+    case "circle":
+    // row 54 (VIS-3a, §5.3, R20-C37): label-below shapes carry the tag in their label block, one line above the label
+    case "event_start":
+    case "event_intermediate":
+    case "event_end":
+    case "gateway_exclusive":
+    case "gateway_parallel":
+    case "gateway_inclusive":
+    case "gateway_complex": {
       // centred above the label block: first label baseline (fit layout, else the one-line label at the centre)
       // minus one tag line (`tagH` of fit/text.ts, caption x 1.2)
       const first = fit ? fit.label.y : y + h / 2;
@@ -763,7 +841,7 @@ export function nodeTextGroundSvg(
 function firstRenderLayout(nd: SheetNode): ReturnType<typeof nodeTextLayout> {
   const shape = nd.spec.shape;
   const tagged = nd.spec.tag !== undefined && nd.spec.tag !== null && nd.spec.tag !== "";
-  if (shape === "document" || shape === "offpage" || (shape === "cylinder" && tagged)) return nodeTextLayout(nd);
+  if (shape === "document" || shape === "offpage" || (shape === "cylinder" && tagged) || isLabelBelow(shape)) return nodeTextLayout(nd);
   return null;
 }
 
@@ -773,6 +851,7 @@ export interface NodeSvgOptions extends SvgMarkOptions {
 }
 
 export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
+  if (isLabelBelow(nd.spec.shape)) return labelBelowNodeSvg(nd, opts);
   const n = nd.spec;
   // Row 165C (F113-9/F113-10): outline inset at the sheet edge; hatch drawn as vector lines under the outline.
   const { canvas, ...markOpts } = opts;
@@ -813,6 +892,44 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
     const at = tagAnchor(nd, fit); // row 53 (H-TAG, N8-218): inset per shape, from the drawn outline (F113-9 sheet-edge inset)
     out.push(svgText(at.x, at.y, n.tag, { role: "table_header", colourToken: "ink400", anchor: at.anchor }));
   }
+  return out;
+}
+
+/**
+ * Swarm 1.2.8 row 54 (VIS-3a, C12 OP-18-4, 01_specs.md §5.3, register N8-477..N8-480): a BPMN event or gateway. The
+ * outline (the element with `data-node`, G-1) is drawn at its fixed size at the top centre of the layout cell; the hatch
+ * fills only the outline; the label block (tag, label, sub) is one `<g data-label-pos="below">` under it, inside the cell.
+ * Texts never lie on the hatch, so no paper ground is drawn. The mark glyph sits beside the outline (`markGlyphAnchor`).
+ */
+function labelBelowNodeSvg(nd: SheetNode, opts: NodeSvgOptions): string[] {
+  const n = nd.spec;
+  const { canvas, ...markOpts } = opts;
+  const shape = n.shape ?? "box";
+  const sw = labelBelowStrokeMm(shape);
+  const g = insetForStroke({ ...nd, ...labelBelowOutline(nd) }, canvas, sw);
+  const fit = nodeTextLayout(nd);
+  const out: string[] = [];
+  const angle = nodeHatchAngle(nd);
+  if (angle !== null) {
+    const clipId = `datum-hatch-clip-${opts.index ?? escAttr(nd.id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
+    const clipShape = clipShapeSvg(shape, g.x, g.y, g.w, g.h);
+    const hatch = hatchLinesSvg(g.x, g.y, g.w, g.h, angle, clipShape !== null ? { id: clipId, shape: clipShape } : undefined);
+    if (hatch) out.push(hatch);
+  }
+  out.push(shapeSvg(g, nodeStrokeToken(nd), "none", { ...markOpts, strokeW: sw }));
+  const sym = nodeSymbolSvg(nd);
+  if (sym) out.push(sym);
+  const texts: string[] = [];
+  if (n.tag) {
+    const at = tagAnchor(nd, fit);
+    texts.push(svgText(at.x, at.y, n.tag, { role: "table_header", colourToken: "ink400", anchor: at.anchor }));
+  }
+  if (fit) {
+    texts.push(svgTextLines(fit.label, { role: "caption", colourToken: "ink900" }));
+    if (fit.sub) texts.push(svgTextLines(fit.sub, { role: "source_line" }));
+  }
+  out.push(`<g data-label-pos="below">${texts.join("")}</g>`);
+  if (n.mark) out.push(markGlyphSvg(nd));
   return out;
 }
 

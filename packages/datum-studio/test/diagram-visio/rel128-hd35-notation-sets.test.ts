@@ -4,14 +4,16 @@
 // once with one example node, separator "; ".
 // Red at BASE e1f9673772: hexagon carries the string "ISO 5807, BPMN", so stadium + hexagon + diamond (+ parallelogram)
 // is refused as two dialects and the message joins three entries with commas; the BPMN tokens do not exist.
-// The "event_start + diamond + task" case is marked "(after VIS-3)" in 01_specs.md:127 and stays pending until row 54
-// (plan issue I-3).
+// The "event_start + diamond + task" case is marked "(after VIS-3)" in 01_specs.md:127; row 54 (plan issue I-3) turned its
+// test.todo into a test (valid, and drawn with the event outline and 0 geometry defects).
 // Namespace import: at BASE `notation_set` does not exist, so the red run fails on assertions, not on a link error.
 import { useStudioEnv } from "../ported/_env"
 useStudioEnv()
 import { describe, expect, test } from "bun:test"
 import * as tokens from "../../vendor/src/lib/studio/engine/diagram/core/tokens"
 import { loadSpec, validateSpec } from "../../vendor/src/lib/studio/engine/diagram/core/spec"
+import * as buildMod from "../../vendor/src/lib/studio/engine/diagram/build"
+import * as lintMod from "../../vendor/src/lib/studio/engine/diagram/fit/lint"
 import fx from "../fixtures/syn128/hd35_sets.json"
 
 type J = Record<string, any>
@@ -54,7 +56,20 @@ describe("rel128-hd35 notation sets (AC-HD35)", () => {
 
   for (const c of fx.cases as Case[]) {
     if (c.after) {
-      test.todo(`${c.name}: valid {${(c.common ?? []).join(", ")}} — pending ${c.after}`, () => {})
+      // Row 54 (plan I-3, C42): the "(after VIS-3)" case is valid AND drawn — the event outline exists since row 54, so the
+      // figure builds and the event adds no geometry defect: the lint gives exactly what the same figure gives with a box
+      // in the event's place (this legacy list flow's diamond fan has two pre-existing connector-end findings).
+      test(`${c.name}: valid {${(c.common ?? []).join(", ")}} and drawn; the event adds no geometry defect (${c.after})`, () => {
+        expect(fails(c.shapes).map((i: J) => i.checkId)).toEqual([])
+        const lint = (shapes: string[]) => {
+          const r = (buildMod as J).buildDiagramSvg(spec(shapes), { release: false })
+          return { svg: r.svg as string, defects: (lintMod as J).lintDiagramGeometry(r.svg).defects as J[] }
+        }
+        const ev = lint(c.shapes)
+        expect(/<circle\b[^>]*data-node="n1"/.test(ev.svg)).toBe(true)
+        expect(ev.defects.filter((d) => d.other === "n1")).toEqual([])
+        expect(ev.defects).toEqual(lint(c.shapes.map((s) => (s.startsWith("event_") ? "box" : s))).defects)
+      })
       continue
     }
     test(`${c.name}: ${c.expect === "valid" ? `valid {${(c.common ?? []).join(", ") || "universal"}}` : "refused DATUM-35"}`, () => {

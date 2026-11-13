@@ -117,6 +117,11 @@ interface TextEl {
   samples: Pt[];
   /** Row 53 (H-TAG): anchor point (x, baseline) of a requirement-tag-like text (start or middle, bold, tracked). */
   tagAt?: Pt;
+  /**
+   * Swarm 1.2.8 row 54 (VIS-3a, §5.3, N8-480): index in `nodes` of the outline a text is the label block of (text inside
+   * `<g data-label-pos="below">`, which follows its node's outline element).
+   */
+  belowOf?: number;
 }
 
 interface NodeShape {
@@ -219,6 +224,8 @@ function scan(svg: string): Scan {
   // badge, diagram/core/svg.ts nodeSymbolSvg) is cell units: its text stays skipped, as in row 124.
   const symStack: { read: boolean; dx: number; dy: number }[] = [];
   let prevKnock = false;
+  // Row 54 (VIS-3a): node index of the open `<g data-label-pos="below">` (it holds only texts, so the next `</g>` closes it).
+  let belowOf: number | null = null;
   const re = /<text\b([^>]*)>([\s\S]*?)<\/text>|<(\/?)([a-zA-Z]+)\b([^>]*?)(\/?)>/g;
   for (let k = re.exec(svg); k; k = re.exec(svg)) {
     if (k[1] !== undefined) {
@@ -279,6 +286,7 @@ function scan(svg: string): Scan {
         knock,
         samples: samplesOf(box),
         ...(tagLike ? { tagAt: [x0, y0] as Pt } : {}),
+        ...(belowOf !== null ? { belowOf } : {}),
       });
       continue;
     }
@@ -286,6 +294,7 @@ function scan(svg: string): Scan {
     const tag = k[4];
     const selfClose = k[6] === "/";
     if (closing) {
+      if (tag === "g" && belowOf !== null && !symStack.length) belowOf = null;
       if (tag === "defs") inDefs = Math.max(0, inDefs - 1);
       if (tag === "g" && symStack.length) symStack.pop();
       continue;
@@ -300,6 +309,10 @@ function scan(svg: string): Scan {
       continue;
     }
     if (symStack.length) continue;
+    if (tag === "g" && !selfClose && /\bdata-label-pos="below"/.test(k[5]) && nodes.length) {
+      belowOf = nodes.length - 1;
+      continue;
+    }
     if (tag === "defs" && !selfClose) {
       inDefs++;
       prevKnock = false;
@@ -735,7 +748,7 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
       });
       if (hit) defects.push({ kind: "lineThroughText", text: t.text });
     }
-    const over = nodes.some((n) => {
+    const overNode = nodes.find((n) => {
       if (n.box[2] + n.half < b[0] || n.box[0] - n.half > b[2] || n.box[3] + n.half < b[1] || n.box[1] - n.half > b[3]) return false;
       if (n.circle) {
         const c = n.circle;
@@ -743,7 +756,21 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
       }
       return t.samples.some((p) => onPolylines(p, n.outline, n.half));
     });
-    if (over) defects.push({ kind: "textOverNode", text: t.text });
+    const over = overNode !== undefined;
+    // Row 54 (VIS-3a): a label-below text names the node whose outline it touches.
+    if (over) defects.push({ kind: "textOverNode", text: t.text, ...(t.belowOf !== undefined ? { other: overNode.id ?? "" } : {}) });
+    // Row 54 (VIS-3a, §5.3): a label-below block lies wholly under its own outline (stroke included) and inside no
+    // other node; else `textOverNode` naming the node it overlaps. Its host is the cell, not the outline box, so the
+    // `textExceedsNode` test below (centre inside a node box) does not apply to it.
+    if (t.belowOf !== undefined) {
+      const own = nodes[t.belowOf];
+      if (own && !over && b[1] < own.box[3] + own.half - 1e-6 && b[0] < own.box[2] + own.half && b[2] > own.box[0] - own.half) {
+        defects.push({ kind: "textOverNode", text: t.text, other: own.id ?? "" });
+      }
+      const hit = nodes.find((n, ni) => ni !== t.belowOf && n.id !== null && b[0] < n.box[2] + n.half && b[2] > n.box[0] - n.half && b[1] < n.box[3] + n.half && b[3] > n.box[1] - n.half);
+      if (hit) defects.push({ kind: "textOverNode", text: t.text, other: hit.id ?? "" });
+      continue;
+    }
     const cx = (b[0] + b[2]) / 2;
     const cy = (b[1] + b[3]) / 2;
     const host = nodes.find((n) => n.id !== null && cx > n.box[0] && cx < n.box[2] && cy > n.box[1] && cy < n.box[3]);
