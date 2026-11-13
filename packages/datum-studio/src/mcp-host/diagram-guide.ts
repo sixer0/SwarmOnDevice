@@ -14,6 +14,9 @@
  * Fix row FX-10 (gate 04 F6/F7/F9; C19a, C19b): the figure-gate sentence is the one shared with the five other gate
  * texts; label limits are the engine hints (~20 / ~40, build/autofit.ts and fitlabels.ts); the defect list is read
  * from PREVIEW_ISSUE_CLASS. Pinned by test/fx10/fx10-figure-gate-wording.test.ts.
+ *
+ * Swarm 1.2.7 row 37 (N-6/F-6, N7-069): one Norms line names GEOM_T03_CODES and where ENTRY_COLLISION fires
+ * (ENTRY_COLLISION_MM). Other lines were shortened to keep the resource under 3000 B (the pin is not moved).
  */
 import { commonV2Schema } from "@/lib/studio/contract/schema/v2/common.schema"
 import { DIAGRAM_GUIDE_URI } from "@/lib/studio/contract/schema/v2/refusal-hints"
@@ -22,7 +25,8 @@ import { GRAPH_EDGE_INSET_MM } from "@/lib/studio/engine/diagram/core/sheet"
 import { LATTICE_X } from "@/lib/studio/engine/diagram/core/tokens"
 import { FLOW_LR_MAX_PARALLEL, flowLrMaxRanks, flowTbMaxPerRank } from "@/lib/studio/engine/diagram/layout-a/flow"
 import { FANOUT_SPLIT_MIN } from "@/lib/studio/engine/diagram/build/route"
-import { PREVIEW_ISSUE_CLASS } from "./local-api/routes/figure-preview-figure"
+import { ENTRY_COLLISION_MM } from "@/lib/studio/engine/diagram/fit/lint"
+import { GEOM_T03_CODES, PREVIEW_ISSUE_CLASS } from "./local-api/routes/figure-preview-figure"
 
 export { DIAGRAM_GUIDE_URI }
 export const DIAGRAM_GUIDE_NAME = "skema-diagram"
@@ -100,17 +104,17 @@ export function diagramGuideText(): string {
   const req = (all: string[], r: string[]) => all.map((k) => (r.includes(k) ? `${k}*` : k)).join(", ")
   const defectCodes = Object.keys(PREVIEW_ISSUE_CLASS).filter((k) => PREVIEW_ISSUE_CLASS[k] === "defect")
   return [
-    "# Diagram block (type \"diagram\"): fields studio_figure_preview and chapters accept",
+    "# Diagram block fields (studio_figure_preview, chapters)",
     "",
-    "`*` = required. Any other field is refused (SCHEMA_INVALID names it). Layout, size, colour and line style come from the template.",
+    "`*` = required; other fields: SCHEMA_INVALID. Template sets layout, size, colour, line style.",
     "",
-    `- block: ${req(f.blockFields, f.blockRequired)}. Exactly one of spec (new drawing) or artifactId (stored). caption/source = {text} objects; the title is the caption.`,
+    `- block: ${req(f.blockFields, f.blockRequired)}. One of spec (new) or artifactId (stored). caption/source = {text}; caption = title.`,
     `- spec: ${req(f.specFields, f.specRequired)}. family: ${f.families.join(", ")}.`,
-    `- node: ${req(f.nodeFields, f.nodeRequired)}. shape: ${f.shapes.join(", ")}. mark: ${f.marks.join(", ")} (provenance glyph; needs a published key row, DATUM-34).`,
-    `- node.class (object, may be {}): ${f.classFields.join(", ")}. Placement (tier/lane/col/row) goes here, not on the node.`,
-    `- edge: ${req(f.edgeFields, f.edgeRequired)}. kind: ${f.edgeKinds.join(", ")} (kind is the line style; no color/style/dash field).`,
-    `- zone: ${req(f.zoneFields, f.zoneRequired)} (members = node ids).`,
-    "- legend, notes, sources: arrays of strings.",
+    `- node: ${req(f.nodeFields, f.nodeRequired)}. shape: ${f.shapes.join(", ")}. mark: ${f.marks.join(", ")} (glyph; needs a key row, DATUM-34).`,
+    `- node.class (may be {}; placement here, not on node): ${f.classFields.join(", ")}.`,
+    `- edge: ${req(f.edgeFields, f.edgeRequired)}. kind: ${f.edgeKinds.join(", ")} (kind = line style; no color/dash field).`,
+    `- zone: ${req(f.zoneFields, f.zoneRequired)} (members: node ids).`,
+    "- legend, notes, sources: string arrays.",
     `- direction (flow only): "TB" or "LR"; ranks nodes by the edges, parallel branches side by side. Rank max: TB ${flowTbMaxPerRank(128, lx)} @128 mm, ${flowTbMaxPerRank(166, lx)} @166 mm; LR ${FLOW_LR_MAX_PARALLEL}. LR max ${flowLrMaxRanks(128, lx)} ranks @128 mm, ${flowLrMaxRanks(166, lx)} @166 mm. Without it: list order (per_row), FLOW_SERIALISED if branches serialise.`,
     "",
     "Norms:",
@@ -124,9 +128,11 @@ export function diagramGuideText(): string {
     `- Fan-out of ${FANOUT_SPLIT_MIN} or more edges is sub-ranked by Studio; over a rank max, split it.`,
     "- Preview a shape before promising it.",
     "- A/B: randomise which side each version is on before a judge sees them.",
-    "- After every revision read FIGURE_GRAPH_DELTA; fix any unplanned node/edge change.",
+    "- After every revision read FIGURE_GRAPH_DELTA; fix any unplanned change.",
+    // Row 37 (1.2.7, N-6/F-6, N7-069): the T-03 codes and where ENTRY_COLLISION fires; shortened for the 3000 B budget.
+    `- T-03 codes (GEOM_T03_CODES): ${GEOM_T03_CODES.join(", ")}; ENTRY_COLLISION fires on hand-drawn or imported SVG (engine keeps ends at least ${ENTRY_COLLISION_MM} mm apart).`,
     "",
-    "Minimal valid block:",
+    "Example:",
     "```json",
     JSON.stringify(DIAGRAM_GUIDE_EXAMPLE),
     "```",

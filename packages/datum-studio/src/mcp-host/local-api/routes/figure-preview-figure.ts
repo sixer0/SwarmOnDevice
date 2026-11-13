@@ -90,6 +90,15 @@ export const PREVIEW_ISSUE_CLASS: Readonly<Record<string, "notice" | "defect">> 
   FLOW_SERIALISED: "defect",
 };
 
+/**
+ * Swarm 1.2.7 row 37 (N-6/F-6, register N7-069, decision C3): the three connector-end (T-03) preview codes, in this
+ * order. Values = engine `CHECK` codes of `edgeEntryCollision`, `stubSegment`, `arrowTangent`
+ * (V engine/diagram/build/autofit.ts); after render they fail FIGURE_FIT as `FIG_GEOMETRY`. Class stays "defect"
+ * (`GEOM_*`, {@link previewIssueClass}). Scope: fires on hand-drawn or imported SVG; engine layouts keep connector
+ * ends at least 1.5 mm apart, so on an engine-built figure STUB or TANGENT is the usual one. No check reorder.
+ */
+export const GEOM_T03_CODES = ["GEOM_ENTRY_COLLISION", "GEOM_STUB_SEGMENT", "GEOM_ARROW_TANGENT"] as const;
+
 /** Row 73 (W-03): class of one issue: FAIL and `GEOM_*` are always defects; then the table; then INFO_CODES -> notice. */
 export function previewIssueClass(checkId: string, status?: string): "notice" | "defect" {
   if (status === "FAIL" || checkId.startsWith("GEOM_")) return "defect";

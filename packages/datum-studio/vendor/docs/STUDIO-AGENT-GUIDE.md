@@ -568,6 +568,10 @@ memperbaikinya sendiri; perbaikan datang dari spec.
 | `GEOM_STUB_SEGMENT` / `stubSegment` | potongan konektor lurus di bawah 2,0 mm yang tidak menuju apa pun | pindahkan label tepi ke segmen terpanjang atau persingkat label tepi (maks ~20 karakter) |
 | `GEOM_ARROW_TANGENT` / `arrowTangent` | ruas terakhir dalam 15 derajat dari sisi simpul yang dituju: kepala panah sejajar sisi, bukan tegak lurus | ubah urutan simpul agar konektor masuk tegak lurus ke sisi simpul sasaran |
 
+Cakupan: GEOM_ENTRY_COLLISION muncul pada SVG gambar tangan atau impor; tata letak mesin menjaga ujung
+konektor sedikitnya 1,5 mm, jadi pada figur buatan mesin yang biasa muncul GEOM_STUB_SEGMENT atau
+GEOM_ARROW_TANGENT.
+
 ### 4.2 Peran paragraf dan rel bukti
 
 Medan `role` paragraf menyatakan makna, bukan tampilan. Delapan nilai diterima (`PARAGRAPH_ROLES_V2`
@@ -1564,6 +1568,7 @@ setelah gerbang mesin DAN gerbang mata atas PNG hasil render. Langkahnya di seks
 `studio_figure_preview { documentId, pid, standalone: true, downloadDir, png: true }` memeriksa figur
 sendirian (caption, KUNCI, dan SUMBER di dalam gambar) dengan batas angka figur. Pratinjau mandiri
 tidak menggantikan pratinjau inline atau pemeriksaan halaman.
+png: true hanya bersama standalone: true dan downloadDir; selain itu INVALID_ARGUMENT.
 
 ### 8.5 Lint: semua temuan satu cek
 
@@ -1592,6 +1597,7 @@ adalah blok `chart`, `diagram`, dan `image`. Bawaannya `null`, artinya tanpa kuo
 menggagalkan dokumen yang melampaui kuota, pada figur pertama yang melewati batas:
 `<n> gambar melebihi kuota <q> per dokumen (figure.quota.maxPerDocument; T-18); kurangi gambar atau
 catat alasan pada figure.quota.exceptionReason`.
+Tidak ada kode kuota terpisah (mis. R-70 atau KUOTA): kuota dan pengecualiannya adalah keadaan cek D22.
 
 Ada dua tindakan agen:
 
