@@ -109,8 +109,8 @@
       "reference": "DX/PD: adapter S64 scripts/parity/reference/doc/ref_doc.py (DatumDocx Garis A) lalu soffice; HT: tanpa acuan Python (lint + snapshot)",
       "referenceCli": "H02",
       "tier": "TERBIT",
-      "sha256": "a3478624220518c1f7da603bce738f840aefe391be9be4740dd6d97379e6649f",
-      "bytes": 46356,
+      "sha256": "c3db786ebc5a35b6dbdeb78775afa43c100d7a3180348feaf5baf298f053e0d4",
+      "bytes": 46319,
       "notes": "halaman depan auto, toc field, 2 bagian, tanda tangan, rel bukti moda A (layout.railMode)"
     },
     {
@@ -138,8 +138,8 @@
       "reference": "DX/PD: acuan Python dari pasangan v1 doc/doc_terbit_report.json (ref_doc.py hanya membaca v1); HT: tanpa acuan Python",
       "referenceCli": "H02",
       "tier": "TERBIT",
-      "sha256": "959a4192dba28b2551a0bc91e4df3db410e2e569e51beffd42e14bc2467922d7",
-      "bytes": 46327,
+      "sha256": "a88fae036a5bf09a3987cd3c78b30aa9e2b1d7cda0bed23c5a61ec1233fafc74",
+      "bytes": 46286,
       "notes": "salinan studio.doc/v2 dari doc/doc_terbit_report.json lewat adaptor SR-09 (SR-41)"
     },
     {
@@ -229,8 +229,8 @@
       "reference": "HS datum_diagram.build_svg (Garis A)",
       "referenceCli": "H03 --kind diagram",
       "family": "topology",
-      "sha256": "63b34dc5a292674fbbb1ad51c039314199d111dfe6fea066c09971a33950b357",
-      "bytes": 2056
+      "sha256": "8ca1887c3ea4cd9e4981f228eafea9a62a498fb7a0e3b542dff29b9b7d396d65",
+      "bytes": 2033
     },
     {
       "id": "dg-stack",
