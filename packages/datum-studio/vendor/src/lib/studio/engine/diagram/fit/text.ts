@@ -53,6 +53,8 @@ export function innerWidthMm(shape: DiagramShape | undefined, w: number, h: numb
       return Math.min(w, h) * 0.7 - pad * 0.5;
     case "stadium":
       return w - Math.min(h, w) * 0.3 - pad;
+    case "predefined": // row 53 (VIS-1b, 01f §1.1): between the two side bars (b = 1.2 mm, core/svg.ts)
+      return w - 2 * PREDEFINED_BAR_MM - pad;
     default:
       return w - pad;
   }
@@ -88,11 +90,23 @@ function tagH(n: Pick<DiagramNode, "tag">): number {
   return truthy(n.tag) ? capMm() * 1.2 : 0;
 }
 
+/**
+ * Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1): share of the node height below the text box. Document: the wave band 2a,
+ * a = 0.08 h; off-page reference: the point below the straight sides (0.3 h). Same fractions as `core/svg.ts`.
+ */
+const PREDEFINED_BAR_MM = 1.2; // = the doubled inner-line inset
+function footFrac(shape: DiagramShape | undefined): number {
+  if (shape === "document") return 2 * 0.08;
+  if (shape === "offpage") return 1 - 0.7;
+  return 0;
+}
+
 /** Tinggi minimum simpul untuk `label`/`sub` berbaris (bentuk diamond butuh dua kali blok). */
 function neededHeight(n: Pick<DiagramNode, "shape" | "tag">, labelLines: number, subLines: number): number {
   const b = blockMm(labelLines, subLines);
   const core = n.shape === "diamond" || n.shape === "hexagon" ? b * 2 : b;
-  return core + 2 * V_MARGIN_MM + tagH(n);
+  // row 53: document / offpage need the text box above the wave / point (needed height / (1 - foot))
+  return (core + 2 * V_MARGIN_MM + tagH(n)) / (1 - footFrac(n.shape));
 }
 
 /**
@@ -204,18 +218,25 @@ export function nodeTextLayout(nd: { x: number; y: number; w: number; h: number;
   }
   // Silinder: busur tutup atas (ry = 0,16 h, digambar sampai y + 2 ry) memotong label di pusat.
   const lid = n.shape === "cylinder" ? nd.h * 0.16 * 2 + 0.3 : 0;
+  // Row 53 (VIS-1b): document / offpage keep their text above the wave / point, so they always get a layout.
+  const foot = nd.h * footFrac(n.shape);
   const probe = planNodeText(n, nd.w, nd.h, NODE_HARD_MAX_LINES);
-  const lidHit = lid > 0 && nd.y + nd.h / 2.0 - FONT_ASCENT_EM * capMm() * (1 - 0.12) < nd.y + lid;
+  // Row 53 (H-TAG): with a tag the cylinder's free top is below the lid AND the tag line.
+  const lidTop = lid > 0 && tagH(n) > 0 ? lid + tagH(n) : lid;
+  const lidHit = (lid > 0 && nd.y + nd.h / 2.0 - FONT_ASCENT_EM * capMm() * (1 - 0.12) < nd.y + lidTop) || foot > 0;
   if (!probe.wrapped && !lidHit) return null;
   const maxLines = linesForHeight(n, nd.h - lid, probe.sub.length);
   const plan = planNodeText(n, nd.w, nd.h, maxLines);
   if (!plan.wrapped && !lidHit) return null;
   // Blok label + sub dipusatkan vertikal di area di bawah tag (atau di bawah tutup silinder).
-  const top = nd.y + Math.max(tagH(n), lid);
+  // Row 53 (H-TAG): a cylinder's tag sits below the lid (core/svg.ts tagAnchor), so the block starts below both.
+  // Row 53 (H-TAG): a doubled node's tag sits inside its inner rectangle (1.2 mm down, core/svg.ts tagAnchor).
+  const tagTop = n.shape === "doubled" && tagH(n) > 0 ? PREDEFINED_BAR_MM + tagH(n) : tagH(n);
+  const top = nd.y + (lidTop > lid ? lidTop : Math.max(tagTop, lid));
   const L = plan.label.length;
   const S = plan.sub.length;
   const total = blockMm(L, S);
-  const blockTop = top + (nd.y + nd.h - top - total) / 2.0;
+  const blockTop = top + (nd.y + nd.h - foot - top - total) / 2.0;
   const y = blockTop + FONT_ASCENT_EM * capMm();
   const out: NodeTextLayout = { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
   if (S > 0) out.sub = { x: cx, y: y + L * capLineMm(), lines: plan.sub, lineMm: subLineMm() };

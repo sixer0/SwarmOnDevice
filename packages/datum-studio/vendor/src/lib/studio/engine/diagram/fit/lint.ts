@@ -84,6 +84,8 @@ export const ENTRY_COLLISION_MM = 1.5;
 /** T-03 kinds: counted and failed by the gate, not part of `score` (see `DiagramGeomLint.score`). */
 const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set(["edgeEntryCollision", "stubSegment", "arrowTangent"]);
 export const STUB_SEGMENT_MIN_MM = 2.0;
+/** Row 53 (H-TAG): tolerance of the tag-inside-outline check (0.01 mm output grid plus float noise). */
+const TAG_OUTSIDE_MIN_MM = 0.05;
 export const ARROW_TANGENT_TOL_DEG = 15;
 
 export interface DiagramGeomDefect {
@@ -113,6 +115,8 @@ interface TextEl {
   area: number;
   knock: boolean;
   samples: Pt[];
+  /** Row 53 (H-TAG): anchor point (x, baseline) of a requirement-tag-like text (start or middle, bold, tracked). */
+  tagAt?: Pt;
 }
 
 interface NodeShape {
@@ -120,6 +124,8 @@ interface NodeShape {
   /** Garis tepi (polilinear tertutup atau terbuka) dan setengah tebal goresan. */
   outline: Pt[][];
   circle?: { cx: number; cy: number; r: number };
+  /** Row 53 (H-TAG): corner radius of a rounded `<rect>` (stadium), read only by the tag containment check. */
+  rx?: number;
   half: number;
   box: Box;
 }
@@ -264,12 +270,15 @@ function scan(svg: string): Scan {
       } else lines.push({ x: x0, y: y0, s: unesc(body.replace(/<[^>]+>/g, "")) });
       const box = textBlockBox(lines, sizeMm, anchor, face, bold, track);
       if (!box) continue;
+      // Row 53 (H-TAG): the tag (role table_header: weight 600, tracked) is the only bold tracked text a node draws.
+      const tagLike = bold && track > 0 && (anchor === "start" || anchor === "middle") && lines.length === 1;
       texts.push({
         text: lines.map((l) => l.s).join(" "),
         box,
         area: Math.max(1e-9, (box[2] - box[0]) * (box[3] - box[1])),
         knock,
         samples: samplesOf(box),
+        ...(tagLike ? { tagAt: [x0, y0] as Pt } : {}),
       });
       continue;
     }
@@ -326,12 +335,14 @@ function scan(svg: string): Scan {
     const half = (Number(a["stroke-width"] ?? 0) || 0) / 2;
     let outline: Pt[][] = [];
     let circle: NodeShape["circle"];
+    let rx: number | undefined;
     if (tag === "rect") {
       const x = Number(a.x ?? 0);
       const y = Number(a.y ?? 0);
       const w = Number(a.width ?? 0);
       const h = Number(a.height ?? 0);
       outline = [[[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]];
+      if (Number(a.rx ?? 0) > 0) rx = Math.min(Number(a.rx), w / 2, h / 2);
     } else if (tag === "polygon") {
       const v = (a.points ?? "").trim().split(/[\s,]+/).map(Number);
       const pts: Pt[] = [];
@@ -348,7 +359,7 @@ function scan(svg: string): Scan {
       ? [circle.cx - circle.r, circle.cy - circle.r, circle.cx + circle.r, circle.cy + circle.r]
       : bboxOf(outline.flat());
     if (!Number.isFinite(box[0])) continue;
-    nodes.push({ id: nodeId ?? null, outline, circle, half, box });
+    nodes.push({ id: nodeId ?? null, outline, circle, ...(rx !== undefined ? { rx } : {}), half, box });
   }
   return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, bands };
 }
@@ -628,6 +639,40 @@ function arrowTangents(links: ReadonlyArray<ReadonlyArray<Pt>>, nodes: readonly 
   return out;
 }
 
+/** Row 53 (H-TAG): ray-cast point-in-polygon on a closed ring (the last point may repeat the first). */
+function inRing(p: Pt, ring: readonly Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Row 53 (H-TAG, 01f §5.4): how far (mm) the point lies outside the region the node outline encloses (0 inside), or
+ * null when the outline encloses no area (bus rail, open path). Circle and rounded rect exact; else the outline ring.
+ */
+function outsideRegion(p: Pt, n: NodeShape): number | null {
+  if (n.circle) return Math.max(0, Math.hypot(p[0] - n.circle.cx, p[1] - n.circle.cy) - n.circle.r);
+  if (n.rx !== undefined) {
+    const [x0, y0, x1, y1] = n.box;
+    const r = n.rx;
+    const qx = Math.max(x0 + r - p[0], 0, p[0] - (x1 - r));
+    const qy = Math.max(y0 + r - p[1], 0, p[1] - (y1 - r));
+    return Math.max(0, Math.hypot(qx, qy) - r);
+  }
+  const ring = n.outline[0];
+  if (!ring || n.outline.length !== 1 || ring.length < 4) return null;
+  const distinct = new Set(ring.map((q) => `${q[0]},${q[1]}`));
+  if (distinct.size < 3) return null;
+  if (inRing(p, ring)) return 0;
+  let d = Infinity;
+  for (let k = 0; k < ring.length; k++) d = Math.min(d, segDist(p, ring[k], ring[(k + 1) % ring.length]));
+  return d;
+}
+
 function emptyCounts(): Record<DiagramDefectKind, number> {
   return {
     textOverlap: 0,
@@ -666,6 +711,17 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
     const [x0, y0, x1, y1] = t.box;
     const over = Math.max(0, -x0, x1 - W, -y0, y1 - H);
     if (over > OUTSIDE_MIN_MM) defects.push({ kind: "textOutside", text: t.text, amount: Number(over.toFixed(2)) });
+    // Row 53 (H-TAG, 01f §5.4): a requirement tag whose anchor lies in a node's box must have its ink inside that
+    // node's outline (stadium corner, diamond side, cylinder lid); else `textOutside` naming the node.
+    const at = t.tagAt;
+    if (!at || over > OUTSIDE_MIN_MM) continue;
+    const host = nodes.find((n) => n.id !== null && at[0] > n.box[0] && at[0] < n.box[2] && at[1] > n.box[1] && at[1] < n.box[3]);
+    if (!host) continue;
+    const corners: Pt[] = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    const out = corners.map((c) => outsideRegion(c, host));
+    if (out.some((v) => v === null)) continue;
+    const worst = Math.max(...(out as number[]));
+    if (worst > TAG_OUTSIDE_MIN_MM) defects.push({ kind: "textOutside", text: t.text, other: host.id ?? "", amount: Number(worst.toFixed(2)) });
   }
   // teks x konektor / garis tepi simpul
   for (const t of texts) {

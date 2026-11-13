@@ -210,6 +210,13 @@ function textRoom(shape: DiagramShape, b: Box): { w: number; h: number } {
       return { w: Math.min(b.w, b.h) * 0.72, h: Math.min(b.w, b.h) * 0.72 };
     case "cylinder":
       return { w: b.w * 0.88, h: b.h * 0.62 };
+    // Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1): between the side bars; above the wave; in the top 0.7 h.
+    case "predefined":
+      return { w: b.w * 0.88 - 2 * 1.2, h: b.h * 0.86 };
+    case "document":
+      return { w: b.w * 0.88, h: b.h * (1 - 2 * 0.08) * 0.86 };
+    case "offpage":
+      return { w: b.w * 0.88, h: b.h * 0.7 * 0.86 };
     default:
       return { w: b.w * 0.88, h: b.h * 0.86 };
   }
@@ -303,12 +310,36 @@ function drawNode(ctx: GCtx, n: SheetNode, b: Box, index: number, stroke: string
     case "bus":
       doc.line(x, y + h / 2, x + w, y + h / 2, stroke, strokeW * 3, { mark });
       return true;
+    // Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1; same geometry as diagram/core/svg.ts shapeSvg).
+    case "predefined":
+      doc.rect(x, y, w, h, pal.paper, o);
+      doc.line(x + 1.2, y, x + 1.2, y + h, stroke, 0.2);
+      doc.line(x + w - 1.2, y, x + w - 1.2, y + h, stroke, 0.2);
+      break;
+    case "document": {
+      const a = h * 0.08;
+      const pts: Array<[number, number]> = [[x, y], [x + w, y], [x + w, y + h - a]];
+      for (let i = 1; i <= 16; i++) pts.push([x + w - (w * i) / 16, y + h - a - a * Math.sin((2 * Math.PI * i) / 16)]);
+      poly(pts);
+      break;
+    }
+    case "offpage":
+      poly([
+        [x, y],
+        [x + w, y],
+        [x + w, y + h * 0.7],
+        [x + w / 2, y + h],
+        [x, y + h * 0.7],
+      ]);
+      break;
     default:
       doc.rect(x, y, w, h, pal.paper, o);
   }
   const fit = fitLines(ctx, n.spec.label ?? n.id, textRoom(shape, b), basePt);
   const lh = ptToMm(fit.size) * 1.2;
-  const y0 = y + h / 2 - ((fit.lines.length - 1) * lh) / 2 + ptToMm(fit.size) * 0.35;
+  // row 53: document / offpage centre their text above the wave / point
+  const textH = shape === "document" ? h * (1 - 2 * 0.08) : shape === "offpage" ? h * 0.7 : h;
+  const y0 = y + textH / 2 - ((fit.lines.length - 1) * lh) / 2 + ptToMm(fit.size) * 0.35;
   fit.lines.forEach((l, k) => doc.text(x + w / 2, y0 + k * lh, l, { sizePt: fit.size, fill: pal.ink900, anchor: "middle" }));
   return fit.fits;
 }

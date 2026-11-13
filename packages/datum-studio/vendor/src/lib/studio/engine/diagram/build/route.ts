@@ -114,6 +114,43 @@ function anchor(node: SheetNode, side: Side, slot: number, slots: number): Pt {
   return [node.x, node.y + node.h * frac];
 }
 
+/**
+ * Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1, connection points): the bottom side of a document is its wave and the bottom of an
+ * off-page reference its point, not the node box. A connector end on the box bottom (x inside the box) whose last piece is
+ * vertical is moved up onto that outline at the same x (same fractions as `core/svg.ts`: wave a = 0.08 h around
+ * y + h - a, one sine period, right half up; pentagon sides straight to 0.7 h). Other shapes and ends: unchanged.
+ */
+function outlineBottomY(node: SheetNode, x: number): number | null {
+  const { x: nx, y, w, h } = node;
+  if (!(w > 0) || x < nx - 1e-6 || x > nx + w + 1e-6) return null;
+  if (node.spec.shape === "document") {
+    const a = h * 0.08;
+    return y + h - a - a * Math.sin((2 * Math.PI * (nx + w - x)) / w);
+  }
+  if (node.spec.shape === "offpage") return y + h - h * 0.3 * (Math.abs(x - (nx + w / 2)) / (w / 2));
+  return null;
+}
+function glueEnd(pts: Pt[], node: SheetNode, atEnd: boolean): Pt[] {
+  if (pts.length < 2 || (node.spec.shape !== "document" && node.spec.shape !== "offpage")) return pts;
+  const k = atEnd ? pts.length - 1 : 0;
+  const nb = atEnd ? pts.length - 2 : 1;
+  const p = pts[k];
+  if (Math.abs(p[1] - (node.y + node.h)) > 1e-6 || Math.abs(pts[nb][0] - p[0]) > 1e-6) return pts;
+  const yy = outlineBottomY(node, p[0]);
+  if (yy === null || Math.abs(yy - p[1]) < 1e-9) return pts;
+  const out = [...pts];
+  out[k] = [p[0], yy];
+  return out;
+}
+/** Row 53: `glueEnd` over routes built elsewhere (ELK); `d` is rebuilt only for a moved edge. */
+function glueToOutlines(routes: RoutedEdge[], sheet: Sheet): RoutedEdge[] {
+  return routes.map((r) => {
+    const pts = r.points as Pt[];
+    const glued = glueEnd(glueEnd(pts, nodeOf(sheet, r.from), false), nodeOf(sheet, r.to), true);
+    return glued === pts ? r : { ...r, points: glued, d: polylineD(glued) };
+  });
+}
+
 function rectHit(p: Pt, q: Pt, node: SheetNode, pad = 0.05): boolean {
   const x1 = node.x + pad;
   const y1 = node.y + pad;
@@ -296,7 +333,7 @@ function sideCandidates(a: SheetNode, b: SheetNode): SidePair[] {
 export function routePlaced(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
   clearFirstRender(); // Swarm 1.2.8 row 35 (H-NB2): a new first-render routing starts with no recorded self-correction
   const elk = activeElkRoutes(s, sheet);
-  if (elk) return elk;
+  if (elk) return glueToOutlines(elk, sheet);
   if (s.family === "rack" && diagramFitRoute("lineThroughText")) {
     diagramFitNote("RACK_ROUTE", "konektor rak dirute pada jalur di sisi kanan badan rak", "tidak ada");
     return routeRackSide(s, sheet);
@@ -607,7 +644,8 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   // nothing; this pass's record (the last pass is the one drawn) goes to autoFitDiagram. No-op inside the fit.
   noteFirstRender(s, fanKept ? [fanNote] : []);
   edges.forEach((e, i) => {
-    const pts = routes[i];
+    // Swarm 1.2.8 row 53 (VIS-1b): an end on the bottom side of a document / offpage lands on the wave / point.
+    const pts = glueEnd(glueEnd(routes[i], nodeOf(sheet, e.from), false), nodeOf(sheet, e.to), true);
     const style = edgeRouteOf(e);
     // Row 56: the style rides on the routed edge (absent for orthogonal, so old objects are unchanged).
     if (style) out.push({ from: e.from, to: e.to, kind: e.kind, label: e.label, points: pts, d: polylineD(pts), route: style } as RoutedEdge);

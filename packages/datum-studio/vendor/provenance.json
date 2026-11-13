@@ -125,7 +125,7 @@
   "patched": 164,
   "replaced": 12,
   "added": 30,
-  "bytes": 10054678
+  "bytes": 10069270
  },
  "files": [
   {
@@ -1751,9 +1751,10 @@
   {
    "path": "src/lib/studio/engine/chart/family-g/flowchart.ts",
    "status": "patched",
-   "bytes": 18947,
+   "bytes": 20221,
    "source_sha256": "d34ed3f70e6f4cc782edbd7ed6972db55e3a5eb5ab7caf364629329984eab563",
-   "sha256": "5d525b2202dd0e03c7261f51fa2b6cf18b6a4b6430d7eb88a69b575ef23965bc",
+   "sha256": "5836527b8152a247e09406e9d8295761fc70bf8bc891b8fb477ea030c9014aa2",
+   "patch_row53": {"id": "128-53-vis1b", "row": "53", "decision": "1.2.8 row 53 (AC-VIS1b; 01f 1.1)", "summary": "G-04 drawNode draws predefined (rect + two 0.2 mm side bars), document (16-piece wave path) and offpage (pentagon); textRoom cases; text centred above the wave / in the top 0.7 h", "diff_base": "sha256 before this row", "before_sha256": "5d525b2202dd0e03c7261f51fa2b6cf18b6a4b6430d7eb88a69b575ef23965bc", "after_sha256": "5836527b8152a247e09406e9d8295761fc70bf8bc891b8fb477ea030c9014aa2", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53_row53_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "0c92bf92fa16824645bf2925c61a519d05aae2e332330176e73f9db45a239aa2"},
    "patch_row53a": {"id": "128-53-hd35", "row": "53a", "decision": "1.2.8 row 53a (AC-HD35, H-D35, D-V1; 01f 1.4; N8-245)", "summary": "ISO_5807_SHAPES derived from SHAPES[s].notation_set (universal or holding ISO 5807) instead of a literal list; the REPORT standardShapes and DATUM-35 share one source (adds predefined, document, offpage, annotation to the accepted ISO set)", "before_sha256": "d34ed3f70e6f4cc782edbd7ed6972db55e3a5eb5ab7caf364629329984eab563", "after_sha256": "5d525b2202dd0e03c7261f51fa2b6cf18b6a4b6430d7eb88a69b575ef23965bc", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53a_row53a_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "a8eb1a012a1df1a6581d76b5ffa4776db385c15a81170e21c5de8537b25c156a"}
   },
   {
@@ -2405,9 +2406,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/route.ts",
    "status": "patched",
-   "bytes": 30888,
+   "bytes": 32971,
    "source_sha256": "2189c545c59473987ba23d3dc64eeeaf9c336c0624c0e9029a34a29773ffa769",
-   "sha256": "5f1ac4ebbcdd0be44e3ea914d1a51b0c18ccd92253c5b4821063c5b429de6a1e",
+   "sha256": "89cc66b0c08b25856c2928c2b81e0c147496af99183f5b5f1f399dcaa2b9f9f2",
+   "patch_row53": {"id": "128-53-vis1b", "row": "53", "decision": "1.2.8 row 53 (AC-VIS1b connection points; out of area under V-build-route)", "summary": "glueEnd / glueToOutlines: a connector end on the box bottom of a document or offpage whose last piece is vertical moves up onto the wave / pentagon point at the same x (Studio routes and ELK routes); other shapes unchanged", "diff_base": "sha256 before this row", "before_sha256": "5f1ac4ebbcdd0be44e3ea914d1a51b0c18ccd92253c5b4821063c5b429de6a1e", "after_sha256": "89cc66b0c08b25856c2928c2b81e0c147496af99183f5b5f1f399dcaa2b9f9f2", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53_row53_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "80a42d769195fd7c180d22d2f49a7e8d5182efc62f4891afc6693e83b6df5407"},
    "patch_row35": {"id": "128-35-hnb2", "row": "35", "decision": "1.2.8 row 35 (AC-HNB, AC-HNB2, AC-HNB3; N8-339; C25)", "summary": "H-NB2: routePlaced clears the first-render record; routeWithSides records the T-08 fan split EDGE_LANES note of each first-render pass (no-op inside withDiagramFit), so the early return can report it. Routing unchanged", "diff_base": "sha256 before this row", "before_sha256": "0e2cef553a4a28e513e1a55fbc0c3ece434373935ed1446c79dc89611f4c560c", "after_sha256": "5f1ac4ebbcdd0be44e3ea914d1a51b0c18ccd92253c5b4821063c5b429de6a1e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35_row35_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "732caa755008349a6833540f9085f085ea7c27f88470bbb4890664ecae3e4f86"},
    "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "VIS-4 route style: edgeRouteOf (explicit orthogonal = absent), routeStyleOfPath, curvedPoints (cubic Bezier P1=P0+n0k, P2=P3+n3k, k=0.4 chord, CURVE_SAMPLES 32 equal-parameter segments, second and second-to-last sample projected onto the side normal); routeWithSides draws straight = [anchor, anchor] and curved = sampled curve on the auto sides, no detour, no lane nudge, no fan-out, no row 124 side retry (a crossed node is reported by the lint); the routed edge carries route only when straight/curved; crossingHops gives curved connectors no hops", "diff_base": "sha256 before this row", "before_sha256": "4d5ceb95f69cba02ca57c098cc2e2a22b3e05d5930eb70a0249e7e9a8251ec14", "after_sha256": "0e2cef553a4a28e513e1a55fbc0c3ece434373935ed1446c79dc89611f4c560c", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "b84a1e3bd54150f4206d8ba6b045853f8ffeb303659a66960003dd8d2aa3053a"},
    "patch_row64": {"id": "row64-t08-fanout", "row": "64", "decision": "1.2.6 patch T-08 fan-out sub-ranking (U5; register N-018 FANOUT_SPLIT_MIN, E-13; 01e §8, A8, A21) + 01e §4.2 ranked-flow forward sides (request routed by row 46, 967face95b)", "summary": "routeWithSides: (1) a forward edge of a ranked flow (flowDirectionOf set, flowRanks rank(from) < rank(to)) gets fixed sides, TB bottom->top, LR right->left; back/intra-rank edges and legacy flow keep sideOf. (2) NEW export FANOUT_SPLIT_MIN 4: a fan group (>= 4 edges on one node side, other ends across the corridor; fan-out then fan-in) whose members conflict (edgeConflicts collinear+cross > 0) is re-routed with slots sorted by far centre, distinct exits (far centre inside the side span when no other exit lies within ENTRY_COLLISION_MM), staggered turn levels LATTICE_Y/2 outermost first; kept only if group conflicts strictly drop, figure conflicts do not rise and no member runs through its own boxes (EDGE_LANES note). Groups without conflicts and legacy flows (no direction, 01e A15) stay byte-identical", "diff_base": "sha256 before this row", "before_sha256": "1e5c034f041eafa18df9214a9fae0061bebfaf10fc0dcf3a80ebc467fc79bccd", "after_sha256": "4d5ceb95f69cba02ca57c098cc2e2a22b3e05d5930eb70a0249e7e9a8251ec14", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/64_row64_diffs/src_lib_studio_engine_diagram_build_route.ts.diff", "diff_sha256": "a3a2ece061d3affa09b39297bcea2ce097600b8e6eb5b695398252a336570a79"},
@@ -2607,9 +2609,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/svg.ts",
    "status": "patched",
-   "bytes": 41081,
+   "bytes": 47775,
    "source_sha256": "6c1846b3c5b2966476dbe1fff3fe44283daea1c70eb7bf12d5b3fbece817c741",
-   "sha256": "e253103fad0230f24026054d280a6a7d8fecb71a7509f8504d4256b31c00d79e",
+   "sha256": "d3fc8b62cb6b4ffad5f9893ec1784a04bb1c08a2c154bbf576fb72a721dcede6",
+   "patch_row53": {"id": "128-53-vis1b-htag", "row": "53", "decision": "1.2.8 row 53 (AC-VIS1b, AC-HTAG; 01f 1.1, 5.4; N8-218, N8-230..232; C12 OP-18-10, C30, C42)", "summary": "shapeSvg draws predefined (rect + two hair side bars at 1.2 mm), document (M/L/Z path, bottom one sine period in 16 straight pieces, a = 0.08 h) and offpage (pentagon, point down at 0.7 h); clipShapeSvg for document/offpage, predefined in BOX_SHAPES; NEW TAG_INSET_MM and tagAnchor (per-shape tag inset: bar, stadium h/2, slant, cylinder lid, doubled inner rect, diamond/circle centred above the label); firstRenderLayout gives document, offpage and a tagged cylinder their text layout outside fit; mark glyph inside the predefined side bar. Box-family tags keep x + 1.5 pt (CHAR byte-identical)", "diff_base": "sha256 before this row", "before_sha256": "e253103fad0230f24026054d280a6a7d8fecb71a7509f8504d4256b31c00d79e", "after_sha256": "d3fc8b62cb6b4ffad5f9893ec1784a04bb1c08a2c154bbf576fb72a721dcede6", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53_row53_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "ad4cd5eeba366ff8279146397fd73980d3540ca247630135d87190b2958e31f9"},
    "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "SvgMarkOptions.route; edgePathSvg appends data-route=\"straight\"|\"curved\" after the mark attributes (N8-469), absent for orthogonal so default edges keep their bytes", "diff_base": "sha256 before this row", "before_sha256": "7c30471d90749405c3074cf8ec4534c3bfc10d6c7105ea7d299b9a2c0f722a56", "after_sha256": "e253103fad0230f24026054d280a6a7d8fecb71a7509f8504d4256b31c00d79e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "6ded08921873cf12f148affbbd8d78e6805a409f32954a243733df9f886df02e"},
    "patch_row61b": {"id": "row61b-t05-glyph-all-shapes", "row": "61b", "decision": "1.2.6 patch T-05 follow-up, finding F61-1 of row 61 (rev 183/184 GEOM_TEXT_NODE)", "summary": "markGlyphAnchor covers hexagon, cylinder, circle and bus through NEW curvedGlyphAnchor: the box anchor is kept whenever the glyph ink (lint em box, 12 % shrink) already clears the outline by stroke half + 1.5 pt, else hexagon glyph moves left inside both right sides (perpendicular clearance), circle glyph sits inside at the top right of the circle square, cylinder glyph drops below the top front rim (centred between the rims when the body is too short), bus glyph rises above the rail; box, diamond and parallelogram anchors unchanged", "before_sha256": "bbbdd9bb5720a5b185aa98672ba3323c15240f463d3604202733643a655fea49", "after_sha256": "7c30471d90749405c3074cf8ec4534c3bfc10d6c7105ea7d299b9a2c0f722a56", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/61b_row61b_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "268f2f10c7f66c37cfa1c687f5bbb6b53b9d6b78266e729a97c7113169e019da"},
    "patch_row61": {"id": "row61-t05-glyph-inset", "row": "61", "decision": "1.2.6 patch T-05, U5 (01_specs T-05; rev 183/184 GEOM_TEXT_NODE)", "summary": "NEW export markGlyphAnchor: provenance glyph anchor by node shape; parallelogram glyph moves left by the slant at the glyph bottom plus the 1.5 pt clearance measured perpendicular to the side; diamond glyph stays in the box top-right corner outside the outline and rises (never drops) until it clears the upper-right side by 1.5 pt; markGlyphSvg and nodeTextGroundSvg use it; every other shape (box included) keeps the old anchor, byte-identical", "before_sha256": "30483840831c8a73f182096a0134265636056784ed27360cbe02cf832af46247", "after_sha256": "bbbdd9bb5720a5b185aa98672ba3323c15240f463d3604202733643a655fea49", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/61_row61_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "83998f27449cb9116c89b5b42126cf977fe587fa958baa84186d4acd7df1e197"},
@@ -2705,9 +2708,10 @@
   {
    "path": "src/lib/studio/engine/diagram/fit/lint.ts",
    "status": "patched",
-   "bytes": 32069,
+   "bytes": 35188,
    "source_sha256": "2b169e21faaa4064307ab8fdcec45c0b7a0d4f9d2982ebc56094d3a704ebc3d8",
-   "sha256": "8c2ce7c3aa97736703272a660ae0963bdc01c3d5a326c274ce0027ef3056d429",
+   "sha256": "7fb1aebc673be1dc532ca753db764d4cf1c1e53b9f9c6e07f839564351da72a0",
+   "patch_row53": {"id": "128-53-htag", "row": "53", "decision": "1.2.8 row 53 (AC-HTAG; 01f 5.4; N8-218)", "summary": "textOutside also fires when a requirement tag (bold tracked one-line text anchored inside a node box) has ink outside that node's outline region (rounded rect via rx, circle, polygon/path ring; open outlines such as the bus rail skipped), tolerance 0.05 mm, naming the node in `other`; scan keeps rect rx. No new defect kind", "diff_base": "sha256 before this row", "before_sha256": "8c2ce7c3aa97736703272a660ae0963bdc01c3d5a326c274ce0027ef3056d429", "after_sha256": "7fb1aebc673be1dc532ca753db764d4cf1c1e53b9f9c6e07f839564351da72a0", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53_row53_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "4e4db887ea49e49774fe5901977fb7cc0c0ebbf2a21920e5058cd136a363b6d8"},
    "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "scan reads data-route per link (linkCurved); stubSegments checks only the first and last straight piece of a curved link (01f 7 (b), OP-18-6); no new defect kind", "diff_base": "sha256 before this row", "before_sha256": "ebb8e0e8bccbff54276cef7f7fa52b41cf023882ff95c7ab04c82f555cbbbd75", "after_sha256": "8c2ce7c3aa97736703272a660ae0963bdc01c3d5a326c274ce0027ef3056d429", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "203abbe094c22f5dd3ec3a7330afe29362b653fe5a6013628c5ddd99b9e756e6"},
    "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "NEW kinds edgeEntryCollision, stubSegment, arrowTangent with ENTRY_COLLISION_MM 1.5, STUB_SEGMENT_MIN_MM 2.0, ARROW_TANGENT_TOL_DEG 15; scan records link order and label knockout bands; the three kinds are in counts/defects but not in score (auto-fit path of existing figures unchanged)", "diff_base": "sha256 before this row", "before_sha256": "6b9d83313a49012bf14e0a3490fbf0a04ff76e737aeee7a1d180a65da6027472", "after_sha256": "ebb8e0e8bccbff54276cef7f7fa52b41cf023882ff95c7ab04c82f555cbbbd75", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_fit_lint.ts.diff", "diff_sha256": "132d1c590767a1e7c4f34dfac935148643faea379a3ac1c40b6398574696c721"},
    "patch_row150c": {
@@ -2749,9 +2753,10 @@
   {
    "path": "src/lib/studio/engine/diagram/fit/text.ts",
    "status": "patched",
-   "bytes": 9576,
+   "bytes": 10998,
    "source_sha256": "663f04e933ad7a1b1281337949753838cc3a0e445c8bce029fe5908add217f48",
-   "sha256": "0a187d52d8e8f6b8ff03aac59c86c1748f55dc9db35a59c527ad2ead682ee9eb",
+   "sha256": "51cf205638f5cb072f1683f5f2e370cd5de5e411902a6020dabfe4aa041c0029",
+   "patch_row53": {"id": "128-53-vis1b-htag", "row": "53", "decision": "1.2.8 row 53 (AC-VIS1b, AC-HTAG; 01f 1.1 G-5, 5.4)", "summary": "innerWidthMm predefined = w - 2 x 1.2 - pad; neededHeight divides by (1 - foot) for document (2 x 0.08) and offpage (0.3); nodeTextLayout keeps the text above the wave / point and below a tagged cylinder's lid and tag line, and below a doubled node's inner line", "diff_base": "sha256 before this row", "before_sha256": "0a187d52d8e8f6b8ff03aac59c86c1748f55dc9db35a59c527ad2ead682ee9eb", "after_sha256": "51cf205638f5cb072f1683f5f2e370cd5de5e411902a6020dabfe4aa041c0029", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53_row53_diffs/engine_diagram_fit_text.ts.diff", "diff_sha256": "b21c657a8dcbac7e6c7ab0901d735661ec51ad63fc1bf4c2468a95014ac38bff"},
    "patch_row63": {"id": "row63-t07-diamond-height", "row": "63", "decision": "1.2.6 patch T-07, U5 (01_specs T-07; register N-017)", "summary": "NEW export diamondTwoLineHeightMm: 2 x two-line text block (+ sub line, + tag), the height in which a two-line label lies inside a diamond", "before_sha256": "663f04e933ad7a1b1281337949753838cc3a0e445c8bce029fe5908add217f48", "after_sha256": "0a187d52d8e8f6b8ff03aac59c86c1748f55dc9db35a59c527ad2ead682ee9eb", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/63_row63_diffs/engine_diagram_fit_text.ts.diff", "diff_sha256": "21f1717ed327ada1fa962f5c1a3a05419379aa9f56b2e0f0152152c80abfb558"}
   },
   {
@@ -6302,6 +6307,7 @@
   "33",
   "35",
   "55",
-  "34"
+  "34",
+  "53"
  ]
 }

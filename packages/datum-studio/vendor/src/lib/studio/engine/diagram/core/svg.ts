@@ -148,8 +148,45 @@ export function nodeFill(nd: Pick<SheetNode, "spec">): string {
 }
 
 /**
+ * Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1). Geometry of the three Basic Flowchart shapes that have their own outline:
+ * - predefined: side bars at the `doubled` inset (1.2 mm) from the left and right sides;
+ * - document: top and both sides straight, the bottom one sine period sampled into `DOCUMENT_WAVE_SEGMENTS` straight
+ *   pieces (G-1: closure lint reads outlines by end points, so no `C`/`Q`/`A`), amplitude a = 0.08 h around y + h - a,
+ *   crest band [y + h - 2a, y + h]; the right half bulges up, the left half down (the Visio document shape);
+ * - offpage: pentagon, point down, sides straight to 0.7 h.
+ * The same fractions are in `fit/text.ts` (text box) and `build/route.ts` (connection points).
+ */
+const PREDEFINED_BAR_MM = 1.2;
+const DOCUMENT_WAVE_FRAC = 0.08;
+const DOCUMENT_WAVE_SEGMENTS = 16;
+const OFFPAGE_SIDE_FRAC = 0.7;
+
+type OutlinePt = readonly [number, number];
+
+/** Document outline, clockwise from the top-left corner (closed by `Z`). */
+function documentOutline(x: number, y: number, w: number, h: number): OutlinePt[] {
+  const a = h * DOCUMENT_WAVE_FRAC;
+  const pts: OutlinePt[] = [[x, y], [x + w, y], [x + w, y + h - a]];
+  for (let i = 1; i <= DOCUMENT_WAVE_SEGMENTS; i++) {
+    const u = i / DOCUMENT_WAVE_SEGMENTS; // 0 at the right side, 1 at the left side
+    pts.push([x + w - w * u, y + h - a - a * Math.sin(2 * Math.PI * u)]);
+  }
+  return pts;
+}
+
+/** Off-page reference outline (pentagon, point down). */
+function offpageOutline(x: number, y: number, w: number, h: number): OutlinePt[] {
+  return [[x, y], [x + w, y], [x + w, y + h * OFFPAGE_SIDE_FRAC], [x + w / 2, y + h], [x, y + h * OFFPAGE_SIDE_FRAC]];
+}
+
+/** `M x y L ... Z` of a closed outline (2 decimals). */
+function outlineD(pts: readonly OutlinePt[]): string {
+  return `${polylineD(pts)} Z`;
+}
+
+/**
  * Bentuk simpul (`_shape_svg`): 10 bentuk P3; bentuk tak dikenal jatuh ke box.
- * Hanya `stadium` beradius.
+ * Hanya `stadium` beradius. Row 53: + predefined, document, offpage (01f §1.1).
  */
 export function shapeSvg(
   nd: SheetNode,
@@ -209,6 +246,17 @@ export function shapeSvg(
         `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>`
       );
     }
+    // Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1, G-1/G-2): Basic Flowchart predefined process, document, off-page reference.
+    case "predefined": {
+      // outline = the box; two hair side bars at the `doubled` inset (G-2: no data-node, no data-mark)
+      const bar = (bx: number) =>
+        `<line x1="${r2(bx)}" y1="${r2(y)}" x2="${r2(bx)}" y2="${r2(y + h)}" fill="none" stroke="${col}" stroke-width="${r2(STROKE_HAIR)}"/>`;
+      return `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>` + bar(x + PREDEFINED_BAR_MM) + bar(x + w - PREDEFINED_BAR_MM);
+    }
+    case "document":
+      return `<path d="${outlineD(documentOutline(x, y, w, h))}" ${common}/>`;
+    case "offpage":
+      return `<polygon points="${offpageOutline(x, y, w, h).map(([px, py]) => `${r2(px)},${r2(py)}`).join(" ")}" ${common}/>`;
     default:
       return `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" ${common}/>`;
   }
@@ -381,6 +429,8 @@ export function markGlyphAnchor(nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spe
   const boxX = nd.x + nd.w - pad;
   const boxY = nd.y + capMm;
   const shape = nd.spec.shape;
+  // Swarm 1.2.8 row 53 (VIS-1b): on a predefined process the glyph sits inside the right side bar.
+  if (shape === "predefined") return { x: boxX - PREDEFINED_BAR_MM, y: boxY };
   if (shape === "hexagon" || shape === "cylinder" || shape === "circle" || shape === "bus") {
     return curvedGlyphAnchor(nd, shape, boxX, boxY, pad, capMm);
   }
@@ -518,7 +568,7 @@ export function hatchLinesSvg(x: number, y: number, w: number, h: number, angle:
 }
 
 /** Row 165C: shapes whose outline is the box itself (hatch cut to the box exactly, no clipPath). */
-const BOX_SHAPES: ReadonlySet<string> = new Set(["box", "shadowed", "doubled"]);
+const BOX_SHAPES: ReadonlySet<string> = new Set(["box", "shadowed", "doubled", "predefined"]); // row 53: + predefined
 
 /** Row 165C: outline of a non-box node as a bare clip element (same geometry as `shapeSvg`), null = box/unknown/bus. */
 function clipShapeSvg(shape: string, x: number, y: number, w: number, h: number): string | null {
@@ -541,6 +591,10 @@ function clipShapeSvg(shape: string, x: number, y: number, w: number, h: number)
     }
     case "circle":
       return `<circle cx="${r2(x + w / 2)}" cy="${r2(y + h / 2)}" r="${r2(Math.min(w, h) / 2)}"/>`;
+    case "document": // row 53 (VIS-1b)
+      return `<path d="${outlineD(documentOutline(x, y, w, h))}"/>`;
+    case "offpage":
+      return `<polygon points="${offpageOutline(x, y, w, h).map(([px, py]) => `${r2(px)},${r2(py)}`).join(" ")}"/>`;
     default:
       return null;
   }
@@ -565,6 +619,55 @@ export function insetForStroke<T extends Pick<SheetNode, "x" | "y" | "w" | "h">>
   if (x0 === nd.x && y0 === nd.y && x1 === nd.x + nd.w && y1 === nd.y + nd.h) return nd;
   if (x1 <= x0 || y1 <= y0) return nd;
   return { ...nd, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// ---------------------------------------------------------------- row 53 (H-TAG)
+/**
+ * Swarm 1.2.8 row 53 (H-TAG, register N8-218, values R20-C37 / 01f §5.4): left inset (mm) of the requirement tag from
+ * the node box, per shape, so the tag's ink lies inside the drawn outline. `TAG_INSET_MM.fixed` = 1.5 pt (0.53 mm), the
+ * inset every shape had before; `TAG_INSET_MM.bar` = the inner line of `doubled` / side bar of `predefined`;
+ * `TAG_INSET_MM.skew` = the slant of parallelogram and hexagon (fraction of w, as in `shapeSvg`). Stadium: the corner
+ * radius h/2. Doubled: also 1.2 mm down (inside the inner rectangle). Cylinder: baseline lowered by the lid (2 ry = 0.32 h). Diamond and circle: centred one tag line above
+ * the label block. Shapes not listed (box, shadowed, document, offpage, bus and the BPMN tokens until row 54 draws
+ * them) keep the fixed inset; the bus tag stays at the top-left of its box, above the rail (OP-18-10, row 53).
+ */
+export const TAG_INSET_MM = {
+  fixed: pt2mm(1.5),
+  bar: PREDEFINED_BAR_MM,
+  skew: { parallelogram: 0.18, hexagon: 0.22 },
+  cylinderLidFrac: 0.32,
+} as const;
+
+/** Row 53 (H-TAG): anchor of the tag text of a node (x, baseline, text-anchor), from the shape and the label layout. */
+export function tagAnchor(
+  nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">,
+  fit: ReturnType<typeof nodeTextLayout>,
+): { x: number; y: number; anchor: "start" | "middle" } {
+  const { x, y, w, h } = nd;
+  const capMm = pt2mm(role("caption").size);
+  const P = TAG_INSET_MM.fixed;
+  switch (nd.spec.shape) {
+    case "doubled": // inside the inner rectangle (its top line is 1.2 mm down too)
+      return { x: x + TAG_INSET_MM.bar + P, y: y + TAG_INSET_MM.bar + capMm, anchor: "start" };
+    case "predefined": // between the side bars
+      return { x: x + TAG_INSET_MM.bar + P, y: y + capMm, anchor: "start" };
+    case "stadium":
+      return { x: x + h / 2, y: y + capMm, anchor: "start" };
+    case "parallelogram":
+    case "hexagon":
+      return { x: x + w * TAG_INSET_MM.skew[nd.spec.shape] + P, y: y + capMm, anchor: "start" };
+    case "cylinder":
+      return { x: x + P, y: y + capMm + h * TAG_INSET_MM.cylinderLidFrac, anchor: "start" };
+    case "diamond":
+    case "circle": {
+      // centred above the label block: first label baseline (fit layout, else the one-line label at the centre)
+      // minus one tag line (`tagH` of fit/text.ts, caption x 1.2)
+      const first = fit ? fit.label.y : y + h / 2;
+      return { x: x + w / 2, y: first - capMm * 1.2, anchor: "middle" };
+    }
+    default:
+      return { x: x + P, y: y + capMm, anchor: "start" };
+  }
 }
 
 // ---------------------------------------------------------------- row 165J
@@ -621,7 +724,10 @@ export function nodeTextGroundSvg(
     const at = markGlyphAnchor(nd);
     lines.push({ x: at.x, y: at.y, s: glyph, role: "register_block", anchor: "end", face: "data" });
   }
-  if (n.tag) lines.push({ x: nd.x + pt2mm(1.5), y: nd.y + capMm, s: pyStr(n.tag), role: "table_header", anchor: "start" });
+  if (n.tag) {
+    const at = tagAnchor(nd, fit); // row 53 (H-TAG): drawn outline (sheet-edge inset)
+    lines.push({ x: at.x, y: at.y, s: pyStr(n.tag), role: "table_header", anchor: at.anchor });
+  }
   const half = STROKE_PRIMARY / 2;
   const bx0 = g.x + half;
   const by0 = g.y + half;
@@ -649,6 +755,18 @@ export function nodeTextGroundSvg(
   return `<g data-text-ground="1"${clip}>${rects.join("")}</g>`;
 }
 
+/**
+ * Swarm 1.2.8 row 53 (VIS-1b, H-TAG): shapes whose text box is not centred on the node box get their text layout in the
+ * first render as well (outside fit the label is otherwise drawn at the centre): document (above the wave), offpage
+ * (top 0.7 h) and a cylinder with a tag (below the lid and the tag line). Every other node: null (unchanged output).
+ */
+function firstRenderLayout(nd: SheetNode): ReturnType<typeof nodeTextLayout> {
+  const shape = nd.spec.shape;
+  const tagged = nd.spec.tag !== undefined && nd.spec.tag !== null && nd.spec.tag !== "";
+  if (shape === "document" || shape === "offpage" || (shape === "cylinder" && tagged)) return nodeTextLayout(nd);
+  return null;
+}
+
 /** Row 165C: options of `nodeSvg` (sheet size for the half-stroke inset of F113-9). */
 export interface NodeSvgOptions extends SvgMarkOptions {
   canvas?: { widthMm: number; heightMm: number };
@@ -665,7 +783,7 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
   const cy = nd.y + nd.h / 2.0;
   const capMm = pt2mm(role("caption").size);
   // FIG-02b: hanya saat fit dan hanya bila label tidak muat satu baris (atau rel bus).
-  const fit = diagramFitActive() ? nodeTextLayout(nd) : null;
+  const fit = diagramFitActive() ? nodeTextLayout(nd) : firstRenderLayout(nd);
   if (angle !== null) {
     const shape = n.shape ?? "box";
     const clipShape = BOX_SHAPES.has(shape) ? null : clipShapeSvg(shape, g.x, g.y, g.w, g.h);
@@ -692,7 +810,8 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
   }
   if (n.mark) out.push(markGlyphSvg(nd));
   if (n.tag) {
-    out.push(svgText(nd.x + pt2mm(1.5), nd.y + capMm, n.tag, { role: "table_header", colourToken: "ink400", anchor: "start" }));
+    const at = tagAnchor(nd, fit); // row 53 (H-TAG, N8-218): inset per shape, from the drawn outline (F113-9 sheet-edge inset)
+    out.push(svgText(at.x, at.y, n.tag, { role: "table_header", colourToken: "ink400", anchor: at.anchor }));
   }
   return out;
 }
