@@ -1,5 +1,6 @@
 import path from "node:path"
 import { Token } from "@opencode-ai/core/util/token"
+import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { Secrets } from "@/tool/secrets"
 
 // Everything here is plain text work with no I/O, so what the memory may keep and what it may send can be tested
@@ -166,6 +167,10 @@ type Note = {
   sessionID?: string
   body?: string
   refs?: readonly Ref[]
+  /** "index" or "index_rollup" (1.2.8 F-MEM); any other value is an ordinary note. */
+  kind?: string
+  /** Set on an index entry absorbed by a roll-up: archived, never in the prompt. */
+  rolledInto?: string
 }
 
 /** Where the session works. Frozen once per session by the caller, so the block stays byte-identical (01h §4.4). */
@@ -192,11 +197,16 @@ const CLOSE = "</project_memory>"
  * how to find them. Anything not listed by the memory panel is not in here.
  */
 export function promptBlock(items: readonly Note[], options: { budget?: number; focus?: Focus; now?: number } = {}) {
-  // Whatever slipped in under an older filter stays on disk for the user to see, and does not go to a model.
-  const eligible = items.filter((item) => !looksSecret(item.text))
+  // Whatever slipped in under an older filter stays on disk for the user to see, and does not go to a model. Archived
+  // index entries are reached through their roll-up and recall; they are neither shown nor counted (01e §3.2).
+  const eligible = items.filter((item) => !looksSecret(item.text) && item.rolledInto === undefined)
   if (eligible.length === 0) return
   const budget = options.budget ?? Number.POSITIVE_INFINITY
-  const ranked = rankNotes(eligible, options).map((entry) => entry.item)
+  const index = eligible.filter(isIndexPart)
+  const ranked = rankNotes(
+    eligible.filter((item) => !isIndexPart(item)),
+    options,
+  ).map((entry) => entry.item)
   // A user's rule loses its place only to the budget, never to an agent note; an agent note written from untrusted
   // input comes after the agent and learned notes without that flag (SEC-09).
   const ordered = [
@@ -204,20 +214,126 @@ export function promptBlock(items: readonly Note[], options: { budget?: number; 
     ...ranked.filter((item) => item.source !== "user" && !item.untrusted),
     ...ranked.filter((item) => item.source !== "user" && item.untrusted),
   ]
-  // Room for the longest footer this block could need, so adding it never pushes the block over the budget.
-  const fixed = [OPEN, FRAME, CLOSE].join("\n").length + footer(eligible.length).length + 1
+  // Room for the longest footer this block could need, so adding it never pushes the block over the budget. With
+  // index entries, room for both headings too; a store without them gives the 1.2.7 block byte for byte (AC-MEMmig).
+  const headings = index.length ? INDEX_HEADING.length + 1 + NOTES_HEADING.length + 1 : 0
+  const fixed = [OPEN, FRAME, CLOSE].join("\n").length + footer(eligible.length).length + 1 + headings
   const fits = (chars: number) => budget === Number.POSITIVE_INFINITY || Token.estimate("".padEnd(chars)) <= budget
+  const head = indexLines(index, options.focus, fixed, fits)
   const lines = ordered.reduce<{ lines: string[]; chars: number }>(
     (acc, item) => {
       const line = noteLine(item)
       if (!fits(acc.chars + line.length + 1)) return acc
       return { lines: [...acc.lines, line], chars: acc.chars + line.length + 1 }
     },
-    { lines: [], chars: fixed },
+    { lines: [], chars: head.chars },
   ).lines
-  const hidden = eligible.length - lines.length
-  if (lines.length === 0 && !fits(fixed)) return
-  return [OPEN, FRAME, ...lines, ...(hidden > 0 ? [footer(hidden)] : []), CLOSE].join("\n")
+  const hidden = eligible.length - head.shown - lines.length
+  if (head.lines.length === 0 && lines.length === 0 && !fits(fixed)) return
+  return [
+    OPEN,
+    FRAME,
+    ...(head.lines.length ? [INDEX_HEADING, ...head.lines] : []),
+    ...(index.length && lines.length ? [NOTES_HEADING] : []),
+    ...lines,
+    ...(hidden > 0 ? [footer(hidden)] : []),
+    CLOSE,
+  ].join("\n")
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Mission index part (1.2.8 MEM-c, 01e §3): index entries first, in their own budget, matched by trigger words.
+
+/** Index entries take at most this many of the session load's estimated tokens (N8-004, 01e §3.4). */
+export const INDEX_LOAD_BUDGET_TOKENS = 2000
+/** Matched index entries whose body is inlined at session start (N8-463, 01e §3.4). */
+export const INDEX_EXPAND_MAX = 2
+const INDEX_HEADING = "Mission index (newest first; recall an id for its detail and report link):"
+const NOTES_HEADING = "Other notes:"
+/** `<period> roll-up[ part <p>] | <n> missions | triggers: ... | body`, period `YYYY-Qn` or `YYYY` (N8-010). */
+const ROLLUP_LINE = /^(\d{4})(?:-Q([1-4]))? roll-up(?: part \d+)? \| \d+ missions \| triggers: ([^|]+) \| body$/
+
+const isIndexPart = (item: Note) => item.kind === "index" || item.kind === "index_rollup"
+
+/** Line date (a roll-up: the last day of its period) and trigger phrases of an index entry. */
+function indexMeta(item: Note) {
+  if (item.kind === "index") {
+    const match = ProjectMemory.INDEX_TEXT_PATTERN.exec(item.text)
+    return { date: match?.[1] ?? "", triggers: match ? match[4]!.split(", ") : [] }
+  }
+  const match = ROLLUP_LINE.exec(item.text)
+  if (!match) return { date: "", triggers: [] }
+  const [, year, quarter, triggers] = match
+  const date = quarter
+    ? new Date(Date.UTC(Number(year), Number(quarter) * 3, 0)).toISOString().slice(0, 10)
+    : `${year}-12-31`
+  return { date, triggers: triggers!.split(",").map((trigger) => trigger.trim()) }
+}
+
+/**
+ * Index order (01e §3.3): score = triggers whose words all occur in the session's first message or folder, highest
+ * first; then newest line date, newer time, id. Without a focus nothing matches. Pure, so the block stays byte-identical
+ * while the store and the frozen focus are unchanged.
+ */
+function indexOrder(items: readonly Note[], focus: Focus | undefined) {
+  const seen = new Set([...words(focus?.query ?? ""), ...words(focus?.directory ?? "")])
+  return items
+    .map((item) => {
+      const meta = indexMeta(item)
+      const score = focus
+        ? meta.triggers.filter((trigger) => {
+            const list = words(trigger)
+            return list.length > 0 && list.every((word) => seen.has(word))
+          }).length
+        : 0
+      return { item, score, date: meta.date }
+    })
+    .toSorted(
+      (a, b) =>
+        b.score - a.score ||
+        (a.date < b.date ? 1 : a.date > b.date ? -1 : 0) ||
+        (b.item.time ?? 0) - (a.item.time ?? 0) ||
+        (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0),
+    )
+}
+
+/**
+ * The index lines within INDEX_LOAD_BUDGET_TOKENS (heading included) and the whole-block budget. At most
+ * INDEX_EXPAND_MAX matched `index` entries get a Detail line; one that does not fit is retried as its hook line, and a
+ * line that does not fit is left out whole (U11). Returns the characters used so the notes get what is left.
+ */
+function indexLines(items: readonly Note[], focus: Focus | undefined, fixed: number, fits: (chars: number) => boolean) {
+  const inIndex = (chars: number) => Token.estimate("".padEnd(chars)) <= INDEX_LOAD_BUDGET_TOKENS
+  const state = { lines: [] as string[], shown: 0, expanded: 0, chars: fixed, part: INDEX_HEADING.length }
+  for (const entry of indexOrder(items, focus)) {
+    const hook = noteLine(entry.item)
+    const detail =
+      entry.score > 0 && entry.item.kind === "index" && state.expanded < INDEX_EXPAND_MAX
+        ? detailLine(entry.item)
+        : undefined
+    const add = [...(detail ? [[hook, detail]] : []), [hook]].find((lines) => {
+      const size = lines.reduce((sum, line) => sum + line.length + 1, 0)
+      return inIndex(state.part + size) && fits(state.chars + size)
+    })
+    if (!add) continue
+    const size = add.reduce((sum, line) => sum + line.length + 1, 0)
+    state.lines.push(...add)
+    state.shown += 1
+    state.expanded += add.length > 1 ? 1 : 0
+    state.chars += size
+    state.part += size
+  }
+  return state
+}
+
+/**
+ * The body of a matched entry, on one line, tags escaped (SR8-21). An untrusted entry's line repeats where it came
+ * from; a body that looks like it holds a credential is never inlined.
+ */
+function detailLine(item: Note) {
+  const body = item.body?.replace(/\s+/g, " ").trim()
+  if (!body || looksSecret(body)) return
+  return `  Detail${item.untrusted ? " (from untrusted input)" : ""}: ${escapeTags(body)}`
 }
 
 const footer = (hidden: number) =>
@@ -348,9 +464,12 @@ function refLine(resolved: RecallRef) {
 // the agent notes without that flag and says where it came from. Nothing is cut (U11).
 const rank = (item: { source: string; untrusted?: boolean }) =>
   item.source === "user" ? 0 : item.source === "agent" ? (item.untrusted ? 1.5 : 1) : 2
-const label = (item: { source: string; untrusted?: boolean }) =>
-  item.source === "user"
-    ? "from the user"
-    : (item.source === "agent" ? "agent note" : "learned") + (item.untrusted ? ", from untrusted input" : "")
+const label = (item: { source: string; untrusted?: boolean; kind?: string }) =>
+  item.kind === "index_rollup"
+    ? "mission index summary, store"
+    : (item.kind === "index" ? "mission index, " : "") +
+      (item.source === "user"
+        ? "from the user"
+        : (item.source === "agent" ? "agent note" : "learned") + (item.untrusted ? ", from untrusted input" : ""))
 
 export * as MemoryLearn from "./learn"
