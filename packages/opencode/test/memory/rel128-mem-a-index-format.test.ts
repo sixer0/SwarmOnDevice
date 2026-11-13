@@ -1,5 +1,5 @@
 // 1.2.8 row 38, AC-MEMa (N8-343): the mission index entry kind and its line format (01e §2). Red at BASE e1f9673772:
-// Memory.add has no kind/missionId and the schema has no INDEX_LIMITS. The SR8-06 untrusted case of this file is row 38d.
+// Memory.add has no kind/missionId and the schema has no INDEX_LIMITS. The SR8-06 untrusted cases (last describe) are row 38d.
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -17,6 +17,12 @@ import { InstanceBootstrap } from "@/project/bootstrap"
 import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { MISSION_ID_PATTERN as STUDIO_MISSION_ID_PATTERN } from "../../../datum-studio/src/mcp-host/mission/schemas"
+import * as Remember from "../../src/tool/remember"
+import * as Truncate from "../../src/tool/truncate"
+import { Agent } from "@/agent/agent"
+import { Session } from "@/session/session"
+import type { Tool } from "@/tool/tool"
+import { SessionID, MessageID } from "../../src/session/schema"
 
 const providerLayer = Layer.succeed(
   Provider.Service,
@@ -315,4 +321,107 @@ describe("AC-MEMa consolidation leaves index entries alone", () => {
     expect(result.items.find((item) => item.id === "i1")?.refs).toEqual([{ path: REPORT }])
     expect(result.items.find((item) => item.id === "x1")?.refs).toEqual([{ path: "gone.md" }])
   })
+})
+
+// 1.2.8 row 38d, AC-SEC06 (SR8-06): a subagent that read the web and a loopback read of Swarm's own session message
+// routes make the index entry untrusted. Red at BASE: `task` was local and loopback shell calls were local.
+describe("AC-SEC06 untrusted index entries (SR8-06)", () => {
+  const where = { root: "/work/project", directory: "/work/project" }
+  const tool = (name: string, input: Record<string, unknown>, metadata: Record<string, unknown> = {}) => ({
+    info: { role: "assistant" },
+    parts: [{ type: "tool", tool: name, state: { status: "completed", input, output: "", metadata } }],
+  })
+  const task = (sessionId: string) => tool("task", { prompt: "look it up" }, { sessionId })
+  const web = [tool("webfetch", { url: "https://example.com" })]
+  // Relative, so it stays inside the worktree both for `where` and for the tmpdir instance of the tool case.
+  const local = [tool("read", { filePath: "a.ts" })]
+  const children: Record<string, unknown[]> = {
+    ses_web: web,
+    ses_local: local,
+    ses_mid: [task("ses_web")],
+    ses_d1: [task("ses_d2")],
+    ses_d2: [task("ses_d3")],
+    ses_d3: [task("ses_d4")],
+    ses_d4: local,
+  }
+  const read = (sessionID: string) => children[sessionID] as never
+  const check = (messages: unknown[]) => Remember.readUntrustedInput(messages as never, where, read)
+
+  test("UNTRUSTED_TASK_DEPTH is 3 (N8-395)", () => {
+    expect(Remember.UNTRUSTED_TASK_DEPTH).toBe(3)
+  })
+
+  test("a completed task whose child read the web counts, directly and one level down", () => {
+    expect(check([task("ses_web")])).toBe(true)
+    expect(check([task("ses_mid")])).toBe(true)
+    expect(check([task("ses_local")])).toBe(false)
+  })
+
+  test("a child that cannot be read, or lies deeper than the depth, counts", () => {
+    expect(check([task("ses_missing")])).toBe(true)
+    expect(check([tool("task", { prompt: "x" })])).toBe(true)
+    // d1 -> d2 -> d3 are read; the task part in d3 names a fourth level, which is not read.
+    expect(check([task("ses_d1")])).toBe(true)
+    expect(check([task("ses_d2")])).toBe(false)
+  })
+
+  test("a loopback shell read of session message routes counts; other loopback calls stay local", () => {
+    const shell = (command: string) => check([tool("bash", { command })])
+    expect(shell("curl -s http://127.0.0.1:4096/session/ses_x/message")).toBe(true)
+    expect(shell("curl http://localhost:4096/session/ses_x/messages?limit=5")).toBe(true)
+    expect(shell("xh http://[::1]:4096/session/ses_x/message/msg_1")).toBe(true)
+    expect(shell("curl http://127.0.0.1:4096/session/ses_x")).toBe(false)
+    expect(shell("curl http://127.0.0.1:4096/health")).toBe(false)
+  })
+
+  it.live("the remember tool stores the index entry untrusted after a web-reading subagent", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const sessions = Session.Service.of({
+          messages: ({ sessionID }: { sessionID: string }) =>
+            children[sessionID] ? Effect.succeed(children[sessionID]) : Effect.fail(new Error("not found")),
+        } as unknown as Session.Interface)
+        const info = yield* Remember.RememberTool.pipe(
+          Effect.provideService(Session.Service, sessions),
+          Effect.provideService(
+            Truncate.Service,
+            Truncate.Service.of({
+              output: (text: string) => Effect.succeed({ content: text, truncated: false }),
+            } as unknown as Truncate.Interface),
+          ),
+          Effect.provideService(
+            Agent.Service,
+            Agent.Service.of({ get: () => Effect.succeed(undefined) } as unknown as Agent.Interface),
+          ),
+        )
+        const remember = yield* info.init()
+        const ctx = (messages: unknown[]) =>
+          ({
+            sessionID: SessionID.make("ses_sec06"),
+            messageID: MessageID.make("msg_sec06"),
+            callID: "",
+            agent: "build",
+            abort: AbortSignal.any([]),
+            messages,
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+            extra: {},
+          }) as unknown as Tool.Context
+        const write = (id: string, messages: unknown[]) =>
+          remember.execute(
+            { kind: "index", missionId: id, text: line({ id, report: `docs/${id}/10_report/report.md` }) } as never,
+            ctx(messages),
+          )
+        yield* write("2026-11-13_sec06_local", [task("ses_local")])
+        yield* write("2026-11-13_sec06_web", [task("ses_mid")])
+        yield* write("2026-11-13_sec06_loop", [tool("bash", { command: "curl http://127.0.0.1:4096/session/s/message" })])
+        const items = (yield* (yield* Memory.Service).get()).items
+        const flag = (id: string) => items.find((item) => item.missionId === id)?.untrusted ?? false
+        expect(items.map((item) => item.kind)).toEqual(["index", "index", "index"])
+        expect(flag("2026-11-13_sec06_local")).toBe(false)
+        expect(flag("2026-11-13_sec06_web")).toBe(true)
+        expect(flag("2026-11-13_sec06_loop")).toBe(true)
+      }),
+    ),
+  )
 })
