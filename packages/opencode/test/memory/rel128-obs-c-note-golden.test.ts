@@ -760,7 +760,6 @@ describe("AC-OBSd triggers", () => {
     expect(await VaultMirror.labelLanguage(dir, key)).toBe("en")
     expect(await VaultMirror.backfillDue(dir, key)).toBe(false)
     VaultMirror.rememberLanguage(key, "id")
-    expect(VaultMirror.rememberedLanguage(key)).toBe("id")
     expect(await VaultMirror.labelLanguage(dir, key)).toBe("id")
     expect(await VaultMirror.backfillDue(dir, key)).toBe(true)
   })

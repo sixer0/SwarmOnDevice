@@ -78,8 +78,6 @@ export interface Journal {
   warnings?: string[]
 }
 
-export type Group = { name: string; kind: GroupKind; path: string; missions: number }
-
 /** What the primitive needs from the running server; the route (row 44b) supplies the real ones, tests fake them. */
 export interface Ports {
   /** `SWARM_DEFAULT_PROJECT_DIR` (N8-443); absent -> every call refuses REHOME_OUTSIDE_ROOT. */
@@ -162,23 +160,6 @@ async function isGroup(realRoot: string, folder: string) {
   const real = await fs.realpath(folder).catch(() => undefined)
   if (!real || path.dirname(real) !== realRoot) return undefined
   return readMarker(folder)
-}
-
-/** The marked one-level groups of the Default Project root R (§2.2): never `docs`, unmarked, symlinked or nested. */
-export async function groups(root: string): Promise<Group[]> {
-  const realRoot = await fs.realpath(root).catch(() => undefined)
-  if (!realRoot) return []
-  const entries = await fs.readdir(realRoot, { withFileTypes: true }).catch(() => [])
-  const found: Group[] = []
-  for (const entry of entries.toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-    if (!entry.isDirectory()) continue
-    const folder = path.join(realRoot, entry.name)
-    const kind = await isGroup(realRoot, folder)
-    if (!kind) continue
-    const docs = await fs.readdir(path.join(folder, "docs"), { withFileTypes: true }).catch(() => [])
-    found.push({ name: entry.name, kind, path: folder, missions: docs.filter((d) => d.isDirectory()).length })
-  }
-  return found
 }
 
 // ---------------------------------------------------------------------------------------------------------------

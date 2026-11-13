@@ -1122,11 +1122,6 @@ export function rememberLanguage(key: string, language: Language): void {
   languages.set(key, language)
 }
 
-/** The label language the app last asked for this store in this process, if any. */
-export function rememberedLanguage(key: string): Language | undefined {
-  return languages.get(key)
-}
-
 /**
  * The project folder's hub as it is on disk: whether an owned hub exists and its `swarm-lang`. No write; a hub that is
  * missing, not a regular file, foreign or unreadable counts as absent.

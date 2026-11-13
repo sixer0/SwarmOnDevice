@@ -140,11 +140,11 @@ describe("AC-OBSe GET /memory/vault", () => {
     await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
     const key = Memory.storeKey("global", tmp.path)
     expect((await vault(tmp.path, "?language=fr")).status).toBe(400)
-    expect(VaultMirror.rememberedLanguage(key)).toBeUndefined()
+    expect(await VaultMirror.labelLanguage(tmp.path, key)).toBeUndefined()
 
     const before = tree(vaultDir)
     expect((await vault(tmp.path, "?language=en")).status).toBe(200)
-    expect(VaultMirror.rememberedLanguage(key)).toBe("en")
+    expect(await VaultMirror.labelLanguage(tmp.path, key)).toBe("en")
     expect(tree(vaultDir)).toEqual(before)
 
     // The next run renders English labels with it (L1 en heading).
@@ -154,7 +154,7 @@ describe("AC-OBSe GET /memory/vault", () => {
       projectRoot: tmp.path,
       projectName: "Synthetic",
       items: ITEMS,
-      language: VaultMirror.rememberedLanguage(key),
+      language: await VaultMirror.labelLanguage(tmp.path, key),
     })
     const hub = fs.readFileSync(path.join(vaultDir, "swarm-memory", run.folder, "index.md"), "utf8")
     expect(hub).toContain("# Synthetic: Swarm memory")

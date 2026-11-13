@@ -1,4 +1,4 @@
-// 1.2.8 row 44, AC-PROJc (N8-364) + the Rehome.groups part of AC-PROJe: the re-home primitive moves one mission folder
+// 1.2.8 row 44, AC-PROJc (N8-364) + the group recognition part of AC-PROJe (through preflight, no Rehome.groups export, C104/G2-05): the re-home primitive moves one mission folder
 // from the Default Project root R into a group, moves the mission's memory notes to the group's store with their ids
 // and refs, re-points its sessions, journals every step and undoes them in reverse on a failure (01d §6, SR8-18).
 // Red at BASE e1f9673772: OC/project/rehome.ts (Rehome) and Memory.storeKey do not exist. The storeKey formula case is
@@ -158,8 +158,8 @@ describe("Memory.storeKey (N8-446, refactor pin)", () => {
   })
 })
 
-describe("Rehome.groups (AC-PROJe, N8-364 groups case)", () => {
-  test("only marked one-level groups: not docs, unmarked, symlinked or nested", async () => {
+describe("group recognition through the move preflight (AC-PROJe, N8-364 groups case)", () => {
+  test("only a marked one-level group is joined: not docs, unmarked, symlinked or nested", async () => {
     await fs.symlink(path.join(R, "Lumen"), path.join(R, "Lumen Link"))
     await fs.mkdir(path.join(R, "Arsip Lama", "Inner", ".swarm"), { recursive: true })
     await fs.writeFile(
@@ -171,8 +171,17 @@ describe("Rehome.groups (AC-PROJe, N8-364 groups case)", () => {
       path.join(R, "docs", ".swarm", "group.json"),
       JSON.stringify({ version: 1, name: "docs", kind: "theme", created: 1 }),
     )
-    const found = await Rehome.groups(R)
-    expect(found.map((g) => [g.name, g.kind, g.missions])).toEqual([["Lumen", "product", 1]])
+    const tree = await treeHash(R)
+    const rehome = Rehome.make(ports())
+    const plan = (to: string) => rehome.run(call({ to, dryRun: true }))
+    expect(await plan(path.join(R, "Lumen"))).toEqual({
+      planned: { folder: true, notes: 2, sessions: 1, createsGroup: false },
+    })
+    expect(await plan(path.join(R, "docs"))).toMatchObject({ refused: "REHOME_OUTSIDE_ROOT" })
+    expect(await plan(path.join(R, "Arsip Lama"))).toMatchObject({ refused: "REHOME_TARGET_EXISTS" })
+    expect(await plan(path.join(R, "Lumen Link"))).toMatchObject({ refused: "REHOME_SYMLINK" })
+    expect(await plan(path.join(R, "Arsip Lama", "Inner"))).toMatchObject({ refused: "REHOME_OUTSIDE_ROOT" })
+    expect(await treeHash(R)).toBe(tree)
   })
 
   test("group names refuse format characters, edge spaces and a trailing dot (SR8-17)", () => {
@@ -229,7 +238,7 @@ describe("Rehome.run (AC-PROJc, N8-364)", () => {
     expect([await fileHash(storeOf(R)), await fileHash(storeOf(path.join(R, "Lumen")))]).toEqual(stores)
   })
 
-  test("new group: creates the folder and its marker; groups() then lists it", async () => {
+  test("new group: creates the folder and its marker; the next call can join it", async () => {
     const to = path.join(R, "Dinas Contoh")
     const result = await Rehome.make(ports()).run(
       call({ missionId: OTHER, to, sessions: [], groupKind: "institution" }),
@@ -238,7 +247,7 @@ describe("Rehome.run (AC-PROJc, N8-364)", () => {
     expect(result.moved).toEqual({ folder: true, notes: 0, sessions: 0 })
     const marker = JSON.parse(await fs.readFile(path.join(to, ".swarm", "group.json"), "utf8"))
     expect(marker).toMatchObject({ version: 1, name: "Dinas Contoh", kind: "institution" })
-    expect((await Rehome.groups(R)).map((g) => g.name)).toEqual(["Dinas Contoh", "Lumen"])
+    expect(await Rehome.make(ports()).run(call({ to, dryRun: true }))).toMatchObject({ planned: { createsGroup: false } })
     expect(await readItems(R)).toEqual(notes())
   })
 
