@@ -28,6 +28,7 @@ import { Dialog } from "@opencode-ai/ui/dialog"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { Session } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
+import { directoryPickerKind } from "@/components/directory-picker-policy"
 import { useSettings } from "@/context/settings"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
@@ -1266,9 +1267,90 @@ export default function LegacyLayout(props: ParentProps) {
     navigateWithSidebarReset(`/${base64Encode(session.directory)}/session/${session.id}`)
   }
 
-  function openProject(directory: string, navigate = true) {
+  // 1.2.7 row 33 (U-8): a project folder that is gone is neither added nor entered. One persistent toast offers
+  // Restore (re-check, then open the same path), Recreate (stored projects only, and only for a path this window
+  // saw missing; desktop makes the leaf alone) and Choose (the picker at home). SR7-13 rules 5-7.
+  const missingFolders = new Set<string>()
+  const missingFolderToasts = new Map<string, number>()
+
+  // Resolves to whether the project was opened; without the desktop check (web, remote server) it opens at once.
+  function openProject(directory: string, navigate = true): Promise<boolean> {
+    const check = platform.checkDirectoryExists
+    if (!check || !server.isLocal()) return openFoundProject(directory, navigate)
+    return check(directory)
+      .catch(() => true)
+      .then((exists) => {
+        if (exists) return openFoundProject(directory, navigate)
+        missingFolders.add(directory)
+        showFolderMissing(directory, navigate)
+        return false
+      })
+  }
+
+  async function openFoundProject(directory: string, navigate: boolean) {
+    missingFolders.delete(directory)
+    closeFolderMissing(directory)
     layout.projects.open(directory)
-    if (navigate) return navigateToProject(directory)
+    if (navigate) await navigateToProject(directory)
+    return true
+  }
+
+  function closeFolderMissing(directory: string) {
+    const toastId = missingFolderToasts.get(directory)
+    if (toastId === undefined) return
+    missingFolderToasts.delete(directory)
+    dismissToast(toastId)
+  }
+
+  function showFolderMissing(directory: string, navigate: boolean, recreateFailed = false) {
+    closeFolderMissing(directory)
+    const stored =
+      server.projects.last() === directory || layout.projects.list().some((project) => project.worktree === directory)
+    const restore = {
+      label: language.t("toast.project.folderMissing.restore"),
+      onClick: () => void openProject(directory, navigate),
+    }
+    const recreate = {
+      label: language.t("toast.project.folderMissing.recreate"),
+      onClick: () => void recreateFolder(directory, navigate),
+    }
+    const choose = { label: language.t("toast.project.folderMissing.choose"), onClick: chooseFolderAtHome }
+    const toastId = showToast({
+      persistent: true,
+      title: language.t("toast.project.folderMissing.title"),
+      description: language.t(
+        recreateFailed ? "toast.project.folderMissing.recreateFailed" : "toast.project.folderMissing.description",
+        { path: directory },
+      ),
+      actions: stored && !recreateFailed ? [restore, recreate, choose] : [restore, choose],
+    })
+    missingFolderToasts.set(directory, toastId)
+  }
+
+  async function recreateFolder(directory: string, navigate: boolean) {
+    const recreateDirectory = platform.recreateDirectory
+    if (!recreateDirectory || !missingFolders.has(directory)) return
+    if (await recreateDirectory(directory).catch(() => false)) return openFoundProject(directory, navigate)
+    // false: the folder came back meanwhile, or the desktop refused (parent missing, excluded place).
+    if (await openProject(directory, navigate)) return
+    showFolderMissing(directory, navigate, true)
+  }
+
+  function chooseFolderAtHome() {
+    const conn = server.current
+    if (!conn || platform.platform !== "desktop" || directoryPickerKind(platform.platform, conn) !== "native")
+      return chooseProject()
+    // `defaultPath` reaches the native picker once the renderer forwards it (file request, row 33); a variable keeps
+    // the field past the narrower option type until then.
+    const options = {
+      title: language.t("command.project.open"),
+      multiple: false,
+      defaultPath: serverSync().data.path.home,
+    }
+    void platform.openDirectoryPickerDialog(options).then((result) => {
+      const directory = Array.isArray(result) ? result[0] : result
+      if (directory) void openProject(directory)
+    })
   }
 
   const handleDeepLinks = (urls: string[]) => {
@@ -1279,15 +1361,17 @@ export default function LegacyLayout(props: ParentProps) {
     }
 
     for (const link of collectNewSessionDeepLinks(urls)) {
-      void openProject(link.directory, false)
-      const slug = base64Encode(link.directory)
-      if (link.prompt) {
-        setSessionHandoff(SessionStateKey.from(server.scope(), SessionRouteKey.fromLegacy(slug)), {
-          prompt: link.prompt,
-        })
-      }
-      const href = link.prompt ? `/${slug}/session?prompt=${encodeURIComponent(link.prompt)}` : `/${slug}/session`
-      navigateWithSidebarReset(href)
+      void openProject(link.directory, false).then((opened) => {
+        if (!opened) return
+        const slug = base64Encode(link.directory)
+        if (link.prompt) {
+          setSessionHandoff(SessionStateKey.from(server.scope(), SessionRouteKey.fromLegacy(slug)), {
+            prompt: link.prompt,
+          })
+        }
+        const href = link.prompt ? `/${slug}/session?prompt=${encodeURIComponent(link.prompt)}` : `/${slug}/session`
+        navigateWithSidebarReset(href)
+      })
     }
   }
 
@@ -1382,10 +1466,10 @@ export default function LegacyLayout(props: ParentProps) {
     if (!conn) return
     function resolve(result: string | string[] | null) {
       if (Array.isArray(result)) {
-        for (const directory of result) {
-          void openProject(directory, false)
-        }
-        void navigateToProject(result[0])
+        // Opened first (each after its folder check), then the first one is entered, as before.
+        void Promise.all(result.map((directory) => openProject(directory, false))).then(([first]) => {
+          if (first) return navigateToProject(result[0])
+        })
       } else if (result) {
         void openProject(result)
       }
