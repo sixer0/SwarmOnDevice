@@ -74,6 +74,7 @@ export type Event =
   | EventPermissionAsked
   | EventPermissionReplied
   | EventAutonomyBlocked
+  | EventAutonomyModeChanged
   | EventTuiPromptAppend2
   | EventTuiCommandExecute2
   | EventTuiToastShow2
@@ -1700,6 +1701,14 @@ export type GlobalEvent = {
           sessionID: string
           level: "b0" | "b1"
           count: number
+        }
+      }
+    | {
+        id: string
+        type: "autonomy.mode.changed"
+        properties: {
+          scope: "session" | "directory"
+          sessionID?: string
         }
       }
     | {
@@ -3556,6 +3565,7 @@ export type V2Event =
   | PermissionAsked
   | PermissionReplied
   | AutonomyBlocked
+  | AutonomyModeChanged
   | TuiPromptAppend
   | TuiCommandExecute
   | TuiToastShow
@@ -6433,6 +6443,24 @@ export type AutonomyBlocked = {
   }
 }
 
+export type AutonomyModeChanged = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "autonomy.mode.changed"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    scope: "session" | "directory"
+    sessionID?: string
+  }
+}
+
 export type TuiPromptAppend = {
   id: string
   metadata?: {
@@ -7606,6 +7634,15 @@ export type EventAutonomyBlocked = {
     sessionID: string
     level: "b0" | "b1"
     count: number
+  }
+}
+
+export type EventAutonomyModeChanged = {
+  id: string
+  type: "autonomy.mode.changed"
+  properties: {
+    scope: "session" | "directory"
+    sessionID?: string
   }
 }
 

@@ -4,7 +4,10 @@ import { createEffect, createMemo, createResource, onCleanup, type Accessor } fr
 import type { AutonomyModeUpdateData } from "@opencode-ai/sdk/v2/client"
 import type { DirectorySDK } from "@/context/sdk"
 
-/** The server sends no event when the mode changes, so whoever changes it away from the composer announces it here. */
+/**
+ * Whoever changes the mode in this window away from the composer announces it here, at once. A change from anywhere
+ * else (the CLI, another window) arrives as the server's `autonomy.mode.changed` (1.2.7 row 58c).
+ */
 export const AUTONOMY_CHANGED = "swarm:autonomy-changed"
 
 type ModeBody = NonNullable<AutonomyModeUpdateData["body"]>
@@ -92,6 +95,8 @@ export function createPromptAutonomy(input: {
     )
     onCleanup(event.on("permission.replied", queueMoved))
     onCleanup(event.on("autonomy.blocked", queueMoved))
+    // Any scope, on or off: a folder change can decide this session's mode, and the read says which answer holds.
+    onCleanup(event.on("autonomy.mode.changed", () => refresh()))
   })
   makeEventListener(window, AUTONOMY_CHANGED, () => refresh())
   makeEventListener(window, "focus", () => refresh())

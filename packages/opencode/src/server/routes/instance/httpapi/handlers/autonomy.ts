@@ -152,7 +152,8 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
       const root = yield* rootOf(ctx.payload.sessionID)
       const where = { root: root.id, directory: root.directory ?? instance.directory }
       // Also when saving failed: stopping holds in memory all the same, and the record should say so.
-      yield* saved({ scope: "session", root: root.id, on: ctx.payload.on, ...consent }).pipe(
+      // The root's folder goes with it, so its windows hear of the change wherever the request came from (row 58c).
+      yield* saved({ scope: "session", root: root.id, directory: where.directory, on: ctx.payload.on, ...consent }).pipe(
         Effect.ensuring(autonomy.markMode(where)),
       )
       return yield* modeAt(where)
