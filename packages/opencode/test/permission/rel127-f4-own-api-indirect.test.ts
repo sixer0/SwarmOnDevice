@@ -5,6 +5,9 @@
 // loopback counts, and a hostname with the listener's port too. Controls: a literal host that is not this computer's,
 // other loopback ports and a stopped listener keep their verdicts. Synthetic values only: no server is contacted, home is
 // a fresh mkdtemp folder (both `os.homedir` spellings the source uses), and no real server password file is read.
+// 1.2.7 row 47k (U10-1, C76, INTENT): an own-server call whose route can be read now runs under the consent unless the
+// route is person-only, so the D forms below name a person-only route (`/autonomy/mode`, a permission reply) where they
+// named `/session` or `/`; the address readings, reasons, texts and controls are unchanged.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import fs, { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
@@ -56,11 +59,11 @@ beforeAll(async () => {
   fixture = await tmpdir({ git: true })
   dir = fixture.path
   instance = { directory: dir, worktree: dir, project: { vcs: "git" } } as InstanceContext
-  writeFileSync(path.join(dir, "cfg"), `# ${MARKER}\nurl = "http://127.0.0.1:${PORT}/session"\nsilent\n`)
+  writeFileSync(path.join(dir, "cfg"), `# ${MARKER}\nurl = "http://127.0.0.1:${PORT}/autonomy/mode"\nsilent\n`)
   writeFileSync(path.join(dir, "cfg-other"), `url = "https://example.com/${MARKER}"\n`)
   writeFileSync(path.join(dir, "cfg-name"), `url = "http://box.example:${PORT}/session"\n`)
   writeFileSync(path.join(dir, "cfg-nested"), `config = "cfg"\n`)
-  writeFileSync(path.join(dir, "urls"), `http://127.0.0.1:${PORT}/session\n`)
+  writeFileSync(path.join(dir, "urls"), `http://127.0.0.1:${PORT}/autonomy/mode\n`)
   writeFileSync(path.join(dir, "big"), `url = "https://example.com/"\n# ${"x".repeat(70 * 1024)}\n`)
   delete process.env.CURL_HOME
   delete process.env.WGETRC
@@ -127,7 +130,7 @@ describe("F-4 texts and category (N7-051, N7-052, N7-135, N7-136)", () => {
     }
   })
   test("the literal own-API call is X own_api, not app_state (CHAR-03 intent)", () =>
-    expectOwnApi(`curl -s http://127.0.0.1:${PORT}/session`))
+    expectOwnApi(`curl -s http://127.0.0.1:${PORT}/autonomy/mode`))
 })
 
 describe("F4-R1 / D2: a config file that names the listener", () => {
@@ -152,15 +155,15 @@ describe("F4-R1 / D2: a config file that names the listener", () => {
 })
 
 describe("F4-R2 / D3: host or port in a variable assigned in the same text", () => {
-  test("`H=127.0.0.1; curl -s $H:<port>/session` and `P=<port>; curl 127.0.0.1:$P`", () => {
-    expectOwnApi(`H=127.0.0.1; curl -s $H:${PORT}/session`)
-    expectOwnApi(`P=${PORT}; curl 127.0.0.1:$P`)
+  test("`H=127.0.0.1; curl -s $H:<port>/autonomy/mode` and `P=<port>; curl 127.0.0.1:$P/autonomy/mode`", () => {
+    expectOwnApi(`H=127.0.0.1; curl -s $H:${PORT}/autonomy/mode`)
+    expectOwnApi(`P=${PORT}; curl 127.0.0.1:$P/autonomy/mode`)
   })
   test("export, braces, quotes and both parts at once", () => {
     for (const command of [
-      `export H=127.0.0.1; curl http://\${H}:${PORT}/`,
-      `H="localhost" P=${PORT}; curl "http://$H:$P/session"`,
-      `U=http://127.0.0.1:${PORT}; curl -s "$U/permission"`,
+      `export H=127.0.0.1; curl http://\${H}:${PORT}/autonomy/mode`,
+      `H="localhost" P=${PORT}; curl "http://$H:$P/autonomy/mode"`,
+      `U=http://127.0.0.1:${PORT}; curl -s -X POST "$U/permission/per_1/reply"`,
     ])
       expectOwnApi(command)
   })
@@ -198,7 +201,7 @@ describe("F4-R3 / U2-U4: the address is not written out", () => {
 describe("F4-R4 / D4: the default config files", () => {
   test("a home `.curlrc` naming the listener turns a plain `curl -s` into X own_api", () => {
     expectNotOwnApi("curl -s")
-    writeFileSync(path.join(home, ".curlrc"), `url = "http://127.0.0.1:${PORT}/session"\n`)
+    writeFileSync(path.join(home, ".curlrc"), `url = "http://127.0.0.1:${PORT}/autonomy/mode"\n`)
     expectOwnApi("curl -s")
     expectOwnApi("curl -s https://example.com/")
   })
@@ -216,7 +219,7 @@ describe("F4-R4 / D4: the default config files", () => {
     expectOwnApi("wget -q http://example.com/")
   })
   test("control: `curl -q` first and `wget --no-config` do not read them", () => {
-    writeFileSync(path.join(home, ".curlrc"), `url = "http://127.0.0.1:${PORT}/session"\n`)
+    writeFileSync(path.join(home, ".curlrc"), `url = "http://127.0.0.1:${PORT}/autonomy/mode"\n`)
     writeFileSync(path.join(home, ".wgetrc"), `http_proxy = http://127.0.0.1:${PORT}/\n`)
     expectNotOwnApi("curl -q -s https://example.com/")
     expectNotOwnApi("wget --no-config -q http://example.com/")
@@ -228,7 +231,7 @@ describe("SR7-08: every spelling of loopback is the listener's host", () => {
     "127.0.0.1", "127.0.0.2", "127.255.255.254", "127.1", "2130706433", "0x7f000001", "0x7f.0.0.1", "0177.0.0.1",
     "017700000001", "0", "0.0.0.0", "localhost", "LOCALHOST", "localhost.", "swarm.localhost", "[::1]",
     "[0:0:0:0:0:0:0:1]", "[0000:0000::0001]", "[::ffff:127.0.0.1]", "[::ffff:7f00:1]", "[::]",
-  ])("curl to %s", (host) => expectOwnApi(`curl -s http://${host}:${PORT}/session`))
+  ])("curl to %s", (host) => expectOwnApi(`curl -s http://${host}:${PORT}/autonomy/mode`))
   test("host and port apart, and bash's sockets", () => {
     for (const command of [`nc 127.1 ${PORT}`, `nc ::1 ${PORT}`, `nc localhost. ${PORT}`, `exec 3<>/dev/tcp/0x7f000001/${PORT}`])
       expectOwnApi(command)
@@ -261,11 +264,11 @@ describe("controls: unchanged verdicts", () => {
   })
   test("once the listener stopped, R1-R4 keep their verdicts", () => {
     SelfAddress.remove(SELF)
-    writeFileSync(path.join(home, ".curlrc"), `url = "http://127.0.0.1:${PORT}/session"\n`)
+    writeFileSync(path.join(home, ".curlrc"), `url = "http://127.0.0.1:${PORT}/autonomy/mode"\n`)
     for (const command of [
       "curl -s -K cfg",
-      `H=127.0.0.1; curl -s $H:${PORT}/session`,
-      `P=${PORT}; curl 127.0.0.1:$P`,
+      `H=127.0.0.1; curl -s $H:${PORT}/autonomy/mode`,
+      `P=${PORT}; curl 127.0.0.1:$P/autonomy/mode`,
       "curl -s $SWARM_URL/session",
       "curl -s",
       `curl -s http://box.example:${PORT}/session`,
@@ -389,12 +392,12 @@ it.instance("gate: R1-R3 are refused with their text for root and subagent, and 
   Effect.gen(function* () {
     const test = yield* TestInstance
     const work = test.directory
-    fs.writeFileSync(path.join(work, "cfg"), `url = "http://127.0.0.1:${PORT}/session"\n`)
+    fs.writeFileSync(path.join(work, "cfg"), `url = "http://127.0.0.1:${PORT}/autonomy/mode"\n`)
     const { root, child } = yield* family()
     for (const id of [root.id, child.id])
       for (const [command, text] of [
         ["curl -s -K cfg", "OWN_API_TEXT"],
-        [`P=${PORT}; curl 127.0.0.1:$P`, "OWN_API_TEXT"],
+        [`P=${PORT}; curl 127.0.0.1:$P/autonomy/mode`, "OWN_API_TEXT"],
         ["curl -s $SWARM_URL/session", "OWN_API_UNRESOLVED_TEXT"],
         ["curl -K /nonexistent/f4.cfg", "OWN_API_UNRESOLVED_TEXT"],
       ] as const) {

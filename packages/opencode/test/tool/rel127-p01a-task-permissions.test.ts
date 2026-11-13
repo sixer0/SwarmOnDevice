@@ -535,7 +535,8 @@ describe("P-01a gate", () => {
     Effect.gen(function* () {
       const dir = (yield* TestInstance).directory
       const { root, child } = yield* family()
-      const own = `curl http://127.0.0.1:${PORT}/session`
+      // 1.2.7 row 47k (U10-1, INTENT): a person-only route; a `/session` read now runs under the consent.
+      const own = `curl -X PUT http://127.0.0.1:${PORT}/autonomy/mode`
       SelfAddress.add(SELF)
       try {
         yield* grantTask(child.id, ["git push --force", own, "sudo ls"])

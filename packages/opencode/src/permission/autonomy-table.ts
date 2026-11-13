@@ -902,7 +902,215 @@ function namesListener(raw: string, listener: SelfAddress.Address) {
 }
 
 /** 1.2.7 F-4: an X `own_api`; a reason (N7-136) when the address could not be worked out (N7-135), none when it was. */
-type OwnApiHit = { readonly reason?: OwnApiReason }
+// 1.2.7 row 47k (U10-1, C76): a hit without a reason may carry the request it makes (`route`); such a hit runs under the
+// consent unless the route is one only the person may call (`personOnlyRoute`). A hit with neither is refused as before.
+type OwnApiHit = { readonly reason?: OwnApiReason; readonly route?: OwnRoute }
+
+/**
+ * 1.2.7 row 47k (U10-1): the request one call makes of Swarm's own server, read from its words: the method (undefined when
+ * it could not be worked out: a variable, a method-override header, an unread config) and the path, normalised as the
+ * server would route it (percent-decoded once, `.`/`..` and empty segments folded, lower case).
+ */
+type OwnRoute = { readonly method: string | undefined; readonly path: string }
+
+/**
+ * 1.2.7 row 47k (U10-1, U10 user ruling): the routes of Swarm's own server only the person calls, whatever the method:
+ * the autonomous mode and the person's "that change was mine" (`/autonomy/mode`, `/autonomy/confirm`), every consent route,
+ * emptying the archive and putting a checkpoint back (the desktop nonce routes), answering a permission, a question or a
+ * TUI control request on the person's behalf, and folder trust. Matched as segments anywhere in the path, so a prefix
+ * (a workspace proxy) does not hide them.
+ */
+const PERSON_ONLY_ROUTES: readonly RegExp[] = [
+  /(?:^|\/)autonomy\/(?:mode|confirm)(?:\/|$)/,
+  /(?:^|\/)consent(?:\/|$)/,
+  /(?:^|\/)autonomy\/archive\/empty(?:\/|$)/,
+  /(?:^|\/)autonomy\/checkpoint(?:\/|$)/,
+  /(?:^|\/)permission\/[^/]+\/reply(?:\/|$)/,
+  /(?:^|\/)session\/[^/]+\/permissions(?:\/|$)/,
+  /(?:^|\/)question\/[^/]+\/(?:reply|reject)(?:\/|$)/,
+  /(?:^|\/)tui\/control\/response(?:\/|$)/,
+  /(?:^|\/)trust(?:\/|$)/,
+]
+/**
+ * 1.2.7 row 47k (U10-1): routes whose writes only the person makes: configuration (`/config`, `/global/config`, the lane
+ * controls `/global/lanes`, provider and MCP credentials under `auth`) and every write under `autonomy`. A read of them
+ * (GET, HEAD, OPTIONS) runs under the consent; a method not worked out counts as a write.
+ */
+const PERSON_ONLY_WRITES: readonly RegExp[] = [
+  /(?:^|\/)config(?:\/|$)/,
+  /(?:^|\/)global\/lanes(?:\/|$)/,
+  /(?:^|\/)auth(?:\/|$)/,
+  /(?:^|\/)autonomy(?:\/|$)/,
+]
+const READ_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS"])
+
+/** 1.2.7 row 47k (U10-1): whether a request of Swarm's own server is one only the person makes. */
+export function personOnlyRoute(route: OwnRoute) {
+  if (PERSON_ONLY_ROUTES.some((pattern) => pattern.test(route.path))) return true
+  const writes = route.method === undefined || !READ_METHODS.has(route.method)
+  return writes && PERSON_ONLY_WRITES.some((pattern) => pattern.test(route.path))
+}
+
+/**
+ * 1.2.7 row 47k (U10-1): the path a URL-like word asks for, as the server routes it; undefined when it is not written out
+ * (a variable or command, curl's `{}`/`[]` globbing, a `;` parameter, a double encoding, a backslash) or a `_method`
+ * override rides in the query.
+ */
+function routePath(word: string): string | undefined {
+  const rest = word.replace(/^[A-Za-z][\w+.-]*:\/\//, "")
+  const start = rest.search(/[/?#]/)
+  if (start < 0) return "/"
+  const tail = rest.slice(start)
+  if (/[$`{}[\]\s\\;]/.test(tail)) return undefined
+  const cut = tail.search(/[?#]/)
+  const raw = cut < 0 ? tail : tail.slice(0, cut)
+  if (cut >= 0 && /_method/i.test(tail.slice(cut))) return undefined
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(raw)
+  } catch {
+    return undefined
+  }
+  if (/%[0-9A-Fa-f]{2}/.test(decoded) || /[\\;]/.test(decoded)) return undefined
+  const parts: string[] = []
+  for (const part of decoded.split("/")) {
+    if (part === "" || part === ".") continue
+    if (part === "..") parts.pop()
+    else parts.push(part.toLowerCase())
+  }
+  return `/${parts.join("/")}`
+}
+
+/** 1.2.7 row 47k (U10-1): what a call's options say of its request: the method, and whether the path is not the URL's. */
+type RequestInfo = { method: string | undefined; targetUnknown: boolean }
+
+/** curl's short options that shape the request, by their long name. */
+const CURL_SHORT_REQUEST: Readonly<Record<string, string>> = {
+  X: "--request", d: "--data", F: "--form", T: "--upload-file", I: "--head", G: "--get", H: "--header", K: "--config", ":": "--next",
+}
+/** curl's long options that shape the method or the path; a word that abbreviates one of them is not worked out. */
+const CURL_REQUEST_LONG = [
+  "--request", "--request-target", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--data-ascii", "--json",
+  "--form", "--form-string", "--upload-file", "--head", "--get", "--header", "--next", "--variable", "--expand-url",
+  "--expand-data", "--url",
+]
+const CURL_FLAGS_KNOWN: ReadonlySet<string> = new Set(["--head", "--get", "--next"])
+
+/** The request curl makes from its options, those given on the line and those its config files add (`configs`). */
+function curlRequest(options: readonly [string, string | undefined][]): RequestInfo {
+  let method: string | undefined
+  let unknown = false
+  let targetUnknown = false
+  let [body, upload, head, get] = [false, false, false, false]
+  for (const [flag, value] of options) {
+    if (flag === "?") {
+      unknown = true
+      targetUnknown = true
+    } else if (flag === "--request") {
+      if (value === undefined || /[$`]/.test(value)) unknown = true
+      else method = value.toUpperCase()
+    } else if (flag === "--request-target" || flag === "--next" || flag === "--variable" || flag.startsWith("--expand-"))
+      targetUnknown = true
+    else if (flag.startsWith("--data") || flag === "--json" || flag.startsWith("--form")) body = true
+    else if (flag === "--upload-file") upload = true
+    else if (flag === "--head") head = true
+    else if (flag === "--get") get = true
+    else if (flag === "--header" && (value === undefined || /method-override|[$`]/i.test(value))) unknown = true
+  }
+  if (unknown) return { method: undefined, targetUnknown }
+  return { method: method ?? (head ? "HEAD" : get ? "GET" : upload ? "PUT" : body ? "POST" : "GET"), targetUnknown }
+}
+
+/** One curl option word (and its value) as a long name: an abbreviation of a request option reads as `?`. */
+function curlLong(flag: string): string {
+  if (CURL_REQUEST_LONG.includes(flag) || netOptions.curl.long.has(flag)) return flag
+  return CURL_REQUEST_LONG.some((name) => name.startsWith(flag) && flag.length >= 3) ? "?" : flag
+}
+
+/** The curl options of a config file's lines (`request = PATCH`, `-X PATCH`, `head`, `-sI`), nested configs two deep. */
+function curlConfigOptions(file: string, depth = 0): [string, string | undefined][] {
+  const text = configText(file)
+  if (text === undefined) return [["?", undefined]]
+  const options: [string, string | undefined][] = []
+  for (const line of text.split(/\r?\n/)) {
+    const entry = /^\s*(-{0,2})([A-Za-z:][\w-]*)\s*(?:[=:\s]\s*"?([^"]*?)"?\s*)?$/.exec(line)
+    if (!entry || line.trim().startsWith("#")) continue
+    const [dashes, key, value] = [entry[1]!, entry[2]!, entry[3] || undefined]
+    if (dashes === "-" || (dashes === "" && key.length === 1)) {
+      for (let at = 0; at < key.length; at++) {
+        const long = CURL_SHORT_REQUEST[key[at]!]
+        if (long) options.push([long, netOptions.curl.short.has(key[at]!) ? key.slice(at + 1) || value : undefined])
+        if (netOptions.curl.short.has(key[at]!)) break
+      }
+      continue
+    }
+    const long = curlLong(`--${key.toLowerCase()}`)
+    if (long === "--config" && value !== undefined && depth < 2) {
+      const next = commandFile(value, path.dirname(file))
+      options.push(...(next === undefined ? [["?", undefined] as [string, undefined]] : curlConfigOptions(next, depth + 1)))
+    } else options.push([long, value])
+  }
+  return options
+}
+
+/** wget's long options that shape the method or the path; a word that abbreviates one of them is not worked out. */
+const WGET_REQUEST_LONG = ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--header", "--execute"]
+
+/** The method wget asks with: `--method`, a post option, a `.wgetrc` command (`-e`, a config file) or GET. */
+function wgetRequest(args: readonly string[], configs: readonly string[]): RequestInfo {
+  let method: string | undefined
+  let unknown = false
+  let body = false
+  const command = (key: string, value: string | undefined) => {
+    const name = key.toLowerCase().replace(/[-_]/g, "")
+    if (name === "method") {
+      if (value === undefined || /[$`]/.test(value)) unknown = true
+      else method = value.trim().toUpperCase()
+    } else if (name === "postdata" || name === "postfile") body = true
+    else if (name === "header" && (value === undefined || /method-override|[$`]/i.test(value))) unknown = true
+  }
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (word === "--") break
+    if (word === "-e" || word.startsWith("-e") || word === "--execute" || word.startsWith("--execute=")) {
+      const value = word === "-e" || word === "--execute" ? args[++index] : word.startsWith("--execute=") ? word.slice(10) : word.slice(2)
+      const match = value === undefined ? undefined : /^\s*([\w-]+)\s*=\s*(.*)$/.exec(value)
+      if (match) command(match[1]!, match[2])
+      else unknown = true
+      continue
+    }
+    if (!word.startsWith("--")) continue
+    const equals = word.indexOf("=")
+    const flag = equals < 0 ? word : word.slice(0, equals)
+    const value = equals < 0 ? (netOptions.wget.long.has(flag) ? args[++index] : undefined) : word.slice(equals + 1)
+    if (WGET_REQUEST_LONG.includes(flag)) command(flag.slice(2), value)
+    else if (!netOptions.wget.long.has(flag) && WGET_REQUEST_LONG.some((name) => name.startsWith(flag) && flag.length >= 4)) unknown = true
+  }
+  for (const file of configs) {
+    const text = configText(file)
+    if (text === undefined) {
+      unknown = true
+      continue
+    }
+    for (const line of text.split(/\r?\n/)) {
+      const match = /^\s*([\w-]+)\s*=\s*(.*)$/.exec(line)
+      if (match) command(match[1]!, match[2])
+    }
+  }
+  if (unknown) return { method: undefined, targetUnknown: false }
+  return { method: method ?? (body ? "POST" : "GET"), targetUnknown: false }
+}
+
+/** httpie's and xh's method: the first word when it is a bare word with a URL after it, else POST with data items, GET without. */
+function httpieRequest(positional: readonly string[]): RequestInfo {
+  const named = positional.length > 1 && /^[A-Za-z]+$/.test(positional[0]!)
+  const items = positional.slice(named ? 2 : 1)
+  if (items.some((item) => /^[^:=]*:(?!=)/.test(item) && /method-override/i.test(item))) return { method: undefined, targetUnknown: false }
+  if (named) return { method: positional[0]!.toUpperCase(), targetUnknown: false }
+  // Without a method, data items (`a=b`, `a:=1`, `f@file`) make it a POST; with none, a body from stdin may too.
+  if (items.some((item) => /(?:^|[^=:])(?:=|:=|@)/.test(item) && !/^[^=]*==/.test(item))) return { method: "POST", targetUnknown: false }
+  return { method: items.length === 0 ? undefined : "GET", targetUnknown: false }
+}
 
 /** F-4: the network clients whose address a call may hide (`BypassLists.OUTWARD` less the remote shells, mail and sync). */
 // 1.2.7 row 47j (U9-5): zsh's `ztcp` and `zftp` too, so a call to Swarm's own server through them is judged as curl's is.
@@ -977,31 +1185,45 @@ function commandFile(word: string, cwd: string) {
 }
 
 /** D2/D4: what a curl or wget config file (or wget URL list) names, followed into the configs it names, two deep. */
-function judgeConfig(file: string, listeners: readonly SelfAddress.Address[], depth = 0): OwnApiHit[] {
+function judgeConfig(file: string, listeners: readonly SelfAddress.Address[], info: RequestInfo, depth = 0): OwnApiHit[] {
   const text = configText(file)
   if (text === undefined) return [{ reason: "config_file" }]
-  if (listeners.some((listener) => namesListener(text, listener))) return [{}]
   const hits: OwnApiHit[] = []
   for (const line of text.split(/\r?\n/)) {
     const entry = /^\s*-{0,2}([A-Za-z][\w-]*)\s*(?:=|:|\s)\s*"?([^"\s]+)"?/.exec(line)
     const bare = /^\s*([a-z]+:\/\/\S+)\s*$/i.exec(line)
     if (bare) {
+      // 1.2.7 row 47k (U10-1): a URL of a list (`wget -i`) is a request, judged by its route.
       const hit = judgeAddress(bare[1]!, listeners, true)
-      if (hit) hits.push(hit)
+      if (hit) hits.push(routed(bare[1]!, hit, info))
       continue
     }
     if (!entry) continue
     const [key, value] = [entry[1]!.toLowerCase(), entry[2]!]
     if (/^(?:url|x|proxy|preproxy|https?_proxy|ftp_proxy|all_proxy)$/.test(key)) {
       const hit = judgeAddress(value, listeners, true)
-      if (hit) hits.push(hit)
+      // A `url` is a request; a proxy entry reaches the server with no route that can be read.
+      if (hit) hits.push(key === "url" ? routed(value, hit, info) : hit)
     }
     if ((key === "k" || key === "config") && depth < 2) {
       const next = commandFile(value, path.dirname(file))
-      hits.push(...(next === undefined ? [{ reason: "config_file" as const }] : judgeConfig(next, listeners, depth + 1)))
+      hits.push(...(next === undefined ? [{ reason: "config_file" as const }] : judgeConfig(next, listeners, info, depth + 1)))
     }
   }
+  // The listener named anywhere else in the file (a header, an unread option): refused as before (D2).
+  if (listeners.some((listener) => namesListener(text, listener)) && !hits.some((hit) => hit.reason === undefined)) hits.push({})
   return hits
+}
+
+/**
+ * 1.2.7 row 47k (U10-1): a request word's hit with the route it asks for. A hit with a reason stays; a path that is not
+ * written out, or a request whose path an option replaces (`--request-target`), is `unresolved_target` (refused).
+ */
+function routed(word: string, hit: OwnApiHit, info: RequestInfo): OwnApiHit {
+  if (hit.reason !== undefined) return hit
+  const route = routePath(word)
+  if (route === undefined || info.targetUnknown) return { reason: "unresolved_target" }
+  return { route: { method: info.method, path: route } }
 }
 
 /** D4: the config files curl or wget reads by itself, those that exist. */
@@ -1108,11 +1330,18 @@ function clientCall(words: readonly string[]): ClientCall | { nested: string } |
   return { program, args: words.slice(index + 1), runtime }
 }
 
-/** What one client call names: address words, config files, URL lists, and whether it reads its default config. */
+/**
+ * What one client call names: address words, config files, URL lists, and whether it reads its default config. 1.2.7 row
+ * 47k (U10-1): `requests` are the URLs it asks for (curl's and wget's operands and `--url`, httpie's URL), `curl` the
+ * options that shape curl's request, `positional` httpie's words; every other address (a proxy, `--resolve`, a socket)
+ * reaches a server with no route that can be read.
+ */
 function clientParts(call: ClientCall) {
   const addresses: string[] = []
+  const requests: string[] = []
   const configs: string[] = []
   const lists: string[] = []
+  const curlOptions: [string, string | undefined][] = []
   const { program, args } = call
   // 1.2.7 row 47j (U9-5): `ztcp [-v] [-d fd] host [port]` (a listen, accept, close or list names no host to call) and
   // `zftp open|params host [port]`.
@@ -1127,7 +1356,7 @@ function clientParts(call: ClientCall) {
     }
     const [host, port] = program === "zftp" ? (["open", "params"].includes(named[0] ?? "") ? named.slice(1) : []) : named
     if (!local && host !== undefined) addresses.push(port === undefined || !/^\d+$/.test(port) ? host : `${host}:${port}`)
-    return { addresses, configs, lists, defaults: false }
+    return { addresses, requests, configs, lists, defaults: false, curlOptions, positional: [] as string[] }
   }
   let defaults = program === "curl" || program === "wget"
   if (program === "curl" && (args[0] === "-q" || args[0] === "--disable")) defaults = false
@@ -1148,8 +1377,10 @@ function clientParts(call: ClientCall) {
       const flag = equals < 0 ? word : word.slice(0, equals)
       const takes = (curl ? netOptions.curl.long : wget ? netOptions.wget.long : httpie ? HTTPIE_VALUE : NC_VALUE).has(flag)
       const value = equals < 0 ? (takes ? args[++index] : undefined) : word.slice(equals + 1)
+      if (curl) curlOptions.push([curlLong(flag), value])
       if (value === undefined) continue
       if (flag === "--config") configs.push(value)
+      else if (curl && flag === "--url") requests.push(value)
       else if (flag === "--input-file") lists.push(value)
       else if (curl && netOptions.curl.address.has(flag)) addresses.push(flag === "--resolve" ? value.split(":").slice(-1)[0]! : flag === "--connect-to" ? value.split(":").slice(2).join(":") : value)
       else if (flag === "--proxy") addresses.push(value.replace(/^(?:https?|all):(?!\/\/)/, ""))
@@ -1168,8 +1399,13 @@ function clientParts(call: ClientCall) {
       const shorts = curl ? netOptions.curl.short : netOptions.wget.short
       for (let at = 1; at < word.length; at++) {
         const letter = word[at]!
-        if (!shorts.has(letter)) continue
+        const long = curl ? CURL_SHORT_REQUEST[letter] : undefined
+        if (!shorts.has(letter)) {
+          if (long) curlOptions.push([long, undefined])
+          continue
+        }
         const value = word.slice(at + 1) || args[++index]
+        if (long) curlOptions.push([long, value])
         if (value === undefined) break
         if (curl && letter === "K") configs.push(value)
         else if (curl && letter === "x") addresses.push(value)
@@ -1181,10 +1417,11 @@ function clientParts(call: ClientCall) {
     }
     positional.push(word)
   }
-  if (curl || wget) addresses.push(...positional)
+  if (curl || wget) requests.push(...positional)
   else if (httpie) {
-    const url = positional.find((word, index) => !(index === 0 && /^[A-Z]+$/.test(word)))
-    if (url !== undefined) addresses.push(url)
+    // 1.2.7 row 47k: a bare first word with more after it is the method (`http post :4096/x`), as `httpieRequest` reads it.
+    const url = positional.length > 1 && /^[A-Za-z]+$/.test(positional[0]!) ? positional[1] : positional[0]
+    if (url !== undefined) requests.push(url)
   } else if (socat) {
     for (const word of positional) {
       const match = SOCAT_ADDRESS.exec(word)
@@ -1194,7 +1431,7 @@ function clientParts(call: ClientCall) {
     // nc, ncat, netcat, telnet: `host [port]`. A host alone may still carry a port once the shell splits it.
     addresses.push(positional[1] === undefined ? positional[0]! : `${positional[0]}:${positional[1]}`)
   }
-  return { addresses, configs, lists, defaults }
+  return { addresses, requests, configs, lists, defaults, curlOptions, positional }
 }
 
 /** A `.wgetrc` command given with `-e`: a proxy setting is an address. */
@@ -1206,12 +1443,35 @@ const wgetProxy = (command: string) => {
 /** The verdicts one client call gets (D2, D4, U1-U4), none when it cannot reach Swarm's server. */
 function judgeClient(call: ClientCall, cwd: string, listeners: readonly SelfAddress.Address[]): OwnApiHit[] {
   if (call.runtime) return [{ reason: "unresolved_target" }]
-  const { addresses, configs, lists, defaults } = clientParts(call)
+  const { addresses, requests, configs, lists, defaults, curlOptions, positional } = clientParts(call)
   const hits: OwnApiHit[] = []
   for (const word of addresses) {
     if (word === "") continue
     const hit = judgeAddress(word, listeners)
     if (hit) hits.push(hit)
+  }
+  // 1.2.7 row 47k (U10-1): what the request asks for, from the line and from every config file the client reads.
+  const read = [...configs.filter((word) => word !== "").map((word) => (word === "-" ? undefined : commandFile(word, cwd)))]
+  const defaultFiles = defaults && (call.program === "curl" || call.program === "wget") ? defaultConfigs(call.program) : []
+  const info: RequestInfo =
+    call.program === "curl"
+      ? curlRequest([
+          ...curlOptions,
+          ...[...read, ...defaultFiles].flatMap((file): [string, string | undefined][] =>
+            file === undefined ? [["?", undefined]] : curlConfigOptions(file),
+          ),
+        ])
+      : call.program === "wget"
+        ? read.includes(undefined)
+          ? { method: undefined, targetUnknown: false }
+          : wgetRequest(call.args, [...read.filter((file) => file !== undefined), ...defaultFiles])
+        : call.program === "http" || call.program === "https" || call.program === "xh"
+          ? httpieRequest(positional)
+          : { method: undefined, targetUnknown: true }
+  for (const word of requests) {
+    if (word === "") continue
+    const hit = judgeAddress(word, listeners)
+    if (hit) hits.push(routed(word, hit, info))
   }
   for (const [word, stdin] of [
     ...configs.map((word) => [word, "config_file"] as const),
@@ -1220,10 +1480,9 @@ function judgeClient(call: ClientCall, cwd: string, listeners: readonly SelfAddr
     // U1/U4: read from stdin, or from a file whose name is not written out.
     const file = word === "-" ? undefined : commandFile(word, cwd)
     if (file === undefined) hits.push({ reason: word === "-" ? stdin : "config_file" })
-    else hits.push(...judgeConfig(file, listeners))
+    else hits.push(...judgeConfig(file, listeners, info))
   }
-  if (defaults && (call.program === "curl" || call.program === "wget"))
-    for (const file of defaultConfigs(call.program)) hits.push(...judgeConfig(file, listeners))
+  for (const file of defaultFiles) hits.push(...judgeConfig(file, listeners, info))
   return hits
 }
 
@@ -1267,20 +1526,29 @@ function judgeOwnServer(text: string, cwd: string, listeners: readonly SelfAddre
   const hits: OwnApiHit[] = []
   for (const part of liftSubstitutions(text)) {
     const resolved = substituteAssignments(part)
-    if (listeners.some((listener) => namesListener(resolved, listener))) hits.push({})
+    const names = (text: string) => listeners.some((listener) => namesListener(text, listener))
     for (const match of resolved.matchAll(/\/dev\/(?:tcp|udp)\/([^/\s]+)\/([^\s;&|)]+)/g)) {
       const hit = judgeAddress(`${match[1]}:${match[2]}`, listeners)
       if (hit) hits.push(hit)
     }
+    // 1.2.7 row 47k (U10-1): the listener named in a simple command counts as a call with no route that can be read (a
+    // socket, interpreter code, an echo), unless that command is a client whose call to it was read (routed or refused).
+    let segmentNamed = false
     for (const words of shellSegments(resolved)) {
+      const named = names(words.join(" "))
+      segmentNamed ||= named
       const call = clientCall(words)
-      if (call === undefined) continue
-      if ("nested" in call) {
+      if (call !== undefined && "nested" in call) {
         if (depth < 2) hits.push(...judgeOwnServer(call.nested, cwd, listeners, depth + 1))
+        else if (named) hits.push({})
         continue
       }
-      hits.push(...judgeClient(call, cwd, listeners))
+      const found = call === undefined ? [] : judgeClient(call, cwd, listeners)
+      hits.push(...found)
+      if (named && found.length === 0) hits.push({})
     }
+    // Named only where the words leave it out (a redirection's target, a here-document): refused as before.
+    if (!segmentNamed && names(resolved)) hits.push({})
   }
   return hits
 }
@@ -1300,6 +1568,12 @@ function judgeOwnServer(text: string, cwd: string, listeners: readonly SelfAddre
  * of the server password file (U16), X `app_state` for any shell write out of app state (C8), the app-state read
  * allowlist (no oracle), and the desktop nonce on revert and archive-empty only. The permission reply, consent and mode
  * routes are password-only.
+ * 1.2.7 row 47k (U10-1, user ruling U10, C76): narrowed to the routes only the person calls. A request whose method and
+ * path were read from its words (curl/wget operands and options, their config files, httpie's method and items, a
+ * webfetch URL) runs under the consent like any other local call unless `personOnlyRoute` names it; that one is X
+ * `own_api` with no reason. Every form whose route cannot be read stays refused as before: a path or method not written
+ * out (`unresolved_target`), an unread config (`config_file`), a socket, a proxy or interpreter code naming the listener
+ * (no reason).
  */
 function ownServerCall(input: Input): OwnApiHit | undefined {
   const listeners = SelfAddress.list()
@@ -1307,17 +1581,20 @@ function ownServerCall(input: Input): OwnApiHit | undefined {
   const hits: OwnApiHit[] = []
   const url = input.metadata.url
   if (typeof url === "string") {
-    if (listeners.some((listener) => namesListener(url, listener))) return {}
+    // A webfetch only ever asks with GET.
     const hit = judgeAddress(url, listeners, true)
-    if (hit) hits.push(hit)
+    if (hit) hits.push(routed(url, hit, { method: "GET", targetUnknown: false }))
+    else if (listeners.some((listener) => namesListener(url, listener))) hits.push({})
   }
   const command = input.metadata.command
   if (typeof command === "string") hits.push(...judgeOwnServer(command, input.cwd, listeners))
-  if (hits.length === 0) return undefined
-  return hits.find((hit) => hit.reason === undefined) ?? hits.find((hit) => hit.reason === "config_file") ?? hits[0]
+  if (hits.some((hit) => hit.route !== undefined && personOnlyRoute(hit.route))) return {}
+  const refused = hits.filter((hit) => hit.route === undefined)
+  if (refused.length === 0) return undefined
+  return refused.find((hit) => hit.reason === undefined) ?? refused.find((hit) => hit.reason === "config_file") ?? refused[0]
 }
 
-/** Whether a call reaches Swarm's own running server, by `ownServerCall`. */
+/** Whether a call to Swarm's own running server is refused, by `ownServerCall` (1.2.7 row 47k: a readable, not person-only route is not). */
 export function callsOwnServer(input: Input) {
   return ownServerCall(input) !== undefined
 }
@@ -2571,6 +2848,40 @@ function appStateRead(command: string, cwd: string, instance: InstanceContext) {
 }
 
 /** N-1: a shell call (or its folder prompt) that reaches Swarm's own state and only looks there as OP-2 allows. */
+/** 1.2.7 row 47k (U9-7): programs that only write the places they name; none prints what a place holds. */
+const STATE_WRITERS: ReadonlySet<string> = new Set(["printf", "echo", "print", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln", "install", "truncate", "tee", "true", ":"])
+/** Of those, the ones whose words are text, not places. */
+const TEXT_WRITERS: ReadonlySet<string> = new Set(["printf", "echo", "print", "true", ":"])
+
+/**
+ * 1.2.7 row 47k (U9-7, C76, user ruling U9 item 7): an autonomous shell call outside the consent that reaches Swarm's
+ * state only through a glob, a link or a variable (no spelling `mentionsAppState` knows) and only writes there: every
+ * simple command is a `cd` or one of `STATE_WRITERS`, no input redirect or command substitution, and no operand a copy
+ * or move reads from (all but the last of `cp`, `ln`, `install`, `mv`) lies in or may glob into app state. Such a call is
+ * held for the person as in 1.2.6 (R-1); everything else that `writesAppState` finds stays X `app_state` (SR7-01).
+ */
+function indirectStateWrite(input: Input) {
+  const command = input.metadata.command
+  if (input.bypass || input.permission !== "bash" || typeof command !== "string") return false
+  if (mentionsAppState(command, input.instance) || /[<`]|\$\(/.test(command)) return false
+  let dirs = [input.cwd]
+  const places = (word: string) => spelling.expand(word, homes()).names.flatMap((name) => dirs.map((dir) => path.resolve(dir, name)))
+  return shellSegments(command).every((words) => {
+    const program = path.basename(words[0]!)
+    if (program === "cd") {
+      if (words[1] !== undefined) dirs = spelling.widen(dirs, places(words[1])).folders
+      return true
+    }
+    if (!STATE_WRITERS.has(program)) return false
+    if (TEXT_WRITERS.has(program)) return true
+    const operands = words.slice(1).filter((word) => !word.startsWith("-"))
+    const read = ["cp", "ln", "install", "mv"].includes(program) ? operands.slice(0, -1) : []
+    return !read.some((word) =>
+      places(word).some((file) => (/[*?[]/.test(word) ? globReachesState(file) : stateRelation(file, input.instance) === "inside")),
+    )
+  })
+}
+
 function readsAppState(input: Input) {
   const command = input.metadata.command
   if (typeof command !== "string" || (input.permission !== "bash" && input.permission !== "external_directory")) return false
@@ -3381,7 +3692,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   const planEdit = input.plan === true && input.permission === "edit"
   const planFile = planEdit && isPlanFile(input)
   if (planEdit && !planFile) return refused("plan_mode")
-  if (!planFile && writesAppState(input)) return refused("app_state")
+  // 1.2.7 row 47k (U9-7, C76): a write that reaches the state folder only through a glob, a link or a variable is held
+  // for the person (D), as in 1.2.6; spelled out, or under the consent (where nothing waits for a person), it is refused.
+  if (!planFile && writesAppState(input)) return indirectStateWrite(input) ? held("app_state") : refused("app_state")
   // 1.2.7 U-10 (C63): only the person turns the mode on (1.1.1 rule); an agent's `swarm autonomy` never runs.
   if (input.permission === "bash" && runsAutonomyCommand(input.metadata.command))
     return { ...refused("own_api"), reason: "person_only" }

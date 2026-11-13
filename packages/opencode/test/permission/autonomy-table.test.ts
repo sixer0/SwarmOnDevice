@@ -1597,13 +1597,13 @@ describe("writing the trust store (ADV-A13)", () => {
             [`printf x | tee ${store()}`, "X"],
             ["printf x > $HOME/.local/state/swarm/trust.json", "X"],
             ["tee state-dir/trust.json", "X"],
-            // 1.2.7 N-1 (SR7-01, INTENT row 29b): a variable, a glob or a link into the state folder is resolved as the
-            // shell would, so these writes are refused (X app_state) instead of held (D).
-            ["printf x > $XDG_STATE_HOME/swarm/tr*", "X"],
-            ["cp src/a.ts state-dir/tr", "X"],
-            ["mv src/a.ts state-dir/tr", "X"],
-            ["rm state-dir/tr", "X"],
-            ["cd state-dir && touch tr", "X"],
+            // 1.2.7 row 47k (U9-7, C76, INTENT; was X since row 29b): a write that reaches the state folder only through
+            // a variable, a glob or a link is held for the person (D), as in 1.2.6; under the consent it stays refused.
+            ["printf x > $XDG_STATE_HOME/swarm/tr*", "D"],
+            ["cp src/a.ts state-dir/tr", "D"],
+            ["mv src/a.ts state-dir/tr", "D"],
+            ["rm state-dir/tr", "D"],
+            ["cd state-dir && touch tr", "D"],
           ]
           for (const [command, expected] of named) {
             const verdict = yield* classifyCommand(command)

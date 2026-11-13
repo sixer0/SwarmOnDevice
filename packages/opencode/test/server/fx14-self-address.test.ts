@@ -17,7 +17,8 @@ test("Server.listen records its own address; a curl to it is X own_api until it 
   await using fixture = await tmpdir({ git: true })
   const instance = { directory: fixture.path, worktree: fixture.path, project: { vcs: "git" } } as InstanceContext
   const curl = (port: number): AutonomyTable.Input => {
-    const command = `curl -s http://127.0.0.1:${port}/session`
+    // 1.2.7 row 47k (U10-1, INTENT): a person-only route; a `/session` read now runs under the consent.
+    const command = `curl -s -X PUT http://127.0.0.1:${port}/autonomy/mode`
     return { permission: "bash", patterns: [command], metadata: { command }, instance, cwd: fixture.path, canUndo: true, folder: "clean" }
   }
   const listener = await Server.listen({ hostname: "127.0.0.1", port: 0 })
