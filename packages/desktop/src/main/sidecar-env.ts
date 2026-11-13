@@ -7,7 +7,12 @@
 // which finds `<XDG_STATE_HOME>/swarm/datum-studio.env` through the XDG_STATE_HOME the sidecar already gets
 // (sidecar.ts prepareSidecarEnv), and the Studio token stays in that 0600 file, never in this environment.
 
+import { isAbsolute } from "node:path"
+import { existingDefaultProjectDir } from "./onboarding-test-root"
+
 export const RENDER_SOCKET_KEY = "DATUM_RENDER_SOCKET"
+/** N8-443 (AC-PROJa, 1.2.8 row 25): the absolute Default Project root, read by the server's re-home route. Not a secret. */
+export const DEFAULT_PROJECT_DIR_KEY = "SWARM_DEFAULT_PROJECT_DIR"
 export const RENDER_TOKEN_KEY = "DATUM_RENDER_TOKEN"
 
 export type RenderEnv = { DATUM_RENDER_SOCKET: string; DATUM_RENDER_TOKEN: string }
@@ -26,6 +31,9 @@ export function createSidecarEnv(
   base: NodeJS.ProcessEnv,
   render?: RenderEnv,
   platform: NodeJS.Platform = process.platform,
+  // undefined: this launch's Default Project when it exists as a folder (the test root's under test onboarding,
+  // R-7); null: none. An explicit path is passed through.
+  defaultProject: string | null | undefined = existingDefaultProjectDir(),
 ): Record<string, string> {
   const env = Object.fromEntries(
     Object.entries(base).flatMap(([key, value]) => (value === undefined ? [] : [[key, String(value)]])),
@@ -40,6 +48,9 @@ export function createSidecarEnv(
     env[RENDER_SOCKET_KEY] = render.DATUM_RENDER_SOCKET
     env[RENDER_TOKEN_KEY] = render.DATUM_RENDER_TOKEN
   }
+  // Only this launch's Default Project may be named: an inherited value (login shell, a parent test) is dropped first.
+  delete env[DEFAULT_PROJECT_DIR_KEY]
+  if (defaultProject && isAbsolute(defaultProject) && !/[\0\r\n]/.test(defaultProject)) env[DEFAULT_PROJECT_DIR_KEY] = defaultProject
   return env
 }
 
