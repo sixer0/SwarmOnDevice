@@ -20,6 +20,8 @@
  * descriptor names a new endpoint, the bridge replays the client's `initialize` there (its answer is not echoed), sends
  * `notifications/initialized`, reopens the session stream and retries the failed request once. The change is logged with
  * the new port and PID only. An unchanged descriptor, or a second change, ends the bridge as before (exit 3).
+ * A descriptor port that is empty, below ENDPOINT_PORT_MIN (1024) or above 65535 is refused DESCRIPTOR_INVALID at start
+ * and on reconnect, so it never replaces the current endpoint; HOST_UNREACHABLE names the endpoint port (1.2.7 M-02).
  *
  * Exit codes: 0 stdin closed; 3 Swarm not running / endpoint gone / token rejected (prints START_SWARM_MESSAGE, spec
  * §9.5); 4 misconfigured bundle or environment.
@@ -41,6 +43,12 @@ const TOKEN_RE = /^[A-Za-z0-9._~+/-]{32,512}$/
 const SOURCE = "datum-studio-bridge"
 /** Row 54b (M-02, register N-051): how many times one bridge process follows a changed descriptor. */
 export const BRIDGE_RECONNECT_ATTEMPTS = 1
+/** 1.2.7 row 41b (M-02, register N7-061): the lowest endpoint port accepted. The app binds port 0, so the OS gives an
+ * ephemeral port >= 1024; port 0, 1 or any privileged port in a descriptor is a broken or foreign descriptor. */
+export const ENDPOINT_PORT_MIN = 1024
+const ENDPOINT_PORT_MAX = 65535
+const INVALID_PORT = () =>
+  new Fatal(EXIT_NOT_RUNNING, "DESCRIPTOR_INVALID", "the DATUM Studio descriptor names an invalid port")
 
 type Json = Record<string, unknown>
 type Endpoint = { url: string; token: string; pid: string }
@@ -99,6 +107,10 @@ function readDescriptor(path: string) {
   }
 }
 
+function validPort(port: number) {
+  return Number.isInteger(port) && port >= ENDPOINT_PORT_MIN && port <= ENDPOINT_PORT_MAX
+}
+
 function readEndpoint(state: string): Endpoint {
   const fields: Record<string, string> = {}
   for (const line of readDescriptor(join(state, "swarm", DESCRIPTOR_FILE)).split("\n")) {
@@ -108,13 +120,19 @@ function readEndpoint(state: string): Endpoint {
   const url = fields.URL ?? ""
   const token = fields.TOKEN ?? ""
   const pid = fields.PID ?? ""
+  // M-02 (row 41b): a loopback URL whose port is out of range is refused as an invalid port, not tried. Checked on the
+  // raw text first, because the URL parser rejects a port above 65535 outright.
+  const rawPort = /^http:\/\/127\.0\.0\.1:([0-9]+)(?:[/?#]|$)/.exec(url)?.[1]
+  if (rawPort !== undefined && !validPort(Number(rawPort))) throw INVALID_PORT()
   let parsed: URL | undefined
   try {
     parsed = new URL(url)
   } catch {}
   // Loopback only (spec §9.1): the Bearer token is never sent anywhere else.
-  if (!parsed || parsed.protocol !== "http:" || parsed.hostname !== "127.0.0.1" || parsed.port === "")
+  if (!parsed || parsed.protocol !== "http:" || parsed.hostname !== "127.0.0.1")
     throw new Fatal(EXIT_NOT_RUNNING, "DESCRIPTOR_INVALID", "the DATUM Studio descriptor has no loopback URL")
+  // An empty port (none, or the scheme default 80) is invalid too.
+  if (parsed.port === "" || !validPort(Number(parsed.port))) throw INVALID_PORT()
   if (!TOKEN_RE.test(token) || !/^[0-9]+$/.test(pid))
     throw new Fatal(EXIT_NOT_RUNNING, "DESCRIPTOR_INVALID", "the DATUM Studio descriptor is incomplete")
   return { url: parsed.href, token, pid }
@@ -194,8 +212,10 @@ class Bridge {
       // FX-4 (S2): no Bun idle cut at 300 s; the slow-call bounds are the host's 540 s and the client's 600 s.
       return await fetch(this.endpoint.url, { ...init, redirect: "error", ...BRIDGE_FETCH_OPTIONS } as RequestInit)
     } catch (error) {
+      // M-02 (N7-062): name the endpoint by its port only; the URL text is not echoed and the token never is.
       throw new Fatal(EXIT_NOT_RUNNING, "HOST_UNREACHABLE", "the DATUM Studio endpoint does not answer", {
         error: error instanceof Error ? error.name : "unknown",
+        port: new URL(this.endpoint.url).port,
       })
     }
   }
