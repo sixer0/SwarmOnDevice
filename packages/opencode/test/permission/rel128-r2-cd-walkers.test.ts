@@ -183,3 +183,68 @@ describe("27a G1-01: the exact home forms keep row 27's read (red at BASE, green
       })
     })
 })
+
+// 1.2.8 row 27b (G1-12, G1-13, C115). Pins of what the walkers decide today, no verdict change. Per form: the read class,
+// whether the planner is refused (root and coder never are), and the verdict with consent (mode on) and without (off).
+const OUTSIDE_READ: Expected = { class: "A", decidedBy: "gate", category: "outside_read" }
+const PROTECTED_READ: Expected = { class: "A", decidedBy: "gate", category: "protected_read" }
+type Pin = [command: string, readClass: boolean, plannerRefused: boolean, on: Expected, off: Expected]
+
+// G1-12: `lookWords` drops quotes, so a quoted `$HOME` or `~` is read as the home folder (the shell moves into a folder
+// of that literal name). Every verdict below equals BASE e1f9673772 (the re-review's `rr37a` probe, BASE = HEAD), except
+// the last form, marked.
+const QUOTED_HOME: Pin[] = [
+  ['cd "$HOME";id && ls', false, true, MAIN_AGENT("not_routine"), NOT_ROUTINE],
+  ['cd "$HOME" && ls', false, true, OUTSIDE_READ, OUTSIDE_READ],
+  ['cd "${HOME}" && ls', false, true, OUTSIDE_READ, OUTSIDE_READ],
+  ["cd '$HOME' && ls", true, false, PROTECTED_READ, PROTECTED_READ],
+  ["cd '$HOME' && cat s.md", true, false, PROTECTED_READ, PROTECTED_READ],
+  ["cd '$HOME' && cat .ssh/id_rsa", true, false, PROTECTED_READ, PROTECTED_READ],
+  ["cd '${HOME}'/x && ls", false, true, PROTECTED_READ, PROTECTED_READ],
+  ["cd '~' && cat s.md", true, false, PROTECTED_READ, PROTECTED_READ],
+  ['cd "~" && ls', true, false, PROTECTED_READ, PROTECTED_READ],
+  ["cd '$HOME' && ls ../..", true, false, PROTECTED_READ, PROTECTED_READ],
+  ["cd '~' && cat .ssh/id_rsa", true, false, PROTECTED_READ, PROTECTED_READ],
+  ['cd "~" && cat .ssh/id_rsa', true, false, PROTECTED_READ, PROTECTED_READ],
+  ["cd '$HOME' && cat .env", true, false, PROTECTED_READ, PROTECTED_READ],
+  ["cd '$HOME' && cat ../.env", true, false, PROTECTED_READ, PROTECTED_READ],
+  // Not BASE: BASE gave read class with the planner allowed. Since row 27 it is not read class and the planner is
+  // refused, as for the unquoted `cd $HOME 2>/dev/null && ls` at BASE and HEAD (the stricter side; same verdict).
+  ["cd '$HOME' 2>/dev/null && ls", false, true, PROTECTED_READ, PROTECTED_READ],
+]
+
+// G1-13: `homeCdWords` reads `cd` only. `pushd $HOME` and `chdir $HOME` name no folder in the read class, so the planner
+// is refused them (the stricter side), while `cd $HOME` and `pushd ~` (read by `lookWords`) are reads it may run. These
+// are HEAD's verdicts (row 27 and 27a); BASE gave all four D `not_routine` without consent except `cd $HOME && ls`.
+const HOME_WALKS: Pin[] = [
+  ["pushd $HOME && ls", false, true, OUTSIDE_READ, OUTSIDE_READ],
+  ["chdir $HOME && ls", false, true, OUTSIDE_READ, OUTSIDE_READ],
+  ["pushd ~ && ls", true, false, PROTECTED_READ, PROTECTED_READ],
+  ["cd $HOME && ls", true, false, PROTECTED_READ, PROTECTED_READ],
+]
+
+for (const [title, pins] of [
+  ["27b G1-12: a quoted home folder is read as home, as at BASE", QUOTED_HOME],
+  ["27b G1-13: cd, pushd and chdir to home keep today's verdicts", HOME_WALKS],
+] as const)
+  describe(title, () => {
+    for (const [command, readClass, plannerRefused, on, off] of pins)
+      for (const [agent, caller] of CALLERS)
+        for (const mode of ["on", "off"] as const)
+          test(`${command} | ${agent ?? "root"} | mode ${mode}`, async () => {
+            const call = await input(command, agent, caller)
+            if (mode === "off") delete (call as { bypass?: unknown }).bypass
+            const verdict = AutonomyTable.classify(call)
+            expect({
+              command,
+              readClass: AutonomyTable.isReadOnlyShell(command, dir, instance),
+              roleRefuses: AutonomyTable.readRoleRefuses(call, instance),
+              verdict: { class: verdict.class, decidedBy: verdict.decidedBy, category: verdict.category, bypassed: verdict.bypassed },
+            }).toEqual({
+              command,
+              readClass,
+              roleRefuses: agent === "planner" && plannerRefused,
+              verdict: { decidedBy: undefined, category: undefined, bypassed: undefined, ...(mode === "on" ? on : off) },
+            })
+          })
+  })

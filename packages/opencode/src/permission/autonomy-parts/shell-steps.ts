@@ -270,7 +270,10 @@ export function cdTarget(words: readonly string[], cwd: string): string | undefi
  * 1.2.8 row 27a (G1-01, C106): the only folder move a walker reads from a piece `lookWords` refuses. Exactly `cd $HOME`
  * or `cd ${HOME}`, optionally followed by `/` and a plain path (letters, digits, `.`, `_`, `+`, `-`, `/`), as the words
  * `cdTarget` takes; undefined for anything else. Text the shell parser refused is never split on spaces, so an operator,
- * a redirect, a quote or a second command in the operand never names a folder.
+ * a redirect, a quote or a second command in the operand never names a folder. 1.2.8 row 27b (G1-13): it reads `cd`
+ * only, not `pushd` or `chdir`, so `pushd $HOME && ls` and `chdir $HOME && ls` name no folder in the read class and a
+ * read role is refused them, while `cd $HOME && ls` and `pushd ~ && ls` (taken by `lookWords`) are reads it may run.
+ * That is the stricter side for read roles; the verdicts are pinned in N8-312.
  */
 export function homeCdWords(piece: string): string[] | undefined {
   const match = /^cd (\$HOME|\$\{HOME\})(\/[A-Za-z0-9._+/-]*)?$/.exec(piece)
@@ -891,7 +894,10 @@ export function protectedLook(command: string, cwd: string, instance: InstanceCo
   for (const [index, piece] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
     // As `routine` reads it: a piece may drop its own error output, and nothing else.
     const words = lookWords(piece.replace(DROP_ERRORS, ""))
-    // `cd $HOME` is no plain word list; `homeCdWords` reads only its exact forms (1.2.8 row 27a, G1-01), never a naive split.
+    // `cd $HOME` is no plain word list; `homeCdWords` reads only its exact unquoted forms (1.2.8 row 27a, G1-01), never a
+    // naive split. Quotes are not refused here: `lookWords` drops them, so `cd '$HOME'`, `cd '~'` and `cd "~"` reach
+    // `cdTarget` as the home folder although the shell moves into a folder named `$HOME` or `~`. BASE reads them the same
+    // way; refusing them would be stricter than BASE and needs a decision first (1.2.8 row 27b, G1-12; pinned in N8-312).
     const cdWords = index === 0 ? (words ?? homeCdWords(piece)) : undefined
     const target = cdWords ? cdTarget(cdWords, cwd) : undefined
     if (target !== undefined) {

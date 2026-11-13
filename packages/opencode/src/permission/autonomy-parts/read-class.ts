@@ -566,7 +566,10 @@ export function readClass(command: string, cwd: string, instance: InstanceContex
   const named: string[] = []
   for (const [index, raw] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
     const words = lookWords(raw.replace(DROP_ERRORS, ""))
-    // `cd $HOME` is no plain word list; `homeCdWords` reads only its exact forms (1.2.8 row 27a, G1-01), never a naive split.
+    // `cd $HOME` is no plain word list; `homeCdWords` reads only its exact unquoted forms (1.2.8 row 27a, G1-01), never a
+    // naive split. Quotes are not refused here: `lookWords` drops them, so `cd '$HOME'`, `cd '~'` and `cd "~"` reach
+    // `cdTarget` as the home folder although the shell moves into a folder named `$HOME` or `~`. BASE reads them the same
+    // way; refusing them would be stricter than BASE and needs a decision first (1.2.8 row 27b, G1-12; pinned in N8-312).
     const cdWords = index === 0 ? (words ?? homeCdWords(raw)) : undefined
     const target = cdWords ? cdTarget(cdWords, cwd) : undefined
     if (target !== undefined) {
