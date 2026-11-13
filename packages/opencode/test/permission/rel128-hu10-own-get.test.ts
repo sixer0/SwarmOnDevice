@@ -382,8 +382,7 @@ describe("OP20-10: the lists are pinned and every route is a registered GET path
       readFileSync(fileURLToPath(new URL("../../../sdk/openapi.json", import.meta.url)), "utf8"),
     ) as { paths: Record<string, Record<string, unknown>> }
     for (const { route } of own.OWN_API_READ_ROUTES) {
-      // Row 43e adds GET /memory/vault (AC-OBSe pins it on this list); until then it has no path in the contract.
-      if (route === "/memory/vault" && openapi.paths["/memory/vault"] === undefined) continue
+      // Every listed route, GET /memory/vault included (row 43e, AC-OBSe), has a GET in the contract.
       const key = route.replace(/:(\w+)/g, "{$1}")
       expect([route, openapi.paths[key]?.get !== undefined]).toEqual([route, true])
     }

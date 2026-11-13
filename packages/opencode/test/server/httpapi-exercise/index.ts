@@ -709,6 +709,7 @@ const scenarios: Scenario[] = [
       "status",
     ),
   http.protected.get("/memory", "memory.get").json(200, object),
+  http.protected.get("/memory/vault", "memory.vault").json(200, object),
   http.protected
     .post("/memory", "memory.add")
     .at((ctx) => ({ path: "/memory", headers: ctx.headers(), body: { text: "the password: hunter22" } }))
