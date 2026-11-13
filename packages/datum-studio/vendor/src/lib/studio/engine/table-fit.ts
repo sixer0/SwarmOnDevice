@@ -59,10 +59,19 @@ const cps = (s: string): number => Array.from(s).length;
 export const TABLE_BREAK_AFTER: readonly string[] = [",", ";", "/"];
 export const TABLE_BREAK_MIN_CHARS = 16;
 
+/**
+ * Swarm 1.2.7 row 40b (AC-N11, C39): a URL is never split. A token holding "://", or starting with "www." or
+ * "mailto:" (leading brackets/quotes ignored), stays one segment, so DOCX never carries U+200B inside a link (it would
+ * travel with copy-paste and break it), HTML gets no <wbr> there, and DT-10a counts the URL as one unbreakable word.
+ */
+export function isUrlToken(word: string): boolean {
+  return word.includes("://") || /^[(\[{<"'‘“]*(www\.|mailto:)/i.test(word);
+}
+
 /** Segments of a whitespace-free run: split after each separator (kept on the left) when the run is long, else whole. */
 export function breakableSegments(word: string): string[] {
   const chars = Array.from(word);
-  if (chars.length <= TABLE_BREAK_MIN_CHARS) return [word];
+  if (chars.length <= TABLE_BREAK_MIN_CHARS || isUrlToken(word)) return [word];
   const out: string[] = [];
   let cur = "";
   for (const ch of chars) {
