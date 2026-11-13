@@ -165,8 +165,25 @@ export const Info = Schema.Struct({
   content: Schema.String,
   /** N8-030: data that suggests the skill (SK-g); it never loads it. Absent when the file has none or they are invalid. */
   triggers: Schema.optional(Triggers),
+  /** N8-039: true when the person turned the skill off (global `skills.disabled`); only `all()` returns such a skill. */
+  disabled: Schema.optional(Schema.Boolean),
+  /** N8-397: true for a REQUIRED_SKILL_NAMES skill, which `skills.disabled` cannot turn off. */
+  required: Schema.optional(Schema.Boolean),
 })
 export type Info = Schema.Schema.Type<typeof Info>
+
+/** N8-396 (RA-1, OP-6): skills Swarm needs. `skills.disabled` (N8-038) is ignored for these names. */
+export const REQUIRED_SKILL_NAMES: ReadonlySet<string> = new Set(["obsidian-memory"])
+
+const isTurnedOff = (disabled: ReadonlySet<string>, name: string) =>
+  disabled.has(name) && !REQUIRED_SKILL_NAMES.has(name)
+
+/** AC-SKc: the person-facing marks. A plain enabled skill is returned unchanged (no extra fields). */
+function marked(info: Info, disabled: ReadonlySet<string>): Info {
+  if (REQUIRED_SKILL_NAMES.has(info.name)) return { ...info, required: true, disabled: false }
+  if (disabled.has(info.name)) return { ...info, disabled: true }
+  return info
+}
 
 /**
  * N8-030..N8-034: a SKILL.md `triggers` value, normalised (lists always present, values trimmed, keywords and mission
@@ -723,28 +740,40 @@ const layer = Layer.effect(
           )
           const trusted = ProjectTrust.isTrusted(ctx.directory)
           const key = yield* Effect.promise(() => fingerprint(discovered.matches, [trusted, claudeCompat]))
-          if (h.last?.key === key) return h.last
+          // AC-SKc (N8-038): the person's `skills.disabled`, global config only (a project key has no effect). Read on
+          // every request and kept out of the fingerprint: it filters the parsed set, it does not change it. A broken
+          // global config turns nothing off (the claude_compat read above already warned about it).
+          const disabled: ReadonlySet<string> = yield* config.getGlobal().pipe(
+            Effect.map((item) => new Set(item.skills?.disabled ?? [])),
+            Effect.catchDefect(() => Effect.succeed(new Set<string>())),
+          )
+          if (h.last?.key === key) return { ...h.last, disabled }
           const next: Snapshot = { key, discovered, state: yield* build(discovered, trusted, h.warned), claudeCompat }
           h.last = next
-          return next
+          return { ...next, disabled }
         }),
       )
     })
 
     const get = Effect.fn("Skill.get")(function* (name: string) {
-      const s = (yield* current()).state
-      return s.skills[name]
+      const { state: s, disabled } = yield* current()
+      const info = s.skills[name]
+      if (!info || isTurnedOff(disabled, name)) return undefined
+      return marked(info, disabled)
     })
 
     const require = Effect.fn("Skill.require")(function* (name: string) {
-      const s = (yield* current()).state
+      const { state: s, disabled } = yield* current()
       const info = s.skills[name]
-      if (info) return info
+      if (info && !isTurnedOff(disabled, name)) return marked(info, disabled)
       return yield* new NotFoundError({
         name,
-        available: Object.keys(s.skills).toSorted(),
-        reason:
-          name === KNOWLEDGE_LIBRARY_SKILL_NAME
+        available: Object.keys(s.skills)
+          .filter((item) => !isTurnedOff(disabled, item))
+          .toSorted(),
+        reason: info
+          ? `Skill "${name}" is turned off by the person in Settings > Skills.`
+          : name === KNOWLEDGE_LIBRARY_SKILL_NAME
             ? yield* libraryAbsence(s)
             : name === DATUM_SKILL_NAME
               ? yield* datumAbsence(s)
@@ -753,8 +782,8 @@ const layer = Layer.effect(
     })
 
     const all = Effect.fn("Skill.all")(function* () {
-      const s = (yield* current()).state
-      return Object.values(s.skills)
+      const { state: s, disabled } = yield* current()
+      return Object.values(s.skills).map((info) => marked(info, disabled))
     })
 
     const dirs = Effect.fn("Skill.dirs")(function* () {
@@ -762,8 +791,11 @@ const layer = Layer.effect(
     })
 
     const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info) {
-      const s = (yield* current()).state
-      const list = Object.values(s.skills).toSorted((a, b) => a.name.localeCompare(b.name))
+      const { state: s, disabled } = yield* current()
+      const list = Object.values(s.skills)
+        .filter((info) => !isTurnedOff(disabled, info.name))
+        .map((info) => marked(info, disabled))
+        .toSorted((a, b) => a.name.localeCompare(b.name))
       if (!agent) return list
       return list.filter((skill) => Permission.evaluate("skill", skill.name, agent.permission).action !== "deny")
     })
