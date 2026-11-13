@@ -917,7 +917,8 @@ type OwnRoute = { readonly method: string | undefined; readonly path: string }
  * 1.2.7 row 47k (U10-1, U10 user ruling): the routes of Swarm's own server only the person calls, whatever the method:
  * the autonomous mode and the person's "that change was mine" (`/autonomy/mode`, `/autonomy/confirm`), every consent route,
  * emptying the archive and putting a checkpoint back (the desktop nonce routes), answering a permission, a question or a
- * TUI control request on the person's behalf, and folder trust. Matched as segments anywhere in the path, so a prefix
+ * TUI control request on the person's behalf, and folder trust; since row 47l (C79) also the user's shell, the person's
+ * UI, repository commits and patches, upgrade and dispose. Matched as segments anywhere in the path, so a prefix
  * (a workspace proxy) does not hide them.
  */
 const PERSON_ONLY_ROUTES: readonly RegExp[] = [
@@ -930,6 +931,20 @@ const PERSON_ONLY_ROUTES: readonly RegExp[] = [
   /(?:^|\/)question\/[^/]+\/(?:reply|reject)(?:\/|$)/,
   /(?:^|\/)tui\/control\/response(?:\/|$)/,
   /(?:^|\/)trust(?:\/|$)/,
+  // 1.2.7 row 47l (C79): routes that run a command or change files outside the permission system, or act in the person's
+  // UI. `session/:id/shell` runs a command recorded as "executed by the user" with no permission check (session/prompt.ts
+  // shellImpl); every `tui` route drives the person's terminal UI (submit or append a prompt, execute a command, open a
+  // dialog, show a toast, select a session, the control queue); `vcs/commit` and `vcs/apply` and `project/git/init` write
+  // the repository outside the checkpoint and classifier path; `global/upgrade` replaces Swarm; the dispose routes stop the
+  // person's instances.
+  /(?:^|\/)session\/[^/]+\/shell(?:\/|$)/,
+  /(?:^|\/)tui(?:\/|$)/,
+  /(?:^|\/)vcs\/(?:commit|apply)(?:\/|$)/,
+  /(?:^|\/)project\/git\/init(?:\/|$)/,
+  /(?:^|\/)global\/upgrade(?:\/|$)/,
+  /(?:^|\/)(?:global|instance)\/dispose(?:\/|$)/,
+  // Attaching to a terminal session types into it (a GET that upgrades to a websocket).
+  /(?:^|\/)pty\/[^/]+\/connect(?:\/|$)/,
 ]
 /**
  * 1.2.7 row 47k (U10-1): routes whose writes only the person makes: configuration (`/config`, `/global/config`, the lane
@@ -941,6 +956,8 @@ const PERSON_ONLY_WRITES: readonly RegExp[] = [
   /(?:^|\/)global\/lanes(?:\/|$)/,
   /(?:^|\/)auth(?:\/|$)/,
   /(?:^|\/)autonomy(?:\/|$)/,
+  // 1.2.7 row 47l (C79): a terminal session (`pty`) spawns any program it is given, with no permission check.
+  /(?:^|\/)pty(?:\/|$)/,
 ]
 const READ_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS"])
 
@@ -994,7 +1011,6 @@ const CURL_REQUEST_LONG = [
   "--form", "--form-string", "--upload-file", "--head", "--get", "--header", "--next", "--variable", "--expand-url",
   "--expand-data", "--url",
 ]
-const CURL_FLAGS_KNOWN: ReadonlySet<string> = new Set(["--head", "--get", "--next"])
 
 /** The request curl makes from its options, those given on the line and those its config files add (`configs`). */
 function curlRequest(options: readonly [string, string | undefined][]): RequestInfo {

@@ -79,8 +79,9 @@ export const ROLE_SHELL_OUTSIDE_READ_TEXT =
  * 1.2.7 F-4 (N7-052): X `own_api`, a call to Swarm's own running server whose address the call itself names (a literal
  * host and port, a variable assigned in the same text, a config file that was read).
  */
+// 1.2.7 row 47l (C79): agents may call Swarm's own server; only the routes that act as the person get this text.
 export const OWN_API_TEXT =
-  "This call did not run. Autonomous mode never calls Swarm's own server, because that would act with the person's rights. Use the tools you were given, or write what is needed into your final message for the person."
+  "This call did not run. Agents may call Swarm's own server, but not the routes that act as the person (the autonomous mode and consent, answers to permissions and questions, reverts, folder trust, configuration, shell commands run as the person, control of the person's app, repository commits and patches, upgrades and shutdowns), and not by a socket or program code whose route cannot be read. Use the tools you were given, or write what is needed into your final message for the person."
 
 /**
  * 1.2.7 F-4 (N7-135): X `own_api` with a reason (N7-136), a network call whose address could not be worked out while

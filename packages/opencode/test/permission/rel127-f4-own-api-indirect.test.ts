@@ -114,7 +114,8 @@ const message = (error: unknown) => (error as Error).message
 describe("F-4 texts and category (N7-051, N7-052, N7-135, N7-136)", () => {
   test("OWN_API_TEXT and OWN_API_UNRESOLVED_TEXT have the register values", () => {
     expect(textOf("OWN_API_TEXT")).toBe(
-      "This call did not run. Autonomous mode never calls Swarm's own server, because that would act with the person's rights. Use the tools you were given, or write what is needed into your final message for the person.",
+      // 1.2.7 row 47l (C79, INTENT): agents may call Swarm's own server; the text names the routes that are the person's.
+      "This call did not run. Agents may call Swarm's own server, but not the routes that act as the person (the autonomous mode and consent, answers to permissions and questions, reverts, folder trust, configuration, shell commands run as the person, control of the person's app, repository commits and patches, upgrades and shutdowns), and not by a socket or program code whose route cannot be read. Use the tools you were given, or write what is needed into your final message for the person.",
     )
     expect(textOf("OWN_API_UNRESOLVED_TEXT")).toBe(
       "This call did not run. Autonomous mode cannot tell where this network call goes (the address comes from a variable, a config file or another command), and it never calls Swarm's own server. Write the host and port into the command itself.",
