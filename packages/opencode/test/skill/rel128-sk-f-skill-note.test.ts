@@ -10,6 +10,7 @@ import fs from "node:fs/promises"
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { Server } from "../../src/server/server"
+import { noteText } from "../../src/skill/manage"
 import { DesktopNonce } from "../../src/server/desktop-nonce"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, tmpdir } from "../fixture/fixture"
@@ -62,6 +63,40 @@ afterEach(async () => {
 })
 
 describe("AC-SKf one memory note per saved skill", () => {
+  test("N8-353 (row 40k, L-3): note text has no double full stop; mission types and file patterns are listed, labelled", async () => {
+    const base = { name: "s", scope: "project" as const }
+    const some = (keywords: string[], files: string[], missionTypes: string[]) => ({ keywords, files, missionTypes })
+    expect(noteText({ ...base, description: "Checks invoices.", triggers: some(["invoice"], [], []) })).toBe(
+      "Skill s (project): Checks invoices. Triggers: invoice.",
+    )
+    expect(noteText({ ...base, description: "Checks invoices", triggers: some(["invoice"], [], []) })).toBe(
+      "Skill s (project): Checks invoices. Triggers: invoice.",
+    )
+    expect(noteText({ ...base, description: "Alfa.", triggers: some([], [], ["research"]) })).toBe(
+      "Skill s (project): Alfa. Triggers: mission types research.",
+    )
+    expect(noteText({ ...base, description: "Alfa", triggers: some(["a", "b"], ["*.pdf"], ["research", "audit"]) })).toBe(
+      "Skill s (project): Alfa. Triggers: a, b; files *.pdf; mission types research, audit.",
+    )
+    expect(noteText({ ...base, description: "Alfa", triggers: some([], ["*.pdf"], []) })).toBe(
+      "Skill s (project): Alfa. Triggers: files *.pdf.",
+    )
+    expect(noteText({ ...base, description: "Alfa.", triggers: some([], [], []) })).toBe(
+      "Skill s (project): Alfa. Triggers: by name only.",
+    )
+    expect(noteText({ ...base, description: "Alfa" })).toBe("Skill s (project): Alfa. Triggers: by name only.")
+  })
+
+  test("N8-353 (row 40k): a saved skill whose description ends with a full stop and whose only trigger is a mission type", async () => {
+    await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
+    const content = `---\nname: mt-only\ndescription: Does things.\ntriggers:\n  missionTypes: [Research]\n---\n\nBody.\n`
+    const saved = await call(tmp.path, "PUT", "/skill", { scope: "project", name: "mt-only", content })
+    expect(saved.status).toBe(200)
+    const list = await notes(tmp.path)
+    expect(list).toHaveLength(1)
+    expect(list[0].text).toBe("Skill mt-only (project): Does things. Triggers: mission types research.")
+  })
+
   test("approve -> exactly one note, source agent, the draft's untrusted flag, N8-046 text, Path and trigger lists, refs = [location]", async () => {
     await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
     await writeDraft(tmp.path, "invoice-check", TRIGGERED("Checks invoices"), true)
@@ -72,7 +107,7 @@ describe("AC-SKf one memory note per saved skill", () => {
     const list = await notes(tmp.path)
     expect(list).toHaveLength(1)
     expect(list[0]).toMatchObject({
-      text: "Skill invoice-check (project): Checks invoices. Triggers: invoice, totals.",
+      text: "Skill invoice-check (project): Checks invoices. Triggers: invoice, totals; files *.invoice.pdf; mission types research.",
       source: "agent",
       untrusted: true,
       body: `Path: .swarm/skills/invoice-check/SKILL.md\nKeywords: invoice, totals\nFiles: *.invoice.pdf\nMission types: research`,

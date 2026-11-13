@@ -311,10 +311,22 @@ export async function removeDraft(scope: WriteScope, name: string, place: Place)
   await fs.rm(path.join(draftsRoot(scope, place), name), { recursive: true, force: true })
 }
 
-/** N8-046: `Skill <name> (<scope>): <description>. Triggers: <keywords or "by name only">.` */
+/**
+ * N8-046 (row 40k): `Skill <name> (<scope>): <description>. Triggers: <keywords>[; files <patterns>][; mission types <types>].`
+ * A trailing full stop of the description is dropped before joining, so the note never reads `..`. Keywords keep the
+ * N8-046 format; file patterns and mission types follow, labelled. "by name only" means no trigger of any kind.
+ */
 export function noteText(input: { name: string; scope: WriteScope; description: string; triggers?: Triggers }) {
+  const description = input.description.trimEnd().replace(/\.+$/, "")
   const keywords = input.triggers?.keywords ?? []
-  return `Skill ${input.name} (${input.scope}): ${input.description}. Triggers: ${keywords.length ? keywords.join(", ") : "by name only"}.`
+  const files = input.triggers?.files ?? []
+  const missionTypes = input.triggers?.missionTypes ?? []
+  const parts = [
+    ...(keywords.length ? [keywords.join(", ")] : []),
+    ...(files.length ? [`files ${files.join(", ")}`] : []),
+    ...(missionTypes.length ? [`mission types ${missionTypes.join(", ")}`] : []),
+  ]
+  return `Skill ${input.name} (${input.scope}): ${description}. Triggers: ${parts.length ? parts.join("; ") : "by name only"}.`
 }
 
 /**
