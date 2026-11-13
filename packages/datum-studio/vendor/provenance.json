@@ -105,7 +105,8 @@
   "rowFX11": "2026-11-13: 1.2.6 fix row FX-11 (C21, finding S-115-1). 1 vendor file re-patched (files[].patch_rowFX11, before = previous sha256; status unchanged): engine/diagram/build/autofit.ts (score-0 early return keeps SVG and decision, and reports the T-03 kinds outside the score as GEOM_* REPORT lines so the figure preview lists what FIGURE_FIT fails). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx11_diffs/. counts by delta: bytes 9963210 -> 9963798; files/copied/patched/replaced/added unchanged. patch_rows += FX-11",
   "row43": "2026-11-13: 1.2.7 row 43 (F-3, AC-F3, C12 O-1). 1 vendor file re-patched (files[].patch_row43, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (15 JSON example lines: the non-manual GSP document number becomes 000/...; same byte length). Redacted diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/43_row43_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes unchanged (191589 -> 191589, +0). patch_rows += 43",
   "row36": "2026-11-13: 1.2.7 row 36 (T-06 chart half, AC-T06, C8 / D-11b). 1 vendor file patched for the first time (files[].patch_row36, status copied -> patched): engine/chart/family-w1/render.ts (line-count refusal lists each counted series with its colour and the remainder, colourCountDetail). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/36_row36_diffs/. counts by delta: copied 410 -> 409, patched 156 -> 157, bytes 9963798 -> 9965366 (+1568); files/replaced/added unchanged. patch_rows += 36",
-  "row37": "2026-11-13: 1.2.7 row 37 (N-6/F-6 guide sentence, N-9 and T-18 guide lines; AC-N6, C3). 1 vendor file re-patched (files[].patch_row37, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (Cakupan sentence after the T-03 table in 4.1.2; png-needs-standalone line in 8.4; no separate quota code line in 8.6). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9965366 -> 9965779 (+413). patch_rows += 37"
+  "row37": "2026-11-13: 1.2.7 row 37 (N-6/F-6 guide sentence, N-9 and T-18 guide lines; AC-N6, C3). 1 vendor file re-patched (files[].patch_row37, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (Cakupan sentence after the T-03 table in 4.1.2; png-needs-standalone line in 8.4; no separate quota code line in 8.6). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9965366 -> 9965779 (+413). patch_rows += 37",
+  "row35b": "2026-11-13: 1.2.7 row 35b (N-3 AC-N3, N-7 AC-N7; N7-063, N7-067, N7-139, K7-09). 4 vendor files re-patched (files[].patch_row35b, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts and registry/lint-explain.ts (FAIL per kode and lint findingsTotal count findings, not rows; labelled <CODE>: total N (dirinci I, tidak dirinci R) line), engine/diagram/build/autofit.ts and capacity.ts (AUTO_FIT remainder counts T-03 defects via autoFitRestText). None is a lint-closure file (guard.ts isLintClosurePath): skillSha unchanged. Diffs in docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/. counts by delta: bytes 9965779 -> 9970083 (+4304); files/copied/patched/replaced/added unchanged. patch_rows += 35b"
  },
  "counts": {
   "files": 608,
@@ -113,7 +114,7 @@
   "patched": 157,
   "replaced": 12,
   "added": 30,
-  "bytes": 9965779
+  "bytes": 9970083
  },
  "files": [
   {
@@ -266,9 +267,10 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 76622,
+   "bytes": 77629,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "019ebf9473a4576b6b538790c5be7a02e3a99ed00b03869a253535f05bd63cf4",
+   "sha256": "6ade167842fae5b4a145def40b6c35b7beb1ddc0414ce55e1af8123e92ccc06d",
+   "patch_row35b": {"id": "127-35b-n3-status-counts", "row": "35b", "decision": "1.2.7 row 35b (AC-N3, N7-063)", "summary": "studio_document_status text: FAIL per kode counts findings, not rows (a code whose FAIL summary row carries findingsAll counts its real total; the summary row is never a finding); one line per such code after FAIL per kode: '<CODE>: total N (dirinci I, tidak dirinci R)' (N7-063); the '+N temuan lain' line subtracts what the listed rows stand for (a listed summary row stands for its rest). Under 100 findings per code the text is byte-identical; description and schema unchanged", "before_sha256": "019ebf9473a4576b6b538790c5be7a02e3a99ed00b03869a253535f05bd63cf4", "after_sha256": "6ade167842fae5b4a145def40b6c35b7beb1ddc0414ce55e1af8123e92ccc06d", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "28d2d9adb76210d0e2037a66e434410e8d76aaf1ea8c36aaea784cea238cf886"},
    "patch_row78b": {"id": "row78b-status-render-verdict", "row": "78b", "decision": "1.2.6 C16 (U24)", "summary": "studio_document_status default text: each output line carries the stored U24 page verdict from R05 outputs[].renderVerification (RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24) [STALE] fail= unknown=, OVERLAP_CLIP coverage line; RENDER_VERIFY_PENDING when absent), within DOCUMENT_STATUS_TEXT_MAX_BYTES; export RENDER_VERIFY_PENDING; description and schema unchanged", "before_sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7", "after_sha256": "70fea230599bbdb987270c3af5167e237f6804ff4db4fe4dc1a590c6b5ee0e47", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/78b_row78b_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "c297a6ceb76078675001f1719163962137364578ae653754c290a06b34947eec"},
    "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_document_status description names findings paging (T-14); trimmed texts of studio_templates_list, studio_document_create, studio_chapter_import_markdown, studio_chapter_submit, studio_slot_fill and the ADOPT, FINDINGS_PARAM, submit, withTier, baseRevisionNo param descriptions (tools/list budget); no schema type or behaviour change", "before_sha256": "d22c77cb51becc10e100657904326fa9d8bed3b6a43846702ed08c7becafeead", "after_sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "7beef52dcefb976107687a2d989f12ee8a9a8f716e048bdaddc5616bd0d11af4"},
    "patch_row69c": {
@@ -2289,18 +2291,20 @@
   {
    "path": "src/lib/studio/engine/diagram/build/autofit.ts",
    "status": "patched",
-   "bytes": 7819,
+   "bytes": 8531,
    "source_sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b",
-   "sha256": "d687c169b1a8903632ecc60b9445c2b30c07ef41ba77bbeea25aa9c08dbe3e0a",
+   "sha256": "8a9369ca7d4a5ed948f0eda72611f81eeabe396f19d3c084ea231643f59f6b82",
+   "patch_row35b": {"id": "127-35b-n7-autofit-rest", "row": "35b", "decision": "1.2.7 row 35b (AC-N7, N7-067, N7-139; C12 O-4 fallback not needed)", "summary": "NEW export autoFitRestText(g): AUTO_FIT remainder 'sisa {score + t03}' plus '(termasuk {t03} isu GEOM T-03)' when T-03 defects remain, suggest 'lihat isu GEOM_* berikut' when anything remains; autoFitDiagram uses it. score and the auto-fit choice unchanged (SVG byte-identical); text unchanged when no T-03 defect remains", "before_sha256": "d687c169b1a8903632ecc60b9445c2b30c07ef41ba77bbeea25aa9c08dbe3e0a", "after_sha256": "8a9369ca7d4a5ed948f0eda72611f81eeabe396f19d3c084ea231643f59f6b82", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/src_lib_studio_engine_diagram_build_autofit.ts.diff", "diff_sha256": "a096f47ca8b8af1709481bc415d3c0948af1895ab3c0ebae36eabb6b67f21cb3"},
    "patch_row25": {"id": "row25-t03-geom-checks", "row": "25", "decision": "1.2.6 patch T-03 (U3, U5, D2; register N-001..N-010, N-166)", "summary": "CHECK/WHAT/SUGGEST gain GEOM_ENTRY_COLLISION, GEOM_STUB_SEGMENT, GEOM_ARROW_TANGENT. Copied -> patched", "diff_base": "sha256 before this row", "before_sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b", "after_sha256": "9a4d68c40cd094725704ebdae85089dfefcde8f5df7a8f210051e86e4d62c51b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/25_row25_diffs/src_lib_studio_engine_diagram_build_autofit.ts.diff", "diff_sha256": "7704acd5172dd7e6e668312a5e0ae64463811ff5e5ba62ab43651cde1d0a66fe"},
    "patch_rowFX11": {"id": "fx-11-preview-gate-parity", "row": "FX-11", "decision": "1.2.6 C21 (finding S-115-1)", "summary": "autoFitDiagram score-0 early return: SVG and auto-fit decision unchanged (row 25 U3, no re-layout); when the lint has defects outside the score (T-03 kinds edgeEntryCollision/stubSegment/arrowTangent), report.geometry gains their GEOM_* REPORT lines (diagramGeometryIssues), so the figure preview's defects match the FIGURE_FIT fail kinds", "before_sha256": "9a4d68c40cd094725704ebdae85089dfefcde8f5df7a8f210051e86e4d62c51b", "after_sha256": "d687c169b1a8903632ecc60b9445c2b30c07ef41ba77bbeea25aa9c08dbe3e0a", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx11_diffs/FX-11_src_lib_studio_engine_diagram_build_autofit.ts.diff", "diff_sha256": "51cfc506df6dd956fedf77e854b3da06b02ee34bc0fab0d3a4dcb9e01264b686"}
   },
   {
    "path": "src/lib/studio/engine/diagram/build/capacity.ts",
    "status": "patched",
-   "bytes": 15219,
+   "bytes": 15320,
    "source_sha256": "ce41b46ce7c7418c379af22f50302c18bb80decc6fea3663cf121e61eb539588",
-   "sha256": "0d90b4f355bd497f43b4ac85d2bee1db966331491801cd5f5ffdea6085e12930",
+   "sha256": "e3a090046cd45377a690910d7a21777bdddb824657990bb04753015e90f22261",
+   "patch_row35b": {"id": "127-35b-n7-capacity-rest", "row": "35b", "decision": "1.2.7 row 35b (AC-N7, N7-067)", "summary": "capacity AUTO_FIT line uses autoFitRestText(best.g): the remainder counts T-03 defects; capacity layout choice (score 0) unchanged", "before_sha256": "0d90b4f355bd497f43b4ac85d2bee1db966331491801cd5f5ffdea6085e12930", "after_sha256": "e3a090046cd45377a690910d7a21777bdddb824657990bb04753015e90f22261", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "a46292897ffcf594e63f6ae3449fc2928a486ef8a7e3b8134cde1ba9e40b1d10"},
    "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "capacityAction: flow text names direction (ranked: per-rank/width/direction; legacy: direction TB/LR or per_row); DATUM-33 for flow gains the direction alternative; overCapacityOf: ranked-flow DATUM-37 branch measures nodes per rank / ranks via flowRankOverload", "diff_base": "sha256 before this row", "before_sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773", "after_sha256": "95ab601bb64dce64373f19a439dac2ba7b038ae5f70f1bc9e0e6d7ce2a3ce075", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "b797aeabfefcce87988d1b23a96172893e637384e1d0cbf299779c43e48ea8c1"},
    "patch_row59": {"id": "row59-t02-graph-inset", "row": "59", "decision": "1.2.6 patch T-02 (U5, R21 4.R1; register N-016)", "summary": "graph max columns counted inside W - 2 x GRAPH_EDGE_INSET_MM (capacityAction, graphColumns); measureFromMessage reads the T-02 inset refusal ('isi <mm> mm > batas <mm> mm') as measured/limit in mm", "diff_base": "patch.after_sha256 (row 158)", "before_sha256": "b1f8ba10220ec25a8f88ad6719081d364dd8edf6fad4befe0811bf811a5cd1a3", "after_sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/59_row59_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "c7eac947bc4b96c45b9ffaa223286b8e708b00430f109fe101c68f832f0d26f8"},
    "patch": {
@@ -4477,9 +4481,10 @@
   {
    "path": "src/lib/studio/registry/lint-explain.ts",
    "status": "added",
-   "bytes": 10215,
+   "bytes": 12699,
    "source_sha256": null,
-   "sha256": "83972a90af215fe4de100ddb770762e5a09a7b68a45fc8a4f71cc53e8e293dd5",
+   "sha256": "cb25401deecf67cdf339f2a0b3abd46ae7f2ea7a495fe2ae00d3d05bd6fc53ce",
+   "patch_row35b": {"id": "127-35b-n3-findings-total", "row": "35b", "decision": "1.2.7 row 35b (AC-N3, K7-09, RA-13)", "summary": "NEW export lintCarrierCounts (per code with a FAIL summary row: total, itemised, rest); summarizeLint findingsTotal = real finding count (carrier total once, its itemised rows not again); a listed summary row carries represents = rest (optional LintSummaryFinding field). Older findings[] shape unchanged", "before_sha256": "83972a90af215fe4de100ddb770762e5a09a7b68a45fc8a4f71cc53e8e293dd5", "after_sha256": "cb25401deecf67cdf339f2a0b3abd46ae7f2ea7a495fe2ae00d3d05bd6fc53ce", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/src_lib_studio_registry_lint-explain.ts.diff", "diff_sha256": "4186d1c25f6502186cae6e9ce09dd12ece598d8da15de112f317ae1b7399e081"},
    "note": "NEW Swarm file of row 206 (no clone original): lintRuleExplanation (registry entry + what D16/D17/D18/D19, SLOT_CONTENT_MISSING, CONTENT_CHAPTER_GAP and the render checks DATUM-14/15/25/28/32/33/37 inspect) and summarizeLint (tri-state lint summary: ran, verdict, findings); used by tool-kit compactSummary, studio_document_status and the host verification client entries",
    "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "lintRuleExplanation: INSPECTS looked up with Object.hasOwn (security review 209 L-3)", "before_sha256": "3de3bcbb48767170085d0c82bd1146c113ba4ab0077047a7c0704ba66b35e3b8", "after_sha256": "83972a90af215fe4de100ddb770762e5a09a7b68a45fc8a4f71cc53e8e293dd5", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/src_lib_studio_registry_lint-explain.ts.diff", "diff_sha256": "7518c1eb3f32d07d024fb1a7be8677cc3319dcb8570294f50ad17207491bc73f"}
   },
@@ -6205,6 +6210,7 @@
   "FX-11",
   "43",
   "36",
-  "37"
+  "37",
+  "35b"
  ]
 }

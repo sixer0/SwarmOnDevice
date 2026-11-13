@@ -70,6 +70,18 @@ export function diagramGeometryIssues(g: DiagramGeomLint): DiagramGeometryIssue[
   return out;
 }
 
+/**
+ * Swarm 1.2.7 row 35b (N-7, N7-067 / N7-139): AUTO_FIT remainder text. `score` leaves out the T-03 kinds (fit/lint.ts),
+ * so the auto-fit choice is unchanged; the text counts them: `sisa {score + t03}` plus `(termasuk {t03} isu GEOM T-03)`
+ * when T-03 defects remain, and points at the GEOM_* lines whenever anything remains. Without T-03 defects the text
+ * is `sisa {score}` as before.
+ */
+export function autoFitRestText(g: DiagramGeomLint): { rest: string; suggest: string } {
+  const t03 = Math.max(0, g.defects.length - g.score);
+  const left = g.score + t03;
+  return { rest: `sisa ${left}${t03 > 0 ? ` (termasuk ${t03} isu GEOM T-03)` : ""}`, suggest: left > 0 ? "lihat isu GEOM_* berikut" : "tidak ada" };
+}
+
 function checkIdOf(e: unknown): string {
   const d = (e as { details?: { checkId?: string } } | null)?.details;
   return d?.checkId ?? (e instanceof Error ? e.message.slice(0, 80) : String(e));
@@ -127,8 +139,8 @@ export function autoFitDiagram(first: DiagramSvgResult, rerender: () => DiagramS
       {
         checkId: "AUTO_FIT",
         status: "REPORT",
-        detail: `cacat geometri terdeteksi (${g0.score}); tata letak otomatis (${best.label}) -> sisa ${g.score}; dicoba: ${tried.join("; ")}`,
-        suggest: g.score ? "lihat isu GEOM_* berikut" : "tidak ada",
+        detail: `cacat geometri terdeteksi (${g0.score}); tata letak otomatis (${best.label}) -> ${autoFitRestText(g).rest}; dicoba: ${tried.join("; ")}`,
+        suggest: autoFitRestText(g).suggest,
       },
       ...state.notes.map((n) => ({ checkId: n.checkId, status: "REPORT" as const, detail: n.suggest ? `${n.detail}; saran: ${n.suggest}` : n.detail, suggest: n.suggest ?? "tidak ada" })),
       ...diagramGeometryIssues(g),
