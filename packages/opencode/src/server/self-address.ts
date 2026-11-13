@@ -1,5 +1,5 @@
 // 1.2.6 row FX-14 (F-1, decision C24): where this process's own server listens, known only at runtime. The autonomy
-// table reads it to refuse an agent's shell or fetch call to Swarm's own API (X `app_state`): with the server password an
+// table reads it to refuse an agent's shell or fetch call to Swarm's own API (X `own_api`): with the server password an
 // agent could answer its own prompts and change its own mode. Every other loopback port stays as it was (C19c). Kept in
 // memory only; `Server.listen` adds an address when it binds and removes it when it stops.
 

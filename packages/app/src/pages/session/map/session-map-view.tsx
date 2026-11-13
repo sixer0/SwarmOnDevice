@@ -296,6 +296,7 @@ const CATEGORY_LABEL = {
   folder_not_trusted: "session.map.decisions.category.folder_not_trusted",
   plan_mode: "session.map.decisions.category.plan_mode",
   app_state: "session.map.decisions.category.app_state",
+  own_api: "session.map.decisions.category.own_api",
   asks_every_time: "session.map.decisions.category.asks_every_time",
   irreversible: "session.map.decisions.category.irreversible",
   admin_rights: "session.map.decisions.category.admin_rights",
