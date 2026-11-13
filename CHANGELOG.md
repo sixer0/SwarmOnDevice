@@ -1,4 +1,4 @@
-# Changelog Swarm 1.1.0 sampai 1.2.6
+# Changelog Swarm 1.1.0 sampai 1.2.7
 
 Disusun 2026-11-13 dari catatan rilis, laporan akhir, log keputusan dan pesan commit tiap versi (sumber di akhir tiap bagian; path `docs/...` ada di folder kerja Swarm_OnDevice, di luar repo ini). Urutan terbaru di atas. "Diperbaiki" = cacat yang dibetulkan; "Baru" = fitur atau perilaku yang ditambahkan.
 
@@ -6,6 +6,7 @@ Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); 
 
 | Versi | Tanggal | Cara rilis | Fokus |
 |---|---|---|---|
+| 1.2.7 | 2026-11-13 | Patch menu dari 1.2.6 | Mission Control per sesi, CLI `swarm autonomy`, izin subagen, tempel dari Word, Add folder, polesan render |
 | 1.2.6 | 2026-11-13 | Patch menu dari 1.2.5 | 62 temuan research-case: diagram, MCP, mode otonom, Mission Control, subagen, panduan |
 | 1.2.5 | 2026-11-10 | Patch menu | Hapus lint C-27 |
 | 1.2.4 | 2026-11-09 | Patch menu | Kunci versi templat bawaan |
@@ -20,6 +21,35 @@ Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); 
 | 1.1.0 | 2026-11-03 | Installer | Knowledge Library, pemasang tools, CLI `swarm` |
 
 ---
+
+## 1.2.7 (2026-11-13)
+
+Cabang `release/1.2.7`, dibangun dari `main` `04067a9d02` (1.2.6). Menindaklanjuti sembilan temuan pengguna (U-1 s.d. U-9), empat tambahan pengguna (U-10 s.d. U-13), audit pasca-uji 1.2.6 (N-1 s.d. N-11, sisa T-xx dan M-xx) dan tindak lanjut F-2 s.d. F-7. Sesuai keputusan pengguna U11, tahap review akhir (verifier, security review diff akhir, senior review) dilewati; cakupannya bertumpu pada review milestone, review keamanan spesifikasi, tes merah-ke-hijau per butir dan gerbang suite penuh.
+
+**Diperbaiki**
+- Mission Control (U-1 s.d. U-5): daftar misi difilter menurut sesi jendela yang dilihat; deliverable bisa dibuka (dokumen dibuka, lainnya ditampilkan di Finder/File Explorer; skrip dan app tidak pernah dijalankan); blok berkas yang diedit banyak agen pindah ke tab sendiri; riwayat baris terbaru di atas dengan sekitar 10 baris terlihat; popup keputusan dan tab Keputusan punya tinggi tetap dengan isi yang bisa digulir sehingga tombol setujui/jawab selalu terjangkau.
+- Folder kerja misi (U-6): ekspor baru memakai folder bernomor `01_identification` sampai `11_deliverables` sesuai urutan standar.
+- Folder proyek hilang (U-8): Swarm tetap berjalan, memberi tahu folder tidak ada dan meminta pemulihan atau pembuatan ulang.
+- Blok thinking (U-9): setiap blok punya tombol tampil/sembunyi; pengaturan "Show reasoning summaries" hanya menentukan keadaan awal.
+- Tempel dari Word (U-13): teks dipaste sebagai teks, gambar dilampirkan hanya bila tidak ada teks; gambar transparan dialasi putih agar terbaca model.
+- Mesin render dan diagram: hitungan D01 dan kode lain menghitung temuan dengan baris total berlabel (N-3); baris AUTO_FIT menyebut sisa sebenarnya (N-7); teks render menyebut HTML pengukuran, menandai PNG halaman sebagai pendekatan (`witness-pNNN.png`) dan mencetak sha256 penuh serta jumlah FAIL per kode (N-4, N-5, M-03); `studio_write` menampilkan penolakan render yang sebenarnya dan retry mengembalikan dokumen yang sama (N-10); sel tabel DOCX/HTML dengan daftar ID panjang boleh putus setelah `,` `;` `/` hanya bila melebihi kolom, URL, nomor dokumen dan path tidak pernah diputus (N-11); OVERLAP_CLIP tingkat bab membaca margin halaman (T-13); `figure_revise` menerima patch parsial termasuk `{spec:{direction:"LR"}}` (T-11); preview mandiri melaporkan perabot (KUNCI, SUMBER, tinggi) (T-12); penolakan DATUM-25 menyebut warna yang dihitung (T-06); nama kontrak tabrakan tepi dipublikasikan (N-6).
+- Keamanan dan build (F-2 s.d. F-7): build dari jalur netral `/opt/swarm-build-1.2.7` dengan gerbang pemeriksa pemilik dan mode (F-2); nomor dokumen GSP dinetralkan dari contoh diagram (F-3); penolakan API server sendiri tidak lagi hanya mencocokkan host+port literal (F-4); revert dikunci terhadap penulisan agen serentak (F-5); pemeriksaan Tailscale tidak lagi menerima VPN lain di 100.64/10 (F-7).
+
+**Baru**
+- Perintah CLI `swarm autonomy on | off | status` (U-10): `on` hanya di terminal interaktif, menampilkan teks persetujuan dan butuh ketikan `yes`; agen tidak pernah bisa menjalankannya.
+- Tombol "Add folder" di composer chat (U-12): folder dikirim sebagai referensi `@folder`, isinya tidak diunggah; folder di luar proyek mengikuti prompt izin biasa.
+- Skill dibaca ulang saat berkas skill berubah, jadi skill dari CLI muncul di app desktop tanpa restart; skill baru default ke `~/.config/swarm/skills` (U-11).
+- Izin subagen (U-7, N-1, P-01a, U4): shell subagen berjalan seperti agen utama untuk pekerjaan rutin, skrip dan di luar folder, serta tes dan build yang dikenali, di bawah mode otonom bersetuju; tool `task` menerima `permissions {bash:[perintah literal]}` yang berakhir bersama subagen; inspeksi baca-saja pada folder state Swarm berjalan, dengan pesan penolakan yang menyebut penggantinya; planner dan data-collector mendapat kelas baca/diagnostik (ls, wc, file, du, head, tail, cat, find, checksum, pdftotext, unzip -l, mdls, git log/show/diff/status, graft, `--version`). Deploy, publish, push image, penambahan paket bernama, perintah tulis `gh` dan alias/fungsi yang dipakai kemudian tetap menunggu keputusan agen utama.
+- Di bawah mode otonom yang disetujui (U9): graft (kecuali `graft init`), builtin jaringan zsh (aturan seperti curl), pencarian atas folder state Swarm (nilai tersamar), opsi baca yang menjalankan program dan `print >|` zsh (dengan checkpoint) diizinkan; dengan mode mati semuanya tetap bertanya.
+- Agen boleh memanggil API server Swarm sendiri (U10), kecuali rute yang bertindak sebagai manusia: mode/persetujuan otonom, menjawab keputusan/izin/pertanyaan, revert checkpoint dan kosongkan arsip, revert sesi, trust, tulis config/auth/lanes, shell sebagai pengguna, pembuatan terminal (pty), seluruh kontrol TUI, commit/apply/git init repo, perubahan worktree/workspace, sync steal, tambah/hubungkan MCP, upgrade dan dispose. Penulisan trust-store lewat glob, link atau variabel kembali menunggu manusia. Keluaran `swarm.json(c)`/`opencode.json(c)` disamarkan per baris.
+
+**Perlu diketahui**
+- Misi yang dibuat sebelum 1.2.7 atau di sesi lain tidak tampil di daftar jendela ini; minta agen "resume mission <id>" untuk memunculkannya di jendela saat ini. Tool `studio_mission_*` milik agen tidak berubah.
+- Kunci revert (F-5) hanya berlaku dalam satu proses server; perintah shell lain (mis. build yang menulis keluaran) tidak mengambilnya, dan sesi subagen dengan root yang tidak terkait dengan direktori instance tidak tercakup.
+- Skill yang disimpan di `.swarm/skills` suatu proyek hanya terlihat di proyek itu. Di sel tabel, U+200B yang disisipkan ikut tersalin saat daftar ID ditempel dari DOCX. `mcp_timeout` 600000 sudah menjadi default sejak 1.2.6 (M-01). Catatan 1.2.6 "daftar D01 (145)" memakai hitungan yang kini diberi label (N-3).
+- Undo ke 1.2.6: tidak ada migrasi store yang ditambahkan (diff `04067a9d02..HEAD` pada `packages/datum-studio/src/store/migrations`, `packages/opencode/migration` dan `packages/core/src/database` kosong), jadi Undo ke 1.2.6 aman.
+
+Sumber: `docs/2026-11-13_swarm_1_2_7_patch/report/release_note_inputs.md`, `decisions/decisions.md`, `identification/01_translated.md`.
 
 ## 1.2.6 (2026-11-13)
 
