@@ -6,7 +6,8 @@
 import { useStudioEnv } from "../ported/_env"
 useStudioEnv()
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, realpathSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
@@ -20,6 +21,9 @@ import * as hints from "../../vendor/src/lib/studio/contract/schema/v2/refusal-h
 import * as tokens from "../../vendor/src/lib/studio/engine/diagram/core/tokens"
 import { loadSpec, validateSpec } from "../../vendor/src/lib/studio/engine/diagram/core/spec"
 import * as guide from "../../src/mcp-host/diagram-guide.ts"
+import { buildDiagramSvg } from "../../vendor/src/lib/studio/engine/diagram/build/index"
+import { buildDiagramSvgAuto } from "../../vendor/src/lib/studio/engine/diagram/elk/index"
+import { diagramSpec } from "../../vendor/src/lib/studio/services/compose/blocks"
 
 type Issue = { pointer: string; keyword: string; message: string }
 type J = Record<string, any>
@@ -301,7 +305,296 @@ describe("guide", () => {
     expect(vendorBytes).toBeLessThan(30_000)
     // Row 52 changes no tool description; the <= 450 rule is the vendor TOOLS rule of row99-g06 (host wrappers are longer).
     const { TOOLS } = await import("../../vendor/scripts/studio/mcp/tools")
-    for (const t of TOOLS as Array<{ name: string; description: string }>) expect(t.description.length, t.name).toBeLessThanOrEqual(450)
-    console.log(`[rel128-vis0] longest vendor description ${Math.max(...(TOOLS as Array<{ description: string }>).map((t) => t.description.length))}, longest host description ${Math.max(...tools.map((t) => (t.description ?? "").length))}`)
+    for (const t of TOOLS as ReadonlyArray<{ name: string; description: string }>) expect(t.description.length, t.name).toBeLessThanOrEqual(450)
+    console.log(`[rel128-vis0] longest vendor description ${Math.max(...(TOOLS as ReadonlyArray<{ description: string }>).map((t) => t.description.length))}, longest host description ${Math.max(...tools.map((t) => (t.description ?? "").length))}`)
   })
+})
+
+// ---------------------------------------------------------------- char (AC-VIS0c, row 52b)
+// Byte-identity harness over the CHAR-VIS corpus (01_specs §3.6 clauses 1, 2, 5; 01f §3.2; AT-V0-char): every diagram
+// spec in the fixed corpus files below (syn127, the old-field syn128 files, the specs the engine-rev-a/svg tests read;
+// anon126 excluded) is rendered with the sync build (`buildDiagramSvg`) and the production path (`buildDiagramSvgAuto`,
+// services/render/figures.ts). Each render is split into the <marker> elements and the rest; both are hashed (sha256,
+// first 16 hex) and compared with CHAR_BASE, which was generated with this describe at BASE e1f9673772 (red-base
+// worktree, REL128_VIS0_CHAR_PRINT=1). Green at BASE by construction, green at HEAD while the engine keeps old output.
+// - "outside markers": every path, node, text, hop and label byte of BASE (clause 1). No exception.
+// - "marker elements": the BASE marker set. Row 57 (AC-HARW) replaces the `mk` hashes with the H-ARW set as INTENT.
+// - "verdicts": validateSpec non-PASS ids, build issues, geometry ids, ELK decision, refusal id (clause 5); an entry may
+//   also match its CHAR_INTENT value, which names the AC line that owns the change.
+// - "twins": the same spec with every 1.2.8 field set to its default (01f §3.2.2) renders byte-equal to the spec without
+//   them. At BASE no 1.2.8 field is in the schema, so no twin field exists and the case checks only that (all or none).
+
+const TEST_ROOT = path.resolve(import.meta.dir, "..")
+/** Fixed corpus (files present when the harness was generated; later M3 fixtures use new fields and are not CHAR). */
+const CHAR_FILES = [
+  "engine-rev-a/svg/fixtures/case04.studio.json",
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json",
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json",
+  "engine-rev-a/svg/fixtures/row162_elk_not_better.json",
+  "engine-rev-a/svg/fixtures/row162_large_layered.json",
+  "fixtures/syn127/f6_fan_in_specs.json",
+  "fixtures/syn127/m03_render_fail_doc.json",
+  "fixtures/syn127/n7_autofit_t03_rest.json",
+  "fixtures/syn127/t06_diagram_six_colours.json",
+  "fixtures/syn127/t11_flow_inline_v2.json",
+  "fixtures/syn127/t12_standalone_key_source.json",
+  "fixtures/syn128/hn13_import.md",
+  "fixtures/syn128/hn6_engine_entry_collision.json",
+  "fixtures/syn128/hna_flow_v2.json",
+  "fixtures/syn128/hnb2_capacity_adapt.json",
+  "fixtures/syn128/hnb4_flow_rank_overflow.json",
+  "fixtures/syn128/hnb4_graph_sheet_overflow.json",
+  "fixtures/syn128/hnb_fit_to_zero.json",
+  "fixtures/syn128/r18g_lr_166.json",
+]
+
+type CharEntry = { key: string; v1: J; opts: J; fields: string[] }
+const isSpec = (o: unknown): o is J => !!o && typeof o === "object" && !Array.isArray(o) && Array.isArray((o as J).nodes) && typeof (o as J).family === "string"
+function charCorpus(): CharEntry[] {
+  const out: CharEntry[] = []
+  for (const rel of CHAR_FILES) {
+    const text = readFileSync(path.join(TEST_ROOT, rel), "utf8")
+    const roots: Array<[string, J]> = rel.endsWith(".md")
+      ? [...text.matchAll(/```(?:diagram|json)\n([\s\S]*?)\n```/g)].map((m, i) => [`/fence${i}`, JSON.parse(m[1])] as [string, J])
+      : [["", JSON.parse(text)]]
+    for (const [base, root] of roots) {
+      const opts = { release: false, ...((root.buildOptions as J) ?? {}) }
+      const walk = (o: unknown, ptr: string) => {
+        if (isSpec(o)) {
+          const v1 = o.$schema ? structuredClone(o) : diagramSpec(structuredClone(o) as never, "Uji.", "SUMBER: uji.", 128, { artifactLabel: "1.1", classification: "TERBATAS", params: {} } as never)
+          out.push({ key: `${rel}#${base}${ptr}`, v1: v1 as J, opts, fields: usedNewFields(o) })
+          return
+        }
+        if (o && typeof o === "object") for (const [k, v] of Object.entries(o as J)) walk(v, `${ptr}/${k}`)
+      }
+      walk(root, "")
+    }
+  }
+  return out
+}
+/** 1.2.8 fields and shape tokens a spec uses (the CHAR corpus must use none: "old-field" specs only). */
+function usedNewFields(s: J): string[] {
+  const used = NEW_FIELDS.spec.filter((f) => f in s)
+  for (const n of (s.nodes ?? []) as J[]) {
+    for (const f of NEW_FIELDS.node) if (f in n) used.push(`node.${f}`)
+    for (const f of NEW_FIELDS.class) if (n.class && typeof n.class === "object" && f in n.class) used.push(`class.${f}`)
+    if (NEW_SHAPES.includes(n.shape)) used.push(`shape.${n.shape}`)
+  }
+  for (const e of (s.edges ?? []) as J[]) for (const f of NEW_FIELDS.edge) if (f in e) used.push(`edge.${f}`)
+  for (const z of (s.zones ?? []) as J[]) for (const f of NEW_FIELDS.zone) if (f in z) used.push(`zone.${f}`)
+  return used
+}
+
+const h16 = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16)
+const MARKER_RE = /<marker\b[^>]*?(?:\/>|>[\s\S]*?<\/marker>)/g
+const splitMarkers = (svg: string) => ({ out: svg.replace(MARKER_RE, ""), mk: (svg.match(MARKER_RE) ?? []).join("\n") })
+const errId = (e: unknown): string => {
+  const x = e as J
+  const id = x?.details?.checkId ?? x?.checkId
+  return id ? String(id) : `ERR:${String(x?.message ?? x).split(/[\s:]/)[0]}`
+}
+const issueIds = (list: J[] | undefined) => (list ?? []).filter((i) => i.status !== "PASS").map((i) => `${i.checkId}:${i.status}`).sort().join(",")
+
+type Fp = { out: string; mk: string; verdict: string }
+/** One render path: hashes of the bytes outside / inside <marker>, and the verdict string. */
+async function fingerprint(v1: J, opts: J, auto: boolean): Promise<Fp> {
+  const vs = (() => {
+    try {
+      return issueIds(validateSpec(loadSpec(structuredClone(v1))) as J[])
+    } catch (e) {
+      return `throw ${errId(e)}`
+    }
+  })()
+  let decision = ""
+  try {
+    const r = (auto
+      ? await buildDiagramSvgAuto(structuredClone(v1) as never, opts as never, {}, (d) => (decision = String(d.reason).split(":")[0]))
+      : buildDiagramSvg(structuredClone(v1) as never, opts as never)) as J
+    const { out, mk } = splitMarkers(r.svg as string)
+    const geo = ((r.report.geometry ?? []) as J[]).map((g) => `${g.checkId}:${g.status}`).sort().join(",")
+    return { out: h16(out), mk: h16(mk), verdict: `V[${vs}] I[${issueIds(r.report.issues)}] G[${geo}] E[${decision}]` }
+  } catch (e) {
+    return { out: "-", mk: "-", verdict: `V[${vs}] X[${errId(e)}] E[${decision}]` }
+  }
+}
+/** Serialised as "<sync out> <sync mk> <auto out> <auto mk> | <sync verdict> | <auto verdict>". */
+async function charLine(v1: J, opts: J): Promise<string> {
+  const s = await fingerprint(v1, opts, false)
+  const a = await fingerprint(v1, opts, true)
+  return `${s.out} ${s.mk} ${a.out} ${a.mk} | ${s.verdict} | ${a.verdict}`
+}
+const parts = (line: string) => {
+  const [hashes, vs, va] = line.split(" | ")
+  const [so, sm, ao, am] = hashes.split(" ")
+  return { so, sm, ao, am, vs, va }
+}
+
+/** 1.2.8 fields set to their default (01f §3.2.2). Spec level: jumps; lane_orientation on swimlane only (P1-containers cause 1). */
+const KIND_HEAD: Record<string, string> = { data: "triangle", accent: "triangle", control: "open", sync: "open", alert: "open", verify: "open" }
+const KIND_DASH: Record<string, string> = { data: "solid", accent: "solid", control: "dashed", sync: "dotted", alert: "longdash", verify: "dashdot" }
+function explicitDefaults(v1: J, has: Set<string>): J {
+  const s = structuredClone(v1)
+  if (has.has("jumps")) s.jumps = "on"
+  if (has.has("lane_orientation") && s.family === "swimlane") s.lane_orientation = "horizontal"
+  for (const e of (s.edges ?? []) as J[]) {
+    const set = (f: string, v: unknown) => {
+      if (has.has(f)) e[f] = v
+    }
+    set("route", "orthogonal")
+    set("from_side", "auto")
+    set("to_side", "auto")
+    set("arrow_start", "none")
+    if (KIND_HEAD[e.kind]) {
+      set("arrow_end", KIND_HEAD[e.kind])
+      set("arrow_end_size", "m")
+    }
+    if (KIND_DASH[e.kind]) set("dash", KIND_DASH[e.kind])
+    if (e.kind !== "accent") set("weight", "normal")
+  }
+  for (const z of (s.zones ?? []) as J[]) if (has.has("style")) z.style = "zone"
+  return s
+}
+const TWIN_FIELDS = ["jumps", "lane_orientation", "route", "from_side", "to_side", "arrow_start", "arrow_end", "arrow_end_size", "dash", "weight", "style"]
+/** Twin fields present in the contract schema (HEAD: all; BASE: none). */
+function schemaTwinFields(): Set<string> {
+  const spec = (commonV2Schema as J).$defs.DiagramSpecV2.properties as J
+  const edge = (spec.edges?.items?.properties ?? {}) as J
+  const zone = (spec.zones?.items?.properties ?? {}) as J
+  const has = new Set<string>()
+  for (const f of ["jumps", "lane_orientation"]) if (f in spec) has.add(f)
+  for (const f of TWIN_FIELDS) if (f in edge) has.add(f)
+  if ("style" in zone) has.add("style")
+  return has
+}
+
+// GENERATED at BASE e1f9673772 (red-base worktree) with REL128_VIS0_CHAR_PRINT=1. Do not edit by hand except as INTENT
+// of a listed AC line (row 57 AC-HARW: the `mk` columns).
+const CHAR_BASE: Record<string, string> = {
+  "engine-rev-a/svg/fixtures/case04.studio.json#":
+    "1cbea94b2c1060f2 5951e475e7e785a8 1cbea94b2c1060f2 5951e475e7e785a8 | V[] I[P1-labels_verified:NOT_RUN] G[] E[] | V[] I[P1-labels_verified:NOT_RUN] G[] E[R2]",
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json#":
+    "f624bcf93d04310d 5951e475e7e785a8 f624bcf93d04310d 5951e475e7e785a8 | V[] I[P1-labels_verified:NOT_RUN] G[] E[] | V[] I[P1-labels_verified:NOT_RUN] G[] E[R2]",
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec":
+    "dd3064adf024896a 5951e475e7e785a8 dd3064adf024896a 5951e475e7e785a8 | V[] I[P1-labels_verified:NOT_RUN] G[] E[] | V[] I[P1-labels_verified:NOT_RUN] G[] E[R2]",
+  "engine-rev-a/svg/fixtures/row162_elk_not_better.json#":
+    "b646efd9124c2d9d 5951e475e7e785a8 b646efd9124c2d9d 5951e475e7e785a8 | V[] I[P1-labels_verified:NOT_RUN] G[AUTO_FIT:REPORT,EDGE_LANES:REPORT,GEOM_EDGE_COLLINEAR:REPORT,GEOM_EDGE_CROSS:REPORT,LABEL_MOVED:REPORT,NODE_ORDER:REPORT] E[] | V[] I[P1-labels_verified:NOT_RUN] G[AUTO_FIT:REPORT,EDGE_LANES:REPORT,ELK_LAYOUT:REPORT,GEOM_EDGE_COLLINEAR:REPORT,GEOM_EDGE_CROSS:REPORT,LABEL_MOVED:REPORT,NODE_ORDER:REPORT] E[R4]",
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#":
+    "ddcaff3459a94e61 5951e475e7e785a8 c6c2c603e634c266 5951e475e7e785a8 | V[] I[P1-labels_verified:NOT_RUN] G[AUTO_FIT:REPORT,GEOM_EDGE_COLLINEAR:REPORT,GEOM_EDGE_CROSS:REPORT,GEOM_STUB_SEGMENT:REPORT,LABEL_MOVED:REPORT,NODE_ORDER:REPORT] E[] | V[] I[P1-labels_verified:NOT_RUN] G[AUTO_FIT:REPORT,EDGE_LANES:REPORT,ELK_LAYOUT:REPORT,LABEL_MOVED:REPORT] E[R3/R4]",
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/0/spec":
+    "694448220dbc9ea7 eea8450c80a2d003 694448220dbc9ea7 eea8450c80a2d003 | V[] I[] G[] E[] | V[] I[] G[] E[R1]",
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/1/spec":
+    "82586f59c7edfd6b eea8450c80a2d003 82586f59c7edfd6b eea8450c80a2d003 | V[] I[] G[] E[] | V[] I[] G[] E[R1]",
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/2/spec":
+    "1a5c662897015832 eea8450c80a2d003 1a5c662897015832 eea8450c80a2d003 | V[] I[] G[GEOM_STUB_SEGMENT:REPORT] E[] | V[] I[] G[GEOM_STUB_SEGMENT:REPORT] E[R1]",
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/3/spec":
+    "cc6faf8a4ab4d959 eea8450c80a2d003 cc6faf8a4ab4d959 eea8450c80a2d003 | V[] I[] G[GEOM_STUB_SEGMENT:REPORT] E[] | V[] I[] G[GEOM_STUB_SEGMENT:REPORT] E[R1]",
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/4/spec":
+    "fdec7f21ed78263c eea8450c80a2d003 fdec7f21ed78263c eea8450c80a2d003 | V[] I[] G[] E[] | V[] I[] G[] E[R2]",
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/5/spec":
+    "540d8474a29336b2 eea8450c80a2d003 540d8474a29336b2 eea8450c80a2d003 | V[] I[] G[AUTO_FIT:REPORT,EDGE_LANES:REPORT,FLOW_SERIALISED:REPORT,GEOM_EDGE_COLLINEAR:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,EDGE_LANES:REPORT,FLOW_SERIALISED:REPORT,GEOM_EDGE_COLLINEAR:REPORT] E[R1]",
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/6/spec":
+    "f6b91b24aa6af503 eea8450c80a2d003 f6b91b24aa6af503 eea8450c80a2d003 | V[] I[] G[] E[] | V[] I[] G[] E[R2]",
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/7/spec":
+    "5cbdd2459a802c3c 3efe8a70ab24fdc4 5cbdd2459a802c3c 3efe8a70ab24fdc4 | V[] I[] G[GEOM_STUB_SEGMENT:REPORT] E[] | V[] I[] G[GEOM_STUB_SEGMENT:REPORT] E[R1]",
+  "fixtures/syn127/m03_render_fail_doc.json#/chapters/0/chapter/sections/0/blocks/1/spec":
+    "11c88a9ff40b79ac eea8450c80a2d003 11c88a9ff40b79ac eea8450c80a2d003 | V[] I[] G[] E[] | V[] I[] G[] E[R1]",
+  "fixtures/syn127/n7_autofit_t03_rest.json#/spec":
+    "a4e7562f1ab641bd eea8450c80a2d003 a4e7562f1ab641bd eea8450c80a2d003 | V[] I[] G[AUTO_FIT:REPORT,GEOM_STUB_SEGMENT:REPORT,LABEL_LEADER:REPORT,LABEL_LEADER:REPORT,LABEL_MOVED:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,GEOM_STUB_SEGMENT:REPORT,LABEL_LEADER:REPORT,LABEL_LEADER:REPORT,LABEL_MOVED:REPORT] E[R1]",
+  "fixtures/syn127/t06_diagram_six_colours.json#/spec":
+    "- - - - | V[] X[DATUM-25] E[] | V[] X[DATUM-25] E[]",
+  "fixtures/syn127/t11_flow_inline_v2.json#/block/spec":
+    "4bdcb52bb5d1d57b 3efe8a70ab24fdc4 4bdcb52bb5d1d57b 3efe8a70ab24fdc4 | V[] I[] G[FLOW_SERIALISED:REPORT,GEOM_ARROW_TANGENT:REPORT] E[] | V[] I[] G[FLOW_SERIALISED:REPORT,GEOM_ARROW_TANGENT:REPORT] E[R1]",
+  "fixtures/syn127/t12_standalone_key_source.json#/block/spec":
+    "eb8cd269271d6289 3efe8a70ab24fdc4 eb8cd269271d6289 3efe8a70ab24fdc4 | V[] I[] G[] E[] | V[] I[] G[] E[R1]",
+  "fixtures/syn128/hn13_import.md#/fence0":
+    "2852fcd149ca343c eea8450c80a2d003 2852fcd149ca343c eea8450c80a2d003 | V[] I[] G[] E[] | V[] I[] G[] E[R1]",
+  "fixtures/syn128/hn13_import.md#/fence1/spec":
+    "9ea657713b29d596 eea8450c80a2d003 9ea657713b29d596 eea8450c80a2d003 | V[] I[] G[] E[] | V[] I[] G[] E[R1]",
+  "fixtures/syn128/hn6_engine_entry_collision.json#/spec":
+    "7178c24ea8adcd66 eea8450c80a2d003 7178c24ea8adcd66 eea8450c80a2d003 | V[] I[] G[GEOM_STUB_SEGMENT:REPORT] E[] | V[] I[] G[GEOM_STUB_SEGMENT:REPORT] E[R1]",
+  "fixtures/syn128/hna_flow_v2.json#/block/spec":
+    "ae50b51457fb4d03 3efe8a70ab24fdc4 ae50b51457fb4d03 3efe8a70ab24fdc4 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT,GEOM_STUB_SEGMENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT,GEOM_STUB_SEGMENT:REPORT] E[R1]",
+  "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec":
+    "ae50b51457fb4d03 3efe8a70ab24fdc4 ae50b51457fb4d03 3efe8a70ab24fdc4 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT,GEOM_STUB_SEGMENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT,GEOM_STUB_SEGMENT:REPORT] E[R1]",
+  "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec":
+    "ae50b51457fb4d03 3efe8a70ab24fdc4 ae50b51457fb4d03 3efe8a70ab24fdc4 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT,GEOM_STUB_SEGMENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT,GEOM_STUB_SEGMENT:REPORT] E[R1]",
+  "fixtures/syn128/hnb2_capacity_adapt.json#/spec":
+    "4bafa659a12d5cb1 eea8450c80a2d003 4bafa659a12d5cb1 eea8450c80a2d003 | V[] I[] G[AUTO_FIT:REPORT,CAPACITY_ADAPT:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT,CAPACITY_ADAPT:REPORT] E[R1]",
+  "fixtures/syn128/hnb4_flow_rank_overflow.json#/spec":
+    "- - - - | V[] X[DATUM-37-lebar] E[] | V[] X[DATUM-37-lebar] E[]",
+  "fixtures/syn128/hnb4_graph_sheet_overflow.json#/spec":
+    "- - - - | V[] X[DATUM-37-lebar] E[] | V[] X[DATUM-37-lebar] E[R1]",
+  "fixtures/syn128/hnb_fit_to_zero.json#/spec":
+    "3a0c05a3c2f31301 eea8450c80a2d003 3a0c05a3c2f31301 eea8450c80a2d003 | V[] I[] G[AUTO_FIT:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT] E[R2]",
+  "fixtures/syn128/r18g_lr_166.json#/spec":
+    "2619dc383ad9cffc 3efe8a70ab24fdc4 2619dc383ad9cffc 3efe8a70ab24fdc4 | V[] I[] G[AUTO_FIT:REPORT] E[] | V[] I[] G[AUTO_FIT:REPORT] E[R2]",
+}
+/** Intended verdict changes (01_specs §3.6 clause 5), key -> [AC line, HEAD line]; bytes outside markers stay BASE's. */
+const CHAR_INTENT: Record<string, [string, string]> = {
+  // AC-HNB4 (row 35b, 4dcd95b64c): one meaning per DATUM-37 id; the refusal stays, its id is split.
+  "fixtures/syn128/hnb4_flow_rank_overflow.json#/spec":
+    ["AC-HNB4", "- - - - | V[] X[DATUM-37-rank] E[] | V[] X[DATUM-37-rank] E[]"],
+  "fixtures/syn128/hnb4_graph_sheet_overflow.json#/spec":
+    ["AC-HNB4", "- - - - | V[] X[DATUM-37-sheet] E[] | V[] X[DATUM-37-sheet] E[R1]"],
+}
+
+describe("char", () => {
+  let corpus: CharEntry[] = []
+  const now: Record<string, string> = {}
+  beforeAll(async () => {
+    corpus = charCorpus()
+    for (const c of corpus) now[c.key] = await charLine(c.v1, c.opts)
+    if (process.env.REL128_VIS0_CHAR_PRINT === "1") console.log(`[rel128-vis0 char] ${JSON.stringify(now, null, 2)}`)
+  }, 120_000)
+
+  test("the corpus is the CHAR-VIS set: every file read, old-field specs only, keys equal CHAR_BASE", () => {
+    console.log(`[rel128-vis0 char] corpus ${corpus.length} specs from ${CHAR_FILES.length} files`)
+    for (const rel of CHAR_FILES) expect(corpus.some((c) => c.key.startsWith(`${rel}#`)), rel).toBe(true)
+    for (const c of corpus) expect(c.fields, c.key).toEqual([])
+    expect(corpus.map((c) => c.key).sort()).toEqual(Object.keys(CHAR_BASE).sort())
+  })
+
+  test("bytes outside <marker> equal BASE for every rendered spec, sync and auto path (§3.6 clause 1)", () => {
+    for (const c of corpus) {
+      const b = parts(CHAR_BASE[c.key]!)
+      const n = parts(now[c.key]!)
+      expect([n.so, n.ao], c.key).toEqual([b.so, b.ao])
+    }
+  })
+
+  test("marker elements equal the BASE set (row 57 AC-HARW replaces them with the H-ARW set as INTENT)", () => {
+    for (const c of corpus) {
+      const b = parts(CHAR_BASE[c.key]!)
+      const n = parts(now[c.key]!)
+      expect([n.sm, n.am], c.key).toEqual([b.sm, b.am])
+    }
+  })
+
+  test("verdicts equal BASE except the intended changes listed with their AC line (§3.6 clause 5)", () => {
+    for (const c of corpus) {
+      const b = parts(CHAR_BASE[c.key]!)
+      const n = parts(now[c.key]!)
+      const intent = CHAR_INTENT[c.key]
+      const ok = (n.vs === b.vs && n.va === b.va) || (!!intent && n.vs === parts(intent[1]).vs && n.va === parts(intent[1]).va)
+      expect(ok ? "ok" : { base: [b.vs, b.va], now: [n.vs, n.va], intent }, c.key).toBe("ok")
+    }
+  })
+
+  test("explicit-default twins render byte-equal to the spec without the fields, verdicts equal (§3.6 clause 2)", async () => {
+    const has = schemaTwinFields()
+    console.log(`[rel128-vis0 char] twin fields in the schema: ${has.size} of ${TWIN_FIELDS.length}`)
+    // All or none: BASE has no 1.2.8 field; HEAD (row 52 on) has every one. A partial set means a schema regression.
+    expect([0, TWIN_FIELDS.length]).toContain(has.size)
+    if (has.size === 0) return
+    let twins = 0
+    for (const c of corpus) {
+      const twin = explicitDefaults(c.v1, has)
+      expect(usedNewFields(twin).length, c.key).toBeGreaterThan(0)
+      // the twin is a valid v1 artefact under the contract
+      expect(validateSchema("studio.diagram/v1", twin) as unknown as Issue[], c.key).toEqual([])
+      expect(await charLine(twin, c.opts), c.key).toBe(now[c.key])
+      twins++
+    }
+    expect(twins).toBe(corpus.length)
+  }, 120_000)
 })
