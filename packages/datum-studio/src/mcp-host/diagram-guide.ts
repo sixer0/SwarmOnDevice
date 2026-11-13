@@ -22,6 +22,9 @@
  * existed before 1.2.8 and point to studio://skema/diagram-visio (diagramVisioGuideText), the generated catalogue of the
  * 1.2.8 fields (DIAGRAM_VISIO_FIELDS), shape sets and connector style; both stay under 3000 B (the pins are not moved).
  * diagramGuideFacts() still returns the full schema lists.
+ *
+ * Swarm 1.2.8 row 58 (AC-VIS10, N8-382): the Visio resource also names P1-event_type and POOL_FLOW_CROSSES, so every
+ * agent-written field, token and check id of N8-230..N8-271 plus the pool warning is in one of the two resources.
  */
 import { commonV2Schema } from "@/lib/studio/contract/schema/v2/common.schema"
 import { DIAGRAM_GUIDE_URI, DIAGRAM_VISIO_FIELDS, DIAGRAM_VISIO_GUIDE_URI } from "@/lib/studio/contract/schema/v2/refusal-hints"
@@ -93,6 +96,8 @@ export const DIAGRAM_GUIDE_EXAMPLE = {
   source: { text: "SUMBER: data proyek." },
   spec: {
     family: "flow",
+    // Row 58 (AC-VIS10): without it the preview lists P1-labels_verified (draft) among figure.defects.
+    labels_verified: true,
     nodes: [
       { id: "a", label: "Sensor R1-R2", class: {} },
       { id: "b", label: "Gerbang Data A", class: {} },
@@ -222,7 +227,7 @@ export function diagramVisioGuideText(): string {
     "",
     "Fields:",
     line("spec", "spec (swimlane only for lanes, phases, pools)"),
-    line("node", "node (event shapes only)"),
+    line("node", "node (event shapes only, P1-event_type)"),
     line("class", "node.class (phase/pool id; all nodes or none, P1-containers)"),
     line("zone", "zone (group = BPMN group)"),
     line("edge", "edge"),
@@ -233,7 +238,7 @@ export function diagramVisioGuideText(): string {
     `- Line styles (kind + dash + weight) at most ${LIMITS.max_line_styles}, ${LIMITS.max_line_styles_with_mark} when a node has a mark (DATUM-25L).`,
     "- label_at fixes the label: a collision is a defect, never moved. Curved and diagonal lines get no jumps.",
     "- Event and gateway labels sit below the shape; other labels inside.",
-    "- BPMN: sequence flow = kind data; message flow = kind control + arrow_start circle + arrow_end open; association = kind sync + arrow_end none. A sequence flow leaving its pool is a warning.",
+    "- BPMN: sequence flow = kind data; message flow = kind control + arrow_start circle + arrow_end open; association = kind sync + arrow_end none. A sequence flow leaving its pool is a warning (POOL_FLOW_CROSSES).",
     "- Arrays replace whole on studio_figure_revise; a style-only change is no FIGURE_GRAPH_DELTA.",
     "",
   ].join("\n")

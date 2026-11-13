@@ -539,6 +539,46 @@ tindakannya; norma kerja diagram lengkap (batas label, warna aksen, jenis garis)
    mesin lulus bila pratinjau inline tanpa `defects` (sesudah render: `FIGURE_FIT` PASS). Pratinjau
    bersih saja belum selesai.
 
+**Bentuk dan konektor setara Visio.** Studio mencakup tiga set bentuk Visio: Basic Flowchart
+(`basic-flowchart`), Cross-Functional (`cross-functional`) dan BPMN Basic (`bpmn-basic`). Katalog medan
+lengkap, nilai dan bawaannya ada di resource MCP `studio://skema/diagram-visio`; baca bersama
+`studio://skema/diagram` sebelum spec pertama. Medan yang tidak dikirim menggambar seperti sebelumnya, dan
+nilai bawaan yang dikirim menggambar sama dengan medan yang tidak dikirim. Diagram dengan medan ini tersimpan
+utuh lewat `studio_chapter_submit`, `studio_write`, `studio_edit` (append) dan
+`studio_chapter_import_markdown` (fence `diagram`). Agen Swarm memuat skill bawaan `diagram-flow` untuk resep
+dan perbaikan galat.
+
+| Visio | Medan atau token Studio | Catatan |
+|---|---|---|
+| Start/End, Process, Decision | `stadium`, `box`, `diamond` | family `flow` (`direction` untuk cabang) atau `graph` |
+| Subprocess (predefined process), Document, Data | `predefined`, `document`, `parallelogram` | `predefined` bukan `subprocess` BPMN |
+| On-page / off-page reference, Preparation, Database | `circle`, `offpage`, `hexagon`, `cylinder` | - |
+| Swimlane, orientasi, separator = fase | `class.lane`, `lane_orientation`, `phases` + `class.phase` | family `swimlane`; urutan lajur = urutan pertama dipakai |
+| Start / intermediate / end event, pemicu | `event_start`, `event_intermediate`, `event_end`, `event_type` | `event_type` hanya pada event (`P1-event_type`) |
+| Task, collapsed sub-process | `task`, `subprocess` | - |
+| Gateway exclusive / parallel / inclusive / complex, tanpa penanda | `gateway_exclusive`, `gateway_parallel`, `gateway_inclusive`, `gateway_complex`, `diamond` | wajib keluaran berlabel (`P3-diamond-exits`) |
+| Data object, data store, text annotation | `data_object`, `cylinder`, `annotation` | dihubungkan dengan asosiasi |
+| Group, pool, lane | `zones[].style` `"group"`, `pools` + `class.pool`, `class.lane` | fase dan kolam: semua simpul atau tidak sama sekali (`P1-containers`) |
+| Sequence / message flow, association | `kind` `"data"`; `kind` `"control"` + `arrow_start` `"circle"` + `arrow_end` `"open"`; `kind` `"sync"` + `arrow_end` `"none"` | aliran urutan yang keluar kolamnya: notice `POOL_FLOW_CROSSES` |
+| Gaya rute (siku, lurus, lengkung) | `route` | lurus dan lengkung tidak memutar; lengkung tanpa `via` |
+| Sambungan ke sisi dan titik sambung | `from_side`, `to_side`, `from_slot`, `to_slot` | slot wajib sisi (`P1-edge-style`) |
+| Titik belok | `via` (titik kisi `{col,row}`) | hanya `flow` tanpa `direction`, `graph`, `swimlane` (`P3-via-family`); maks 8 (`P1-via`) |
+| Kepala panah kedua ujung, jenis dan ukuran | `arrow_start`, `arrow_end`, `arrow_start_size`, `arrow_end_size` | ukuran tanpa jenis ditolak `P1-edge-style` |
+| Pola garis dan tebal garis | `dash`, `weight` | gaya garis (`kind` + `dash` + `weight`) dibatasi `DATUM-25L` |
+| Posisi label konektor | `label_at` | label tetap tidak digeser; tabrakan menjadi cacat |
+| Lompatan garis | `jumps` (tingkat spec) | persilangan tetap cacat `GEOM_EDGE_CROSS` |
+
+Satu notasi per gambar (`DATUM-35`): bentuk ISO 5807 atau BPMN, tidak dicampur; `box`, `circle`,
+`cylinder` dan `annotation` boleh di keduanya. Label event dan gateway berada di bawah bentuknya (di samping
+lingkaran bila alur atas-bawah keluar ke bawah); label bentuk lain di dalam bentuk. Titik `via` diambil dari
+`structuredContent.figure.lattice` pada pratinjau dengan lebar templat yang sama: kisi dipusatkan per lebar
+dan berasal dari tata letak pertama, jadi setelah notice `AUTO_FIT` pratinjau ulang. Lebar: pada 166 mm tiga
+lajur atau tiga fase muat, pada 128 mm dua; kolam mendatar memuat dua kolom simpul pada 166 mm dan satu pada
+128 mm, jadi proses yang lebih lebar memakai `lane_orientation: "vertical"` atau dipecah (`DATUM-37`). Grup
+di swimlane menjangkau lajur tetangga kecuali simpulnya di lajur terluar. Celah satu kisi yang dilintasi garis
+lajur tidak memuat label (`LABEL_LEADER`): perlebar celahnya atau persingkat labelnya. Masuki keputusan dari
+atas; keluaran berangkat dari sudutnya.
+
 **Cabang paralel: `direction`.** `spec.direction` bernilai `"TB"` (atas-bawah) atau `"LR"`
 (kiri-kanan) dan hanya berlaku untuk `family: "flow"`. Tanpa `direction`, flow mengikuti urutan daftar
 dalam satu kolom: cabang paralel tersusun berurutan dan pratinjau memberi cacat `FLOW_SERIALISED`.

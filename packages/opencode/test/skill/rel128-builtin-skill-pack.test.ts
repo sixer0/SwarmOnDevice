@@ -405,3 +405,67 @@ describe("project-folders", () => {
     expect(rule.test("Kajian Tarif")).toBe(true)
   })
 })
+
+// --- diagram-flow (1.2.8 row 58, AC-VIS10, N8-062 / N8-476) -----------------------------------------------------------
+// The text, the resources and every example are checked by the Studio test N8-382
+// (datum-studio test/g04-agent-guide/rel128-vis10-guide.test.ts); here: the real Skill service and the trigger match.
+describe("diagram-flow", () => {
+  const text = skillFile("diagram-flow.md")
+  const TRIGGERS = {
+    keywords: ["diagram", "flowchart", "bpmn", "swimlane", "business flow", "business process", "visio", "bagan alir", "alur bisnis", "proses bisnis"],
+    files: [],
+    missionTypes: [],
+  }
+
+  it.live("listed as a built-in with its description and English and Indonesian triggers", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const skill = yield* Skill.Service
+        const listed = (yield* skill.available()).find((item) => item.name === "diagram-flow")
+        expect(listed?.location).toBe("<built-in>")
+        expect(listed?.description).toBe(s.DIAGRAM_FLOW_SKILL_DESCRIPTION as string)
+        expect(listed?.description).toContain("Load it before writing a diagram spec")
+        expect(listed?.triggers).toEqual(TRIGGERS)
+        expect(Skill.parseTriggers(TRIGGERS)).toEqual({ triggers: TRIGGERS })
+        expect((yield* skill.require("diagram-flow")).content).toBe(text)
+      }),
+    ),
+  )
+
+  it.live("reserved: a disk copy never replaces it", () => expectReservedBuiltin("diagram-flow", "diagram-flow.md"))
+
+  it.live("a request in English or Indonesian suggests it; an unrelated request does not", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const skill = yield* Skill.Service
+        const available = yield* skill.available()
+        const suggest = (focus: string) => SystemPrompt.suggestedSkills(available, { text: focus, files: [] }) ?? ""
+        for (const [focus, keyword] of [
+          ["Draw a BPMN process for the claim handling.", "bpmn"],
+          ["Make a flowchart of the approval steps.", "flowchart"],
+          ["We need a swimlane view per department.", "swimlane"],
+          ["Map the business flow from order to invoice.", "business flow"],
+          ["Buatkan bagan alir untuk proses pengadaan.", "bagan alir"],
+          ["Tolong gambarkan alur bisnis penagihan.", "alur bisnis"],
+          ["Susun diagram proses bisnis layanan.", "diagram"],
+        ])
+          expect(suggest(focus)).toContain(`- diagram-flow: matched keywords "${keyword}"`)
+        expect(suggest("Summarise the meeting notes in three bullets.")).not.toContain("diagram-flow")
+      }),
+    ),
+  )
+
+  test("text: built-in shape, points to both Studio resources, names only registered tools", () => {
+    expectBuiltinShape(text)
+    expect(text).toContain("studio://skema/diagram")
+    expect(text).toContain("studio://skema/diagram-visio")
+    const studio = [...new Set([...text.matchAll(/\bstudio_[a-z_]*[a-z]\b/g)].map((m) => m[0]))]
+    expect(studio.length).toBeGreaterThan(5)
+    const studioTools = new Set(
+      ["figure-tools.ts", "doc-tools.ts", "write-tools.ts", "tools.ts"].flatMap((file) =>
+        [...readOptional(PACKAGES, "datum-studio", "vendor", "scripts", "studio", "mcp", file).matchAll(/"(studio_[a-z_]+)"/g)].map((m) => m[1]),
+      ),
+    )
+    expect(studio.filter((name) => !studioTools.has(name))).toEqual([])
+  })
+})

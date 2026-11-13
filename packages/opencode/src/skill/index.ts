@@ -29,6 +29,7 @@ import FLUX3_IMAGE_GEN_SKILL_BODY from "./flux3-image-gen.md" with { type: "text
 import SKILL_AUTHORING_SKILL_BODY from "./skill-authoring.md" with { type: "text" }
 import OBSIDIAN_MEMORY_SKILL_BODY from "./obsidian-memory.md" with { type: "text" }
 import PROJECT_FOLDERS_SKILL_BODY from "./project-folders.md" with { type: "text" }
+import DIAGRAM_FLOW_SKILL_BODY from "./diagram-flow.md" with { type: "text" }
 
 const CLAUDE_EXTERNAL_DIR = ".claude"
 const AGENTS_EXTERNAL_DIR = ".agents"
@@ -157,6 +158,31 @@ export const PROJECT_FOLDERS_SKILL_DESCRIPTION =
   "Project folders: at mission creation in the Default Project root, propose a group (product, institution or research theme) for the person to choose in Mission Control, and on request propose one list that tidies existing missions into groups. Load it after creating a mission in the Default Project root or when the person asks to group or tidy missions. You only propose; Swarm moves missions after the person's click."
 export const PROJECT_FOLDERS_SKILL_CONTENT: string = PROJECT_FOLDERS_SKILL_BODY
 
+// Built-in entry shipped with 1.2.8 (row 58; N8-062, N8-476, 01f section 8.4): how to draw Visio-minimum diagrams
+// (Basic Flowchart, Cross-Functional, BPMN Basic, connector styling) in Studio. Reserved like the others. The text
+// names fields and codes but lists no values: those come from studio://skema/diagram and studio://skema/diagram-visio.
+export const DIAGRAM_FLOW_SKILL_NAME = "diagram-flow"
+export const DIAGRAM_FLOW_SKILL_DESCRIPTION =
+  "Diagrams and business flows in Studio: basic flowcharts, cross-functional swimlanes with phases, BPMN basic shapes, and connector styling (route, glue, bend points, arrowheads, dash, weight, label position, line jumps). Load it before writing a diagram spec. It points to Studio's diagram resources, which are the field reference."
+export const DIAGRAM_FLOW_SKILL_CONTENT: string = DIAGRAM_FLOW_SKILL_BODY
+/** Keywords in English and Indonesian that suggest the diagram-flow built-in (01b section 3.1 limits: 10 entries). */
+export const DIAGRAM_FLOW_SKILL_TRIGGERS: Triggers = {
+  keywords: [
+    "diagram",
+    "flowchart",
+    "bpmn",
+    "swimlane",
+    "business flow",
+    "business process",
+    "visio",
+    "bagan alir",
+    "alur bisnis",
+    "proses bisnis",
+  ],
+  files: [],
+  missionTypes: [],
+}
+
 export const RESERVED_SKILL_NAMES: ReadonlySet<string> = new Set([
   KNOWLEDGE_LIBRARY_SKILL_NAME,
   DATUM_SKILL_NAME,
@@ -167,6 +193,7 @@ export const RESERVED_SKILL_NAMES: ReadonlySet<string> = new Set([
   SKILL_AUTHORING_SKILL_NAME,
   OBSIDIAN_MEMORY_SKILL_NAME,
   PROJECT_FOLDERS_SKILL_NAME,
+  DIAGRAM_FLOW_SKILL_NAME,
 ])
 
 /** N8-034: limits of a SKILL.md `triggers` map. Over a limit the skill still loads, without triggers (N8-049). */
@@ -742,6 +769,13 @@ const layer = Layer.effect(
         description: PROJECT_FOLDERS_SKILL_DESCRIPTION,
         location: "<built-in>",
         content: PROJECT_FOLDERS_SKILL_CONTENT,
+      }
+      s.skills[DIAGRAM_FLOW_SKILL_NAME] = {
+        name: DIAGRAM_FLOW_SKILL_NAME,
+        description: DIAGRAM_FLOW_SKILL_DESCRIPTION,
+        location: "<built-in>",
+        content: DIAGRAM_FLOW_SKILL_CONTENT,
+        triggers: DIAGRAM_FLOW_SKILL_TRIGGERS,
       }
       const library = LibraryRoot.current()
       if (library.kind !== "available") return s

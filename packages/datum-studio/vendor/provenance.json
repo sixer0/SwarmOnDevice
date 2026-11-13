@@ -125,7 +125,7 @@
   "patched": 164,
   "replaced": 12,
   "added": 30,
-  "bytes": 10195015
+  "bytes": 10199672
  },
  "files": [
   {
@@ -154,10 +154,11 @@
   {
    "path": "docs/STUDIO-AGENT-GUIDE.md",
    "status": "patched",
-   "bytes": 193516,
+   "bytes": 197588,
    "source_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb",
-   "sha256": "97c67cad6046fdd88136d36c71edf205267f4ad5a3b215a17f1fb0f89abd697e",
-   "patch_row35": {"id": "128-35-hnb3", "row": "35", "decision": "1.2.8 row 35 (AC-HNB, AC-HNB2, AC-HNB3; N8-339; C25)", "summary": "4.1.2 connector-end table: GEOM_STUB_SEGMENT suggestion cell = the new engine text (row97b pin quotes the engine suggestion)", "diff_base": "sha256 before this row", "before_sha256": "c74e80c4fdd137edd765cf1920f37cd12f53ca4ffa3372fb04965c1852c97210", "after_sha256": "97c67cad6046fdd88136d36c71edf205267f4ad5a3b215a17f1fb0f89abd697e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35_row35_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "be4679aa624605b17ce41f985892729531fa6920265e462c2700504509a9a5cb"},
+   "sha256": "559add502bedf4eea2ea73ec978d2efcd184c798e38beea0384378a873247211",
+   "patch_row58": {"id": "128-58-vis10-guide", "row": "58", "decision": "1.2.8 row 58 (AC-VIS10, N8-382; user item 7)", "summary": "4.1.2 after step 5: paragraph Bentuk dan konektor setara Visio (three shape sets, studio://skema/diagram-visio, persistence channels, diagram-flow skill) and a 17-row table Visio -> Studio field/token for every 01f shape, container and connector row; notation, label-below, figure.lattice per width, width limits, group in swimlane, one-lattice gap, decision entry rules", "diff_base": "sha256 before this row", "before_sha256": "97c67cad6046fdd88136d36c71edf205267f4ad5a3b215a17f1fb0f89abd697e", "after_sha256": "559add502bedf4eea2ea73ec978d2efcd184c798e38beea0384378a873247211", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/58_row58_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "ff59520d9255cab826a51dff289bf99bff41759b3956f6f7441b66feda2d7551"},
+   "patch_row35":{"id": "128-35-hnb3", "row": "35", "decision": "1.2.8 row 35 (AC-HNB, AC-HNB2, AC-HNB3; N8-339; C25)", "summary": "4.1.2 connector-end table: GEOM_STUB_SEGMENT suggestion cell = the new engine text (row97b pin quotes the engine suggestion)", "diff_base": "sha256 before this row", "before_sha256": "c74e80c4fdd137edd765cf1920f37cd12f53ca4ffa3372fb04965c1852c97210", "after_sha256": "97c67cad6046fdd88136d36c71edf205267f4ad5a3b215a17f1fb0f89abd697e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/35_row35_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "be4679aa624605b17ce41f985892729531fa6920265e462c2700504509a9a5cb"},
    "patch_row37c": {"id": "row37c-n11-overflow-only-sentence", "row": "37c", "decision": "1.2.7 C54 (row 40d overflow-only rule, d2c1b053b0; AC-N11)", "summary": "4: Lebar tabel (DT-10a) sentence: ID list without spaces breaks after , ; / above 16 characters and only when it does not fit its column; URL, document number and path never break and are counted whole", "before_sha256": "7c061826b4fa96e1a4d0f0d8606c1cc2c7804c419c13198cfe79c43ca6322013", "after_sha256": "c74e80c4fdd137edd765cf1920f37cd12f53ca4ffa3372fb04965c1852c97210", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/37c_row37c_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "7ff9d24a7862f0cd6061c6f14edfb6a6929660f67cd7a637e9aa0bbf2f7405c9"},
    "patch_row37b": {"id": "row37b-guide-sentences-n10-n11-t11-t12", "row": "37b", "decision": "1.2.7 C32/C42 (integration row); 01c N-10, N-11, T-11, T-12 text changes; file requests rows 38, 39", "summary": "4: Lebar tabel (DT-10a) line, ID lists break after , ; / above 16 characters, URLs never break (N-11); 4.1.2 step 2: inline v2 needs only family and nodes, Arah alur patch {spec:{direction:\"LR\"}} line, top-level direction refused (T-11); 8.3: studio_write render failure line and retry rule, retire refusals NOT_BOUND_TO_ROW and NO_CURRENT_DELIVERABLE by design (N-10); 8.4: standalone result prints perabot: KUNCI <k> baris, SUMBER <s> baris, tinggi <h> mm (T-12)", "before_sha256": "4ce6cbefa1523ea9d2c5d2eab869bfefd058143cc26bbf4d3c4967c7b8cc9e92", "after_sha256": "7c061826b4fa96e1a4d0f0d8606c1cc2c7804c419c13198cfe79c43ca6322013", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/37b_row37b_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "9c98234fc781679fc17ff1d321793d9b64ae85eefabbc0d339be6ea6084d7a9d"},
    "patch_row37f": {"id": "row37f-render-text-guide-lines", "row": "37", "decision": "1.2.7 controller request (DS-guide owner); 01c N-3, N-4, N-5, M-03 text changes", "summary": "8.4: studio_render text carries the full sha256 per file and a fail per code line (M-03/M-08); formats pdf/docx without html: Studio adds html as the measured source (formats added), not a deliverable (N-4); eye gate PNGs are witness-pNNN.png witness images, not deliverables (N-5); 8.5: the <kode>: total N (dirinci 100, tidak dirinci M) line gives the real count, FAIL per kode counts findings (N-3)", "before_sha256": "0157cda6ac4c4f68ffe283aa70e24ccf2163b5043a8c655d2851c15223d97c04", "after_sha256": "4ce6cbefa1523ea9d2c5d2eab869bfefd058143cc26bbf4d3c4967c7b8cc9e92", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/STUDIO-AGENT-GUIDE.md.followup.diff", "diff_sha256": "ad6aadb301d902133fb5358622f33da4c811aa5c724936f2672ca71ef24cdf69"},
@@ -4697,10 +4698,11 @@
   {
    "path": "src/lib/studio/services/compose/blocks.ts",
    "status": "patched",
-   "bytes": 23015,
+   "bytes": 23600,
    "source_sha256": "111e9a84d36f7ce54bbde3c5fd386a8114e5066dd2474879c189c171e27c05e2",
-   "sha256": "210040d74db349db2457ad22d4c048fa03f5fdbf7f591c68f630ec6e9e520db0",
-   "patch_row45": {"id": "row45-t11-direction-contract", "row": "45", "decision": "1.2.6 patch T-11 contract (register N-109; 01e §3.1)", "summary": "diagramSpec: copies spec.direction when present (absent = no key, legacy JSON unchanged)", "before_sha256": "85567a74c851e1c37bbbc0293a2c3ca3154a63fffed802e7f66ea291a0ffe6d6", "after_sha256": "210040d74db349db2457ad22d4c048fa03f5fdbf7f591c68f630ec6e9e520db0", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/src_lib_studio_services_compose_blocks.ts.diff", "diff_sha256": "2be8d541ccb05c54a4dc6c48f8f0077f9595403b25836fc24a2e54a860d42191"},
+   "sha256": "0ca8fe67b1e3f6185611b84e21f8624e754a240a540f7f1b893ed966b54082ec",
+   "patch_row58": {"id": "128-58-block-spec-fields", "row": "58", "decision": "1.2.8 row 58 (AC-VIS10, N8-382; user item 7)", "summary": "diagramSpec: copies the four 1.2.8 spec-level fields lane_orientation, phases, pools, jumps when present (absent = no key, older blocks byte-identical); before, a block with phases was refused P1-containers and lane_orientation/jumps were ignored on the block path", "diff_base": "sha256 before this row", "before_sha256": "210040d74db349db2457ad22d4c048fa03f5fdbf7f591c68f630ec6e9e520db0", "after_sha256": "0ca8fe67b1e3f6185611b84e21f8624e754a240a540f7f1b893ed966b54082ec", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/58_row58_diffs/services_compose_blocks.ts.diff", "diff_sha256": "da850bb43559387c4f4cfc02224e63ba8cbfa929810477074f3b1801cd6dd568"},
+   "patch_row45":{"id": "row45-t11-direction-contract", "row": "45", "decision": "1.2.6 patch T-11 contract (register N-109; 01e §3.1)", "summary": "diagramSpec: copies spec.direction when present (absent = no key, legacy JSON unchanged)", "before_sha256": "85567a74c851e1c37bbbc0293a2c3ca3154a63fffed802e7f66ea291a0ffe6d6", "after_sha256": "210040d74db349db2457ad22d4c048fa03f5fdbf7f591c68f630ec6e9e520db0", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/src_lib_studio_services_compose_blocks.ts.diff", "diff_sha256": "2be8d541ccb05c54a4dc6c48f8f0077f9595403b25836fc24a2e54a860d42191"},
    "patch": {"id": "row163b-compose-chart-vega", "row": "163b", "decision": "C155", "summary": "chart(): the block code is passed as the spec kind with a cast (V-01..V-08 reach the Vega branch of services/render/vega-figure.ts) and `options` is copied onto the spec. Rev A blocks compose byte-identically", "before_sha256": "111e9a84d36f7ce54bbde3c5fd386a8114e5066dd2474879c189c171e27c05e2", "after_sha256": "85567a74c851e1c37bbbc0293a2c3ca3154a63fffed802e7f66ea291a0ffe6d6", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/services_compose_blocks.ts.diff", "diff_sha256": "3a2b9df945d3ab81ea300f1ddb0bc810e283a6b4fffbbff6b2a507e79aa14eb3"}
   },
   {
@@ -6357,6 +6359,7 @@
   "55b",
   "56c",
   "53b",
-  "57c"
+  "57c",
+  "58"
  ]
 }
