@@ -2,10 +2,11 @@
 // overlay opened in a local category (`SUBAGENT_RUNS_LIKE_ROOT`) runs like the root's, with no decider call and the root's
 // line. `sh|bash|zsh -c '<literal>'` is judged as the command line it runs (C21 b), and `sh|bash|zsh <file>` as running
 // that script (C21 c). Every other opened category still goes to the main agent, where "cannot tell" refuses.
-import { afterEach, beforeEach, expect } from "bun:test"
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { afterEach, beforeEach, expect, spyOn } from "bun:test"
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { createHash } from "node:crypto"
 import os from "node:os"
+import * as osModule from "node:os"
 import path from "node:path"
 import { Cause, Effect, Exit, Layer } from "effect"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -262,8 +263,21 @@ it.instance("SUBAGENT_RUNS_LIKE_ROOT is exactly check, not_routine, script and o
 // SR7-02: a shell write outside the project, in any spelling of home (and inside `sh -c`), is `outside_write_held` under
 // consent: decided, so the subagent's call reaches the main agent, whose "cannot tell" refuses it. A copy that would
 // replace there is refused outright.
+// Row 29d (C46): hermetic. Home is a fresh mkdtemp folder for this test (both `os.homedir` spellings the source uses), so
+// a real `~/.zshrc` on the machine running it (which would make the write an X replacement) never changes the outcome.
+const tempHome = () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "h7-"))
+  const spies = [spyOn(os, "homedir").mockReturnValue(home), spyOn(osModule, "homedir").mockReturnValue(home)]
+  return Effect.sync(() => {
+    for (const spy of spies) spy.mockRestore()
+    rmSync(home, { recursive: true, force: true })
+  })
+}
+
 it.instance("SR7-02: a subagent's home-spelled shell write outside the project reaches the decider", () =>
   Effect.gen(function* () {
+    const restore = tempHome()
+    yield* Effect.addFinalizer(() => restore)
     const test = yield* TestInstance
     const dir = test.directory
     const { root, child } = yield* family()

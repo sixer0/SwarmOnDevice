@@ -2490,6 +2490,36 @@ export function classify(input: Input, checkClass: CheckClass = CHECK_CLASS): Ve
  */
 export const SUBAGENT_RUNS_LIKE_ROOT: ReadonlySet<string> = new Set(["not_routine", "script", "outside_folder", "check"])
 
+/** Row 29d (C46): the package tools whose `add` / `install <name>` fetches a named package from a registry. */
+const REGISTRY_ADDERS: ReadonlySet<string> = new Set(["npm", "bun", "pnpm", "yarn"])
+const ADD_WORDS: ReadonlySet<string> = new Set(["add", "install", "i", "in", "isntall"])
+/** A word that names a local package, not one from a registry: a path or a local protocol. */
+const LOCAL_PACKAGE = /^(\.{1,2}(\/|$)|\/|~|file:|link:|workspace:|portal:)/
+
+/** Row 29d (C46): `npm|bun|pnpm|yarn add|install <pkg>`; a lockfile install (`bun install`, `npm ci`) names none. */
+function addsRegistryPackage(name: string, args: readonly string[]) {
+  if (!REGISTRY_ADDERS.has(name)) return false
+  const words = args.filter((word) => !word.startsWith("-"))
+  return ADD_WORDS.has(words[0] ?? "") && words.slice(1).some((word) => !LOCAL_PACKAGE.test(word))
+}
+
+/**
+ * Row 29d (C46, OP-1): a SUBAGENT's shell call that leaves the parity path although its category is in
+ * `SUBAGENT_RUNS_LIKE_ROOT`: one of its steps (texts and project scripts unwrapped, `BypassScreen.deepSteps`) is a form the
+ * 1.1.1 rules recognise as leaving the machine (`BypassLists.OUTWARD_FORMS`: a hosted deploy, a publish, an image push), or
+ * adds a named registry package. It goes to the main agent, where "cannot tell" refuses. The root is never asked here,
+ * and nothing is reclassified: the line's category stays the table's.
+ */
+export function subagentSendsAnyway(input: Input): boolean {
+  if (input.bypass?.caller !== "subagent") return false
+  return BypassScreen.deepSteps(input).steps.some((step) => {
+    const found = BypassScreen.unwrap(step.argv)
+    if (found.kind !== "program") return false
+    const form = Object.hasOwn(BypassLists.OUTWARD_FORMS, found.name) ? BypassLists.OUTWARD_FORMS[found.name] : undefined
+    return (form !== undefined && form(found.args)) || addsRegistryPackage(found.name, found.args)
+  })
+}
+
 /** 1.2.7 U-7 (C21 b, c): the shells whose `-c` text is read as a command line, and whose script file is screened as one. */
 const SHELL_TEXT_PROGRAMS: ReadonlySet<string> = new Set(["sh", "bash", "zsh"])
 

@@ -793,7 +793,7 @@ const layer = Layer.effect(
         const left = ScriptReader.waitLeft(SCRIPT_READER_WAIT_MS)
         if (left > 0) yield* Effect.promise(() => starting).pipe(Effect.timeoutOption(Duration.millis(left)))
       }
-      const { last, cwd, canUndo, table: judgedTable, via } = yield* judge(input, userCatchAll, root.id, bypass)
+      const { last, cwd, canUndo, table: judgedTable, via, tableInput } = yield* judge(input, userCatchAll, root.id, bypass)
       // S1.36, defence in depth: only the consent overlay opens a call, only under consent, and never one of the X
       // categories. A verdict that says otherwise is not believed: what nothing may run is refused, the rest (1.1.0 path
       // only) waits for a person. 1.1.3: `noWait` opens the KEPT_D categories, outward sends and soft script flags, so under
@@ -871,7 +871,9 @@ const layer = Layer.effect(
         input.permission === "bash" ||
         (input.permission === "external_directory" &&
           typeof (input.metadata as Record<string, unknown> | undefined)?.command === "string")
-      const runsLikeRoot = shellCall && SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed as string)
+      // Row 29d (C46): a subagent's deploy or registry add leaves that path and goes to the main agent; the root's is unchanged.
+      const runsLikeRoot =
+        shellCall && SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed as string) && !AutonomyTable.subagentSendsAnyway(tableInput)
       const forSubagent = overlaid && bypass.caller === "subagent" && !runsLikeRoot
       const mainAgent = `agent:main/${last?.agent ?? "build"}` as const
       const asked =
