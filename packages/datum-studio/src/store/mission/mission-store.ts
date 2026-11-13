@@ -496,6 +496,9 @@ export class MissionStore {
     if (to === "done") {
       const open = tx.all<{ row_id: string }>("SELECT row_id FROM mission_row WHERE mission_id = ? AND status NOT IN ('done','dropped') ORDER BY ord", [mission]).map((r) => r.row_id)
       if (open.length > 0) throw err("MISSION_ROWS_OPEN", "rows are not done or dropped", { mission, rows: open })
+      // 1.2.8 row 39 (MEM-e): Swarm said this project's memory has no index entry for the mission (order: STATUS_TRANSITION
+      // -> MISSION_ROWS_OPEN -> MEMORY_INDEX_MISSING; a no-op move above is never checked).
+      if (opts?.memoryIndex?.missionId === mission && opts.memoryIndex.present === false) throw err("MEMORY_INDEX_MISSING", "no mission index entry in this project's memory", { mission })
     }
     let decision: string | null = null
     if (to === "cancelled") {

@@ -336,6 +336,11 @@ export interface MissionWriteOptions {
    * (AUTONOMOUS_MODE_OFF). `undefined` = the caller is trusted code (store tests, migrations), not checked here.
    */
   autonomousMode?: boolean
+  /**
+   * 1.2.8 row 39 (MEM-e, N8-467): Swarm's lookup of the mission index entry (`_meta["studio/memoryIndex"]`). A `done`
+   * close of mission `missionId` with `present: false` is refused MEMORY_INDEX_MISSING. `undefined` = not checked.
+   */
+  memoryIndex?: { missionId: string; present: boolean }
 }
 
 export interface RowPatch {

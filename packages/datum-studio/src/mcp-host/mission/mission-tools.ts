@@ -223,8 +223,11 @@ export function autonomousModeOf(s: HostToolSession): boolean {
 export function writeOptions(args: Record<string, unknown>, s: HostToolSession): MissionWriteOptions {
   const actor = actorOf(args, s)
   const session = sessionOf(args, s)
-  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s) }
+  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s), ...(s.memoryIndex ? { memoryIndex: s.memoryIndex } : {}) }
 }
+
+/** 1.2.8 row 39 (N8-014): text of the warning on a done close Swarm's memory did not check. */
+export const MEMORY_INDEX_UNCHECKED_TEXT = "no Swarm memory check on this call; if the mission has a final report, add its index entry"
 
 function str(a: Record<string, unknown>, k: string): string | undefined {
   return typeof a[k] === "string" ? (a[k] as string) : undefined
@@ -419,7 +422,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_set_status",
       "Change mission status",
-      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests. Setting the current status again returns unchanged: true and writes nothing. done returns the decision register decisions {count, ids} (the store holds them; studio_mission_export renders decisions.md); closing is not refused for a missing export.",
+      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests. Setting the current status again returns unchanged: true and writes nothing. done returns the decision register decisions {count, ids} (the store holds them; studio_mission_export renders decisions.md); closing is not refused for a missing export. A Swarm close is refused MEMORY_INDEX_MISSING until the project memory holds the mission's index entry; other callers get warning MEMORY_INDEX_UNCHECKED.",
       false,
       async (a, s) => {
         const r = await write(dry(a), (tx) => {
@@ -442,6 +445,11 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           const dropped = (["note", "decision", "supersededBy"] as const).filter((k) => str(a, k))
           const lost = dropped.length > 0 ? `; ${dropped.join(", ")} not recorded (use studio_mission_update_row note or studio_mission_record_decision)` : ""
           return { text: `mission ${r.id}: already ${r.to}, unchanged (no event, no snapshot)${lost}${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+        }
+        // 1.2.8 row 39 (MEM-e, D-M2): a done close without a usable Swarm memory lookup for this mission succeeds with a warning.
+        if (r.to === "done" && s.memoryIndex?.missionId !== r.id) {
+          const warning = { code: "MEMORY_INDEX_UNCHECKED", message: MEMORY_INDEX_UNCHECKED_TEXT }
+          return { text: `mission ${r.id}: ${r.from} -> ${r.to}${reg}; warning MEMORY_INDEX_UNCHECKED: ${MEMORY_INDEX_UNCHECKED_TEXT}${dryNote(a)}`, data: { ...r, dryRun: dry(a), warning } }
         }
         return { text: `mission ${r.id}: ${r.from} -> ${r.to}${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },

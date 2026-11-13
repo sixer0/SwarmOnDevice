@@ -103,7 +103,7 @@ export const MISSION_LIFECYCLE = [
   "Lifecycle 3/6 set_status running: studio_mission_set_status {to: running}; no row starts before approval (MISSION_NOT_APPROVED). Setting the status a mission already has returns unchanged: true and writes nothing, so a repeated call is safe.",
   `Lifecycle 4/6 update_row per step: studio_mission_update_row {rows: [{id, status: running}]} when a step starts; when it ends set done or blocked, each with a note (${ROW_RUNNING_DONE_RULE}). Each patch applies or is refused on its own: the call can succeed while a patch failed, so read ${ROW_PATCH_RESULT_SHAPE}. rows[].decision gives one patch its own decision (it overrides the call-level decision). Notes are never gated by dependencies: send a note as its own patch; a status refused DEP_NOT_DONE in a patch that also carries a note still stores the note (noteSaved: true). Phase and kind must match the matrix in the guide (KIND_NOT_ALLOWED, PHASE_UNKNOWN otherwise).`,
   "Lifecycle 5/6 gate: a row is done only with verified outputs (OUTPUT_UNVERIFIED otherwise) or a note naming the check and its result file. Rows added or dropped after approval need a decision and show in studio_mission_get derived.drift (each with its decision id).",
-  "Lifecycle 6/6 done: every row done or dropped (MISSION_ROWS_OPEN otherwise), then one studio_mission_set_status {to: done}.",
+  "Lifecycle 6/6 done: every row done or dropped (MISSION_ROWS_OPEN otherwise), the final report written and its mission index entry remembered (MEMORY_INDEX_MISSING otherwise, Swarm only), then one studio_mission_set_status {to: done}.",
 ] as const
 
 const arrows = (moves: Readonly<Record<string, readonly string[]>>) =>
