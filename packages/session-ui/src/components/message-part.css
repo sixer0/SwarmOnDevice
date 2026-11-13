@@ -295,6 +295,51 @@
   color: var(--v2-text-text-muted);
   line-height: var(--line-height-normal);
 
+  /* U-9: the toggle is the collapsible trigger under its own slot name, so it takes the trigger look here. */
+  [data-slot="reasoning-toggle"] {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: var(--session-row, 32px);
+    padding: 0;
+    border: none;
+    background-color: transparent;
+    color: var(--v2-text-text-muted);
+    cursor: pointer;
+    user-select: none;
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-small);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-large);
+    text-align: left;
+
+    &:focus-visible {
+      outline: none;
+      background-color: var(--surface-raised-base-hover);
+    }
+
+    [data-slot="collapsible-arrow"] {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    [data-slot="collapsible-arrow-icon"] {
+      display: inline-flex;
+      color: var(--icon-weaker);
+      transform: rotate(-90deg);
+      transition: transform 0.15s ease;
+    }
+
+    &[aria-expanded="true"] [data-slot="collapsible-arrow-icon"] {
+      transform: rotate(0deg);
+    }
+  }
+
   [data-component="markdown"] {
     margin-top: 16px;
     font-style: normal;
