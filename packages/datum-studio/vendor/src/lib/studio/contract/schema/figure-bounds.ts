@@ -44,6 +44,14 @@ export const FIGURE_BOUNDS = {
   diagramNotes: 24,
   diagramSources: 12,
   /**
+   * Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §2.1, §3.1; register N8-473 = N8-253, N8-259): swimlane phases and pools
+   * per diagram, bend points (`via`) per edge. The engine aliases them in `core/tokens.ts` LIMITS (max_phases,
+   * max_pools, max_via); the contract does not import the engine.
+   */
+  diagramPhases: 8,
+  diagramPools: 4,
+  diagramVia: 8,
+  /**
    * Panjang teks diagram yang masuk loop tata letak mesin (karakter): judul, label simpul/sub/tepi/zona, sumber,
    * butir legenda/catatan. Sama dengan `maxLength` skema diagram v1; cek kapasitas memakainya juga untuk spec
    * terkomposisi dari blok v2 (judul = caption) dan spec tersimpan. `sourcesTotal` = jumlah karakter semua butir

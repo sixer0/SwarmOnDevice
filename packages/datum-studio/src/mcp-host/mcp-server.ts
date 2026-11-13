@@ -15,7 +15,7 @@ import { McpToolError, REAL_NODE_FS, redactSecret, type NodeFs } from "../../ven
 import { createStudioMcpServer } from "../../vendor/scripts/studio/mcp/server"
 import { executeTool, McpSession, newCallId, TOOLS, type ToolDef } from "../../vendor/scripts/studio/mcp/tools"
 import { MISSION_GUIDE_NAME, MISSION_GUIDE_URI, missionGuideText } from "./mission/mission-guide.ts"
-import { DIAGRAM_GUIDE_NAME, DIAGRAM_GUIDE_URI, diagramGuideText } from "./diagram-guide.ts"
+import { DIAGRAM_GUIDE_NAME, DIAGRAM_GUIDE_URI, DIAGRAM_VISIO_GUIDE_NAME, DIAGRAM_VISIO_GUIDE_URI, diagramGuideText, diagramVisioGuideText } from "./diagram-guide.ts"
 import { ASSET_TOOL_NAME, assetHostExtension } from "./asset-tool.ts"
 import { FIGURE_LOCK_TOOL, FIGURE_LOCKED, FIGURE_LOCKS, withFigureLock, type FigureLockRegistry } from "./figure-lock.ts"
 import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, sessionForCall, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
@@ -99,6 +99,8 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
     const guides: Array<{ uri: string; name: string; title: string; description: string; mimeType: string; text: () => string }> = []
     if (missionOn) guides.push({ uri: MISSION_GUIDE_URI, name: MISSION_GUIDE_NAME, title: "MissionDoc shape for studio_mission_create", description: "Required fields, kind/size/tier enums, deps N:B / N:C, mission types and a minimal valid example.", mimeType: "text/markdown", text: missionGuideText })
     if (figureOn) guides.push({ uri: DIAGRAM_GUIDE_URI, name: DIAGRAM_GUIDE_NAME, title: "Diagram block fields", description: "Block, spec, node, class, edge and zone fields; family, shape, mark and edge kind enums; a minimal valid diagram block.", mimeType: "text/markdown", text: diagramGuideText })
+    // Swarm 1.2.8 row 52 (VIS-0b, N8-474, C12 OP-18-1): the 1.2.8 diagram contract fields, beside the diagram guide.
+    if (figureOn) guides.push({ uri: DIAGRAM_VISIO_GUIDE_URI, name: DIAGRAM_VISIO_GUIDE_NAME, title: "Diagram Visio fields", description: "Basic Flowchart, Cross-Functional and BPMN Basic shape sets; lanes, phases, pools; connector route, glue, via, arrowheads, dash, weight, label_at, jumps.", mimeType: "text/markdown", text: diagramVisioGuideText })
     server.setRequestHandler(ListResourcesRequestSchema, async (req, extra) => {
       const base = await vendoredList(req, extra)
       return { ...base, resources: [...((base.resources as unknown[]) ?? []), ...guides.map(({ text: _t, ...r }) => r)] }

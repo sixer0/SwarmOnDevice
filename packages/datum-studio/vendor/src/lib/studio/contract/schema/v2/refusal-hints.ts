@@ -21,6 +21,25 @@ import { skeletonV1Schema } from "./skeleton.schema";
 
 /** MCP resource with the diagram block guide (served by the Swarm host, src/mcp-host/diagram-guide.ts). */
 export const DIAGRAM_GUIDE_URI = "studio://skema/diagram";
+/**
+ * Swarm 1.2.8 row 52 (VIS-0b, register N8-474, C12 OP-18-1): the generated catalogue of the F-VISIO contract fields
+ * (shape sets, connector style, containers), served beside DIAGRAM_GUIDE_URI by the Swarm host.
+ */
+export const DIAGRAM_VISIO_GUIDE_URI = "studio://skema/diagram-visio";
+
+/**
+ * Swarm 1.2.8 row 52 (VIS-0a/VIS-0b, F-VISIO 01f §2.1, §3.1): the contract fields added in 1.2.8, per object. Every name
+ * is a schema field (row 52 test). `studio://skema/diagram` prints the older fields and points here; the full list is
+ * in DIAGRAM_VISIO_GUIDE_URI; an object-type refusal lists them after the older fields.
+ */
+export const DIAGRAM_VISIO_FIELDS: Readonly<Record<"spec" | "node" | "class" | "edge" | "zone", readonly string[]>> = {
+  spec: ["lane_orientation", "phases", "pools", "jumps"],
+  node: ["event_type"],
+  class: ["phase", "pool"],
+  edge: ["route", "from_side", "to_side", "from_slot", "to_slot", "via", "arrow_start", "arrow_end", "arrow_start_size", "arrow_end_size", "dash", "weight", "label_at"],
+  zone: ["style"],
+};
+const VISIO_FIELD_SET: ReadonlySet<string> = new Set(Object.values(DIAGRAM_VISIO_FIELDS).flat());
 
 type S = Record<string, unknown>;
 const isObj = (x: unknown): x is S => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -36,7 +55,29 @@ const ROOTS: ReadonlyMap<string, S> = new Map(
  * that meaning. Only names that are NOT fields of the object; the target must exist in the schema (row 178 test).
  */
 export const DIAGRAM_ALIASES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  edge: { color: "kind", colour: "kind", style: "kind", stroke: "kind", dash: "kind", pattern: "kind", type: "kind", width: "kind", line: "kind" },
+  // Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §4.1): `dash` is a field now; pattern -> dash; width/stroke/thickness ->
+  // weight; arrowhead names -> arrow_end / arrow_start; bend names -> via; routing names -> route. Colour stays `kind`.
+  edge: {
+    color: "kind",
+    colour: "kind",
+    style: "kind",
+    type: "kind",
+    line: "kind",
+    pattern: "dash",
+    stroke: "weight",
+    width: "weight",
+    thickness: "weight",
+    arrow: "arrow_end",
+    arrowhead: "arrow_end",
+    head: "arrow_end",
+    tail: "arrow_start",
+    waypoints: "via",
+    points: "via",
+    bends: "via",
+    routing: "route",
+    curve: "route",
+    connector: "route",
+  },
   node: { type: "shape", kind: "shape", name: "label", text: "label", title: "label" },
   // Swarm 1.2.6 row 48 (T-11, N-110, 01e §3.2): `direction` is a spec field (row 45), so it leaves this list; the
   // reading-direction aliases (incl. Indonesian `arah`) name it. `layout` still means the family.
@@ -54,6 +95,8 @@ export const DIAGRAM_ALIASES: Readonly<Record<string, Readonly<Record<string, st
 
 /** Swarm 1.2.6 row 48 (T-11, 01e §3.2/§6.1): extra clause after `for "<alias>" use "direction" (TB, LR)`. */
 export const DIRECTION_ALIAS_CLAUSE = "direction berlaku untuk family flow; nilai rankdir TB/LR sama, RL/BT tidak didukung";
+/** Swarm 1.2.8 row 52 (VIS-0a, 01f §4.1): `orientation` keeps naming `direction`; for swimlane lanes it is lane_orientation. */
+export const LANE_ORIENTATION_CLAUSE = 'for swimlane lanes use "lane_orientation" (horizontal, vertical)';
 
 function decode(seg: string): string {
   return seg.replace(/~1/g, "/").replace(/~0/g, "~");
@@ -165,15 +208,23 @@ export function additionalPropertyHint(schemaPath: string, field: string): strin
     if (alias === "caption") parts.push(`"${field}" is not a diagram field: the title is the block's caption`);
     else parts.push(`for "${field}" use "${alias}"${enumText(resolve((node?.properties as S)[alias], root))}`);
     if (alias === "direction") parts.push(DIRECTION_ALIAS_CLAUSE);
+    if (field === "orientation" && allowed.includes("lane_orientation")) parts.push(LANE_ORIENTATION_CLAUSE);
   }
   return parts.join("; ");
 }
 
-/** Hint for `type: object` errors: the fields that object takes. */
+/**
+ * Hint for `type: object` errors: the fields that object takes. Swarm 1.2.8 row 52: the 1.2.8 contract fields
+ * (DIAGRAM_VISIO_FIELDS) of a diagram object follow the braces, so the older field set reads as before.
+ */
 export function objectTypeHint(schemaPath: string): string {
   const node = schemaAtPath(schemaPath.replace(/\/type$/, ""));
   const names = propertyNames(node);
-  return names.length > 0 ? `{${names.join(", ")}}` : "";
+  if (names.length === 0) return "";
+  const visio = (n: string) => isDiagramPath(schemaPath) && VISIO_FIELD_SET.has(n);
+  const base = names.filter((n) => !visio(n));
+  const added = names.filter(visio);
+  return `{${base.join(", ")}}${added.length > 0 ? ` + ${added.join(", ")}` : ""}`;
 }
 
 /** Allowed `type` values of a discriminated union (ajv `discriminator` error). */

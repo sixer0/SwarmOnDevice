@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 608,
-  "copied": 409,
-  "patched": 157,
+  "copied": 408,
+  "patched": 158,
   "replaced": 12,
   "added": 30,
-  "bytes": 9987150
+  "bytes": 10001392
  },
  "files": [
   {
@@ -920,9 +920,10 @@
   {
    "path": "src/lib/studio/contract/enums.ts",
    "status": "patched",
-   "bytes": 21566,
+   "bytes": 23971,
    "source_sha256": "06afe5476f373900c81ce876711322b952f2b4b8985ae8f3b86ad861620454e2",
-   "sha256": "ec86a5130ef14d06d28c607e9e01fb1934134dbf6a06ce7b132a1314f31605eb",
+   "sha256": "5b752cf4baaf0e4f83fb38eb6d8710ce4ac660f720b39397e331150a379353a8",
+   "patch_row52": {"id": "128-52-vis0a", "row": "52", "decision": "1.2.8 row 52 (AC-VIS0a, AC-VIS0b; C12 OP-18-1; 01f 4.1)", "summary": "DIAGRAM_SHAPES + 14 tokens appended (predefined, document, offpage, event_start, event_intermediate, event_end, task, subprocess, gateway_exclusive, gateway_parallel, gateway_inclusive, gateway_complex, data_object, annotation); new enums DIAGRAM_EVENT_TYPES, DIAGRAM_LANE_ORIENTATIONS, DIAGRAM_ZONE_STYLES, DIAGRAM_EDGE_ROUTES, DIAGRAM_EDGE_SIDES, DIAGRAM_ARROW_TYPES, DIAGRAM_ARROW_SIZES, DIAGRAM_EDGE_DASHES, DIAGRAM_EDGE_WEIGHTS, DIAGRAM_LABEL_AT, DIAGRAM_JUMPS and their types", "before_sha256": "ec86a5130ef14d06d28c607e9e01fb1934134dbf6a06ce7b132a1314f31605eb", "after_sha256": "5b752cf4baaf0e4f83fb38eb6d8710ce4ac660f720b39397e331150a379353a8", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/52_row52_diffs/contract_enums.ts.diff", "diff_sha256": "ea5028f04d01344041e9b2bee9cae2b97524e63533e7e1e7cb5be4d3574eb8c8"},
    "patch_row158": {
     "id": "row158-error-code-figure-over-capacity",
     "row": 158,
@@ -1034,9 +1035,10 @@
   {
    "path": "src/lib/studio/contract/schema/diagram.schema.ts",
    "status": "patched",
-   "bytes": 5280,
+   "bytes": 8684,
    "source_sha256": "05287f38dcbbad4c28c25856e75532da45496e99295b8cc8f8b6923498b0c6ff",
-   "sha256": "412d2619262bd85e87df86c94566b103bdcd831e3a5ea9966cf32fb4a69e1874",
+   "sha256": "3c22713276dc0332f810f2b5d03f655d6126aeb04b5c9888d0d36ef3fc40e5a9",
+   "patch_row52": {"id": "128-52-vis0a", "row": "52", "decision": "1.2.8 row 52 (AC-VIS0a, AC-VIS0b; C12 OP-18-1; 01f 4.1)", "summary": "studio.diagram/v1: node event_type; class phase, pool; edge route, from_side, to_side, from_slot, to_slot (0<n<1), via [{col,row}] maxItems diagramVia, arrow_start, arrow_end, arrow_start_size, arrow_end_size, dash, weight, label_at; zone style; spec lane_orientation, phases, pools (maxItems diagramPhases/diagramPools), jumps; additionalProperties:false kept, older fields unchanged", "before_sha256": "412d2619262bd85e87df86c94566b103bdcd831e3a5ea9966cf32fb4a69e1874", "after_sha256": "3c22713276dc0332f810f2b5d03f655d6126aeb04b5c9888d0d36ef3fc40e5a9", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/52_row52_diffs/contract_schema_diagram.schema.ts.diff", "diff_sha256": "ed4eb4484554c276d8c6f29b4b6a623aa04ed437f33d31104823507d60ee604d"},
    "patch_row45": {"id": "row45-t11-direction-contract", "row": "45", "decision": "1.2.6 patch T-11 contract, SEC-23 (register N-109; 01e §3.1, §6.2)", "summary": "additive: direction: { enum: [\"TB\", \"LR\"] } beside per_row (any other value SCHEMA_INVALID before layout or ELK)", "before_sha256": "054431598f47321a6917d61e2e55a10cdebb2e3002031543116995fb69f75810", "after_sha256": "412d2619262bd85e87df86c94566b103bdcd831e3a5ea9966cf32fb4a69e1874", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/src_lib_studio_contract_schema_diagram.schema.ts.diff", "diff_sha256": "c38a1fe77162623a08837f3a19020bbce0d90005e1c7cbff5a18614830b79baa"},
    "patch": {
     "id": "row124b-diagram-schema-symbol",
@@ -1059,9 +1061,10 @@
   {
    "path": "src/lib/studio/contract/schema/figure-bounds.ts",
    "status": "patched",
-   "bytes": 3993,
+   "bytes": 4360,
    "source_sha256": "6a529ef235ea5aa75abec0eee3c2e9d6042c79d26fde017fda81b202aa3c5880",
-   "sha256": "52f4ed3bb525d9efa6a3e5a0799921f8fb0c52eadf833b8afee01224e90f1d65",
+   "sha256": "e7c44590ca835c212cca76c8e6d54f4f86a74990d92b3fb627740ceb89ab0f5f",
+   "patch_row52": {"id": "128-52-vis0a", "row": "52", "decision": "1.2.8 row 52 (AC-VIS0a, AC-VIS0b; C12 OP-18-1; 01f 4.1)", "summary": "FIGURE_BOUNDS diagramPhases 8, diagramPools 4, diagramVia 8 (N8-473)", "before_sha256": "52f4ed3bb525d9efa6a3e5a0799921f8fb0c52eadf833b8afee01224e90f1d65", "after_sha256": "e7c44590ca835c212cca76c8e6d54f4f86a74990d92b3fb627740ceb89ab0f5f", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/52_row52_diffs/contract_schema_figure-bounds.ts.diff", "diff_sha256": "f9d1d94fa087cf2196657ed8aef7b210a65af926a0af89f1e2c13f9493596c36"},
    "patch_row27": {"id": "row27-t01-caption-token", "row": "27", "decision": "1.2.6 patch T-01 (U5; register N-014)", "summary": "additive: CAPTION_GUIDE_MAX_CHARS = 100 (one-line caption guide limit, cited by the CAPTION_TOKEN_DUPLICATE refusal and the row 28 CAPTION_WRAP FAIL); FIGURE_BOUNDS unchanged (diagramText.title stays 300, E-07). Copied -> patched", "before_sha256": "6a529ef235ea5aa75abec0eee3c2e9d6042c79d26fde017fda81b202aa3c5880", "after_sha256": "52f4ed3bb525d9efa6a3e5a0799921f8fb0c52eadf833b8afee01224e90f1d65", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/27_row27_diffs/src_lib_studio_contract_schema_figure-bounds.ts.diff", "diff_sha256": "1cd7382c88fdb161014b0140b270ae58442f96d326e7cabbb275ac6f795f8e47"}
   },
   {
@@ -1088,9 +1091,10 @@
   {
    "path": "src/lib/studio/contract/schema/v2/common.schema.ts",
    "status": "patched",
-   "bytes": 33483,
+   "bytes": 33842,
    "source_sha256": "49f4c3c9f35bcf2969bd1f5db852b995fa2e8119366addc25c20c7768432049e",
-   "sha256": "50aa1ef305504662ca5368cab31b904ab2e1bd93accc532f62ce1b62a2c04e99",
+   "sha256": "a99b9d0959e5037f4e42b23a4f6371ed9cab08d60b42f355893d613e2feb1e24",
+   "patch_row52": {"id": "128-52-vis0a", "row": "52", "decision": "1.2.8 row 52 (AC-VIS0a, AC-VIS0b; C12 OP-18-1; 01f 4.1)", "summary": "DiagramSpecV2 lists lane_orientation, phases, pools, jumps (same definitions as v1)", "before_sha256": "50aa1ef305504662ca5368cab31b904ab2e1bd93accc532f62ce1b62a2c04e99", "after_sha256": "a99b9d0959e5037f4e42b23a4f6371ed9cab08d60b42f355893d613e2feb1e24", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/52_row52_diffs/contract_schema_v2_common.schema.ts.diff", "diff_sha256": "206147abe14e55fc8c568e1541aad8567cfd57b423889fb5b33ac335049b4bc0"},
    "patch_row45": {"id": "row45-t11-direction-contract", "row": "45", "decision": "1.2.6 patch T-11 contract (register N-109; 01e §3.1)", "summary": "additive: DIAGRAM_SPEC_V2 gains direction: DIAGRAM_V1_PROPS.direction", "before_sha256": "50e5e3e6e06a6cd66aa484757cb53c99962113c5c7c35f617f6d6176b9ea6366", "after_sha256": "50aa1ef305504662ca5368cab31b904ab2e1bd93accc532f62ce1b62a2c04e99", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/src_lib_studio_contract_schema_v2_common.schema.ts.diff", "diff_sha256": "dc89ea71f032c9aa2f8a61e088270e25cd8c667845a9856e73c260d202743033"},
    "patch": {"id": "row163b-v2-chart-vega", "row": "163b", "decision": "C155 (Vega chart family on the agent render path)", "summary": "additive: ChartV2.code enum += V-01..V-08 (VEGA_CHART_CODES_V2), ChartV2.options (closed: weekStart/offset/max/form) allowed only on V codes and the DF codes vegaChartFor maps (VEGA_ALIAS_CHART_CODES_V2, allOf rule), ChartDataV2 shapes days + hierarchy. Rev A codes, shapes and rules unchanged", "before_sha256": "49f4c3c9f35bcf2969bd1f5db852b995fa2e8119366addc25c20c7768432049e", "after_sha256": "d4ffaa0ae3b2f1680a5bdec76e680f122628823db188c6f44954ddbec820d50c", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/contract_schema_v2_common.schema.ts.diff", "diff_sha256": "6aec9051c5fdbcb902029186ccc79b07ecec5a00ee504152817cfb98475ad6bd"},
    "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "VerificationEntryV2 + method/object/result (longText); required [layer] + minProperties 2 (role/name optional)", "before_sha256": "d4ffaa0ae3b2f1680a5bdec76e680f122628823db188c6f44954ddbec820d50c", "after_sha256": "50e5e3e6e06a6cd66aa484757cb53c99962113c5c7c35f617f6d6176b9ea6366", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/common.schema.ts.diff"}
@@ -1125,9 +1129,10 @@
   {
    "path": "src/lib/studio/contract/schema/v2/refusal-hints.ts",
    "status": "added",
-   "bytes": 9110,
+   "bytes": 11512,
    "source_sha256": null,
-   "sha256": "ad032672159da9549937416b23c0358676d1ae97d5ff58f74ca594236cca61c9",
+   "sha256": "1b2a34aa236971cf8b669a76804ae44f92744132e53b074a4bdee332bbc34d0e",
+   "patch_row52": {"id": "128-52-vis0a", "row": "52", "decision": "1.2.8 row 52 (AC-VIS0a, AC-VIS0b; C12 OP-18-1; 01f 4.1)", "summary": "DIAGRAM_VISIO_GUIDE_URI studio://skema/diagram-visio (N8-474); DIAGRAM_VISIO_FIELDS; edge aliases per 01f 4.1 (dash is a field; pattern->dash; width/stroke/thickness->weight; arrow/arrowhead/head->arrow_end; tail->arrow_start; waypoints/points/bends->via; routing/curve/connector->route); orientation adds the lane_orientation clause; objectTypeHint lists 1.2.8 diagram fields after the braces; spec aliases unchanged", "before_sha256": "ad032672159da9549937416b23c0358676d1ae97d5ff58f74ca594236cca61c9", "after_sha256": "1b2a34aa236971cf8b669a76804ae44f92744132e53b074a4bdee332bbc34d0e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/52_row52_diffs/contract_schema_v2_refusal-hints.ts.diff", "diff_sha256": "be74c6f2c50c3f17a0d18ce4b5d8b7f7423c76242f646084e48d947b27119ec0"},
    "patch_row48": {"id": "row48-t11-direction-aliases", "row": "48", "decision": "1.2.6 patch T-11 refusals (register N-110; 01e §3.2, §6.1)", "summary": "DIAGRAM_ALIASES.spec: dir, rankdir, rankDir, orientation, arah -> direction (was family; arah new); direction removed (a field since row 45); layout stays family. NEW export DIRECTION_ALIAS_CLAUSE appended by additionalPropertyHint after 'for \"<alias>\" use \"direction\" (TB, LR)'. Schema unchanged; every alias still refused", "before_sha256": "557747abcf25ff915261d8ca3cd19b561b62875cbc84ae238d22eec88b93a0ec", "after_sha256": "ad032672159da9549937416b23c0358676d1ae97d5ff58f74ca594236cca61c9", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/48_row48_diffs/src_lib_studio_contract_schema_v2_refusal-hints.ts.diff", "diff_sha256": "c9bd26d611ed34b88529f9d78e4651edf647fc4cf2999e64994422a08e13e411"},
    "note": "NEW Swarm file of row 178 (no clone original): refusal hints read from the v2/v1 schemas (allowed property names, object fields, discriminator values, misplaced-field and alias hints) and DIAGRAM_GUIDE_URI; used by forbidden.ts classifySchemaV2Errors and src/mcp-host/diagram-guide.ts"
   },
@@ -1186,9 +1191,10 @@
   {
    "path": "src/lib/studio/contract/types/diagram.ts",
    "status": "patched",
-   "bytes": 2845,
+   "bytes": 5185,
    "source_sha256": "80a970c0a1acf0a963c49a90bdd1d11fe973d48fc352dcfbaaee6afdba183c8b",
-   "sha256": "e6074618069372c17a4ac347c8a2a23ca003ca0fc2bf0d02603b54bb24817ba1",
+   "sha256": "99c223848ef4dcb1f0650dba0c778ad4a8c680395a8e780eaf55eff8ae0c7f7f",
+   "patch_row52": {"id": "128-52-vis0a", "row": "52", "decision": "1.2.8 row 52 (AC-VIS0a, AC-VIS0b; C12 OP-18-1; 01f 4.1)", "summary": "types of the 1.2.8 fields (DiagramNodeClass phase/pool, DiagramNode event_type, DiagramEdge style fields, DiagramViaPoint, DiagramContainer, DiagramZone style, StudioDiagramV1 lane_orientation/phases/pools/jumps)", "before_sha256": "e6074618069372c17a4ac347c8a2a23ca003ca0fc2bf0d02603b54bb24817ba1", "after_sha256": "99c223848ef4dcb1f0650dba0c778ad4a8c680395a8e780eaf55eff8ae0c7f7f", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/52_row52_diffs/contract_types_diagram.ts.diff", "diff_sha256": "652cf43a3935d7df301ebe02ec0a826cc325f1532dd32d0ced5f6e986ec0740b"},
    "patch_row45": {"id": "row45-t11-direction-contract", "row": "45", "decision": "1.2.6 patch T-11 contract (register N-109; 01e §3.1)", "summary": "additive: StudioDiagramV1.direction?: \"TB\" | \"LR\"", "before_sha256": "bf222e9b55b95de72f153e59c908912679ad0ae21531d06ff2d2ad0b889ec1ee", "after_sha256": "e6074618069372c17a4ac347c8a2a23ca003ca0fc2bf0d02603b54bb24817ba1", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/src_lib_studio_contract_types_diagram.ts.diff", "diff_sha256": "a429f80bf2803b61b01965380e3060524930fe3e046282e3784448c87ab7687a"},
    "patch": {
     "id": "row124b-diagram-types-symbol",
@@ -2601,10 +2607,11 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/core/tokens.ts",
-   "status": "copied",
-   "bytes": 12671,
+   "status": "patched",
+   "bytes": 15636,
    "source_sha256": "be6c723d7870cfd8cf359b3c66c9e0e148b1ab2b006c94a2a5fe6037ddfdc3a6",
-   "sha256": "be6c723d7870cfd8cf359b3c66c9e0e148b1ab2b006c94a2a5fe6037ddfdc3a6"
+   "sha256": "57e68c5a1f29f043745d1447d65e97af4d6a3376c368375fc711b240df8b916e",
+   "patch_row52": {"id": "128-52-vis0a", "row": "52", "decision": "1.2.8 row 52 (AC-VIS0a, AC-VIS0b; C12 OP-18-1; 01f 4.1)", "summary": "SHAPES + 14 entries (notation string kept for DATUM-35 until row 53a; new tokens draw as box until rows 53/54); LIMITS max_line_styles 4, max_line_styles_with_mark 3, max_phases/max_pools/max_via (alias FIGURE_BOUNDS), curve_samples 32, arrow_sizes_mm, weight_mm, shape_glyph_mm 2.4, label_at_fraction and exported aliases; no drawing change", "before_sha256": "be6c723d7870cfd8cf359b3c66c9e0e148b1ab2b006c94a2a5fe6037ddfdc3a6", "after_sha256": "57e68c5a1f29f043745d1447d65e97af4d6a3376c368375fc711b240df8b916e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/52_row52_diffs/engine_diagram_core_tokens.ts.diff", "diff_sha256": "017e9e092341a84a5dd52b67d31b8db9cbba2ed26c57dd623b5a7a196970573e"}
   },
   {
    "path": "src/lib/studio/engine/diagram/core/xml.ts",
@@ -6254,6 +6261,7 @@
   "48b",
   "40d",
   "37c",
-  "31"
+  "31",
+  "52"
  ]
 }

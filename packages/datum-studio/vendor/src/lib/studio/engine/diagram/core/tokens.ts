@@ -10,6 +10,7 @@
  * Tidak ada hex/mm gaya lain di luar objek `DIAGRAM_TOKENS`.
  */
 import type { DiagramEdgeKind, DiagramFamily, DiagramShape, ProvenanceMark } from "../../../contract";
+import { FIGURE_BOUNDS } from "../../../contract/schema/figure-bounds";
 import { DiagramDefect } from "./defect";
 import { pyFixed, pyLen, pyRound0, pyStr } from "./pyfmt";
 
@@ -109,7 +110,32 @@ export const LIMITS = {
   max_colour_values: 5,
   max_accented_subjects: 1,
   hop_radius_mm: 0.9,
+  // Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §4.1; register N8-213, N8-253, N8-255, N8-259, N8-217, N8-264, N8-470,
+  // N8-471, values per R20-C36/C42): limits and sizes of the 1.2.8 diagram contract fields. Read by the rows that draw
+  // and check them (35c, 53-57); nothing reads them in row 52. Phases, pools and via alias the contract bounds.
+  max_line_styles: 4,
+  max_line_styles_with_mark: 3,
+  max_phases: FIGURE_BOUNDS.diagramPhases,
+  max_pools: FIGURE_BOUNDS.diagramPools,
+  max_via: FIGURE_BOUNDS.diagramVia,
+  curve_samples: 32,
+  arrow_sizes_mm: { s: 2.5, m: 3.2, l: 4.0 },
+  weight_mm: { thin: 0.3, normal: 0.45, thick: 0.7 },
+  shape_glyph_mm: 2.4,
+  label_at_fraction: { start: 0.2, middle: 0.5, end: 0.8 },
 } as const;
+
+/** Swarm 1.2.8 row 52 (VIS-0a): exported aliases of the LIMITS keys above (register names). */
+export const LINE_STYLE_MAX = LIMITS.max_line_styles;
+export const LINE_STYLE_MAX_WITH_MARK = LIMITS.max_line_styles_with_mark;
+export const PHASES_MAX = LIMITS.max_phases;
+export const POOLS_MAX = LIMITS.max_pools;
+export const VIA_MAX = LIMITS.max_via;
+export const CURVE_SAMPLES = LIMITS.curve_samples;
+export const ARROW_SIZES_MM = LIMITS.arrow_sizes_mm;
+export const WEIGHT_MM = LIMITS.weight_mm;
+export const SHAPE_GLYPH_MM = LIMITS.shape_glyph_mm;
+export const LABEL_AT_FRACTION = LIMITS.label_at_fraction;
 
 /** Peran tipografi yang dicetak mesin (diuji DATUM-28). */
 export const DIAGRAM_ROLES = ["caption", "source_line", "table_header", "evidence_rail", "register_block"] as const;
@@ -128,7 +154,11 @@ export const FAMILIES: Readonly<Record<DiagramFamily, { drawWhen: string; engine
   graph: { drawWhen: "selain itu, ditempatkan lewat col dan row", engine: "layout_graph" },
 };
 
-/** P3: 10 bentuk simpul. */
+/**
+ * P3: 10 bentuk simpul + Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §1): 14 bentuk Basic Flowchart / BPMN Basic / anotasi.
+ * Bentuk baru digambar sebagai kotak sampai row 53/54 memasang garis luarnya; `notation` (string) tetap dipakai DATUM-35
+ * sampai row 53a menggantinya dengan `notation_set` (N8-245).
+ */
 export const SHAPES: Readonly<Record<DiagramShape, { means: string; notation: string; radius: boolean }>> = {
   box: { means: "komponen, langkah proses, peralatan", notation: "universal", radius: false },
   stadium: { means: "awal atau akhir; satu-satunya bentuk yang boleh beradius", notation: "ISO 5807", radius: true },
@@ -140,6 +170,20 @@ export const SHAPES: Readonly<Record<DiagramShape, { means: string; notation: st
   shadowed: { means: "entitas eksternal di luar batas", notation: "DFD Gane-Sarson", radius: false },
   circle: { means: "persimpangan, penyambung luar-halaman", notation: "universal", radius: false },
   bus: { means: "rel bus atau backplane, garis berat", notation: "IEC 60617", radius: false },
+  predefined: { means: "subproses terdefinisi (proses dengan dua garis sisi)", notation: "ISO 5807", radius: false },
+  document: { means: "dokumen", notation: "ISO 5807", radius: false },
+  offpage: { means: "penyambung ke halaman lain", notation: "ISO 5807", radius: false },
+  event_start: { means: "peristiwa awal (BPMN)", notation: "BPMN", radius: false },
+  event_intermediate: { means: "peristiwa antara (BPMN)", notation: "BPMN", radius: false },
+  event_end: { means: "peristiwa akhir (BPMN)", notation: "BPMN", radius: false },
+  task: { means: "tugas (BPMN)", notation: "BPMN", radius: true },
+  subprocess: { means: "subproses terlipat [+] (BPMN)", notation: "BPMN", radius: true },
+  gateway_exclusive: { means: "gerbang eksklusif X (BPMN); setiap keluaran berlabel", notation: "BPMN", radius: false },
+  gateway_parallel: { means: "gerbang paralel + (BPMN)", notation: "BPMN", radius: false },
+  gateway_inclusive: { means: "gerbang inklusif O (BPMN)", notation: "BPMN", radius: false },
+  gateway_complex: { means: "gerbang kompleks * (BPMN)", notation: "BPMN", radius: false },
+  data_object: { means: "objek data (BPMN)", notation: "BPMN", radius: false },
+  annotation: { means: "anotasi teks dengan kurung", notation: "universal", radius: false },
 };
 
 export type DashPatternName = "solid" | "dashed" | "dotted" | "longdash" | "dashdot";

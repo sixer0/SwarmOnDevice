@@ -205,6 +205,12 @@ const DIAGRAM_SPEC_V2 = obj(
     per_row: DIAGRAM_V1_PROPS.per_row,
     // Swarm 1.2.6 row 45 (T-11, N-109): same enum as v1.
     direction: DIAGRAM_V1_PROPS.direction,
+    // Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §2.1, §3.1): the spec-level contract fields, same definitions as v1
+    // (node, class, edge and zone fields come with nodes/edges/zones above).
+    lane_orientation: DIAGRAM_V1_PROPS.lane_orientation,
+    phases: DIAGRAM_V1_PROPS.phases,
+    pools: DIAGRAM_V1_PROPS.pools,
+    jumps: DIAGRAM_V1_PROPS.jumps,
   },
   ["family", "nodes"],
 );

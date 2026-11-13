@@ -163,8 +163,52 @@ export const DIAGRAM_SHAPES = [
   "parallelogram",
   "shadowed",
   "stadium",
+  // Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §1, register N8-230..N8-244): Basic Flowchart, BPMN Basic and the text
+  // annotation. Appended (existing order kept). The engine draws each one as a box until rows 53/54 land its outline.
+  "predefined",
+  "document",
+  "offpage",
+  "event_start",
+  "event_intermediate",
+  "event_end",
+  "task",
+  "subprocess",
+  "gateway_exclusive",
+  "gateway_parallel",
+  "gateway_inclusive",
+  "gateway_complex",
+  "data_object",
+  "annotation",
 ] as const;
 export type DiagramShape = (typeof DIAGRAM_SHAPES)[number];
+
+/**
+ * Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §1.3, §2.1, §3.1; register N8-236, N8-249, N8-252, N8-254, N8-256, N8-260,
+ * N8-261, N8-262, N8-263, N8-265, N8-266): enums of the diagram contract fields. Absent field = today's drawing; the
+ * defaults are stated in 01f §2.1/§3.1 (arrow_end and dash follow the edge kind).
+ */
+export const DIAGRAM_EVENT_TYPES = ["none", "message", "timer"] as const;
+export const DIAGRAM_LANE_ORIENTATIONS = ["horizontal", "vertical"] as const;
+export const DIAGRAM_ZONE_STYLES = ["zone", "group"] as const;
+export const DIAGRAM_EDGE_ROUTES = ["orthogonal", "straight", "curved"] as const;
+export const DIAGRAM_EDGE_SIDES = ["auto", "top", "right", "bottom", "left"] as const;
+export const DIAGRAM_ARROW_TYPES = ["none", "triangle", "open", "diamond", "circle"] as const;
+export const DIAGRAM_ARROW_SIZES = ["s", "m", "l"] as const;
+export const DIAGRAM_EDGE_DASHES = ["solid", "dashed", "dotted", "longdash", "dashdot"] as const;
+export const DIAGRAM_EDGE_WEIGHTS = ["thin", "normal", "thick"] as const;
+export const DIAGRAM_LABEL_AT = ["start", "middle", "end"] as const;
+export const DIAGRAM_JUMPS = ["on", "off"] as const;
+export type DiagramEventType = (typeof DIAGRAM_EVENT_TYPES)[number];
+export type DiagramLaneOrientation = (typeof DIAGRAM_LANE_ORIENTATIONS)[number];
+export type DiagramZoneStyle = (typeof DIAGRAM_ZONE_STYLES)[number];
+export type DiagramEdgeRoute = (typeof DIAGRAM_EDGE_ROUTES)[number];
+export type DiagramEdgeSide = (typeof DIAGRAM_EDGE_SIDES)[number];
+export type DiagramArrowType = (typeof DIAGRAM_ARROW_TYPES)[number];
+export type DiagramArrowSize = (typeof DIAGRAM_ARROW_SIZES)[number];
+export type DiagramEdgeDash = (typeof DIAGRAM_EDGE_DASHES)[number];
+export type DiagramEdgeWeight = (typeof DIAGRAM_EDGE_WEIGHTS)[number];
+export type DiagramLabelAt = (typeof DIAGRAM_LABEL_AT)[number];
+export type DiagramJumps = (typeof DIAGRAM_JUMPS)[number];
 
 /** E21 */
 export const DIAGRAM_EDGE_KINDS = ["accent", "alert", "control", "data", "sync", "verify"] as const;
