@@ -20,7 +20,7 @@ import { Truncate } from "@/tool/truncate"
 import { Plugin } from "@/plugin"
 import type { TaskPromptOps } from "@/tool/task"
 import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema } from "ai"
-import { Effect, Option } from "effect"
+import { Cause, Effect, Option } from "effect"
 import { MessageV2 } from "./message-v2"
 import { Session } from "./session"
 import { SessionProcessor } from "./processor"
@@ -33,6 +33,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceState } from "@/effect/instance-state"
 import { Secrets } from "@/tool/secrets"
 import { missionTypeSuggestion } from "./system"
+import { Memory } from "@/memory/memory"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -120,6 +121,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   const sessions = Option.getOrUndefined(yield* Effect.serviceOption(Session.Service))
   // SK-g (N8-048): optional too; without it no mission-type line is added.
   const skills = Option.getOrUndefined(yield* Effect.serviceOption(Skill.Service))
+  // MEM-e (01e §4.2): optional too; without it the done close carries no memory check and the host warns.
+  const memory = Option.getOrUndefined(yield* Effect.serviceOption(Memory.Service))
 
   const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => ({
     sessionID: input.session.id,
@@ -493,6 +496,33 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     return yield* autonomy.isOn({ root: root.id, directory })
   }).pipe(Effect.catchCause(() => Effect.succeed(false)))
 
+  // MEM-e (01e §4.2, N8-012): on `studio_mission_set_status {to: "done"}` only, whether this project's memory holds the
+  // mission's index entry (archived counts). The key is left out, so the host warns MEMORY_INDEX_UNCHECKED instead of
+  // refusing, when memory is off (SWARM_DISABLE_MEMORY or the store disabled), when this agent may not `remember`, or
+  // when the lookup fails: a close is never refused for a step the agent cannot take. The model cannot set `_meta`.
+  const memoryIndexMeta = (name: string, args: Record<string, unknown>): Effect.Effect<Record<string, unknown>> => {
+    if (name !== "studio_mission_set_status" || args.to !== "done" || typeof args.mission !== "string")
+      return Effect.succeed({})
+    const missionId = args.mission
+    return Effect.gen(function* () {
+      if (!memory || process.env.SWARM_DISABLE_MEMORY) return {}
+      const ruleset = Permission.merge(input.agent.permission, input.session.permission ?? [])
+      if (Permission.evaluate("remember", "*", ruleset).action === "deny") return {}
+      const store = yield* memory.get()
+      if (!store.enabled) return {}
+      const present = store.items.some((item) => item.kind === "index" && item.missionId === missionId)
+      return { [McpCatalog.MEMORY_INDEX_META]: { missionId, present } }
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logError("mission index lookup failed", {
+          source: "SessionTools.memoryIndexMeta",
+          sessionID: input.session.id,
+          cause: Cause.pretty(cause),
+        }).pipe(Effect.as({})),
+      ),
+    )
+  }
+
   for (const [key, entry] of Object.entries(yield* mcp.tools())) {
     // L51: the built-in datum-studio server (global origin only, never a project's look-alike entry) gets the calling
     // session in _meta, so a mission it writes links to this session without the agent inventing an id.
@@ -500,9 +530,10 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     // (the person turns it on). Only then may the agent self-approve a mission; the model cannot set `_meta`.
     const studio: McpCatalog.CallMeta | undefined =
       entry.source?.server === DatumStudioMcp.DATUM_STUDIO_MCP && entry.source.origin === "global"
-        ? async () => ({
+        ? async (args) => ({
             ...McpCatalog.callerSessionMeta(input.session.id),
             ...((await run.promise(autonomousOn)) ? { [McpCatalog.AUTONOMOUS_META]: true } : {}),
+            ...(await run.promise(memoryIndexMeta(entry.def.name, args))),
           })
         : undefined
     const item = McpCatalog.convertTool(entry.def, entry.client, entry.timeout, studio)
