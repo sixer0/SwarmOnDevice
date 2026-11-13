@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 608,
-  "copied": 407,
-  "patched": 159,
+  "copied": 406,
+  "patched": 160,
   "replaced": 12,
   "added": 30,
-  "bytes": 10007846
+  "bytes": 10010660
  },
  "files": [
   {
@@ -1281,9 +1281,10 @@
   {
    "path": "src/lib/studio/contract/types/v2/doc.ts",
    "status": "patched",
-   "bytes": 11983,
+   "bytes": 12550,
    "source_sha256": "3848686b0c685205e693227b4904cc6813fe29ffc1cfd2d183e7283a5ed8b0dd",
-   "sha256": "b5704a6b1e9deab552d57d59910cd08e07aeb38813bced5c84d5bf6cbba30d34",
+   "sha256": "1d380acfa30bd03720c99f94a57c22de521163b1604cb9be5c1a18c5f997a1ac",
+   "patch_row53a": {"id": "128-53-hd35", "row": "53a", "decision": "1.2.8 row 53a (C30: DiagramSpecV2 type gap routed from row 52)", "summary": "additive: DiagramSpecV2 lane_orientation?, phases?, pools?, jumps? (types of contract/types/diagram.ts), matching the v2 schema of row 52", "before_sha256": "b5704a6b1e9deab552d57d59910cd08e07aeb38813bced5c84d5bf6cbba30d34", "after_sha256": "1d380acfa30bd03720c99f94a57c22de521163b1604cb9be5c1a18c5f997a1ac", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53a_row53a_diffs/contract_types_v2_doc.ts.diff", "diff_sha256": "a0448b9481bd7e477166b56a38075320f97ff5443a4552cee14c71df346bb967"},
    "patch_row45": {"id": "row45-t11-direction-contract", "row": "45", "decision": "1.2.6 patch T-11 contract (register N-109; 01e §3.1)", "summary": "additive: DiagramSpecV2.direction?: \"TB\" | \"LR\"", "before_sha256": "d59778455ee546ab278f96952066778a6a257d18e4b49cddb3b0d8df49d2deb6", "after_sha256": "b5704a6b1e9deab552d57d59910cd08e07aeb38813bced5c84d5bf6cbba30d34", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/src_lib_studio_contract_types_v2_doc.ts.diff", "diff_sha256": "f6231ca63b5cd7952ee60b8b9d594dcfb136b3b5dfa026d7c3bc294b0f4b8678"},
    "patch": {"id": "row163b-v2-chart-vega-types", "row": "163b", "decision": "C155", "summary": "additive: ChartV2.code += VegaChartKind, ChartV2.options?: ChartVegaOptions, ChartDataV2 += days and hierarchy shapes (matches common.schema.ts patch row163b-v2-chart-vega)", "before_sha256": "3848686b0c685205e693227b4904cc6813fe29ffc1cfd2d183e7283a5ed8b0dd", "after_sha256": "d59778455ee546ab278f96952066778a6a257d18e4b49cddb3b0d8df49d2deb6", "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/122_row163b_diffs/contract_types_v2_doc.ts.diff", "diff_sha256": "7410732cfd5e754a893fdc308531b57dd07ef200ca61a93f08a5fb07b4ba16c5"}
   },
@@ -1739,10 +1740,11 @@
   },
   {
    "path": "src/lib/studio/engine/chart/family-g/flowchart.ts",
-   "status": "copied",
-   "bytes": 18689,
+   "status": "patched",
+   "bytes": 18947,
    "source_sha256": "d34ed3f70e6f4cc782edbd7ed6972db55e3a5eb5ab7caf364629329984eab563",
-   "sha256": "d34ed3f70e6f4cc782edbd7ed6972db55e3a5eb5ab7caf364629329984eab563"
+   "sha256": "5d525b2202dd0e03c7261f51fa2b6cf18b6a4b6430d7eb88a69b575ef23965bc",
+   "patch_row53a": {"id": "128-53-hd35", "row": "53a", "decision": "1.2.8 row 53a (AC-HD35, H-D35, D-V1; 01f 1.4; N8-245)", "summary": "ISO_5807_SHAPES derived from SHAPES[s].notation_set (universal or holding ISO 5807) instead of a literal list; the REPORT standardShapes and DATUM-35 share one source (adds predefined, document, offpage, annotation to the accepted ISO set)", "before_sha256": "d34ed3f70e6f4cc782edbd7ed6972db55e3a5eb5ab7caf364629329984eab563", "after_sha256": "5d525b2202dd0e03c7261f51fa2b6cf18b6a4b6430d7eb88a69b575ef23965bc", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53a_row53a_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "a8eb1a012a1df1a6581d76b5ffa4776db385c15a81170e21c5de8537b25c156a"}
   },
   {
    "path": "src/lib/studio/engine/chart/family-g/index.ts",
@@ -2580,9 +2582,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/spec.ts",
    "status": "patched",
-   "bytes": 18110,
+   "bytes": 19680,
    "source_sha256": "129cdffa87ecc2eb3b29c54106d8eb0173eec9821ed6523aa66653d1d09051dd",
-   "sha256": "6c65b2d5953c941c9f70bd78ab95e1adcce82cd1329ca0dee5c2e90ad454514c",
+   "sha256": "d248aa6754237ea9508c5d22d71b18da0d926f7721c92c3efa0c097886ebe7b3",
+   "patch_row53a": {"id": "128-53-hd35", "row": "53a", "decision": "1.2.8 row 53a (AC-HD35, H-D35, D-V1; 01f 1.4; N8-245)", "summary": "DATUM-35 (id unchanged): valid iff the intersection of notation_set over non-universal nodes is non-empty; NEW notationEntries: message lists each dialect once with one example node, separator '; ' (single-dialect nodes first, a multi-dialect node only when uncovered), replaces the comma join of the notation strings", "before_sha256": "6c65b2d5953c941c9f70bd78ab95e1adcce82cd1329ca0dee5c2e90ad454514c", "after_sha256": "d248aa6754237ea9508c5d22d71b18da0d926f7721c92c3efa0c097886ebe7b3", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53a_row53a_diffs/engine_diagram_core_spec.ts.diff", "diff_sha256": "f08841fef97a75808f24d84dc477c7dfdc4f2cc61344d90df3185f1c03b4d6df"},
    "patch_row45": {"id": "row45-t11-direction-contract", "row": "45", "decision": "1.2.6 patch T-11 contract, SEC-23 (register N-159, N-165; 01e §6.3-6.4)", "summary": "SPEC_CHECK_IDS gains P1-direction after P1-sources; NEW export directionIssue (flow only, never with per_row, value TB/LR; one text for validateSpec and the by-construction gate); validateSpec runs P1-direction only when the spec carries direction (legacy ran list unchanged)", "before_sha256": "129cdffa87ecc2eb3b29c54106d8eb0173eec9821ed6523aa66653d1d09051dd", "after_sha256": "6c65b2d5953c941c9f70bd78ab95e1adcce82cd1329ca0dee5c2e90ad454514c", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/45_row45_diffs/src_lib_studio_engine_diagram_core_spec.ts.diff", "diff_sha256": "efc72582d036d04c9fec3230851551971de57955945b763b55a59ed6ee63b8db"}
   },
   {
@@ -2610,9 +2613,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/tokens.ts",
    "status": "patched",
-   "bytes": 15636,
+   "bytes": 16055,
    "source_sha256": "be6c723d7870cfd8cf359b3c66c9e0e148b1ab2b006c94a2a5fe6037ddfdc3a6",
-   "sha256": "57e68c5a1f29f043745d1447d65e97af4d6a3376c368375fc711b240df8b916e",
+   "sha256": "25cc84aca5606f5e44c197a06394b8344b3733ed91f440fd20fdfdc5826183f9",
+   "patch_row53a": {"id": "128-53-hd35", "row": "53a", "decision": "1.2.8 row 53a (AC-HD35, H-D35, D-V1; 01f 1.4; N8-245)", "summary": "SHAPES[s].notation_set: readonly string[] replaces the notation string ([] = universal: box, circle, cylinder, annotation; ISO 5807: stadium, parallelogram, hexagon, predefined, document, offpage; diamond ISO 5807 + BPMN; the 10 BPMN tokens BPMN; doubled, shadowed, bus unchanged single dialects)", "before_sha256": "57e68c5a1f29f043745d1447d65e97af4d6a3376c368375fc711b240df8b916e", "after_sha256": "25cc84aca5606f5e44c197a06394b8344b3733ed91f440fd20fdfdc5826183f9", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53a_row53a_diffs/engine_diagram_core_tokens.ts.diff", "diff_sha256": "2ce807c9bdd34c564101669807698309d772c57a03a6c23c0e0e416a3cd1314f"},
    "patch_row52": {"id": "128-52-vis0a", "row": "52", "decision": "1.2.8 row 52 (AC-VIS0a, AC-VIS0b; C12 OP-18-1; 01f 4.1)", "summary": "SHAPES + 14 entries (notation string kept for DATUM-35 until row 53a; new tokens draw as box until rows 53/54); LIMITS max_line_styles 4, max_line_styles_with_mark 3, max_phases/max_pools/max_via (alias FIGURE_BOUNDS), curve_samples 32, arrow_sizes_mm, weight_mm, shape_glyph_mm 2.4, label_at_fraction and exported aliases; no drawing change", "before_sha256": "be6c723d7870cfd8cf359b3c66c9e0e148b1ab2b006c94a2a5fe6037ddfdc3a6", "after_sha256": "57e68c5a1f29f043745d1447d65e97af4d6a3376c368375fc711b240df8b916e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/52_row52_diffs/engine_diagram_core_tokens.ts.diff", "diff_sha256": "017e9e092341a84a5dd52b67d31b8db9cbba2ed26c57dd623b5a7a196970573e"}
   },
   {
@@ -6270,6 +6274,7 @@
   "31",
   "52",
   "35b",
-  "32"
+  "32",
+  "53a"
  ]
 }

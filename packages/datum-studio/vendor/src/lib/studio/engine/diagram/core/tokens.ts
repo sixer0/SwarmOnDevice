@@ -154,36 +154,42 @@ export const FAMILIES: Readonly<Record<DiagramFamily, { drawWhen: string; engine
   graph: { drawWhen: "selain itu, ditempatkan lewat col dan row", engine: "layout_graph" },
 };
 
+/** Swarm 1.2.8 row 53a (H-D35, ruling D-V1, register N8-245): notation dialects of `SHAPES[s].notation_set`. */
+const UNIVERSAL: readonly string[] = [];
+const ISO: readonly string[] = ["ISO 5807"];
+const BPMN: readonly string[] = ["BPMN"];
+
 /**
  * P3: 10 bentuk simpul + Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §1): 14 bentuk Basic Flowchart / BPMN Basic / anotasi.
- * Bentuk baru digambar sebagai kotak sampai row 53/54 memasang garis luarnya; `notation` (string) tetap dipakai DATUM-35
- * sampai row 53a menggantinya dengan `notation_set` (N8-245).
+ * Bentuk baru digambar sebagai kotak sampai row 53/54 memasang garis luarnya.
+ * Swarm 1.2.8 row 53a (H-D35, D-V1, 01f §1.4, N8-245): `notation_set` menggantikan string `notation`. `[]` = universal;
+ * sebuah gambar sah bila irisan himpunan semua simpul non-universal tidak kosong (DATUM-35, `core/spec.ts`).
  */
-export const SHAPES: Readonly<Record<DiagramShape, { means: string; notation: string; radius: boolean }>> = {
-  box: { means: "komponen, langkah proses, peralatan", notation: "universal", radius: false },
-  stadium: { means: "awal atau akhir; satu-satunya bentuk yang boleh beradius", notation: "ISO 5807", radius: true },
-  diamond: { means: "keputusan; setiap keluaran berlabel", notation: "ISO 5807", radius: false },
-  parallelogram: { means: "masukan atau keluaran", notation: "ISO 5807", radius: false },
-  cylinder: { means: "data tersimpan, arsip", notation: "universal", radius: false },
-  hexagon: { means: "persiapan, gerbang", notation: "ISO 5807, BPMN", radius: false },
-  doubled: { means: "subsistem dengan struktur lanjutan", notation: "UML component", radius: false },
-  shadowed: { means: "entitas eksternal di luar batas", notation: "DFD Gane-Sarson", radius: false },
-  circle: { means: "persimpangan, penyambung luar-halaman", notation: "universal", radius: false },
-  bus: { means: "rel bus atau backplane, garis berat", notation: "IEC 60617", radius: false },
-  predefined: { means: "subproses terdefinisi (proses dengan dua garis sisi)", notation: "ISO 5807", radius: false },
-  document: { means: "dokumen", notation: "ISO 5807", radius: false },
-  offpage: { means: "penyambung ke halaman lain", notation: "ISO 5807", radius: false },
-  event_start: { means: "peristiwa awal (BPMN)", notation: "BPMN", radius: false },
-  event_intermediate: { means: "peristiwa antara (BPMN)", notation: "BPMN", radius: false },
-  event_end: { means: "peristiwa akhir (BPMN)", notation: "BPMN", radius: false },
-  task: { means: "tugas (BPMN)", notation: "BPMN", radius: true },
-  subprocess: { means: "subproses terlipat [+] (BPMN)", notation: "BPMN", radius: true },
-  gateway_exclusive: { means: "gerbang eksklusif X (BPMN); setiap keluaran berlabel", notation: "BPMN", radius: false },
-  gateway_parallel: { means: "gerbang paralel + (BPMN)", notation: "BPMN", radius: false },
-  gateway_inclusive: { means: "gerbang inklusif O (BPMN)", notation: "BPMN", radius: false },
-  gateway_complex: { means: "gerbang kompleks * (BPMN)", notation: "BPMN", radius: false },
-  data_object: { means: "objek data (BPMN)", notation: "BPMN", radius: false },
-  annotation: { means: "anotasi teks dengan kurung", notation: "universal", radius: false },
+export const SHAPES: Readonly<Record<DiagramShape, { means: string; notation_set: readonly string[]; radius: boolean }>> = {
+  box: { means: "komponen, langkah proses, peralatan", notation_set: UNIVERSAL, radius: false },
+  stadium: { means: "awal atau akhir; satu-satunya bentuk yang boleh beradius", notation_set: ISO, radius: true },
+  diamond: { means: "keputusan; setiap keluaran berlabel", notation_set: ["ISO 5807", "BPMN"], radius: false },
+  parallelogram: { means: "masukan atau keluaran", notation_set: ISO, radius: false },
+  cylinder: { means: "data tersimpan, arsip", notation_set: UNIVERSAL, radius: false },
+  hexagon: { means: "persiapan, gerbang", notation_set: ISO, radius: false },
+  doubled: { means: "subsistem dengan struktur lanjutan", notation_set: ["UML component"], radius: false },
+  shadowed: { means: "entitas eksternal di luar batas", notation_set: ["DFD Gane-Sarson"], radius: false },
+  circle: { means: "persimpangan, penyambung luar-halaman", notation_set: UNIVERSAL, radius: false },
+  bus: { means: "rel bus atau backplane, garis berat", notation_set: ["IEC 60617"], radius: false },
+  predefined: { means: "subproses terdefinisi (proses dengan dua garis sisi)", notation_set: ISO, radius: false },
+  document: { means: "dokumen", notation_set: ISO, radius: false },
+  offpage: { means: "penyambung ke halaman lain", notation_set: ISO, radius: false },
+  event_start: { means: "peristiwa awal (BPMN)", notation_set: BPMN, radius: false },
+  event_intermediate: { means: "peristiwa antara (BPMN)", notation_set: BPMN, radius: false },
+  event_end: { means: "peristiwa akhir (BPMN)", notation_set: BPMN, radius: false },
+  task: { means: "tugas (BPMN)", notation_set: BPMN, radius: true },
+  subprocess: { means: "subproses terlipat [+] (BPMN)", notation_set: BPMN, radius: true },
+  gateway_exclusive: { means: "gerbang eksklusif X (BPMN); setiap keluaran berlabel", notation_set: BPMN, radius: false },
+  gateway_parallel: { means: "gerbang paralel + (BPMN)", notation_set: BPMN, radius: false },
+  gateway_inclusive: { means: "gerbang inklusif O (BPMN)", notation_set: BPMN, radius: false },
+  gateway_complex: { means: "gerbang kompleks * (BPMN)", notation_set: BPMN, radius: false },
+  data_object: { means: "objek data (BPMN)", notation_set: BPMN, radius: false },
+  annotation: { means: "anotasi teks dengan kurung", notation_set: UNIVERSAL, radius: false },
 };
 
 export type DashPatternName = "solid" | "dashed" | "dotted" | "longdash" | "dashdot";

@@ -34,7 +34,7 @@ import type {
   SvgResult,
 } from "../../../contract";
 import { StudioEngineError } from "../../../contract/errors";
-import { DASH_PATTERNS, DiagramDefect, EDGE_KINDS, Sheet, type SheetNode, nodeStrokeToken, resolveDiagramGrid, validateSpec } from "../../diagram/core";
+import { DASH_PATTERNS, DiagramDefect, EDGE_KINDS, SHAPES, Sheet, type SheetNode, nodeStrokeToken, resolveDiagramGrid, validateSpec } from "../../diagram/core";
 import { placeDiagram } from "../../diagram/build/place";
 import { routePlaced } from "../../diagram/build/route";
 import { layoutFlow } from "../../diagram/layout-a";
@@ -45,8 +45,14 @@ import { fitActive } from "../core/fit";
 import { wrap } from "../core/textfit";
 import { type GCtx, TYPE_PT, accentHint, assertAccentCount, beginChart, endChart, hintMiss, kindBool, kindInt, kindStr, ran, report, tokenHex } from "./common";
 
-/** Bentuk diagram yang termasuk simbol ISO 5807. */
-const ISO_5807_SHAPES: readonly DiagramShape[] = ["box", "stadium", "diamond", "parallelogram", "hexagon", "circle", "cylinder"];
+/**
+ * Bentuk diagram yang termasuk simbol ISO 5807. Swarm 1.2.8 row 53a (H-D35, D-V1, N8-245): kept in step with
+ * `SHAPES[s].notation_set` (universal `[]` or holding "ISO 5807"), so the REPORT and DATUM-35 share one source.
+ */
+const ISO_5807_SHAPES: readonly DiagramShape[] = (Object.keys(SHAPES) as DiagramShape[]).filter((s) => {
+  const set = SHAPES[s].notation_set;
+  return set.length === 0 || set.includes("ISO 5807");
+});
 
 /**
  * Hanya keluarga `flow` yang dipakai (spec dipaksa `flow` sebelum penempatan); peta

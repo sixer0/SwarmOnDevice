@@ -238,6 +238,28 @@ export function directionIssue(spec: unknown): { detail: string; pointer: string
 }
 
 /**
+ * Swarm 1.2.8 row 53a (H-D35, 01f §1.4): DATUM-35 message entries, each dialect once with one example node, in node
+ * order: `ISO 5807 (n1: stadium); BPMN (n4: task)`. Single-dialect nodes name the dialects; a multi-dialect node
+ * (diamond) is listed only when none of its dialects is already named, as `ISO 5807 / BPMN (n2: diamond)`.
+ */
+function notationEntries(nodes: ReadonlyArray<{ id: string; shape: string; set: readonly string[] }>): string {
+  const covered = new Set<string>();
+  const entries: Array<{ at: number; text: string }> = [];
+  const add = (i: number) => {
+    const n = nodes[i];
+    if (n.set.some((d) => covered.has(d))) return;
+    n.set.forEach((d) => covered.add(d));
+    entries.push({ at: i, text: `${n.set.join(" / ")} (${n.id}: ${n.shape})` });
+  };
+  nodes.forEach((n, i) => n.set.length === 1 && add(i));
+  nodes.forEach((n, i) => n.set.length > 1 && add(i));
+  return entries
+    .sort((a, b) => a.at - b.at)
+    .map((e) => e.text)
+    .join("; ");
+}
+
+/**
  * Validasi penuh spek. Mengembalikan entri per cek (PASS) atau per pelanggaran
  * (FAIL, `detail` = pesan Python, `pointer` = JSON pointer medan).
  */
@@ -325,7 +347,8 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
   mark = out.length;
   const nodes = listOf(spec.nodes);
   const ids = new Set<unknown>();
-  const notations = new Set<string>();
+  // Swarm 1.2.8 row 53a (H-D35, D-V1, N8-245): node id + notation_set of every non-universal node, in node order.
+  const notations: Array<{ id: string; shape: string; set: readonly string[] }> = [];
   const marksUsed = new Set<ProvenanceMark>();
   if (nodes.length === 0) {
     fail("P1-nodes+P3-shapes", "nodes[] kosong — gambar tanpa komponen nyata melanggar MAT-09 (P8)", "/nodes");
@@ -352,7 +375,8 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
       fail("P1-nodes+P3-shapes", `simpul ${pyStr(nid)} wajib class (tier/lane/col/row) (P1)`, `${ptr}/class`);
       return;
     }
-    notations.add(SHAPES[shp as keyof typeof SHAPES].notation);
+    const set = SHAPES[shp as keyof typeof SHAPES].notation_set;
+    if (set.length) notations.push({ id: pyStr(nid), shape: shp, set });
     const mk = n.mark;
     if (mk !== undefined && mk !== null) {
       if (typeof mk !== "string" || !has(MARKS, mk)) {
@@ -364,15 +388,13 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
   });
   pass("P1-nodes+P3-shapes", mark);
 
-  // DATUM-35: satu dialek simbol per gambar (universal boleh berdampingan)
+  // DATUM-35: satu dialek simbol per gambar (universal boleh berdampingan). Swarm 1.2.8 row 53a (H-D35, D-V1, 01f §1.4):
+  // sah bila irisan notation_set semua simpul non-universal tidak kosong (diamond = {ISO 5807, BPMN} cocok dengan
+  // keduanya). Pesan: setiap dialek sekali dengan satu simpul contoh, pemisah "; " (dulu join koma atas string berkoma).
   mark = out.length;
-  const dialects = [...notations].filter((t) => t !== "universal").sort();
-  if (dialects.length > 1) {
-    fail(
-      "DATUM-35",
-      `DATUM-35: lebih dari satu dialek simbol dalam satu gambar (${dialects.join(", ")}) — satu notasi per gambar (P3/P5)`,
-      "/nodes",
-    );
+  const common = notations.reduce<readonly string[] | null>((acc, n) => (acc === null ? n.set : acc.filter((d) => n.set.includes(d))), null);
+  if (common !== null && common.length === 0) {
+    fail("DATUM-35", `DATUM-35: notasi bentuk tidak dapat digabung: ${notationEntries(notations)} — satu notasi per gambar (P3/P5)`, "/nodes");
   }
   pass("DATUM-35", mark);
 

@@ -7,9 +7,9 @@
  * dengan issue `checkId: "DISPLAY_FIELD"`. Skema JSON padanan:
  * ../../schema/v2/common.schema.ts dan ../../schema/v2/doc.schema.ts.
  */
-import type { ChartCode, ChartIntentOrientation, ChartIntentSort, DiagramFamily, ParagraphRoleV2, ProvenanceMark, SymbolDialect, TableBlockType } from "../../enums";
+import type { ChartCode, ChartIntentOrientation, ChartIntentSort, DiagramFamily, DiagramJumps, DiagramLaneOrientation, ParagraphRoleV2, ProvenanceMark, SymbolDialect, TableBlockType } from "../../enums";
 import type { ChartLabelShort, ChartVegaOptions, VegaChartKind } from "../chart";
-import type { DiagramEdge, DiagramNode, DiagramZone } from "../diagram";
+import type { DiagramContainer, DiagramEdge, DiagramNode, DiagramZone } from "../diagram";
 import type { DocMeta, RegisterEntry, StudioMissionRef } from "../doc";
 import type {
   AssetInputV2,
@@ -119,6 +119,14 @@ export interface DiagramSpecV2 {
   per_row?: number;
   /** Swarm 1.2.6 row 45 (T-11, N-109): ranked flow direction, family flow only; absent = legacy list layout. */
   direction?: "TB" | "LR";
+  /** Swarm 1.2.8 row 53a (C30; schema by row 52, VIS-0a, N8-249): swimlane lane orientation. */
+  lane_orientation?: DiagramLaneOrientation;
+  /** Swarm 1.2.8 row 53a (C30; schema by row 52, N8-247): swimlane phase bands, in order. */
+  phases?: DiagramContainer[];
+  /** Swarm 1.2.8 row 53a (C30; schema by row 52, N8-250): swimlane pools, in order. */
+  pools?: DiagramContainer[];
+  /** Swarm 1.2.8 row 53a (C30; schema by row 52, N8-266): line jumps at crossings; absent = "on". */
+  jumps?: DiagramJumps;
 }
 
 /**
