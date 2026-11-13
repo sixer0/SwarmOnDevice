@@ -10,7 +10,7 @@ import type { MissionSource } from "@/pages/session/swarm/mission-poll"
 import type { MissionWriter } from "@/pages/session/swarm/mission-command-model"
 
 type PickerPaths = string | string[] | null
-type OpenDirectoryPickerOptions = { title?: string; multiple?: boolean }
+type OpenDirectoryPickerOptions = { title?: string; multiple?: boolean; defaultPath?: string }
 type OpenAttachmentPickerOptions = {
   title?: string
   multiple?: boolean

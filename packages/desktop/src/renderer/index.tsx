@@ -32,6 +32,7 @@ import { availableStartupServer, readyWslConnections } from "./wsl/connections"
 import "./styles.css"
 import { Splash } from "@opencode-ai/ui/logo"
 import { useTheme } from "@opencode-ai/ui/theme/context"
+import { directoryPickerArgs } from "./picker-options"
 
 const root = document.getElementById("root")
 if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
@@ -174,10 +175,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     windowID: windowState.id,
 
     async openDirectoryPickerDialog(opts) {
-      return window.api.openDirectoryPicker({
-        multiple: opts?.multiple ?? false,
-        title: opts?.title,
-      })
+      return window.api.openDirectoryPicker(directoryPickerArgs(opts))
     },
 
     async openAttachmentPickerDialog(opts, onFile) {
