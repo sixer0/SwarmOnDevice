@@ -103,15 +103,16 @@
   "rowFX7f": "2026-11-13: 1.2.6 row FX-7 item f (M3 N1). 1 vendor file re-patched (files[].patch_rowFX7f): engine/chart/core/gallery.ts threshold-branch inline 0.4 named THRESHOLD_GUTTER_CAP_FRAC with the reason it differs from LABEL_GUTTER_CAP_FRAC (T-10 scoped to bar); output byte-identical (92 parity renders: only the pre-existing g04 row-63 delta). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx7_diffs/. counts by delta: bytes 9962719 -> 9963136; status unchanged. patch_rows += FX-7f",
   "rowFX7d2": "2026-11-13: 1.2.6 row FX-7 item d follow-up. scripts/studio/mcp/doc-tools.ts: findingsPage object literal restored to the guide shape { checkId, chapter, total, offset, returned, nextOffset }; truncated is assigned after it, only when the stored list was cut. Behaviour unchanged vs FX-7d. counts by delta: bytes 9963136 -> 9963210; status unchanged. patch_rows += FX-7d2",
   "rowFX11": "2026-11-13: 1.2.6 fix row FX-11 (C21, finding S-115-1). 1 vendor file re-patched (files[].patch_rowFX11, before = previous sha256; status unchanged): engine/diagram/build/autofit.ts (score-0 early return keeps SVG and decision, and reports the T-03 kinds outside the score as GEOM_* REPORT lines so the figure preview lists what FIGURE_FIT fails). Diff in docs/2026-11-12_swarm_1_2_6_patch/implementation/fx11_diffs/. counts by delta: bytes 9963210 -> 9963798; files/copied/patched/replaced/added unchanged. patch_rows += FX-11",
-  "row43": "2026-11-13: 1.2.7 row 43 (F-3, AC-F3, C12 O-1). 1 vendor file re-patched (files[].patch_row43, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (15 JSON example lines: the non-manual GSP document number becomes 000/...; same byte length). Redacted diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/43_row43_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes unchanged (191589 -> 191589, +0). patch_rows += 43"
+  "row43": "2026-11-13: 1.2.7 row 43 (F-3, AC-F3, C12 O-1). 1 vendor file re-patched (files[].patch_row43, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (15 JSON example lines: the non-manual GSP document number becomes 000/...; same byte length). Redacted diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/43_row43_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes unchanged (191589 -> 191589, +0). patch_rows += 43",
+  "row36": "2026-11-13: 1.2.7 row 36 (T-06 chart half, AC-T06, C8 / D-11b). 1 vendor file patched for the first time (files[].patch_row36, status copied -> patched): engine/chart/family-w1/render.ts (line-count refusal lists each counted series with its colour and the remainder, colourCountDetail). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/36_row36_diffs/. counts by delta: copied 410 -> 409, patched 156 -> 157, bytes 9963798 -> 9965366 (+1568); files/replaced/added unchanged. patch_rows += 36"
  },
  "counts": {
   "files": 608,
-  "copied": 410,
-  "patched": 156,
+  "copied": 409,
+  "patched": 157,
   "replaced": 12,
   "added": 30,
-  "bytes": 9963798
+  "bytes": 9965366
  },
  "files": [
   {
@@ -2214,10 +2215,11 @@
   },
   {
    "path": "src/lib/studio/engine/chart/family-w1/render.ts",
-   "status": "copied",
-   "bytes": 21074,
+   "status": "patched",
+   "bytes": 22642,
    "source_sha256": "1ede1ac10232b04f9a391cefa96d437b5e12a0f833c920b706a018d46aa28282",
-   "sha256": "1ede1ac10232b04f9a391cefa96d437b5e12a0f833c920b706a018d46aa28282"
+   "sha256": "26dda8ba32454c47e0c45ae348423c65db80a0c6eeebb252c6a3ba61a1c4474b",
+   "patch_row36": {"id": "127-36-T06", "row": "36", "decision": "1.2.7 C8 / D-11b (T-06 chart half, AC-T06)", "summary": "renderLine: the line-count refusal (DATUM-25 for W-03, chart.kind.W-01.maxLines for W-01) appends colourCountDetail of the counted lines: seri \"<name>\" (#HEX[, putus-putus]) per series with the stroke lineLooks gives it, and the remainder (sisa, U+2212 when negative). Limit and check ids unchanged; single line", "before_sha256": "1ede1ac10232b04f9a391cefa96d437b5e12a0f833c920b706a018d46aa28282", "after_sha256": "26dda8ba32454c47e0c45ae348423c65db80a0c6eeebb252c6a3ba61a1c4474b", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/36_row36_diffs/render.ts.diff", "diff_sha256": "e1ea3f2c17559ed3fcb2a70e1d119ef58a7bdb7b46cf00081063de9a8373eb1c"}
   },
   {
    "path": "src/lib/studio/engine/chart/family-w1/timeaxis.ts",
@@ -6199,6 +6201,7 @@
   "FX-7f",
   "FX-7d2",
   "FX-11",
-  "43"
+  "43",
+  "36"
  ]
 }

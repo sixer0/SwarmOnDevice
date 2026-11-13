@@ -24,6 +24,7 @@ import { num, ptToMm, textWidthMm } from "../core/svg";
 import { type Frame, type W1Style, drawAxes, drawFoot, drawGrid, layoutFrame, spreadLabels, styleMetrics } from "./frame";
 import { type AccentRequest, type W1Code, accentRequest, w1Bool, w1Int } from "./params";
 import { categoryIndex } from "./timeaxis";
+import { colourCountDetail } from "../../diagram/core/colour";
 import { kindAxis, kindEnum } from "../core/read";
 
 type StepMode = "post" | "pre" | "mid";
@@ -176,6 +177,29 @@ function lineLooks(style: W1Style, pal: ChartPalette, n: number, accent: number)
 }
 
 /**
+ * Swarm 1.2.7 row 36 (T-06): detail of the line-count refusal. Counted = one line per series, listed as
+ * `seri "<name>" (#HEX[, putus-putus])` with the stroke `lineLooks` would give it (accent from
+ * `series[].accent` or the accent request, as the drawing would resolve it before layout), then the
+ * remaining allowance (negative when over the limit, U+2212).
+ */
+function lineCountDetail(style: W1Style, pal: ChartPalette, series: readonly SeriesIn[], req: AccentRequest, limit: number): string {
+  const set = new Set<number>(series.flatMap((s, i) => (s.accent ? [i] : [])));
+  for (const name of [req.series, req.group]) {
+    const i = name === undefined ? -1 : series.findIndex((s) => s.name === name);
+    if (i >= 0) set.add(i);
+  }
+  const looks = lineLooks(style, pal, series.length, set.size ? Math.min(...set) : -1);
+  const values = series.map((s) => `seri "${s.name}"`);
+  const sources = new Map<string, string[]>(
+    series.map((s, i) => {
+      const hex = `#${looks[i].stroke.replace(/^#/, "").toUpperCase()}`;
+      return [values[i].toUpperCase(), looks[i].dash ? [hex, "putus-putus"] : [hex]];
+    }),
+  );
+  return colourCountDetail(values, sources, limit);
+}
+
+/**
  * Path garis (atau tangga matplotlib `where`: "post" PC:772 = nilai bertahan sampai titik
  * berikut, "pre" = naik dulu, "mid" = berpindah di tengah); null memutus garis.
  */
@@ -236,7 +260,10 @@ function renderLine(code: "W-01" | "W-03", spec: StudioChartV1, canvas: ChartCan
 
   const maxLines = code === "W-01" ? w1Int(spec, tpl, "W-01", "maxLines", 3) : W03_MAX_LINES;
   if (series.length > maxLines) {
-    throw defect(code === "W-01" ? kindKey("W-01", "maxLines") : "DATUM-25", `${fid} — ${series.length} garis > ${maxLines}; sorot satu garis atau pecah gambarnya`, {
+    // Swarm 1.2.7 row 36 (T-06, AC-T06): name what was counted — each series with the colour it would be
+    // drawn with — and the remainder, in the diagram DATUM-25 detail shape (colourCountDetail, row 62).
+    const detail = lineCountDetail(style, pal, series, accentRequest(spec), maxLines);
+    throw defect(code === "W-01" ? kindKey("W-01", "maxLines") : "DATUM-25", `${fid} — ${series.length} garis > ${maxLines}; sorot satu garis atau pecah gambarnya; ${detail}`, {
       code,
       lines: series.length,
     });
