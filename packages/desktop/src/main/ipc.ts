@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
-import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
+import type { IpcMain, IpcMainEvent, IpcMainInvokeEvent, WebContents } from "electron"
 import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
 import { parseDesktopNativeBundle, type DesktopNativeBundle } from "@opencode-ai/app/i18n/desktop-native"
 
@@ -32,6 +32,8 @@ import { createSetupRunner, setupDir, type SetupRunner } from "./setup-runner"
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
 import { registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
 import { registerDesktopNonceHandler } from "./desktop-nonce"
+import { revealInFolder } from "./reveal-path"
+import { MISSION_CONTROL_IPC } from "../preload/mission-control-channels"
 import type { MissionControlPlatform } from "../preload/types"
 
 const pickerFilters = (ext?: string[]) => {
@@ -65,6 +67,27 @@ type Deps = {
   missionControl?: () => MissionControlPlatform | undefined
   /** Row 38b (SEC-06): this launch's desktop nonce when the local sidecar holds it (index.ts, memory only). */
   desktopNonce?: () => string | undefined
+  /**
+   * 1.2.7 row 25 (N7-126, U-2): the reveal roots of a window: (a) the folders it listed in Mission Control, (b) home.
+   * Default: the folders recorded from this file's mission-control list channel plus the home folder.
+   */
+  revealRoots?: (sender: WebContents) => string[]
+}
+
+// 1.2.7 row 25 (U-2, SR7-11): Swarm's own folders a reveal never points at (the home credential places are added by
+// reveal-path.ts). Both the inherited XDG folder and its default, since the sidecar may run with either.
+function revealExcluded() {
+  const home = app.getPath("home")
+  const env = process.env
+  const xdg = (name: string, fallback: string) => [env[name], join(home, fallback)].filter((p): p is string => !!p)
+  return [
+    app.getPath("userData"),
+    app.getPath("sessionData"),
+    ...xdg("XDG_CONFIG_HOME", ".config").map((p) => join(p, "swarm")),
+    ...xdg("XDG_DATA_HOME", join(".local", "share")).map((p) => join(p, "swarm")),
+    ...xdg("XDG_STATE_HOME", join(".local", "state")).map((p) => join(p, "swarm")),
+    ...xdg("XDG_CACHE_HOME", ".cache").map((p) => join(p, "swarm")),
+  ]
 }
 
 export function registerIpcHandlers(deps: Deps) {
@@ -101,9 +124,26 @@ export function registerIpcHandlers(deps: Deps) {
     markOffered: markSetupToolsOffered,
     log: (message, meta) => getLogger().log(message, meta),
   })
+  // 1.2.7 row 25 (U-2, R-1 (a)): the folders each window listed in Mission Control, recorded after an ok list.
+  const listedFolders = new WeakMap<object, Set<string>>()
+  const revealRoots =
+    deps.revealRoots ??
+    ((sender: WebContents) => [...(listedFolders.get(sender) ?? [])].concat(app.getPath("home")))
   // Mission control (row 127): four channels, validated in main; the host token never leaves main.
   registerMissionControlHandlers({
-    ipcMain,
+    ipcMain: {
+      handle: (channel: string, listener: Parameters<IpcMain["handle"]>[1]) =>
+        ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+          const result = await listener(event, ...args)
+          const directory = (args[0] as { directory?: unknown } | undefined)?.directory
+          if (channel === MISSION_CONTROL_IPC.list && (result as { ok?: unknown })?.ok === true && typeof directory === "string") {
+            const known = listedFolders.get(event.sender) ?? new Set<string>()
+            known.add(directory)
+            listedFolders.set(event.sender, known)
+          }
+          return result
+        }),
+    },
     windowOf: (sender) => BrowserWindow.fromWebContents(sender),
     isRendererUrl,
     client: () => deps.missionControl?.(),
@@ -279,15 +319,16 @@ export function registerIpcHandlers(deps: Deps) {
     })
   })
 
-  ipcMain.handle("reveal-path", async (_event: IpcMainInvokeEvent, path: string) => {
-    const exists = await stat(path).then(
-      () => true,
-      () => false,
-    )
-    if (!exists) return false
-    shell.showItemInFolder(path)
-    return true
-  })
+  // 1.2.7 row 25 (U-2, SR7-11): only a path inside this window's roots and outside Swarm's and the credential places;
+  // shell.showItemInFolder only, never openPath/openExternal (a `.command` or `.app` is shown, never launched).
+  ipcMain.handle("reveal-path", async (event: IpcMainInvokeEvent, path: unknown) =>
+    revealInFolder(path, revealRoots(event.sender), {
+      shell,
+      home: app.getPath("home"),
+      excluded: revealExcluded(),
+      log: (level, message, context) => getLogger()[level](message, context),
+    }),
+  )
 
   ipcMain.handle("read-clipboard-image", () => {
     const image = clipboard.readImage()
