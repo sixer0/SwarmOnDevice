@@ -36,6 +36,7 @@ import type { OutwardKnown } from "./outward-known"
 import { Reach } from "../tool/reach"
 import { Risk } from "../tool/risk"
 import { TomlReader } from "./toml-reader"
+import { NetOptions } from "./net-options"
 
 /** What the table passes in from the consent: hosts the person named in the mission (ticked or not) and those ticked. */
 export type Known = {
@@ -228,6 +229,8 @@ const CURL_FLAGS = new Set([
   "--http2-prior-knowledge", "-4", "--ipv4", "-6", "--ipv6", "-q", "--disable", "--raw", "-j", "--junk-session-cookies",
   "--retry-all-errors", "--retry-connrefused", "--no-keepalive", "--tcp-nodelay", "--path-as-is", "--styled-output",
   "--no-styled-output", "-Z", "--parallel", "-O", "--remote-name", "--remote-name-all", "--create-dirs", "--trace-time",
+  // 1.2.7 47f: a flag in curl (and in the shared table); still always held, since it is in CURL_UPLOAD.
+  "--form-escape",
 ])
 // Options taking a value that names no file and sends none.
 const CURL_VALUES = new Set([
@@ -247,7 +250,6 @@ const CURL_OUTPUT = new Set([
 ])
 // Always send a file from disk, or read options from one.
 const CURL_UPLOAD = new Set(["-T", "--upload-file", "-K", "--config", "--form-escape"])
-const CURL_SHORT_VALUE = "XAeumwrdFHoDcbTK"
 // 1.1.1 F30 (P46): the options whose value may hold a `$NAME`, and how many leading characters must be literal first.
 // A value that starts with an expansion could start with `@` and name a file; a cookie needs its `=` written out.
 const CURL_EXPANDS: Readonly<Record<string, (value: string) => boolean>> = {
@@ -275,8 +277,15 @@ const CURL_GUESSED = /^(ftp|dict|ldap|imap|pop3|smtp)\./i
 
 type Parsed = { options: [string, string | undefined][]; positional: string[] } | undefined
 
-/** Options and positional words; short clusters split (`-sSL`, `-XPOST`, `-d@f`), `--opt=value` split. */
-function parse(args: readonly string[], flags: ReadonlySet<string>, values: ReadonlySet<string>, shortValue: string): Parsed {
+/** 1.2.7 47f (M1-08): the value tables this reader uses, the same objects the own-API reader (F-4) uses. */
+export const netOptions = { curl: NetOptions.CURL, wget: NetOptions.WGET } as const
+
+/**
+ * Options and positional words; short clusters split (`-sSL`, `-XPOST`, `-d@f`), `--opt=value` split. An option is read
+ * only when it is listed in `flags` or `values`; whether it takes a value is what `takes` says (47f: for curl and wget the
+ * shared `NetOptions` table).
+ */
+function parse(args: readonly string[], flags: ReadonlySet<string>, values: ReadonlySet<string>, takes: NetOptions.ValueTable): Parsed {
   const options: [string, string | undefined][] = []
   const positional: string[] = []
   for (let index = 0; index < args.length; index++) {
@@ -289,7 +298,7 @@ function parse(args: readonly string[], flags: ReadonlySet<string>, values: Read
       const at = word.indexOf("=")
       const name = at < 0 ? word : word.slice(0, at)
       if (flags.has(name) && at < 0) options.push([name, undefined])
-      else if (values.has(name)) {
+      else if (values.has(name) && takes.long.has(name)) {
         const value = at < 0 ? args[++index] : word.slice(at + 1)
         if (value === undefined) return undefined
         options.push([name, value])
@@ -299,7 +308,7 @@ function parse(args: readonly string[], flags: ReadonlySet<string>, values: Read
     if (word.startsWith("-") && word.length > 1) {
       for (let at = 1; at < word.length; at++) {
         const name = `-${word[at]}`
-        if (shortValue.includes(word[at]!) && values.has(name)) {
+        if (takes.short.has(word[at]!) && values.has(name)) {
           const value = at + 1 < word.length ? word.slice(at + 1) : args[++index]
           if (value === undefined) return undefined
           options.push([name, value])
@@ -330,7 +339,7 @@ function writeOutFiles(format: string): string[] | undefined {
 }
 
 function curl(args: readonly string[], known: Known | undefined): Reading {
-  const found = parse(args, CURL_FLAGS, ALL_CURL_VALUES, CURL_SHORT_VALUE)
+  const found = parse(args, CURL_FLAGS, ALL_CURL_VALUES, netOptions.curl)
   if (!found) return { held: "unread" }
   if (found.positional.some(expands)) return { held: "unread" }
   const urls = [...found.positional]
@@ -396,7 +405,7 @@ const WGET_EXPANDS = new Set(["--header", "--body-data", "--post-data", "--user"
 function wget(args: readonly string[], known: Known | undefined): Reading {
   // `-nv` and `-nc` are single words of two letters each, not clusters.
   const words = args.map((word) => (word === "-nv" ? "--no-verbose" : word === "-nc" ? "--no-clobber" : word))
-  const found = parse(words, WGET_FLAGS, WGET_VALUES, "OUtTioaP")
+  const found = parse(words, WGET_FLAGS, WGET_VALUES, netOptions.wget)
   if (!found) return { held: "unread" }
   if (found.positional.some(expands)) return { held: "unread" }
   const outputs: string[] = []
@@ -436,9 +445,10 @@ const HTTPIE_VALUES = new Set([
   "--max-redirects", "--bearer", "-o", "--output",
 ])
 const HTTPIE_EXPANDS = new Set(["-a", "--auth", "--bearer"])
+const HTTPIE_TAKES: NetOptions.ValueTable = { short: new Set("paAso"), long: HTTPIE_VALUES }
 
 function httpie(program: string, args: readonly string[], known: Known | undefined, whole: string): Reading {
-  const found = parse(args, HTTPIE_FLAGS, HTTPIE_VALUES, "paAso")
+  const found = parse(args, HTTPIE_FLAGS, HTTPIE_VALUES, HTTPIE_TAKES)
   if (!found) return { held: "unread" }
   for (const [name, value] of found.options)
     if (value !== undefined && expands(value) && !(HTTPIE_EXPANDS.has(name) && plainExpansions(value))) return { held: "unread" }

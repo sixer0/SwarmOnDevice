@@ -15,6 +15,8 @@ import { OutwardConsent } from "./outward-consent"
 import { ScriptScreen } from "./script-screen"
 import { BypassLists } from "./bypass-lists"
 import { BypassScreen } from "./bypass-screen"
+import { NetOptions } from "./net-options"
+import { PathSpelling } from "./path-spelling"
 import { ScriptReader } from "./script-reader"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { LibraryRoot } from "../skill/library-root"
@@ -784,7 +786,7 @@ function mentionsAppState(command: string, instance: InstanceContext) {
 
 // Breaks a command into words the way a path ends: blanks, redirects, pipes, separators, `=` of an option or assignment.
 const PATH_BREAK = /[\s<>|;&()`=,]+/
-const HOME_WORD = /^(?:~|\$HOME\b|\$\{HOME\})(?=\/|$)/
+const HOME_WORD = PathSpelling.HOME_SPELLING
 
 /** The places a command names with a home spelling (`~`, `$HOME`, `${HOME}`), resolved under every home Swarm knows. */
 function homeSpelled(command: string) {
@@ -904,30 +906,8 @@ const CLIENT_WRAPPERS: ReadonlySet<string> = new Set([
   "rtk", "env", "exec", "command", "builtin", "nohup", "time", "nice", "timeout", "stdbuf", "sudo", "doas", "eval", "xargs",
   "sh", "bash", "zsh", "dash",
 ])
-/** curl's short options that take a value; `K` is a config file, `x` a proxy. */
-const CURL_VALUE_SHORT = new Set("AbcCdDeEFHKmoPQrtTuUwxXyYz".split(""))
-/** curl's long options whose value is an address. */
-const CURL_ADDRESS_LONG = new Set(["--url", "--proxy", "--preproxy", "--doh-url", "--connect-to", "--resolve", "--socks4", "--socks4a", "--socks5", "--socks5-hostname"])
-const CURL_VALUE_LONG = new Set([
-  "--config", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--data-ascii", "--json", "--header", "--proxy-header",
-  "--user", "--user-agent", "--output", "--output-dir", "--request", "--cookie", "--cookie-jar", "--referer", "--form",
-  "--form-string", "--write-out", "--max-time", "--connect-timeout", "--retry", "--retry-delay", "--retry-max-time", "--range",
-  "--upload-file", "--cacert", "--capath", "--cert", "--key", "--cert-type", "--key-type", "--proxy-user", "--oauth2-bearer",
-  "--limit-rate", "--max-filesize", "--dump-header", "--trace", "--trace-ascii", "--stderr", "--interface", "--dns-servers",
-  "--unix-socket", "--abstract-unix-socket", "--aws-sigv4", "--variable", "--url-query", "--time-cond", "--continue-at",
-  "--speed-limit", "--speed-time", "--local-port", "--keepalive-time", "--max-redirs", "--expect100-timeout", "--pass",
-  "--ciphers", "--crlfile", "--pinnedpubkey", "--quote", "--telnet-option", "--create-file-mode", "--happy-eyeballs-timeout-ms",
-  ...CURL_ADDRESS_LONG,
-])
-/** wget's short options that take a value; `i` is a URL list read at run time, `e` a `.wgetrc` command. */
-const WGET_VALUE_SHORT = new Set("OoaiBtTwePUQlARDXI".split(""))
-const WGET_VALUE_LONG = new Set([
-  "--output-document", "--output-file", "--append-output", "--input-file", "--base", "--tries", "--timeout", "--wait",
-  "--execute", "--directory-prefix", "--user-agent", "--quota", "--level", "--accept", "--reject", "--domains", "--header",
-  "--user", "--password", "--http-user", "--http-password", "--post-data", "--post-file", "--body-data", "--body-file",
-  "--method", "--config", "--load-cookies", "--save-cookies", "--referer", "--ca-certificate", "--certificate", "--private-key",
-  "--limit-rate", "--bind-address", "--read-timeout", "--connect-timeout", "--dns-timeout", "--waitretry",
-])
+/** 1.2.7 47f (M1-08): curl's and wget's value-taking options, the same table objects the outward-consent reader uses. */
+export const netOptions = { curl: NetOptions.CURL, wget: NetOptions.WGET } as const
 /** httpie's and xh's options that take a value; `--proxy` is `scheme:url`. */
 const HTTPIE_VALUE = new Set(["-a", "--auth", "-A", "--auth-type", "--session", "--session-read-only", "-o", "--output", "--verify", "--cert", "--cert-key", "--proxy", "--timeout", "-p", "--print", "-s", "--style", "--pretty", "--format-options", "--boundary", "--max-redirects", "--raw"])
 /** nc, ncat, netcat and telnet options that take a value; `x` and `--proxy` are an address. */
@@ -1145,12 +1125,12 @@ function clientParts(call: ClientCall) {
     if (word.startsWith("--")) {
       const equals = word.indexOf("=")
       const flag = equals < 0 ? word : word.slice(0, equals)
-      const takes = (curl ? CURL_VALUE_LONG : wget ? WGET_VALUE_LONG : httpie ? HTTPIE_VALUE : NC_VALUE).has(flag)
+      const takes = (curl ? netOptions.curl.long : wget ? netOptions.wget.long : httpie ? HTTPIE_VALUE : NC_VALUE).has(flag)
       const value = equals < 0 ? (takes ? args[++index] : undefined) : word.slice(equals + 1)
       if (value === undefined) continue
       if (flag === "--config") configs.push(value)
       else if (flag === "--input-file") lists.push(value)
-      else if (curl && CURL_ADDRESS_LONG.has(flag)) addresses.push(flag === "--resolve" ? value.split(":").slice(-1)[0]! : flag === "--connect-to" ? value.split(":").slice(2).join(":") : value)
+      else if (curl && netOptions.curl.address.has(flag)) addresses.push(flag === "--resolve" ? value.split(":").slice(-1)[0]! : flag === "--connect-to" ? value.split(":").slice(2).join(":") : value)
       else if (flag === "--proxy") addresses.push(value.replace(/^(?:https?|all):(?!\/\/)/, ""))
       else if (wget && flag === "--execute") addresses.push(...wgetProxy(value))
       continue
@@ -1164,7 +1144,7 @@ function clientParts(call: ClientCall) {
         }
         continue
       }
-      const shorts = curl ? CURL_VALUE_SHORT : WGET_VALUE_SHORT
+      const shorts = curl ? netOptions.curl.short : netOptions.wget.short
       for (let at = 1; at < word.length; at++) {
         const letter = word[at]!
         if (!shorts.has(letter)) continue
@@ -2411,7 +2391,9 @@ function globReachesState(file: string) {
 }
 
 const SPELLED_BREAK = /[\s<>|;&()`=,]+/
-const MAX_DIRS = 16
+
+/** 1.2.7 47f (C68): the word resolver this reader uses, the same object the shell's output masking uses. */
+export const spelling = PathSpelling
 
 /**
  * SR7-01: the places a command's words name, as the shell would resolve them: relative to its folder and to every `cd` in
@@ -2420,17 +2402,13 @@ const MAX_DIRS = 16
  */
 function spelledPlaces(command: string, cwd: string) {
   const words = command.replace(/['"\\]/g, "").split(SPELLED_BREAK).filter(Boolean)
-  const expand = (word: string): string[] => {
-    const home = HOME_WORD.exec(word)
-    if (home) return homes().map((place) => path.join(place, word.slice(home[0].length)))
-    return [word.replace(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g, (whole, name: string) => process.env[name] ?? whole)]
-  }
+  const expand = (word: string): string[] => spelling.expand(word, homes()).names
   let dirs = [cwd]
   const places: { file: string; glob: boolean }[] = []
   for (const [index, word] of words.entries()) {
     const resolved = expand(word).flatMap((spelling) => dirs.map((dir) => path.resolve(dir, spelling)))
     places.push(...resolved.map((file) => ({ file, glob: /[*?[]/.test(word) })))
-    if (words[index - 1] === "cd") dirs = [...new Set([...dirs, ...resolved])].slice(0, MAX_DIRS)
+    if (words[index - 1] === "cd") dirs = spelling.widen(dirs, resolved).folders
   }
   const programs = new Set(words.map((word) => path.basename(word)))
   return { places, dirs, search: [...CONTENT_SEARCH].some((name) => programs.has(name)), rg: programs.has("rg") }
@@ -2478,9 +2456,9 @@ function readsAppState(input: Input) {
   return touchesAppState(command, input.cwd, input.instance) && appStateRead(command, input.cwd, input.instance)
 }
 
-/** The home folders a protected place may be spelled under: the one Swarm reads (pinned in tests) and the system's. */
+/** The home folders a protected place may be spelled under (47f: the shared resolver's list). */
 function homes() {
-  return [...new Set([Global.Path.home, homedir()])]
+  return PathSpelling.homes()
 }
 
 /** The protected roots for a read or a write, each also by its real path (`/etc` is `/private/etc` on macOS). */
@@ -3397,7 +3375,6 @@ const CARGO_VALUES: ReadonlySet<string> = new Set([
   "--features", "-F", "--profile", "--bin", "--example", "--rename", "--package", "-p", "--manifest-path", "--target-dir",
   "--config", "-Z", "--color",
 ])
-const NO_VALUES: ReadonlySet<string> = new Set()
 const OTHER_ADDERS: Readonly<Record<string, readonly AddRule[]>> = {
   pip: [{ subs: ["install"], values: PIP_VALUES, local: PIP_LOCAL }],
   pip3: [{ subs: ["install"], values: PIP_VALUES, local: PIP_LOCAL }],

@@ -4,6 +4,7 @@
 // what a poisoned page can make an agent repeat, and how many transcripts and logs end up holding a production key.
 import fs from "node:fs"
 import path from "node:path"
+import { PathSpelling } from "../permission/path-spelling"
 
 export const PLACEHOLDER = /\[hidden:[^\]\n]*\]/
 
@@ -130,29 +131,13 @@ export function maskedByName(file: string) {
 }
 
 // 1.2.7 M1-02 (U16, SR7-07): the masking scan resolves the files a shell command reads the way the permission table's
-// app-state reader does (`spelledPlaces` in `permission/autonomy-table.ts`, not exported): `~`, `$HOME` and `${HOME}` under
-// every home Swarm knows, set environment variables expanded, and relative names under every folder a `cd` may lead to.
-const HOME_SPELLING = /^(?:~|\$HOME\b|\$\{HOME\})(?=\/|$)/
-const VARIABLE = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g
+// app-state reader does: `~`, `$HOME` and `${HOME}` under every home Swarm knows, set environment variables expanded, and
+// relative names under every folder a `cd` may lead to. 47f (C68): with the table's own resolver (`PathSpelling`, the
+// object `AutonomyTable.spelling`), not a copy of its rules.
 const CHANGES_FOLDER = new Set(["cd", "chdir", "pushd"])
-const MAX_FOLDERS = 16
 
 /** A word as the shell would expand it. `certain` is false when some part of it could not be expanded here. */
-export function expandSpelling(word: string, homes: readonly string[]): { names: string[]; certain: boolean } {
-  const home = HOME_SPELLING.exec(word)
-  const starts = home ? homes.map((place) => place + word.slice(home[0].length)) : [word]
-  // `~user` names another user's home.
-  let certain = !/^~[^/]/.test(word)
-  const names = starts.map((start) =>
-    start.replace(VARIABLE, (whole, braced: string | undefined, bare: string | undefined) => {
-      const value = process.env[(braced ?? bare)!]
-      if (value === undefined) certain = false
-      return value ?? whole
-    }),
-  )
-  if (names.some((name) => /[$`]/.test(name))) certain = false
-  return { names: [...new Set(names)], certain }
-}
+export const expandSpelling = PathSpelling.expand
 
 /**
  * Every folder a command's words may be read from: the call's folder and each `cd`, `chdir` or `pushd` target, each
@@ -167,9 +152,9 @@ export function workingFolders(
   let folders = [cwd]
   let certain = true
   const add = (more: string[]) => {
-    const next = [...new Set([...folders, ...more])]
-    if (next.length > MAX_FOLDERS) certain = false
-    folders = next.slice(0, MAX_FOLDERS)
+    const next = PathSpelling.widen(folders, more)
+    if (next.capped) certain = false
+    folders = next.folders
   }
   for (const command of commands) {
     const words = command[0] === "builtin" || command[0] === "command" ? command.slice(1) : command

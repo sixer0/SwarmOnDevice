@@ -1350,7 +1350,8 @@ export const ShellTool = Tool.define(
       // Row 36b (SEC-01, SEC-03): what a secret file or a protected place shows is judged by its name and where it lands,
       // so a link `notes.txt` to `.env` and a glob `.en?` count, and Swarm's own credential files and the key folders in
       // the home folder are whole-secret for output (reads of them run without asking now, U12).
-      const homes = [Global.Path.home, os.homedir()]
+      // 47f (C68): the homes, like the resolver below, are the permission table's own (`AutonomyTable.spelling`).
+      const homes = AutonomyTable.spelling.homes()
       const places = BypassLists.protectedOutputPlaces(homes, Global.Path.data)
       // 1.2.7 M1-02 (U16): a name is resolved in every folder the command may read it from (`cd X && cat swarm.jsonc`,
       // `(cd X; cat ./f)`), with `~`, `$HOME` and set variables expanded, as the permission table resolves the same read.
