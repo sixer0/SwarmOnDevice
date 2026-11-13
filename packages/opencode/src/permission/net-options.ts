@@ -47,6 +47,19 @@ export const CURL: ValueTable & { readonly address: ReadonlySet<string> } = {
 }
 export const WGET: ValueTable = { short: WGET_VALUE_SHORT, long: WGET_VALUE_LONG }
 
+// 1.2.8 row 27 (R-2, N8-201): httpie's and xh's options that take a value, ONE table for the outward reader and the own-API
+// reader, as curl's and wget's are. Before the merge the own-API copy lacked `--bearer` and the outward copy lacked the
+// session, certificate, proxy and format options; each option either copy knew takes a value here. `--proxy` is
+// `scheme:url`. The outward reader still opens only the options it knows the meaning of (`HTTPIE_VALUES` there).
+/** httpie's and xh's short options that take a value. */
+const HTTPIE_VALUE_SHORT: ReadonlySet<string> = new Set("paAso".split(""))
+/** httpie's and xh's long options that take a value. */
+const HTTPIE_VALUE_LONG: ReadonlySet<string> = new Set([
+  "--auth", "--auth-type", "--bearer", "--session", "--session-read-only", "--output", "--verify", "--cert", "--cert-key",
+  "--proxy", "--timeout", "--print", "--style", "--pretty", "--format-options", "--boundary", "--max-redirects", "--raw",
+])
+export const HTTPIE: ValueTable = { short: HTTPIE_VALUE_SHORT, long: HTTPIE_VALUE_LONG }
+
 /** Whether `option` (`-X` or `--name`) takes a value in `table`. */
 export function takesValue(table: ValueTable, option: string) {
   if (option.startsWith("--")) return table.long.has(option)

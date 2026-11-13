@@ -9,7 +9,7 @@ import { Reach } from "../../tool/reach"
 import { Risk } from "../../tool/risk"
 import type { CommandKind } from "./types"
 import { BRANCH, COMMIT, FILE_OPS, INSTALLS, OUTPUT_TAIL, canRunIn, fileOp, gitAllowed, lockfileUnchanged, matchesCheck, noRepositoryBetween, safePath } from "./routine"
-import { SED_ADDR, lookWords, probe, programInProject } from "./shell-steps"
+import { SED_ADDR, cdTarget, lookWords, probe, programInProject } from "./shell-steps"
 import { CHECKSUMS, nearLibrary } from "./outside"
 // Programs that only look. Each lists what would make it do more: run a program (`find -exec`, `rg --pre`, `rg -z`), write
 // (`find -delete`, `find -fprint`, `tree -o`, `tree -R`, `file -C`), wait for good (`tail -f`), read names from a file
@@ -19,7 +19,18 @@ import { CHECKSUMS, nearLibrary } from "./outside"
 // Row 274 adds the programs the inventory of 88,388 recorded agent commands found looking
 // (`research/20_shell_command_inventory.md`), each with what would make it write: `sort -o`, `uniq` and `xxd` with a second
 // name (their output file), `diff --output`, and `du`/`df` reading only. `maxPaths` caps the names a program takes as input.
-export const READS = new Map<string, { short?: string; long?: readonly string[]; exact?: readonly string[]; maxPaths?: number }>([
+// 1.2.8 row 27 (H-U7, N8-392): a program may instead name the only options it takes (`only`: flags, `values`: options that
+// take the next word or the rest of their word), and say that its other words are patterns, not paths (`patterns`).
+type LookRules = {
+  short?: string
+  long?: readonly string[]
+  exact?: readonly string[]
+  maxPaths?: number
+  only?: string
+  values?: string
+  patterns?: boolean
+}
+export const READS = new Map<string, LookRules>([
   ["ls", {}],
   ["cat", {}],
   ["head", {}],
@@ -68,7 +79,37 @@ export const READS = new Map<string, { short?: string; long?: readonly string[];
   ["cksum", {}],
   // Not `jq`: `env` and `$ENV` print the environment, keys and tokens included, into what the agent reads.
   ["test", {}],
+  // 1.2.8 row 27 (H-U7, D-H5): `pgrep` lists processes by name and signals none. Only these options: `-l -f -a -i -x -n -o
+  // -q` and, with a value, `-u -U -g -G -P -t -d`; its other words are name patterns. `-F` (a pid file), `-L`, `-v`, long
+  // options and every other option keep the verdict they had; `pkill` and `kill` are not looks.
+  ["pgrep", { only: "lfaixnoq", values: "uUgGPtd", patterns: true }],
 ])
+
+/** 1.2.8 row 27 (H-U7): whether every option is one `rules.only`/`rules.values` lists, each value present. */
+function onlyListed(args: readonly string[], rules: LookRules) {
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index]!
+    if (!word.startsWith("-")) continue
+    if (!/^-[A-Za-z]/.test(word)) return false
+    for (let at = 1; at < word.length; at++) {
+      const letter = word[at]!
+      if (rules.values?.includes(letter)) {
+        // The value is the rest of the word (`-u501`) or the next word (`-u 501`).
+        if (at + 1 === word.length && args[++index] === undefined) return false
+        break
+      }
+      if (!rules.only?.includes(letter)) return false
+    }
+  }
+  return true
+}
+
+/** The words a look names as places: none for a program whose operands are patterns (`READS` `patterns`). */
+function namedPaths(words: readonly string[]) {
+  const rules = READS.get(words[0]!)
+  if (rules?.patterns) return []
+  return words.slice(1).filter((word) => !word.startsWith("-"))
+}
 // Row 274: a short flag may carry its value (`cut -c1-80`, `sort -k1,1`, `head -n+5`) and a long one `=value`
 // (`grep --include=*.ts`). A refused long name is matched with its value too, so `sort --output=f` is still a write.
 // A space is a value only as `cut -d' '` writes it: one letter, then that one space.
@@ -78,6 +119,7 @@ const READ_FLAG = /^-[A-Za-z0-9@][A-Za-z0-9@,.:+-]*$|^-[A-Za-z] $|^--[a-z][a-z0-
 export function onlyLooks(words: readonly string[]) {
   const rules = READS.get(words[0]!)
   if (!rules) return false
+  if (rules.only !== undefined) return onlyListed(words.slice(1), rules)
   return words.slice(1).every(
     (word) =>
       !word.startsWith("-") ||
@@ -93,7 +135,7 @@ export function onlyLooks(words: readonly string[]) {
 /** "read", "outside" when a path it names is beyond the folder, or undefined when it is not only a look. */
 export function readKind(words: readonly string[], cwd: string, instance: InstanceContext): "read" | "outside" | undefined {
   if (!onlyLooks(words)) return undefined
-  const named = words.slice(1).filter((word) => !word.startsWith("-"))
+  const named = namedPaths(words)
   const cap = READS.get(words[0]!)?.maxPaths
   if (cap !== undefined && named.length > cap) return undefined
   for (const word of named) {
@@ -453,6 +495,30 @@ function graftPaths(args: readonly string[]) {
   return positionals <= rule.positionals ? ([] as string[]) : undefined
 }
 
+/**
+ * 1.2.8 row 27 (H-U4b): a git look (`gitLook`) in a repository outside the project, by `git -C <folder>` or after a
+ * leading `cd`. Under consent the other roles run it (an outside look), so a read role runs the same look, on the same
+ * conditions as a nested repository's (`nestedGitAllowed`): the guard vets that repository's own `.git`, nothing lies
+ * between it and the folder, and the folder is no sensitive or secret place. Gives the folder, so the library check sees it.
+ */
+function outsideGitLook(words: readonly string[], here: string, instance: InstanceContext): string[] | undefined {
+  const moved = words[1] === "-C" && words[2] !== undefined
+  const target = moved ? path.resolve(here, words[2]!) : here
+  const [sub, ...args] = words.slice(moved ? 3 : 1)
+  if (sub === undefined || !gitLook(sub, args)) return undefined
+  const folder = Reach.real(target)
+  if (folder === undefined || Reach.inside(folder, instance) || Reach.sensitive(folder, instance) || Reach.secret(folder)) return undefined
+  if (fs.statSync(folder, { throwIfNoEntry: false })?.isDirectory() !== true) return undefined
+  let top = folder
+  while (!fs.lstatSync(path.join(top, ".git"), { throwIfNoEntry: false })) {
+    const parent = path.dirname(top)
+    if (parent === top) return undefined
+    top = parent
+  }
+  if (Reach.sensitive(top, instance) || Reach.secret(top)) return undefined
+  return GitGuard.inspect(top).refused === undefined && noRepositoryBetween(folder, top) ? [target] : undefined
+}
+
 /** SR7-05 d: `git reflog` only bare or as `show`, `list` or `exists`; `expire` and `delete` change the repository. */
 function gitReflogLooks(words: readonly string[]) {
   const moved = words[1] === "-C" && words[2] !== undefined
@@ -466,11 +532,14 @@ function readClassPaths(words: readonly string[], here: string, instance: Instan
   if (program === undefined) return undefined
   if (READS.has(program)) {
     if (!onlyLooks(words) || readClassRefuses(words)) return undefined
-    const paths = args.filter((word) => !word.startsWith("-"))
+    const paths = namedPaths(words)
     const cap = READS.get(program)?.maxPaths
     return cap !== undefined && paths.length > cap ? undefined : paths
   }
-  if (program === "git") return gitReads(words, here, instance) && gitReflogLooks(words) ? [] : undefined
+  if (program === "git") {
+    if (!gitReflogLooks(words)) return undefined
+    return gitReads(words, here, instance) ? [] : outsideGitLook(words, here, instance)
+  }
   if (program === "mdls") return mdlsPaths(args)
   if (program === "pdftotext") return pdftotextPaths(args)
   if (program === "unzip") return unzipPaths(args)
@@ -497,12 +566,15 @@ export function readClass(command: string, cwd: string, instance: InstanceContex
   const named: string[] = []
   for (const [index, raw] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
     const words = lookWords(raw.replace(DROP_ERRORS, ""))
-    if (!words || words.length === 0) return undefined
-    if (index === 0 && words[0] === "cd" && words.length === 2 && !words[1]!.startsWith("-")) {
-      here = path.resolve(cwd, words[1]!)
+    // `cd $HOME` is no plain word list, and `cdTarget` reads it from the bare words. In single quotes `$HOME` is no
+    // variable, so a quoted `$` is never read as the home folder.
+    const target = index === 0 && !/'[^']*\$/.test(raw) ? cdTarget(words ?? raw.trim().split(" "), cwd) : undefined
+    if (target !== undefined) {
+      here = target
       named.push(here)
       continue
     }
+    if (!words || words.length === 0) return undefined
     const paths = readClassPaths(words, here, instance)
     if (!paths) return undefined
     named.push(...paths.map((word) => path.resolve(here, word)))

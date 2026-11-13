@@ -158,6 +158,31 @@ type Reading = { steps: Step[]; writes: string[]; chdirs: readonly Place[]; comp
 const MAX_STEPS = 400
 
 /**
+ * 1.2.8 row 27 (R-2 cd, N8-389): the programs that change the shell's folder. `cd`, `pushd` and zsh's `chdir` with one
+ * operand go to a folder the table can name (`cdTarget`); `popd` goes back to one the text does not name.
+ */
+export const FOLDER_MOVES: ReadonlySet<string> = new Set(["cd", "pushd", "popd", "chdir"])
+
+/**
+ * 1.2.8 row 27 (R-2 cd, N8-389): the ONE reading of a leading `cd` (or `pushd`/`chdir`, read by `decompose` in
+ * `tool/shell.ts` the same way) that every single-folder walker of the table uses (the
+ * routine walker, the look walkers, the read class, the program lookup). `words` as the shell gets them (quotes removed);
+ * `~`, `~/x`, `$HOME`, `${HOME}` are the home folder, as the shell expands them. Undefined when the folder cannot be told
+ * from the text: no operand or more than one, an option or the directory stack (`-`, `-P`, `+1`), any other variable or a
+ * glob, `~name`, a bare name the shell may find through `CDPATH` (as `decompose` reads it), `popd`, or a program that
+ * does not change the folder.
+ */
+export function cdTarget(words: readonly string[], cwd: string): string | undefined {
+  if (words[0] === "popd" || !FOLDER_MOVES.has(words[0]!) || words.length !== 2) return undefined
+  const operand = words[1]!
+  if (/^[-+]/.test(operand)) return undefined
+  const spelled = operand.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, homedir())
+  if (/[$`*?[~'"\\]/.test(spelled)) return undefined
+  if (process.env.CDPATH && !/^(\/|\.{1,2}(\/|$))/.test(spelled)) return undefined
+  return path.resolve(cwd, spelled)
+}
+
+/**
  * `metadata.steps` as the shell wrote it, or undefined for anything else. Nothing in it is taken on trust past its shape.
  * 1.1.1 F20 (P34, CR9-1, S9-1): `writes` also holds where each redirect with a `..` really lands (`physicalWrites`), so
  * every reader of a call's writes, with consent or without, judges the file the system will open.
@@ -176,6 +201,9 @@ export function shellReading(value: unknown, instance?: InstanceContext): Readin
     if (step.code !== undefined && typeof step.code !== "string") return undefined
     steps.push({ argv: step.argv, cwds: step.cwds, ...(step.code === undefined ? {} : { code: step.code }) })
   }
+  // 1.2.8 row 27 (R-2 cd): the shell's reading follows `cd`, `pushd` and `chdir` and gives none of them a step. A folder
+  // change that is a step (a reading written before that, or `popd`) leaves the later steps' folders untold: not taken.
+  if (steps.some((step) => FOLDER_MOVES.has(path.basename(step.argv[0]!)))) return undefined
   if (!item.writes.every((file) => path.isAbsolute(file))) return undefined
   if (item.assigned !== undefined && !strings(item.assigned)) return undefined
   const assigned: readonly string[] = item.assigned ?? []
@@ -686,10 +714,13 @@ function installed(file: string, instance: InstanceContext) {
  */
 export function programInProject(command: string, cwd: string, instance: InstanceContext) {
   const pieces = command.replace(OUTPUT_TAIL, "").split(" && ")
-  const first = pieces[0]!.split(" ")
-  // A leading `cd <path>` is where every later piece looks for its program.
-  const moves = first[0] === "cd" && first.length === 2
-  const here = moves ? path.resolve(cwd, first[1]!) : cwd
+  const first = lookWords(pieces[0]!) ?? pieces[0]!.split(" ")
+  // A leading `cd <path>` is where every later piece looks for its program (1.2.8 R-2: read by `cdTarget`). A folder change
+  // whose folder cannot be told leaves the lookup unknown, which counts as the project's own program.
+  const moves = FOLDER_MOVES.has(first[0]!)
+  const target = moves ? cdTarget(first, cwd) : cwd
+  if (target === undefined) return pieces.length > 1
+  const here = target
   return pieces.some((piece, index) => {
     if (index === 0 && moves) return false
     const words = piece.split(" ")
@@ -729,7 +760,7 @@ function onlyLookPieces(command: string) {
     .split(" && ")
     .every((piece, index) => {
       const words = homeWords(piece)
-      return words !== undefined && ((index === 0 && words[0] === "cd" && words.length === 2) || onlyLooks(words))
+      return words !== undefined && ((index === 0 && cdTarget(words, path.sep) !== undefined) || onlyLooks(words))
     })
 }
 
@@ -763,13 +794,15 @@ export function protectedLook(command: string, cwd: string, instance: InstanceCo
   for (const [index, piece] of command.replace(OUTPUT_TAIL, "").split(" && ").entries()) {
     // As `routine` reads it: a piece may drop its own error output, and nothing else.
     const words = lookWords(piece.replace(DROP_ERRORS, ""))
-    if (!words) return false
-    if (index === 0 && words[0] === "cd" && words.length === 2) {
-      here = path.resolve(cwd, words[1]!)
+    // `cd $HOME` is no plain word list, and `cdTarget` reads it from the bare words. In single quotes `$HOME` is no
+    // variable, so a quoted `$` is never read as the home folder.
+    const target = index === 0 && !/'[^']*\$/.test(piece) ? cdTarget(words ?? piece.trim().split(" "), cwd) : undefined
+    if (target !== undefined) {
+      here = target
       named.push(here)
       continue
     }
-    if (!onlyLooks(words)) return false
+    if (!words || !onlyLooks(words)) return false
     const paths = words.slice(1).filter((word) => !word.startsWith("-"))
     const cap = READS.get(words[0]!)?.maxPaths
     if (cap !== undefined && paths.length > cap) return false

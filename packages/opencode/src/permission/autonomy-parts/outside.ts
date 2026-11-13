@@ -15,7 +15,7 @@ import { Secrets } from "../../tool/secrets"
 import { READS, READ_SHELL_ROLES, onlyLooks, readClass, readKind, unwrapped } from "./read-class"
 import { OUTPUT_TAIL, WORD_BREAK } from "./routine"
 import { held, refused, type Input, type Verdict } from "./types"
-import { OUTSIDE_EDIT, PROTECTED_READ, classifyConsented, editTargets, protectedLook, shellReading } from "./shell-steps"
+import { FOLDER_MOVES, OUTSIDE_EDIT, PROTECTED_READ, classifyConsented, editTargets, protectedLook, shellReading } from "./shell-steps"
 import { shellSegments } from "./own-api"
 import { classifySend } from "./outward"
 /** The words of one plain command, with `~` read the way the shell reads it. */
@@ -204,7 +204,8 @@ function spelledPlaces(command: string, cwd: string) {
   for (const [index, word] of words.entries()) {
     const resolved = expand(word).flatMap((spelling) => dirs.map((dir) => path.resolve(dir, spelling)))
     places.push(...resolved.map((file) => ({ file, glob: /[*?[]/.test(word) })))
-    if (words[index - 1] === "cd") dirs = spelling.widen(dirs, resolved).folders
+    // 1.2.8 R-2: after any folder change (`FOLDER_MOVES`), over-read as after `cd`.
+    if (FOLDER_MOVES.has(words[index - 1] ?? "")) dirs = spelling.widen(dirs, resolved).folders
   }
   const programs = new Set(words.map((word) => path.basename(word)))
   return { places, dirs, search: [...CONTENT_SEARCH].some((name) => programs.has(name)), rg: programs.has("rg") }

@@ -349,10 +349,11 @@ const CLIENT_WRAPPERS: ReadonlySet<string> = new Set([
   "rtk", "env", "exec", "command", "builtin", "nohup", "time", "nice", "timeout", "stdbuf", "sudo", "doas", "eval", "xargs",
   "sh", "bash", "zsh", "dash",
 ])
-/** 1.2.7 47f (M1-08): curl's and wget's value-taking options, the same table objects the outward-consent reader uses. */
-export const netOptions = { curl: NetOptions.CURL, wget: NetOptions.WGET } as const
-/** httpie's and xh's options that take a value; `--proxy` is `scheme:url`. */
-const HTTPIE_VALUE = new Set(["-a", "--auth", "-A", "--auth-type", "--session", "--session-read-only", "-o", "--output", "--verify", "--cert", "--cert-key", "--proxy", "--timeout", "-p", "--print", "-s", "--style", "--pretty", "--format-options", "--boundary", "--max-redirects", "--raw"])
+/**
+ * 1.2.7 47f (M1-08): curl's and wget's value-taking options, the same table objects the outward-consent reader uses.
+ * 1.2.8 row 27 (R-2, N8-201): httpie's and xh's too (`NetOptions.HTTPIE`), which replaces this file's own copy.
+ */
+export const netOptions = { curl: NetOptions.CURL, wget: NetOptions.WGET, httpie: NetOptions.HTTPIE } as const
 /** nc, ncat, netcat and telnet options that take a value; `x` and `--proxy` are an address. */
 const NC_VALUE = new Set(["-p", "-s", "-w", "-x", "-X", "-i", "-O", "-I", "-T", "-V", "-e", "-c", "-o", "--proxy", "--proxy-type", "--sh-exec", "--exec"])
 const TELNET_VALUE = new Set(["-l", "-e", "-n", "-b"])
@@ -604,7 +605,7 @@ function clientParts(call: ClientCall) {
     if (word.startsWith("--")) {
       const equals = word.indexOf("=")
       const flag = equals < 0 ? word : word.slice(0, equals)
-      const takes = (curl ? netOptions.curl.long : wget ? netOptions.wget.long : httpie ? HTTPIE_VALUE : NC_VALUE).has(flag)
+      const takes = (curl ? netOptions.curl.long : wget ? netOptions.wget.long : httpie ? netOptions.httpie.long : NC_VALUE).has(flag)
       const value = equals < 0 ? (takes ? args[++index] : undefined) : word.slice(equals + 1)
       if (curl) curlOptions.push([curlLong(flag), value])
       if (value === undefined) continue
@@ -618,8 +619,8 @@ function clientParts(call: ClientCall) {
     }
     if (word.startsWith("-") && word.length > 1 && !socat) {
       if (httpie || !(curl || wget)) {
-        const values = httpie ? HTTPIE_VALUE : program === "telnet" ? TELNET_VALUE : NC_VALUE
-        if (values.has(word)) {
+        const values = program === "telnet" ? TELNET_VALUE : NC_VALUE
+        if (httpie ? NetOptions.takesValue(netOptions.httpie, word) : values.has(word)) {
           const value = args[++index]
           if (value !== undefined && (word === "-x" || word === "--proxy")) addresses.push(value)
         }

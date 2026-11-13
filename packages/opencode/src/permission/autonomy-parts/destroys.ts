@@ -12,7 +12,7 @@ import { Risk } from "../../tool/risk"
 import { DeletionWords } from "../../tool/deletion"
 import { refused, type Input, type Verdict } from "./types"
 import { commandWords } from "./outward"
-import { MAKES, scriptForm, shellReading } from "./shell-steps"
+import { FOLDER_MOVES, MAKES, scriptForm, shellReading } from "./shell-steps"
 import { OUTWARD_HELD, consentOutward } from "./consent"
 import { shellRunsScreenedScript } from "./subagent"
 /**
@@ -31,7 +31,7 @@ function destroys(input: Input) {
   // call's folder, and only when nothing moves it.
   const copies = (list: readonly (readonly string[])[]) => list.filter((words) => words[0] === "cp" || words[0] === "mv").length
   const covered = copies(pieces) > 0 && copies(read.map((step) => step.argv)) >= copies(pieces)
-  const moves = pieces.some((words) => ["cd", "pushd", "popd"].includes(words[0] ?? ""))
+  const moves = pieces.some((words) => FOLDER_MOVES.has(words[0] ?? ""))
   const rough = pieces
     .filter((words) => !(covered && (words[0] === "cp" || words[0] === "mv")))
     .map((words) => ({ argv: words, cwds: moves ? [] : [input.cwd] }))

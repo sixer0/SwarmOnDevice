@@ -12,6 +12,7 @@ import { DeletionWords } from "../../tool/deletion"
 import { findProgram } from "../../util/find-program"
 import type { CommandKind } from "./types"
 import { DROP_ERRORS, printsOnly, single, unwrapped } from "./read-class"
+import { cdTarget } from "./shell-steps"
 const CHECK_NAMES = new Set(["test", "build", "typecheck", "lint", "check"])
 // Row 276: a script named for one of those with a part after a colon, as projects split them (`check:registry`, `test:unit`).
 const CHECK_SCRIPT = /^(test|check|lint|typecheck):[\w.-]+$/
@@ -222,8 +223,11 @@ export function routine(command: string, cwd: string, instance: InstanceContext)
       const words = Risk.plainWords(piece)
       const quoted = words ?? Risk.quotedWords(unwrapped(piece))
       if (quoted && printsOnly(quoted)) freeText = true
-      if (row === 0 && index === 0 && words?.[0] === "cd" && words.length === 2 && safePath(words[1]!, here, instance)) {
-        here = path.resolve(here, words[1]!)
+      // 1.2.8 R-2: the folder is `cdTarget`'s reading, and the word must be one `safePath` takes (relative, no `..` on a
+      // path that may hold a link, inside, nothing secret).
+      const target = row === 0 && index === 0 && words ? cdTarget(words, here) : undefined
+      if (target !== undefined && safePath(words![1]!, here, instance)) {
+        here = target
         continue
       }
       // `classifyDeletion` leaves a text with a line break to the rules after it, so no line here may delete.
