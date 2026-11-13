@@ -41,6 +41,9 @@ export const TAILSCALE_CLI_PATHS = [
   "/opt/homebrew/bin/tailscale",
 ] as const
 
+/** Linux places the Tailscale CLI may live (package installs), absolute only, tried in order: no PATH lookup, no shell. */
+export const TAILSCALE_LINUX_CLI_PATHS = ["/usr/bin/tailscale", "/usr/sbin/tailscale", "/usr/local/bin/tailscale"] as const
+
 /** An IPv4 address in Tailscale's carrier-grade NAT range, 100.64.0.0/10 (100.64.0.0 to 100.127.255.255). */
 export const inTailscaleRange = (address: string) => {
   const parts = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(address.trim())
@@ -140,7 +143,7 @@ const executable = (file: string) => {
 
 /**
  * Default self lookup: `tailscale ip -4` (macOS: the first TAILSCALE_CLI_PATHS entry that exists, run with
- * TAILSCALE_BE_CLI=1 so the app binary acts as the CLI; Linux: `tailscale` as `ip` is called). The lines in
+ * TAILSCALE_BE_CLI=1 so the app binary acts as the CLI; Linux: the first TAILSCALE_LINUX_CLI_PATHS entry that exists; never a PATH lookup). The lines in
  * 100.64.0.0/10; none = undefined. Windows is not asked: its probe already asks `tailscale status --json`.
  * The result is compared in memory only; it is never logged, shown or written.
  */
@@ -149,7 +152,7 @@ export const osTailscaleSelf: TailscaleSelf = async () => {
     process.platform === "darwin"
       ? TAILSCALE_CLI_PATHS.find(executable)
       : process.platform === "linux"
-        ? "tailscale"
+        ? TAILSCALE_LINUX_CLI_PATHS.find(executable)
         : undefined
   if (!bin) return undefined
   const out = await run(bin, ["ip", "-4"], { ...process.env, TAILSCALE_BE_CLI: "1" })
