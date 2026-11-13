@@ -113,8 +113,10 @@ export function MissionCommand(props: {
             data-mission-decision
             class="mb-0.5 flex max-h-full min-w-0 shrink-0 flex-col gap-1.5 overflow-y-auto rounded-[8px] p-2 [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
           >
-            {/* 1.2.7 U-5 (C6, D-11): the question and its context scroll in a bounded body; the options stay outside it. */}
-            <div data-mission-decision-body class="flex max-h-[min(40vh,240px)] min-h-0 shrink flex-col gap-1.5 overflow-y-auto overscroll-contain">
+            {/* 1.2.7 U-5 (C6, D-11): the question and its context scroll in a bounded body; the options stay outside it.
+                1.2.8 row 51d (L1-R12): the body shrinks no lower than about 3 lines of the question (or its whole
+                content when shorter), so many long options cannot squeeze it to 0 px; the card then scrolls. */}
+            <div data-mission-decision-body class="flex max-h-[min(40vh,240px)] min-h-0 [min-height:calc-size(fit-content,min(size,4lh))]! shrink flex-col gap-1.5 overflow-y-auto overscroll-contain">
               <div class="flex items-baseline justify-between gap-2">
                 <h2 data-mission-question class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-base [font-weight:500]">
                   {placement() ? t("session.mission.placement.title") : tidy() ? t("session.mission.tidy.title") : decision().question}
