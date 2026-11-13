@@ -11,7 +11,7 @@ import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { Format } from "../format"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { InstanceState } from "@/effect/instance-state"
-import { checkpointBefore, followedByEdit, lock, trimDiff } from "./edit"
+import { checkpointBefore, followedByEdit, linkedLabels, lock, trimDiff } from "./edit"
 import { ActionCheckpoint } from "./checkpoint"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
@@ -64,7 +64,7 @@ export const WriteTool = Tool.define(
           const trust = yield* Reach.editTrust(ctx, instance, [filepath])
           yield* ctx.ask({
             permission: "edit",
-            patterns: [label],
+            patterns: [label, ...linkedLabels(instance.worktree, [filepath])],
             always: trust.risk ? [] : ["*"],
             metadata: {
               filepath,

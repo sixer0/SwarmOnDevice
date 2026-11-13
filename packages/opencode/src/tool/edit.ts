@@ -49,6 +49,23 @@ export const followedByEdit = (ctx: Tool.Context, patterns: readonly string[]): 
   ask: (request) => ctx.ask({ ...request, follows: [{ permission: "edit", patterns }] }),
 })
 
+/**
+ * 1.2.8 AC-HN17 (SR8-03): for each file that is itself a link, the label of where it really leads, when that differs from
+ * the file's own label. The edit prompt names both, so a role whose rules allow `*.md` but deny the rest (planner,
+ * data-collector, verifier) cannot write `src/a.ts` through a link named `notes.md`. A link loop adds nothing: the write
+ * fails on it anyway.
+ */
+export function linkedLabels(worktree: string, files: readonly string[]): string[] {
+  const root = Reach.real(worktree) ?? worktree
+  return files.flatMap((file) => {
+    if (!Reach.isLink(file)) return []
+    const target = Reach.real(file)
+    if (target === undefined) return []
+    const label = path.relative(root, target).replaceAll("\\", "/")
+    return label === path.relative(worktree, file).replaceAll("\\", "/") ? [] : [label]
+  })
+}
+
 export function lock(filePath: string) {
   const resolvedFilePath = FSUtil.resolve(filePath)
   const hit = locks.get(resolvedFilePath)
@@ -200,7 +217,7 @@ export const EditTool = Tool.define(
                 const trust = yield* Reach.editTrust(ctx, instance, [filePath])
                 yield* ctx.ask({
                   permission: "edit",
-                  patterns: [label],
+                  patterns: [label, ...linkedLabels(instance.worktree, [filePath])],
                   always: trust.risk ? [] : ["*"],
                   metadata: {
                     filepath: filePath,
@@ -260,7 +277,7 @@ export const EditTool = Tool.define(
               const trust = yield* Reach.editTrust(ctx, instance, [filePath])
               yield* ctx.ask({
                 permission: "edit",
-                patterns: [label],
+                patterns: [label, ...linkedLabels(instance.worktree, [filePath])],
                 always: trust.risk ? [] : ["*"],
                 metadata: {
                   filepath: filePath,

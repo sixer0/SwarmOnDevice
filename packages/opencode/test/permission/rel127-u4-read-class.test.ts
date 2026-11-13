@@ -49,9 +49,10 @@ test("N7-115: the read class programs include the U4 additions and no writer", (
     expect(AutonomyTable.READ_SHELL_COMMANDS.has(name)).toBe(false)
 })
 
+// 1.2.8 AC-HN1 (INTENT, N8-391): a subagent cannot start a coder subagent; the text names the final-message route.
 test("N7-054: the role refusal names the substitute", () => {
   expect(ROLE_SHELL_OUTSIDE_READ_TEXT).toBe(
-    "This agent role only runs inspection commands (for example ls, head, git log). Hand this command to a coder subagent.",
+    "This agent role only runs inspection commands (for example ls, head, git log). This command was not run: list it in your final message so the agent that started you, or the person, can run it.",
   )
 })
 

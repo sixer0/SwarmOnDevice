@@ -156,7 +156,7 @@ export function taskGrantRefusal(input: {
     if (Permission.evaluate("bash", pattern, input.parent).action === "deny")
       return `${TASK_GRANT_EXCEEDS_PARENT} Task not started: permissions grants ${shown(pattern)}, which this session may not run itself.`
     if (READ_SHELL_ROLES.has(input.role) || Permission.evaluate("bash", pattern, input.child).action === "deny")
-      return `${TASK_GRANT_ROLE_DENIED} Task not started: the ${input.role} role may not run ${shown(pattern)}. Hand it to a coder subagent.`
+      return `${TASK_GRANT_ROLE_DENIED} Task not started: the ${input.role} role may not run ${shown(pattern)}. Ask for it in your final message instead.`
   }
   return undefined
 }

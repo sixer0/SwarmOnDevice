@@ -72,8 +72,9 @@ const APP_STATE_TEXT =
  * 1.2.7 U4 (N7-054): the refusal a read role (`planner`, `data-collector`; `READ_SHELL_ROLES`) gets for a shell call
  * outside the read class (`isReadOnlyShell`), in every mode, whatever a person's "always", a task grant or user config say.
  */
+// 1.2.8 AC-HN1 (N8-391): a subagent cannot start a coder subagent, so the text names the route it has: list the command.
 export const ROLE_SHELL_OUTSIDE_READ_TEXT =
-  "This agent role only runs inspection commands (for example ls, head, git log). Hand this command to a coder subagent."
+  "This agent role only runs inspection commands (for example ls, head, git log). This command was not run: list it in your final message so the agent that started you, or the person, can run it."
 
 /**
  * 1.2.7 F-4 (N7-052): X `own_api`, a call to Swarm's own running server whose address the call itself names (a literal

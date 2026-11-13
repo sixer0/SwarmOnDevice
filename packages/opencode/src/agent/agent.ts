@@ -296,7 +296,9 @@ const layer = Layer.effect(
             name: "verifier",
             description: `Checks finished work against its criteria and reports pass or fail with evidence: runs tests and checks, reviews a diff, a test report or the security of a change. Does not use edit tools; its shell commands still ask. No web tools. Use after implementation and before a gate or a report. Reads images (vision): it can check a rendered page, a figure or a screenshot by eye. Can act as a blind judge: it compares two sides given without project context and without knowing which side is the candidate. Also the role called verifier, senior-code-reviewer, security-review or pm-verifier, and test-expert when tests are run rather than written.`,
             prompt: PROMPT_VERIFIER,
-            permission: Permission.merge(defaults, user, specialist({ edit: "deny" })),
+            // 1.2.8 AC-HN17 (D-H3 a, N8-393): it may write Markdown (its report) with an ask, as planner and data-collector
+            // do; every other file stays its own deny. Not editing the artefact it verifies stays guidance in its prompt.
+            permission: Permission.merge(defaults, user, specialist(markdownOnly)),
             options: {},
             mode: "subagent",
             native: true,

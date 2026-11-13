@@ -897,8 +897,10 @@ it.instance("specialist permissions bind over the baseline", () =>
     const get = (name: string) => load((svc) => svc.get(name))
     const verifier = yield* get("verifier")
     expect(at(verifier, "edit", "src/a.ts")).toBe("deny")
+    // 1.2.8 AC-HN17 (INTENT, D-H3 a): the verifier writes Markdown with an ask, so its edit tools are no longer hidden.
+    expect(at(verifier, "edit", "docs/x.md")).toBe("ask")
     const hidden = Permission.disabled(["edit", "write", "apply_patch", "bash", "read"], verifier!.permission)
-    expect([...hidden].sort()).toEqual(["apply_patch", "edit", "write"])
+    expect([...hidden].sort()).toEqual([])
     for (const name of ["planner", "data-collector"]) {
       const agent = yield* get(name)
       expect(at(agent, "edit", "src/a.ts")).toBe("deny")

@@ -8,7 +8,7 @@ import { Patch } from "../patch"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Reach } from "./reach"
-import { checkpointBefore, lock, trimDiff } from "./edit"
+import { checkpointBefore, linkedLabels, lock, trimDiff } from "./edit"
 import { ActionCheckpoint } from "./checkpoint"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
@@ -271,7 +271,7 @@ export const ApplyPatchTool = Tool.define(
       const trust = yield* Reach.editTrust(ctx, instance, touched)
       yield* ctx.ask({
         permission: "edit",
-        patterns: relativePaths,
+        patterns: [...relativePaths, ...linkedLabels(instance.worktree, touched)],
         always: trust.risk ? [] : ["*"],
         metadata: {
           filepath: relativePaths.join(", "),
