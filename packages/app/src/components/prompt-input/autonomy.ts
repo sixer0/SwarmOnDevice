@@ -52,6 +52,14 @@ export async function nextMode(
   return { on: true, consent: consentPayload(ask.language()) }
 }
 
+/**
+ * The server's `autonomy.mode.changed`, any scope, on or off: a folder change can decide a session's mode, and the read
+ * that `refresh` starts says which answer holds. Shared by the composer's marker and the palette's toggle (row 58f).
+ * Returns the unsubscribe.
+ */
+export const followModeChanges = (event: Pick<DirectorySDK["event"], "on">, refresh: () => void) =>
+  event.on("autonomy.mode.changed", () => refresh())
+
 // The session read goes through the whole audit file, so a burst of decisions reads it once.
 const REFRESH_DELAY = 250
 
@@ -95,8 +103,7 @@ export function createPromptAutonomy(input: {
     )
     onCleanup(event.on("permission.replied", queueMoved))
     onCleanup(event.on("autonomy.blocked", queueMoved))
-    // Any scope, on or off: a folder change can decide this session's mode, and the read says which answer holds.
-    onCleanup(event.on("autonomy.mode.changed", () => refresh()))
+    onCleanup(followModeChanges(event, refresh))
   })
   makeEventListener(window, AUTONOMY_CHANGED, () => refresh())
   makeEventListener(window, "focus", () => refresh())
