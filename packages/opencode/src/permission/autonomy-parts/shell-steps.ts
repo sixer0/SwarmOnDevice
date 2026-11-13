@@ -23,7 +23,7 @@ import { OPENED_BY_NO_WAIT, noWait, openedByNoWait } from "./destroys"
 import { SUBAGENT_RUNS_LIKE_ROOT, shellTextCall } from "./subagent"
 import { OUTPUT_TAIL, WORD_BREAK, canRunIn, outsideProject, routine } from "./routine"
 import { DROP_ERRORS, READS, onlyLooks, unwrapped } from "./read-class"
-import { OWN_API_READ, ownApiRead, ownServerCall, runsAutonomyCommand, runsGraftInit } from "./own-api"
+import { OWN_API_READ, ownApiRead, ownServerCall, runsAutoApproveRun, runsAutonomyCommand, runsGraftInit } from "./own-api"
 import { classifyCheckpoint } from "./checkpoint"
 export function editTargets(input: Input) {
   const named = input.patterns.filter((pattern) => pattern !== "*").map((pattern) => path.resolve(input.instance.worktree, pattern))
@@ -867,6 +867,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   // 1.2.7 U-10 (C63): only the person turns the mode on (1.1.1 rule); an agent's `swarm autonomy` never runs.
   if (input.permission === "bash" && runsAutonomyCommand(input.metadata.command))
     return { ...refused("own_api"), reason: "person_only" }
+  // 1.2.8 row 36d (C59): nor does an agent start a nested `swarm run`/TUI that answers its own asks (--auto, --yolo, …).
+  if (input.permission === "bash" && runsAutoApproveRun(input.metadata.command))
+    return { ...refused("own_api"), reason: "auto_approve_run" }
   // 1.2.7 row 47j (U9-3, C76): every graft sub-command runs under the consent except `graft init`, which writes the
   // machine's own hook and MCP configuration: refused in autonomous mode, the root's as a subagent's, as a write of a
   // protected place is (the consent never turns it into a held write outside, which the main agent could open).

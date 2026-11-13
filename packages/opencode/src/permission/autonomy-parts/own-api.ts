@@ -1112,6 +1112,63 @@ export function runsAutonomyCommand(command: unknown, depth = 0): boolean {
   )
 }
 
+/** The flags that make a Swarm `run` or TUI answer its own permission asks (run.ts / tui.ts `auto`), any spelling yargs takes. */
+const AUTO_APPROVE_FLAG = /^--(?:auto|yolo|dangerously-skip-permissions|dangerouslySkipPermissions)(?:=(.*))?$/
+/** The same flags inside another program's code: the CLI's name (or its `index.ts` followed by `run`), later an auto flag. */
+const AUTO_APPROVE_IN_TEXT =
+  /(?:^|[\s'"[(,/=])(?:(?:swarm|opencode)(?:-launcher)?(?:\.sh|\.exe)?|index\.[cm]?[jt]s['"]?(?:\s*,\s*|[\s\\]+)['"]?run)['"]?(?:\s*,\s*|[\s\\]+)[^;|&\n]*?['"]?--(?:auto|yolo|dangerously-skip-permissions|dangerouslySkipPermissions)(?![\w-])(?!=(?:false|0)\b)/i
+
+/** Whether the words after the CLI carry an auto-approve flag that is on (`--auto`, `--yolo=true`; not `=false`, not after `--`). */
+function carriesAutoApprove(words: readonly string[]) {
+  for (let index = 0; index < words.length; index++) {
+    const word = words[index]!
+    if (word === "--") return false
+    const flag = AUTO_APPROVE_FLAG.exec(word)
+    if (!flag) continue
+    const value = flag[1] ?? (/^(?:true|false)$/i.test(words[index + 1] ?? "") ? words[index + 1] : undefined)
+    if (value === undefined || !/^(?:false|0|no)$/i.test(value)) return true
+  }
+  return false
+}
+
+/**
+ * 1.2.8 row 36d (C59): a shell command that starts a Swarm `run` or TUI with `--auto`, `--yolo` or
+ * `--dangerously-skip-permissions`, read in every place `runsAutonomyCommand` reads `swarm autonomy` (the CLI by any name
+ * or path, past assignments and wrappers, through `sh -c`/`eval` two deep, inside a program that runs other code). Such a
+ * nested run starts its own server and a root session whose mode the consent may not reach, and answers that session's
+ * asks itself, so the calls the consent refuses could run. A program not written out (`$B`) counts when its first word
+ * that is no option is `run`. Plain `swarm run "<prompt>"` without such a flag is not this rule (the nested run then
+ * rejects every ask); a mention in another program's arguments (`git commit -m`) is not a run. Residual, as R-F4: a
+ * script file that starts one is not read here.
+ */
+export function runsAutoApproveRun(command: unknown, depth = 0): boolean {
+  if (typeof command !== "string") return false
+  return liftSubstitutions(command).some((part) =>
+    shellSegments(substituteAssignments(part)).some((words) => {
+      let index = 0
+      while (index < words.length) {
+        const word = words[index]!
+        if (/^[A-Za-z_]\w*=/.test(word)) {
+          index++
+          continue
+        }
+        const name = path.basename(word)
+        if (!CLIENT_WRAPPERS.has(name)) break
+        index++
+        while (index < words.length && (words[index]!.startsWith("-") || /^\d+[smhd]?$/.test(words[index]!))) index++
+        if (name === "eval" || DeletionWords.SHELLS.has(name))
+          return depth < 2 && runsAutoApproveRun(words.slice(index).join(" "), depth + 1)
+      }
+      const program = words[index]
+      if (program === undefined) return false
+      const rest = words.slice(index + 1)
+      if (SWARM_CLI.test(path.basename(program))) return carriesAutoApprove(rest)
+      if (program.startsWith("$")) return rest.find((word) => !word.startsWith("-")) === "run" && carriesAutoApprove(rest)
+      return AUTONOMY_RUNNERS.has(path.basename(program)) && AUTO_APPROVE_IN_TEXT.test(` ${rest.join(" ")}`)
+    }),
+  )
+}
+
 /**
  * 1.2.7 row 47j (U9-3): a simple command (past assignments and wrappers, through a shell's `-c` or an `eval`, as
  * `runsAutonomyCommand` reads it) whose program is `graft` and whose first word that is no option is `init`. A program

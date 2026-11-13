@@ -99,14 +99,22 @@ export const OWN_API_PERSON_ONLY_TEXT =
   "This call did not run. Only the person turns autonomous mode on or off, in the app or by typing swarm autonomy at their own terminal; an agent never runs that command. Carry on without it, and if the mode should change, say so in your final message for the person."
 
 /**
- * 1.2.7 F-4 (N7-136): the closed reason list of an X `own_api`. Without a reason the address was named in the call.
- * 1.2.7 U-10: `person_only`, the `swarm autonomy` command.
+ * 1.2.8 row 36d (C59): X `own_api` with reason `auto_approve_run`, an agent's shell starting a nested `swarm run` or TUI
+ * with `--auto`, `--yolo` or `--dangerously-skip-permissions` (that run would approve its own permission prompts).
  */
-export type OwnApiReason = "config_file" | "unresolved_target" | "person_only"
+export const OWN_API_AUTO_APPROVE_RUN_TEXT =
+  "This call did not run. An agent may not start Swarm with --auto, --yolo or --dangerously-skip-permissions: that run would approve its own permission prompts, past what the person allowed this session. Do the work with the tools you were given, or start the run without that flag, and list anything that needs the person in your final message."
+
+/**
+ * 1.2.7 F-4 (N7-136): the closed reason list of an X `own_api`. Without a reason the address was named in the call.
+ * 1.2.7 U-10: `person_only`, the `swarm autonomy` command. 1.2.8 row 36d: `auto_approve_run`, a nested auto-approving run.
+ */
+export type OwnApiReason = "config_file" | "unresolved_target" | "person_only" | "auto_approve_run"
 
 /** The text of an X `own_api`: `OWN_API_UNRESOLVED_TEXT` for a reason of the closed list, else `OWN_API_TEXT`. */
 export function ownApiText(reason: string | undefined): string {
   if (reason === "person_only") return OWN_API_PERSON_ONLY_TEXT
+  if (reason === "auto_approve_run") return OWN_API_AUTO_APPROVE_RUN_TEXT
   return reason === "config_file" || reason === "unresolved_target" ? OWN_API_UNRESOLVED_TEXT : OWN_API_TEXT
 }
 

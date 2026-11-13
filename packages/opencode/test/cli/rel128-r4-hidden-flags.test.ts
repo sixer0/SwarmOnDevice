@@ -7,8 +7,8 @@
 //      refused before any ask is published (permission/index.ts `refusedBy`);
 //   3. from an agent: the CLI cannot switch the autonomy mode (`swarm autonomy …` is X), a `swarm run --attach` to the
 //      running server is X own_api, and (sub-case R4-AGENT) a nested `swarm run` carrying an auto-answer flag is not
-//      run without a person under the consent. R4-AGENT is RED at BASE and HEAD and is kept as `test.todo` with its
-//      body for the permission-lane coder row the controller opens (driver rules, plan §2 rule 3).
+//      run, in any layer. R4-AGENT was RED at BASE and HEAD (row 36c); row 36d (C59) refuses it, X own_api with reason
+//      auto_approve_run, and turned the todo into a test with the launcher names, `sh -c` and mode-off cases.
 // Synthetic values only: no server is contacted, no session runs, home is a fresh mkdtemp folder.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
@@ -20,8 +20,9 @@ import { Global } from "@opencode-ai/core/global"
 import { PERMISSION_BASELINE } from "@opencode-ai/core/swarm-permission-baseline"
 import type { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { RunCommand } from "../../src/cli/cmd/run"
-import { Permission } from "../../src/permission"
+import { Permission, refusedByMode, refusedUnderConsent } from "../../src/permission"
 import { AutonomyTable } from "../../src/permission/autonomy-table"
+import { AutonomyTexts } from "../../src/permission/autonomy-texts"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { SelfAddress } from "../../src/server/self-address"
 import { tmpdir } from "../fixture/fixture"
@@ -152,6 +153,9 @@ describe("R4-WIRING: a hidden flag only feeds `auto`, and `auto` only answers a 
       for (const file of sourceFiles(root)) {
         const rel = path.relative(SRC, file)
         if (rel === path.join("cli", "cmd", "run.ts") || rel === path.join("cli", "cmd", "tui.ts")) continue
+        // Row 36d (C59): the classifier reads the flags in an agent's command text (to refuse it) and its refusal names
+        // them; neither reads a parsed CLI argument.
+        if (rel === path.join("permission", "autonomy-parts", "own-api.ts") || rel === path.join("permission", "autonomy-texts.ts")) continue
         for (const { line, at } of codeLines(file))
           if (/\byolo\b|dangerously-skip-permissions|dangerouslySkipPermissions/i.test(line)) readers.push(`${at}: ${line}`)
       }
@@ -254,22 +258,60 @@ describe("R4-AGENT: an agent cannot reach the person's controls through the Swar
     for (const flag of ["--auto", ...HIDDEN])
       expectX(every(bash(`swarm run --attach ${OWN} ${flag} "hello"`)), `run --attach ${flag}`, "own_api")
   })
-  // RED at BASE and HEAD (row 36c): under the consent a nested `swarm run` with an auto-answer flag is class A
-  // by_main_agent (bypassed not_routine), so the main agent runs it on the consent and nobody is asked. The nested run
-  // starts its own in-process server and a new root session; with a session-scoped consent that root's mode is off, so
-  // its D asks (`git push --force` is X in the outer session) are answered "once" by the nested CLI (run.ts:808-812).
-  // Kept as todo with its body for the permission-lane coder row; `bun test --todo` runs it.
-  test.todo("a nested `swarm run`/TUI with --auto, --yolo or --dangerously-skip-permissions is not run without a person under the consent", () => {
+  // Found RED at BASE and HEAD by row 36c (class A by_main_agent under the consent): the nested run starts its own
+  // in-process server and a new root session; with a session-scoped consent that root's mode is off, so its D asks
+  // (`git push --force` is X in the outer session) are answered "once" by the nested CLI (run.ts:808-812).
+  // Row 36d (C59): refused X own_api, reason auto_approve_run, in every layer (mode off, consent root, consent subagent).
+  test("a nested `swarm run`/TUI with --auto, --yolo or --dangerously-skip-permissions is X own_api auto_approve_run in every layer", () => {
     for (const command of [
       `swarm run --yolo "git push --force"`,
       `swarm run --dangerously-skip-permissions "git push --force"`,
       `swarm run --auto "git push --force"`,
+      `swarm run --dangerouslySkipPermissions hello`,
+      `swarm run --yolo=true hello`,
+      `swarm run hello --auto`,
       `opencode run --yolo hello`,
+      `swarm-launcher run --auto hello`,
       `swarm-launcher.sh run --dangerously-skip-permissions hello`,
-      `sh -c 'swarm run --yolo hello'`,
+      `/Applications/Swarm.app/Contents/Resources/swarm-launcher.sh run --yolo hello`,
+      `~/.local/bin/swarm run --auto hello`,
+      `./node_modules/.bin/opencode run --yolo hello`,
       `swarm --yolo --prompt hello`,
+      `swarm --dangerously-skip-permissions`,
+      `opencode --auto --prompt hello`,
+      `sh -c 'swarm run --yolo hello'`,
+      `bash -lc "opencode run --dangerously-skip-permissions hello"`,
+      `sh -c 'swarm --yolo --prompt hello'`,
+      `env FOO=1 swarm run --auto hello`,
+      `cd /tmp && swarm run --yolo hello`,
+      `eval swarm run --auto hello`,
+      `B=swarm; $B run --yolo hello`,
+      `python3 -c "import pty; pty.spawn(['swarm', 'run', '--yolo', 'hello'])"`,
     ])
-      for (const [layer, verdict] of consented(bash(command)))
-        expect({ command, layer, refused: verdict.class === "X" }).toEqual({ command, layer, refused: true })
+      for (const [layer, verdict] of every(bash(command)))
+        expect({ command, layer, verdict }).toEqual({
+          command,
+          layer,
+          verdict: { class: "X", decidedBy: "gate", category: "own_api", reason: "auto_approve_run" },
+        })
+    // The refusal has its own text, next to the `swarm autonomy` one, in mode on and off.
+    expect(refusedUnderConsent("own_api", "auto_approve_run").message).toBe(AutonomyTexts.OWN_API_AUTO_APPROVE_RUN_TEXT)
+    expect(refusedByMode("own_api", "auto_approve_run").message).toBe(AutonomyTexts.OWN_API_AUTO_APPROVE_RUN_TEXT)
+    expect(AutonomyTexts.OWN_API_AUTO_APPROVE_RUN_TEXT).not.toBe(AutonomyTexts.OWN_API_PERSON_ONLY_TEXT)
+  })
+  test("plain `swarm run` without an auto flag, a flag set false, a flag after `--`, or a mention keep their verdict", () => {
+    for (const command of [
+      `swarm run hello`,
+      `swarm run "use --yolo in the text"`,
+      `swarm run --yolo=false hello`,
+      `swarm run --auto false hello`,
+      `swarm run -- --yolo`,
+      `sh -c 'swarm run hello'`,
+      `git commit -m "swarm run --yolo"`,
+      `grep -rn -- --dangerously-skip-permissions src`,
+      `echo swarm run --auto`,
+    ])
+      for (const [layer, verdict] of every(bash(command)))
+        expect({ command, layer, reason: verdict.reason }).toEqual({ command, layer, reason: undefined })
   })
 })
