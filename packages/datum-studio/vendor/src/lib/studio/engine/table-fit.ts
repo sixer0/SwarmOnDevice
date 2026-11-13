@@ -68,10 +68,44 @@ export function isUrlToken(word: string): boolean {
   return word.includes("://") || /^[(\[{<"'‘“]*(www\.|mailto:)/i.test(word);
 }
 
-/** Segments of a whitespace-free run: split after each separator (kept on the left) when the run is long, else whole. */
-export function breakableSegments(word: string): string[] {
+/** Strips leading brackets/quotes and trailing punctuation around a token before its shape is judged. */
+const coreToken = (word: string): string => word.replace(/^[(\[{<"'‘“]+/, "").replace(/[)\]}>"'’”.,;:!?]+$/, "");
+
+/**
+ * Swarm 1.2.7 row 40d (M2-01, C50): a house-style document number, `NNN/<letters>/.../<roman month>/<YYYY>`
+ * (e.g. the synthetic `002/UJI/NT/XI/2026`), is never broken: U+200B inside it travels with copy-paste out of Word
+ * and defeats Word's Find for the plain number.
+ */
+export function isDocumentNumberToken(word: string): boolean {
+  return /^\d{3}(\/[A-Za-z][A-Za-z0-9.-]*)+\/(XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I)\/\d{4}$/i.test(coreToken(word));
+}
+
+/**
+ * Swarm 1.2.7 row 40d (M2-01, C50): a path-like token is never broken (same copy-paste / Find reason): it holds a
+ * backslash, starts with `/`, `./`, `../` or `~/`, or has a `/` and ends in a file extension (`.ts`, `.docx`).
+ */
+export function isPathToken(word: string): boolean {
+  const w = coreToken(word);
+  if (/[,;]/.test(w)) return false;
+  if (w.includes("\\")) return true;
+  if (/^(\/|\.{1,2}\/|~\/)\S/.test(w)) return true;
+  return w.includes("/") && /\.[A-Za-z][A-Za-z0-9]{0,4}$/.test(w);
+}
+
+/** Lower-bound width (mm) of a word set in a wrapping text cell: 0.42 em at 7.5 pt per code point (DT-10a). */
+export function tableTokenMm(word: string): number {
+  return cps(word) * PROP_EM_MIN * TEXT_PT * MM_PER_PT;
+}
+
+/**
+ * Segments of a whitespace-free run, split after each separator (kept on the left). Swarm 1.2.7 row 40d (C50): the run
+ * stays whole when it is `TABLE_BREAK_MIN_CHARS` or shorter, a URL, a document number or path-like, or when it fits
+ * `budgetMm`, the room its column has (`tableBreakBudget`). Without a budget (0) every other long run splits.
+ */
+export function breakableSegments(word: string, budgetMm = 0): string[] {
   const chars = Array.from(word);
-  if (chars.length <= TABLE_BREAK_MIN_CHARS || isUrlToken(word)) return [word];
+  if (chars.length <= TABLE_BREAK_MIN_CHARS || isUrlToken(word) || isDocumentNumberToken(word) || isPathToken(word)) return [word];
+  if (tableTokenMm(word) <= budgetMm + 1e-9) return [word];
   const out: string[] = [];
   let cur = "";
   for (const ch of chars) {
@@ -86,16 +120,16 @@ export function breakableSegments(word: string): string[] {
 }
 
 /**
- * The paragraph's runs with `mark` inserted at every break `breakableSegments` allows, words read across run
- * boundaries (a run without `t` is whitespace, as in `cellTexts`). Null when no break applies, so callers keep their
+ * The paragraph's runs with `mark` inserted at every break `breakableSegments(word, budgetMm)` allows, words read
+ * across run boundaries (a run without `t` is whitespace, as in `cellTexts`). Null when no break applies, so callers keep their
  * output byte-identical.
  */
-export function tableBreakRuns<R extends object>(runs: readonly R[], mark: string): R[] | null {
+export function tableBreakRuns<R extends object>(runs: readonly R[], mark: string, budgetMm = 0): R[] | null {
   const texts = runs.map((r) => ("t" in r && typeof (r as { t?: unknown }).t === "string" ? (r as unknown as { t: string }).t : null));
   const joined = texts.map((t) => t ?? " ").join("");
   const at: number[] = [];
   for (const m of joined.matchAll(/\S+/g)) {
-    const segs = breakableSegments(m[0]);
+    const segs = breakableSegments(m[0], budgetMm);
     let off = m.index ?? 0;
     for (let i = 0; i < segs.length - 1; i++) {
       off += segs[i].length;
@@ -126,10 +160,10 @@ export function tableBreakRuns<R extends object>(runs: readonly R[], mark: strin
   });
 }
 
-const longestWord = (s: string): string =>
+const longestWord = (s: string, budgetMm: number): string =>
   s
     .split(/\s+/)
-    .flatMap((w) => breakableSegments(w))
+    .flatMap((w) => breakableSegments(w, budgetMm))
     .reduce((a, w) => (cps(w) > cps(a) ? w : a), "");
 
 export interface TableMinWidth {
@@ -141,8 +175,10 @@ export interface TableMinWidth {
   widest: { column: number; row: number; text: string; mm: number } | null;
 }
 
-/** Lower bound of the width the table needs (mm), from its unbreakable content. */
-export function tableMinWidthMm(t: Pick<TableBlock, "columns" | "rows">, params: ParamMap): TableMinWidth {
+type TableShape = Pick<TableBlock, "columns" | "rows">;
+
+/** Per-column lower bound, a wrapping text cell measured by its longest segment under `budgetOf(column)`. */
+function scanColumns(t: TableShape, params: ParamMap, budgetOf: (ci: number) => number): { columnsMm: number[]; at: Array<{ row: number; text: string } | null> } {
   const cols: readonly ColumnSpec[] = Array.isArray(t.columns) ? t.columns : [];
   const rows: readonly Row[] = Array.isArray(t.rows) ? t.rows : [];
   const monoPt = num(params, "type.scale.tableNumerals.size", 7.8);
@@ -162,8 +198,8 @@ export function tableMinWidthMm(t: Pick<TableBlock, "columns" | "rows">, params:
           else if (nowrap && role === "unit") mm = cps(text) * PROP_EM_MIN * UNIT_PT * MM_PER_PT;
           else if (nowrap) mm = cps(text) * MONO_EM * monoPt * MM_PER_PT;
           else {
-            shown = longestWord(text);
-            mm = cps(shown) * PROP_EM_MIN * TEXT_PT * MM_PER_PT;
+            shown = longestWord(text, budgetOf(ci));
+            mm = tableTokenMm(shown);
           }
           if (mm > columnsMm[ci]) {
             columnsMm[ci] = mm;
@@ -174,7 +210,50 @@ export function tableMinWidthMm(t: Pick<TableBlock, "columns" | "rows">, params:
       ci += gs;
     }
   });
-  const minMm = columnsMm.reduce((a, b) => a + b, 0) + COLUMN_GAP_MM * Math.max(0, cols.length - 1);
+  return { columnsMm, at };
+}
+
+export interface TableBreakBudget {
+  /** Room (mm) per grid column for a whitespace-free run before it is broken. */
+  columnsMm: number[];
+  /** Room (mm) of a cell starting at grid column `col` and spanning `span` columns (gaps included). */
+  cellMm(col: number, span?: number): number;
+}
+
+/**
+ * Swarm 1.2.7 row 40d (M2-01, C50): how much room each column gives a whitespace-free run before the ID-list break is
+ * made, shared by the DT-10a estimate and both renderers. U = column lower bound with nothing broken (the estimate
+ * before row 40), B = with every breakable run broken; the span's slack over B (span - gaps - sum B) is shared out in
+ * proportion to each column's need U - B. So a table that fit before row 40 (sum U fits) gets no break at all, and a
+ * table that fits once broken still fits: every run kept whole is within its column's share. A run that is a URL, a
+ * document number or path-like never breaks and is in both U and B.
+ */
+export function tableBreakBudget(t: TableShape, params: ParamMap): TableBreakBudget {
+  const n = Array.isArray(t.columns) ? t.columns.length : 0;
+  const limit = tableSpanLimitMm(params);
+  const u = scanColumns(t, params, () => Number.POSITIVE_INFINITY).columnsMm;
+  const b = scanColumns(t, params, () => 0).columnsMm;
+  const slack = limit - COLUMN_GAP_MM * Math.max(0, n - 1) - b.reduce((x, y) => x + y, 0);
+  const need = u.map((x, i) => Math.max(0, x - b[i]));
+  const needSum = need.reduce((x, y) => x + y, 0);
+  const columnsMm = b.map((x, i) => (slack <= 0 ? x : needSum > 0 ? x + (slack * need[i]) / needSum : x + slack / n));
+  return {
+    columnsMm,
+    cellMm(col: number, span = 1): number {
+      let mm = 0;
+      let k = 0;
+      for (let j = Math.max(0, col); j < Math.min(n, col + Math.max(1, span)); j++, k++) mm += columnsMm[j];
+      return k === 0 ? limit : mm + COLUMN_GAP_MM * (k - 1);
+    },
+  };
+}
+
+/** Lower bound of the width the table needs (mm), from its unbreakable content (row 40d: breaks per `tableBreakBudget`). */
+export function tableMinWidthMm(t: TableShape, params: ParamMap): TableMinWidth {
+  const n = Array.isArray(t.columns) ? t.columns.length : 0;
+  const budget = tableBreakBudget(t, params);
+  const { columnsMm, at } = scanColumns(t, params, (ci) => budget.columnsMm[ci] ?? 0);
+  const minMm = columnsMm.reduce((a, b) => a + b, 0) + COLUMN_GAP_MM * Math.max(0, n - 1);
   let widest: TableMinWidth["widest"] = null;
   columnsMm.forEach((mm, ci) => {
     const a = at[ci];
@@ -187,6 +266,14 @@ export function tableMinWidthMm(t: Pick<TableBlock, "columns" | "rows">, params:
 export function tableSpanLimitMm(params: ParamMap): number {
   const ok = okWidthsMm(params["grid.allowedFigureWidthsMm"]);
   return ok ? Math.max(...ok) : num(params, "grid.fullSpanMm", FALLBACK_SPAN_MM);
+}
+
+/**
+ * Swarm 1.2.7 row 40d (M2-08): the DT-10a suggestion's break clause, built from `TABLE_BREAK_AFTER` and
+ * `TABLE_BREAK_MIN_CHARS` so it cannot drift from the rule.
+ */
+export function tableBreakSuggestion(): string {
+  return `daftar ID tanpa spasi dipatah setelah ${TABLE_BREAK_AFTER.join(" ")} bila lebih dari ${TABLE_BREAK_MIN_CHARS} karakter dan tidak muat di kolomnya; nomor dokumen, path, dan URL tidak pernah dipatah`;
 }
 
 /**
@@ -213,7 +300,7 @@ export function assertTableFits(
     limit,
     measured: Math.round(m.minMm * 10) / 10,
     suggestion:
-      "pecah tabel menjadi dua (kolom kunci diulang), kurangi jumlah kolom angka, atau pindahkan teks panjang dari kolom ID/angka/satuan ke kolom teks agar dapat dibungkus; daftar ID tanpa spasi dipatah setelah , ; / bila lebih dari 16 karakter",
+      `pecah tabel menjadi dua (kolom kunci diulang), kurangi jumlah kolom angka, atau pindahkan teks panjang dari kolom ID/angka/satuan ke kolom teks agar dapat dibungkus; ${tableBreakSuggestion()}`,
     ...(where.address ? { pointer: where.address } : {}),
   });
 }

@@ -40,6 +40,9 @@ const URLS = [
   "(https://example.net/x/y/z)",
 ]
 const IDS = "R-01/R-02/R-03/R-04/R-05"
+// Row 40d (C50) INTENT: a list breaks only when it would overflow its column, so the rendered mixed cell carries a
+// 40-ID list (199 characters, wider than the 166 mm span) instead of the 5-ID list, which now fits and stays whole.
+const LONG_IDS = Array.from({ length: 40 }, (_, i) => `R-${String(i + 1).padStart(2, "0")}`).join("/")
 
 describe("rel127 N-11b: URLs are never broken by the ID-list rule", () => {
   test("breakableSegments keeps every URL form whole; ID lists still split", () => {
@@ -55,7 +58,7 @@ describe("rel127 N-11b: URLs are never broken by the ID-list rule", () => {
   })
 
   test("DOCX document.xml carries each URL contiguous with no U+200B; HTML has no <wbr> inside a URL", async () => {
-    const b = block([["Tautan", "Keterangan"], ...URLS.map((u) => [u, "uji"]), [`${URLS[0]} ${IDS}`, "campuran"]])
+    const b = block([["Tautan", "Keterangan"], ...URLS.map((u) => [u, "uji"]), [`${URLS[0]} ${LONG_IDS}`, "campuran"]])
     const { html, xml } = await render(b.columns, b.rows)
     for (const u of URLS) {
       // A bracketed URL is rendered as its own (link-styled) run; look for the URL itself.
@@ -63,9 +66,9 @@ describe("rel127 N-11b: URLs are never broken by the ID-list rule", () => {
       expect({ u, inXml: xml.includes(esc) }).toEqual({ u, inXml: true })
       expect({ u, inHtml: html.includes(esc) }).toEqual({ u, inHtml: true })
     }
-    // Only the ID list breaks: 4 separators, nothing else.
-    expect(count(xml, ZW)).toBe(4)
+    // Only the overflowing ID list breaks: 39 separators, nothing else (row 40d INTENT; was the 5-ID list's 4).
+    expect(count(xml, ZW)).toBe(39)
     expect(count(xml, ZW)).toBe(count(xml, `/${ZW}`))
-    expect(count(html, "<wbr>")).toBe(4)
+    expect(count(html, "<wbr>")).toBe(39)
   }, 60_000)
 })
