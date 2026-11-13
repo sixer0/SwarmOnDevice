@@ -191,7 +191,8 @@ describe("row 78b: real host — status shows the verdict studio_render stored",
     const st = await callFull("studio_document_status", { documentId: id })
     console.log(`[row78b] status text:\n${st.text}`)
     for (const l of renderLines) {
-      const [, outId, verdict] = /^ {2}\S+ (\S+) (.+)$/.exec(l)!
+      // 1.2.7 row 35d (INTENT, AC-M03/N7-065): render lines end with ` sha256=<64 hex>`; the verdict is what precedes it
+      const [, outId, verdict] = /^ {2}\S+ (\S+) (.+?)(?: sha256=[0-9a-f]{64})?$/.exec(l)!
       const line = st.text.split("\n").find((x) => x.startsWith(`berkas ${outId} `))
       expect(line).toBeDefined()
       expect(line!).toContain(` ${verdict} `)
