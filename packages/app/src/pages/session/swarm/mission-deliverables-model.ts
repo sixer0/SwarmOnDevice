@@ -128,6 +128,9 @@ export type DeliverableActions = {
   selectRow?: (rowId: string) => void
   /** opens a session-relative path in the existing file tab: `(p) => openTab(file.tab(p))` (session-side-panel.tsx:747) */
   openFile?: (path: string) => void
+  /** 1.2.7 row 58e (L-2): after the file tab is opened, show the review/file pane with that tab active; called only for
+   * a document line that opened (never for reveal or an executable). */
+  openPane?: (path: string) => void
   /** N7-023: `(abs) => platform.revealPath(abs)`: desktop reveal-path, showItemInFolder only (never opens, U3) */
   revealFile?: (absPath: string) => void
 }
@@ -138,5 +141,6 @@ export function activateDeliverable(line: DeliverableLine, actions: DeliverableA
   const path = openablePath(line.path, line.origin)
   if (!path || !actions.openFile) return "not-in-project"
   actions.openFile(path)
+  actions.openPane?.(path)
   return "opened"
 }

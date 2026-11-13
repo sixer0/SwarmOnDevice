@@ -67,6 +67,21 @@ describe("row 132 deliverables model", () => {
     expect(activateDeliverable(a, {})).toBe("not-in-project")
   })
 
+  test("1.2.7 L-2: opening a document deliverable also opens the review/file pane (after the tab); not-in-project does not", () => {
+    const calls: string[] = []
+    const actions = {
+      openFile: (p: string) => calls.push(`open:${p}`),
+      openPane: (p: string) => calls.push(`pane:${p}`),
+    }
+    const [a, b] = deliverableLines(vm())
+    expect(activateDeliverable(a, actions)).toBe("opened")
+    expect(activateDeliverable(b, actions)).toBe("not-in-project")
+    expect(calls).toEqual([`open:docs/m-doc-1/${PDF_A}`, `pane:docs/m-doc-1/${PDF_A}`])
+    const exe = { ...a, path: null, origin: "folder" as const }
+    expect(activateDeliverable(exe, actions)).toBe("not-in-project")
+    expect(calls.length).toBe(2)
+  })
+
   test("only docs/<mission>/<Studio output name> is ever opened (§12, C102)", () => {
     expect(openablePath(`docs/m1/${PDF_A}`)).toBe(`docs/m1/${PDF_A}`)
     expect(openablePath("docs/m1/readme.pdf")).toBeNull()

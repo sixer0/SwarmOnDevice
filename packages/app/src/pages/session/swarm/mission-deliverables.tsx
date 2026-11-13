@@ -8,6 +8,7 @@
 // (desktop reveal-path: showItemInFolder only, never opens or launches). Folder lines (files in 11_deliverables/ that
 // no Studio output claims) have no status badge; a .command, .app and every non-document type is reveal only.
 // No new panel: one button per line in the existing Deliverables section.
+import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
@@ -15,6 +16,7 @@ import { fileManagerApp, type FileManagerOS } from "@/utils/file-manager"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { For, Show, createMemo } from "solid-js"
 import { activateDeliverable, deliverableLines, finalTally, lineMeta, type DeliverableLine } from "./mission-deliverables-model"
+import { useSessionLayout } from "../session-layout"
 import type { DeliverableStatus, MissionVM } from "./mission-model"
 
 export type MissionDeliverablesKey =
@@ -42,6 +44,8 @@ export type MissionDeliverablesProps = {
   onSelectAgent?: (rowId: string) => void
   /** `(p) => tabs().open(file.tab(p))` (spec §11; session-side-panel.tsx:747) */
   openFile?: (path: string) => void
+  /** 1.2.7 row 58e (L-2): show the review/file pane with the opened tab active; absent = the session layout's own */
+  openPane?: (path: string) => void
   /** N7-023: `(abs) => void platform.revealPath?.(abs)`; absent = the platform's own revealPath (desktop) or no button */
   revealFile?: (absPath: string) => void
   /** the session directory the deliverables' project paths are relative to; absent = the SDK's directory */
@@ -106,7 +110,7 @@ export function MissionDeliverablesList(props: MissionDeliverablesProps & { t: M
                   title={line.name}
                   data-origin={line.origin}
                   class="grid min-w-0 flex-1 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-v2-overlay-simple-overlay-hover aria-pressed:bg-v2-overlay-simple-overlay-hover"
-                  onClick={() => activateDeliverable(line, { selectRow: props.onSelectAgent, openFile: props.openFile })}
+                  onClick={() => activateDeliverable(line, { selectRow: props.onSelectAgent, openFile: props.openFile, openPane: props.openPane })}
                 >
                   <span
                     data-mission-deliverable-format
@@ -177,10 +181,21 @@ export function MissionDeliverables(props: MissionDeliverablesProps) {
   const platform = optional(usePlatform)
   const sdk = optional(useSDK)
   // A refused path resolves false; the desktop logs it (reveal-path.ts). Nothing here opens or retries.
+  // 1.2.7 L-2: opening a document deliverable also shows the review/file pane, as other open-file actions do
+  // (session-side-panel activateTab: openReviewPanel + setActive). Outside the providers: no pane action.
+  const layout = optional(useSessionLayout)
+  const files = optional(useFile)
+  const openPane = (path: string) => {
+    if (!layout) return
+    if (!layout.view().reviewPanel.opened()) layout.view().reviewPanel.open()
+    const tab = files?.tab(path)
+    if (tab) layout.tabs().setActive(tab)
+  }
   const revealFile = (abs: string) => void platform?.revealPath?.(abs).catch(() => false)
   return (
     <MissionDeliverablesList
       {...props}
+      openPane={props.openPane ?? (layout ? openPane : undefined)}
       revealFile={props.revealFile ?? (platform?.revealPath ? revealFile : undefined)}
       directory={props.directory ?? sdk?.().directory}
       os={props.os ?? platform?.os ?? "unknown"}
