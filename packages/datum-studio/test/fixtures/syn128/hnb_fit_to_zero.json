@@ -1,0 +1,78 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-HNB, row 35): flow LR at 166 mm, 4-node chain. MEASURED (engine = BASE): first render score 1; AUTO_FIT detail `cacat geometri terdeteksi (1); tata letak otomatis (penuh) -> sisa 0; dicoba: penuh: 0`, suggest `tidak ada`; final lint score 0, no defect.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.1",
+    "title": "Gambar sintetis uji.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "direction": "LR",
+    "nodes": [
+      {
+        "id": "r0",
+        "label": "Terima berkas",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "r1",
+        "label": "Periksa kelengkapan",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "r2",
+        "label": "Verifikasi isi",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "r3",
+        "label": "Arsipkan",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "r0",
+        "to": "r1",
+        "kind": "data",
+        "label": "isi"
+      },
+      {
+        "from": "r1",
+        "to": "r2",
+        "kind": "data",
+        "label": "lolos"
+      },
+      {
+        "from": "r2",
+        "to": "r3",
+        "kind": "data",
+        "label": "sah"
+      }
+    ]
+  },
+  "buildOptions": {
+    "release": false
+  },
+  "expected": {
+    "firstScore": 1,
+    "restScore": 0
+  }
+}

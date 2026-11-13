@@ -1,0 +1,91 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-HNB4, row 35): graph at 128 mm, 5-column chain. MEASURED (engine = BASE): refused, checkId DATUM-37-lebar (same id as the flow fixture), message `DATUM-37: simpul c3 keluar lebar lembar (128.000..128.000 dari 128.0 mm) (P8); tata letak kapasitas tidak bersih ...` (graph.ts sheet edge). After row 35: DATUM-37-sheet.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.1",
+    "title": "Gambar sintetis uji.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "c0",
+        "label": "Tahap 1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "c1",
+        "label": "Tahap 2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c2",
+        "label": "Tahap 3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "c3",
+        "label": "Tahap 4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "c4",
+        "label": "Tahap 5",
+        "class": {
+          "col": 4,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "c0",
+        "to": "c1",
+        "kind": "data",
+        "label": "t1"
+      },
+      {
+        "from": "c1",
+        "to": "c2",
+        "kind": "data",
+        "label": "t2"
+      },
+      {
+        "from": "c2",
+        "to": "c3",
+        "kind": "data",
+        "label": "t3"
+      },
+      {
+        "from": "c3",
+        "to": "c4",
+        "kind": "data",
+        "label": "t4"
+      }
+    ]
+  },
+  "buildOptions": {
+    "release": false
+  },
+  "measured": {
+    "checkId": "DATUM-37-lebar",
+    "messageStart": "DATUM-37: simpul c3 keluar lebar lembar"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-HN15, row 34): studio_write args (add `mission`) with a 3-column table that fits; DT-10a lower bound measured 29.45 mm. Expected: no TABLE_OVERFLOW at render, no TABLE_OVERFLOW_LIKELY at write.",
+  "args": {
+    "docKey": "syn128-hn15-fit",
+    "template": "datum-nota",
+    "meta": {
+      "title": "Nota uji H-N15 muat",
+      "author": "Alfa Bravo",
+      "number": "003/UJI/NT/XI/2026"
+    },
+    "sections": [
+      {
+        "heading": "Pendahuluan",
+        "blocks": [
+          "Paragraf pembuka sintetis."
+        ]
+      },
+      {
+        "heading": "Rincian",
+        "blocks": [
+          {
+            "table": [
+              [
+                "Kode",
+                "Uraian",
+                "Status"
+              ],
+              [
+                "UJI-01",
+                "Paragraf sintetis alfa bravo",
+                "selesai"
+              ],
+              [
+                "UJI-02",
+                "Paragraf sintetis charlie delta",
+                "berjalan"
+              ]
+            ],
+            "caption": "Tabel sintetis muat",
+            "source": "Sumber sintetis uji."
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "dt10aLowerBoundMm": 29.45,
+    "renderFinding": null,
+    "writeWarning": null
+  }
+}

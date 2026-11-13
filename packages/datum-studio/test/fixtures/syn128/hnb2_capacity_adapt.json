@@ -1,0 +1,94 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-HNB2, row 35): graph, 5 columns at 166 mm (default pitch does not fit, graph max 4 at the default pitch). MEASURED (engine = BASE): first render refused DATUM-37-lebar; capacity layout `time` -> score 0, no defect; buildDiagramSvg geometry = AUTO_FIT (`render pertama ditolak DATUM-37-lebar; tata letak kapasitas -> sisa 0`) + one CAPACITY_ADAPT REPORT (`5 kolom graph tidak muat dengan pitch bawaan di 166.0 mm; pitch dipadatkan ke 32.00 mm ...`). Note for row 35: on this capacityRetry path BASE already reports CAPACITY_ADAPT; the unreported self-correction of AT-HNB2 is the autoFitDiagram early-return path (g0.score 0), where diagramFitNote has no active state on the first render.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.1",
+    "title": "Gambar sintetis uji.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "c0",
+        "label": "Tahap 1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "c1",
+        "label": "Tahap 2",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "c2",
+        "label": "Tahap 3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "c3",
+        "label": "Tahap 4",
+        "class": {
+          "col": 3,
+          "row": 1
+        }
+      },
+      {
+        "id": "c4",
+        "label": "Tahap 5",
+        "class": {
+          "col": 4,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "c0",
+        "to": "c1",
+        "kind": "data",
+        "label": "t1"
+      },
+      {
+        "from": "c1",
+        "to": "c2",
+        "kind": "data",
+        "label": "t2"
+      },
+      {
+        "from": "c2",
+        "to": "c3",
+        "kind": "data",
+        "label": "t3"
+      },
+      {
+        "from": "c3",
+        "to": "c4",
+        "kind": "data",
+        "label": "t4"
+      }
+    ]
+  },
+  "buildOptions": {
+    "release": false
+  },
+  "expected": {
+    "firstRender": "DATUM-37-lebar",
+    "capacityScore": 0,
+    "notes": [
+      "CAPACITY_ADAPT"
+    ]
+  }
+}

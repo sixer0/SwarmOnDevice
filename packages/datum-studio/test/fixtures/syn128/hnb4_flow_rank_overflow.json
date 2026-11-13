@@ -1,0 +1,148 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-HNB4, row 35): flow TB at 128 mm, 8 nodes on rank 1. MEASURED (engine = BASE): refused, checkId DATUM-37-lebar, message `DATUM-37: peringkat 1 memuat 8 simpul, maks 4 pada 128 mm ...` (flow.ts rank overload). After row 35: DATUM-37-rank.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.1",
+    "title": "Gambar sintetis uji.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "direction": "TB",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Mulai",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Cabang 1",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Cabang 2",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Cabang 3",
+        "class": {
+          "col": 2,
+          "row": 1
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Cabang 4",
+        "class": {
+          "col": 3,
+          "row": 1
+        }
+      },
+      {
+        "id": "b4",
+        "label": "Cabang 5",
+        "class": {
+          "col": 4,
+          "row": 1
+        }
+      },
+      {
+        "id": "b5",
+        "label": "Cabang 6",
+        "class": {
+          "col": 5,
+          "row": 1
+        }
+      },
+      {
+        "id": "b6",
+        "label": "Cabang 7",
+        "class": {
+          "col": 6,
+          "row": 1
+        }
+      },
+      {
+        "id": "b7",
+        "label": "Cabang 8",
+        "class": {
+          "col": 7,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b0",
+        "kind": "data",
+        "label": "c1"
+      },
+      {
+        "from": "a",
+        "to": "b1",
+        "kind": "data",
+        "label": "c2"
+      },
+      {
+        "from": "a",
+        "to": "b2",
+        "kind": "data",
+        "label": "c3"
+      },
+      {
+        "from": "a",
+        "to": "b3",
+        "kind": "data",
+        "label": "c4"
+      },
+      {
+        "from": "a",
+        "to": "b4",
+        "kind": "data",
+        "label": "c5"
+      },
+      {
+        "from": "a",
+        "to": "b5",
+        "kind": "data",
+        "label": "c6"
+      },
+      {
+        "from": "a",
+        "to": "b6",
+        "kind": "data",
+        "label": "c7"
+      },
+      {
+        "from": "a",
+        "to": "b7",
+        "kind": "data",
+        "label": "c8"
+      }
+    ]
+  },
+  "buildOptions": {
+    "release": false
+  },
+  "measured": {
+    "checkId": "DATUM-37-lebar",
+    "messageStart": "DATUM-37: peringkat 1 memuat 8 simpul"
+  }
+}

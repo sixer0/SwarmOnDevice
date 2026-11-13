@@ -1,0 +1,61 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-HN15, row 34): studio_write args (add `mission`); for studio_edit append `args.sections[1].blocks[0]`. Six text columns, each data cell one 16-character run of wide capitals without a break opportunity (<= TABLE_BREAK_MIN_CHARS, never split). DT-10a lower bound (tableMinWidthMm, 0.42 em) measured 119.18 mm <= 166 mm, so render is NOT refused; at a real advance of ~0.7-0.9 em the runs need ~190-230 mm, so the HTML table is expected wider than its container (TABLE_OVERFLOW). The TABLE_OVERFLOW verdict itself needs a browser render and was NOT measured by row 25b: row 34 confirms it in its red run (C-decision if it does not overflow).",
+  "args": {
+    "docKey": "syn128-hn15-wide",
+    "template": "datum-nota",
+    "meta": {
+      "title": "Nota uji H-N15 lebar",
+      "author": "Alfa Bravo",
+      "number": "003/UJI/NT/XI/2026"
+    },
+    "sections": [
+      {
+        "heading": "Pendahuluan",
+        "blocks": [
+          "Paragraf pembuka sintetis."
+        ]
+      },
+      {
+        "heading": "Rincian",
+        "blocks": [
+          {
+            "table": [
+              [
+                "Kolom A",
+                "Kolom B",
+                "Kolom C",
+                "Kolom D",
+                "Kolom E",
+                "Kolom F"
+              ],
+              [
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM"
+              ],
+              [
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM",
+                "WMWMWMWMWMWMWMWM"
+              ]
+            ],
+            "caption": "Tabel sintetis lebar",
+            "source": "Sumber sintetis uji."
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "dt10aLowerBoundMm": 119.18,
+    "spanMm": 166,
+    "renderFinding": "TABLE_OVERFLOW",
+    "writeWarning": "TABLE_OVERFLOW_LIKELY"
+  }
+}

@@ -1,0 +1,532 @@
+{
+  "version": 2,
+  "enabled": true,
+  "items": [
+    {
+      "id": "a00000",
+      "text": "catatan sintetis nomor 1: alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november al.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767225600000
+    },
+    {
+      "id": "a00001",
+      "text": "catatan sintetis nomor 2: bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar br.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767229200000,
+      "sessionID": "ses_syn128note001"
+    },
+    {
+      "id": "a00002",
+      "text": "catatan sintetis nomor 3: charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa ch.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767232800000
+    },
+    {
+      "id": "a00003",
+      "text": "catatan sintetis nomor 4: delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec de.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767236400000
+    },
+    {
+      "id": "a00004",
+      "text": "catatan sintetis nomor 5: echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo ec.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767240000000
+    },
+    {
+      "id": "a00005",
+      "text": "catatan sintetis nomor 6: foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra fo.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767243600000
+    },
+    {
+      "id": "a00006",
+      "text": "catatan sintetis nomor 7: golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango go.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767247200000,
+      "sessionID": "ses_syn128note006"
+    },
+    {
+      "id": "a00007",
+      "text": "catatan sintetis nomor 8: hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa ho.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767250800000
+    },
+    {
+      "id": "a00008",
+      "text": "catatan sintetis nomor 9: india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo in.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767254400000
+    },
+    {
+      "id": "a00009",
+      "text": "catatan sintetis nomor 10: juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie j.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767258000000
+    },
+    {
+      "id": "a0000a",
+      "text": "catatan sintetis nomor 11: kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta k.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767261600000
+    },
+    {
+      "id": "a0000b",
+      "text": "catatan sintetis nomor 12: lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo l.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767265200000,
+      "sessionID": "ses_syn128note011"
+    },
+    {
+      "id": "a0000c",
+      "text": "catatan sintetis nomor 13: mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot m.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767268800000
+    },
+    {
+      "id": "a0000d",
+      "text": "catatan sintetis nomor 14: november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf n.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767272400000
+    },
+    {
+      "id": "a0000e",
+      "text": "catatan sintetis nomor 15: oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel o.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767276000000
+    },
+    {
+      "id": "a0000f",
+      "text": "catatan sintetis nomor 16: papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india p.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767279600000
+    },
+    {
+      "id": "a00010",
+      "text": "catatan sintetis nomor 17: quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett q.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767283200000,
+      "sessionID": "ses_syn128note016"
+    },
+    {
+      "id": "a00011",
+      "text": "catatan sintetis nomor 18: romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo r.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767286800000
+    },
+    {
+      "id": "a00012",
+      "text": "catatan sintetis nomor 19: sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima s.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767290400000
+    },
+    {
+      "id": "a00013",
+      "text": "catatan sintetis nomor 20: tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike t.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767294000000
+    },
+    {
+      "id": "a00014",
+      "text": "catatan sintetis nomor 21: alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november a.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767297600000
+    },
+    {
+      "id": "a00015",
+      "text": "catatan sintetis nomor 22: bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar b.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767301200000,
+      "sessionID": "ses_syn128note021"
+    },
+    {
+      "id": "a00016",
+      "text": "catatan sintetis nomor 23: charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa c.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767304800000
+    },
+    {
+      "id": "a00017",
+      "text": "catatan sintetis nomor 24: delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec d.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767308400000
+    },
+    {
+      "id": "a00018",
+      "text": "catatan sintetis nomor 25: echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo e.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767312000000
+    },
+    {
+      "id": "a00019",
+      "text": "catatan sintetis nomor 26: foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra f.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767315600000
+    },
+    {
+      "id": "a0001a",
+      "text": "catatan sintetis nomor 27: golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango g.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767319200000,
+      "sessionID": "ses_syn128note026"
+    },
+    {
+      "id": "a0001b",
+      "text": "catatan sintetis nomor 28: hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa h.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767322800000
+    },
+    {
+      "id": "a0001c",
+      "text": "catatan sintetis nomor 29: india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo i.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767326400000
+    },
+    {
+      "id": "a0001d",
+      "text": "catatan sintetis nomor 30: juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie j.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767330000000
+    },
+    {
+      "id": "a0001e",
+      "text": "catatan sintetis nomor 31: kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta k.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767333600000
+    },
+    {
+      "id": "a0001f",
+      "text": "catatan sintetis nomor 32: lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo l.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767337200000,
+      "sessionID": "ses_syn128note031"
+    },
+    {
+      "id": "a00020",
+      "text": "catatan sintetis nomor 33: mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot m.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767340800000
+    },
+    {
+      "id": "a00021",
+      "text": "catatan sintetis nomor 34: november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf n.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767344400000
+    },
+    {
+      "id": "a00022",
+      "text": "catatan sintetis nomor 35: oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel o.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767348000000
+    },
+    {
+      "id": "a00023",
+      "text": "catatan sintetis nomor 36: papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india p.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767351600000
+    },
+    {
+      "id": "a00024",
+      "text": "catatan sintetis nomor 37: quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett q.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767355200000,
+      "sessionID": "ses_syn128note036"
+    },
+    {
+      "id": "a00025",
+      "text": "catatan sintetis nomor 38: romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo r.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767358800000
+    },
+    {
+      "id": "a00026",
+      "text": "catatan sintetis nomor 39: sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima s.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767362400000
+    },
+    {
+      "id": "a00027",
+      "text": "catatan sintetis nomor 40: tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike t.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767366000000
+    },
+    {
+      "id": "a00028",
+      "text": "catatan sintetis nomor 41: alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november a.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767369600000
+    },
+    {
+      "id": "a00029",
+      "text": "catatan sintetis nomor 42: bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar b.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767373200000,
+      "sessionID": "ses_syn128note041"
+    },
+    {
+      "id": "a0002a",
+      "text": "catatan sintetis nomor 43: charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa c.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767376800000
+    },
+    {
+      "id": "a0002b",
+      "text": "catatan sintetis nomor 44: delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec d.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767380400000
+    },
+    {
+      "id": "a0002c",
+      "text": "catatan sintetis nomor 45: echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo e.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767384000000
+    },
+    {
+      "id": "a0002d",
+      "text": "catatan sintetis nomor 46: foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra f.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767387600000
+    },
+    {
+      "id": "a0002e",
+      "text": "catatan sintetis nomor 47: golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango g.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767391200000,
+      "sessionID": "ses_syn128note046"
+    },
+    {
+      "id": "a0002f",
+      "text": "catatan sintetis nomor 48: hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa h.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767394800000
+    },
+    {
+      "id": "a00030",
+      "text": "catatan sintetis nomor 49: india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo i.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767398400000
+    },
+    {
+      "id": "a00031",
+      "text": "catatan sintetis nomor 50: juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie j.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767402000000
+    },
+    {
+      "id": "a00032",
+      "text": "catatan sintetis nomor 51: kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta k.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767405600000
+    },
+    {
+      "id": "a00033",
+      "text": "catatan sintetis nomor 52: lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo l.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767409200000,
+      "sessionID": "ses_syn128note051"
+    },
+    {
+      "id": "a00034",
+      "text": "catatan sintetis nomor 53: mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot m.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767412800000
+    },
+    {
+      "id": "a00035",
+      "text": "catatan sintetis nomor 54: november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf n.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767416400000
+    },
+    {
+      "id": "a00036",
+      "text": "catatan sintetis nomor 55: oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel o.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767420000000
+    },
+    {
+      "id": "a00037",
+      "text": "catatan sintetis nomor 56: papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india p.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767423600000
+    },
+    {
+      "id": "a00038",
+      "text": "catatan sintetis nomor 57: quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett q.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767427200000,
+      "sessionID": "ses_syn128note056"
+    },
+    {
+      "id": "a00039",
+      "text": "catatan sintetis nomor 58: romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo r.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767430800000
+    },
+    {
+      "id": "a0003a",
+      "text": "catatan sintetis nomor 59: sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima s.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767434400000
+    },
+    {
+      "id": "a0003b",
+      "text": "catatan sintetis nomor 60: tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike t.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767438000000
+    },
+    {
+      "id": "a0003c",
+      "text": "catatan sintetis nomor 61: alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november a.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767441600000
+    },
+    {
+      "id": "a0003d",
+      "text": "catatan sintetis nomor 62: bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar b.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767445200000,
+      "sessionID": "ses_syn128note061"
+    },
+    {
+      "id": "a0003e",
+      "text": "catatan sintetis nomor 63: charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa c.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767448800000
+    },
+    {
+      "id": "a0003f",
+      "text": "catatan sintetis nomor 64: delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec d.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767452400000
+    },
+    {
+      "id": "a00040",
+      "text": "catatan sintetis nomor 65: echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo e.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767456000000
+    },
+    {
+      "id": "a00041",
+      "text": "catatan sintetis nomor 66: foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra f.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767459600000
+    },
+    {
+      "id": "a00042",
+      "text": "catatan sintetis nomor 67: golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango g.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767463200000,
+      "sessionID": "ses_syn128note066"
+    },
+    {
+      "id": "a00043",
+      "text": "catatan sintetis nomor 68: hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa h.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767466800000
+    },
+    {
+      "id": "a00044",
+      "text": "catatan sintetis nomor 69: india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo i.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767470400000
+    },
+    {
+      "id": "a00045",
+      "text": "catatan sintetis nomor 70: juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie j.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767474000000
+    },
+    {
+      "id": "a00046",
+      "text": "catatan sintetis nomor 71: kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta k.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767477600000
+    },
+    {
+      "id": "a00047",
+      "text": "catatan sintetis nomor 72: lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo l.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767481200000,
+      "sessionID": "ses_syn128note071"
+    },
+    {
+      "id": "a00048",
+      "text": "catatan sintetis nomor 73: mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot m.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767484800000
+    }
+  ]
+}
