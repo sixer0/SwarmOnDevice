@@ -132,7 +132,8 @@ export function diagramGuideText(): string {
     `- Caption: Studio prints the label; the caption never starts with it; at most ${CAPTION_GUIDE_MAX_CHARS} characters.`,
     "- Labels: edge label at most ~20 characters, node label at most ~40; a second detail goes in `sub`.",
     "- One accent per drawing.",
-    "- At most 3 edge kinds when any node has a mark (4 without; DATUM-25).",
+    // Row 35c (1.2.8, H-T06, N8-212): the spec check DATUM-25L enforces it (DATUM-25 counts colours).
+    `- Edge kinds max ${LIMITS.max_line_styles}, ${LIMITS.max_line_styles_with_mark} if a node has a mark (DATUM-25L).`,
     `- \`col: 0\` is valid; Studio keeps a ${GRAPH_EDGE_INSET_MM} mm inset from the sheet edge.`,
     `- Fan-out of ${FANOUT_SPLIT_MIN} or more edges is sub-ranked by Studio; over a rank max, split it.`,
     "- Preview a shape before promising it.",
@@ -200,7 +201,7 @@ export function diagramVisioGuideText(): string {
     }
     return `- ${label}: ` + out.map((e) => `${e.keys.join(", ")} ${e.v}`).join("; ") + "."
   }
-  // Notation groups from SHAPES (one notation per figure, DATUM-35); `notation_set` once row 53a lands it (N8-245).
+  // Notation groups from SHAPES (one notation per figure, DATUM-35); `notation_set` per shape since row 53a (N8-245).
   const inSets = new Set(VISIO_SETS.flatMap(([, rows]) => rows.map(([t]) => t)))
   const groups = new Map<string, string[]>()
   for (const [shape, t] of Object.entries(SHAPES)) {

@@ -104,6 +104,8 @@ export const SPEC_CHECK_IDS = [
   "P1-via",
   "P3-via-family",
   "DATUM-34",
+  // Swarm 1.2.8 row 35c (H-T06, D-H1, N8-212): line-style budget; runs only above LINE_STYLE_MAX_WITH_MARK styles.
+  "DATUM-25L",
   "P3-diamond-exits",
 ] as const;
 export const RELEASE_CHECK_ID = "P1-labels_verified";
@@ -663,6 +665,21 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
     }
   }
   pass("DATUM-34", mark);
+
+  // DATUM-25L (Swarm 1.2.8 row 35c, H-T06, D-H1, N8-212/N8-213): distinct line styles <= LINE_STYLE_MAX (4), <= 3 when
+  // a node carries a mark. A style is the edge kind here; row 57b adds dash and weight to the key (AC-VIS8). Not the
+  // closure DATUM-25 (colours). Runs and is listed in `ran` only above the lower limit, so a spec within 3 styles
+  // keeps its verdict and check list (52c rule).
+  const lineStyles = new Set(edgeObjs.filter((e) => typeof e.kind === "string" && has(EDGE_KINDS, e.kind)).map((e) => e.kind as string));
+  if (lineStyles.size > LIMITS.max_line_styles_with_mark) {
+    mark = out.length;
+    const max = marksUsed.size > 0 ? LIMITS.max_line_styles_with_mark : LIMITS.max_line_styles;
+    if (lineStyles.size > max) {
+      const why = marksUsed.size > 0 ? `${max} bila ada simpul ber-mark` : `${max}`;
+      fail("DATUM-25L", `DATUM-25L: ${lineStyles.size} gaya garis (${[...lineStyles].sort().join(", ")}), maksimum ${why} (P5)`, "/edges");
+    }
+    pass("DATUM-25L", mark);
+  }
 
   // P3-diamond-exits: keputusan wajib keluaran berlabel. Swarm 1.2.8 row 52c (01f §1.5): also the four BPMN
   // gateways; the diamond text is unchanged, a gateway message names its shape.
