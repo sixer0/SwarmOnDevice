@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 30,
-  "bytes": 10240760
+  "bytes": 10243317
  },
  "files": [
   {
@@ -2348,10 +2348,11 @@
   {
    "path": "src/lib/studio/engine/diagram/build/capacity.ts",
    "status": "patched",
-  "bytes": 16757,
+  "bytes": 19314,
    "source_sha256": "ce41b46ce7c7418c379af22f50302c18bb80decc6fea3663cf121e61eb539588",
-  "sha256": "5ea911e64c8fb24029cbcd65cc944448aa8240f85e0197f512cfbecf39dcf442",
-  "patch_row55d": {"id": "128-55d-pool-capacity-message", "row": "55d", "decision": "1.2.8 row 55d (C135 R3)", "summary": "swimlane capacity line: horizontal pools count the pool header strip (second gutter, 3 lattice) and the half-lattice inside the pool frame, so the shown maks per baris lajur is below the measured count when the pool refusal fires; vertical pools and figures without pools keep today's text", "diff_base": "sha256 before this row", "before_sha256": "3d7693fe4f1daa8f8bc5a3b1be8befba53d3fc3d82b521e3faa658b19bae12fb", "after_sha256": "5ea911e64c8fb24029cbcd65cc944448aa8240f85e0197f512cfbecf39dcf442", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55d_row55d_diffs/engine_diagram_build_capacity.ts.diff", "diff_sha256": "3913c3cd1e80ea9045029571c1a3690bdb81114d6ba7ad8bb05e5158720d7825"},
+  "sha256": "a6e790b0b73934b8e7b0662e6fa43d8804bb7a6812e7ff0d6b3cc73aa831997a",
+  "patch_row55g": {"id": "128-55g-vertical-pool-capacity", "row": "55g", "decision": "1.2.8 row 55g (C140, M3 re-review G3-21)", "summary": "swimlane capacity line for vertical pools counts lane columns per (pool, lane) against the columns that fit (fitPoolColumns budget, >= 2 lattice each) and keeps the shown max below the measured count; the remedy names fewer pools / 166 mm / 2 diagrams; horizontal pools (55d) and figures without pools are byte-identical", "diff_base": "sha256 before this row", "before_sha256": "5ea911e64c8fb24029cbcd65cc944448aa8240f85e0197f512cfbecf39dcf442", "after_sha256": "a6e790b0b73934b8e7b0662e6fa43d8804bb7a6812e7ff0d6b3cc73aa831997a", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55g_row55g_diffs/engine_diagram_build_capacity.ts.diff", "diff_sha256": "9a62c8b8f184e81a2347b993038d49edc20711191323e2f3bd56a2cc2d93c54d"},
+   "patch_row55d": {"id": "128-55d-pool-capacity-message", "row": "55d", "decision": "1.2.8 row 55d (C135 R3)", "summary": "swimlane capacity line: horizontal pools count the pool header strip (second gutter, 3 lattice) and the half-lattice inside the pool frame, so the shown maks per baris lajur is below the measured count when the pool refusal fires; vertical pools and figures without pools keep today's text", "diff_base": "sha256 before this row", "before_sha256": "3d7693fe4f1daa8f8bc5a3b1be8befba53d3fc3d82b521e3faa658b19bae12fb", "after_sha256": "5ea911e64c8fb24029cbcd65cc944448aa8240f85e0197f512cfbecf39dcf442", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55d_row55d_diffs/engine_diagram_build_capacity.ts.diff", "diff_sha256": "3913c3cd1e80ea9045029571c1a3690bdb81114d6ba7ad8bb05e5158720d7825"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C71 R3, C116 D55b-1)", "summary": "swimlane capacity suggestion: with phases it names the phase (kurangi simpul per lajur atau per fase, kurangi fase); horizontal pools point to lane_orientation vertical; a swimlane without phases or pools keeps today's text", "diff_base": "sha256 before this row", "before_sha256": "e3a090046cd45377a690910d7a21777bdddb824657990bb04753015e90f22261", "after_sha256": "3d7693fe4f1daa8f8bc5a3b1be8befba53d3fc3d82b521e3faa658b19bae12fb", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_build_capacity.ts.diff", "diff_sha256": "c6657da1a05d6b69664b2411efa3d2e987bdac0383054a30c02816b360df9acc"},
    "patch_row35b": {"id": "127-35b-n7-capacity-rest", "row": "35b", "decision": "1.2.7 row 35b (AC-N7, N7-067)", "summary": "capacity AUTO_FIT line uses autoFitRestText(best.g): the remainder counts T-03 defects; capacity layout choice (score 0) unchanged", "before_sha256": "0d90b4f355bd497f43b4ac85d2bee1db966331491801cd5f5ffdea6085e12930", "after_sha256": "e3a090046cd45377a690910d7a21777bdddb824657990bb04753015e90f22261", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "a46292897ffcf594e63f6ae3449fc2928a486ef8a7e3b8134cde1ba9e40b1d10"},
    "patch_row46": {"id": "row46-t11-ranked-flow", "row": "46", "decision": "1.2.6 patch T-11 ranked layout (U5, D4=A, C7 S17-1..S17-5; register N-109, N-111, N-112, N-161..N-164; 01e §4.1-§4.2, §4.5, §5, §6.5-6.8)", "summary": "capacityAction: flow text names direction (ranked: per-rank/width/direction; legacy: direction TB/LR or per_row); DATUM-33 for flow gains the direction alternative; overCapacityOf: ranked-flow DATUM-37 branch measures nodes per rank / ranks via flowRankOverload", "diff_base": "sha256 before this row", "before_sha256": "2bd070b2f6910f7af37ea0c372a0e9a12d76fcd97ae7404f01d0fdeb5fb16773", "after_sha256": "95ab601bb64dce64373f19a439dac2ba7b038ae5f70f1bc9e0e6d7ce2a3ce075", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/46_row46_diffs/src_lib_studio_engine_diagram_build_capacity.ts.diff", "diff_sha256": "b797aeabfefcce87988d1b23a96172893e637384e1d0cbf299779c43e48ea8c1"},
@@ -6375,6 +6376,7 @@
   "58a",
   "55c",
   "55d",
-  "56d"
+  "56d",
+  "55g"
  ]
 }

@@ -299,3 +299,47 @@ describe("55c G3-15: pools whose lanes have no name draw no empty lane-header ba
     expect(viewBox(nm)[1] - viewBox(un)[1]).toBeCloseTo(4.7625 * 2, 2)
   })
 })
+
+// ── C140 (M3 re-review 03b_gate_m3_rereview.md) G3-21 (row 55g): vertical-pool refusal counts lane columns per pool ──
+describe("55g G3-21: a vertical-pool refusal's capacity line shows a max below the measured count", () => {
+  const lineOf = (e: J): { d: J; maks: number } => {
+    const d = e.details ?? e
+    const m = /maks (\d+) kolom/.exec(String(d.suggestion ?? e.message))
+    expect(m, "capacity line present").not.toBeNull()
+    return { d, maks: Number(m![1]) }
+  }
+  const distinctLanes = (): J => {
+    const s = fourPools()
+    s.nodes = s.nodes.map((n: J, i: number) => ({ ...n, class: { lane: `L${i + 1}`, pool: n.class.pool } }))
+    return s
+  }
+  test("four vertical pools, one shared lane name: 4 columns counted per pool (not 4 nodes of one lane)", async () => {
+    const e = await refusal(fourPools())
+    expect(e, "refused").not.toBeNull()
+    expect(e!.code).toBe("FIGURE_OVER_CAPACITY")
+    const { d, maks } = lineOf(e!)
+    expect(d.measured).toBe(4)
+    expect(d.limit).toBeLessThan(d.measured)
+    expect(maks).toBeLessThan(d.measured)
+    expect(String(e!.message)).toContain("pakai 166 mm")
+  })
+  test("four vertical pools, one lane each (L1..L4): no longer 'memuat 1, maks 2' next to a refusal", async () => {
+    const e = await refusal(distinctLanes())
+    expect(e, "refused").not.toBeNull()
+    const { d, maks } = lineOf(e!)
+    expect(d.measured).toBe(4)
+    expect(d.limit).toBeLessThan(d.measured)
+    expect(maks).toBeLessThan(d.measured)
+    expect(String(e!.message)).not.toContain("memuat 1 simpul")
+  })
+  for (const w of [128, 166]) {
+    test(`committed vis0_carry_a (lanes not remapped) refused at ${w} mm: max below measured`, async () => {
+      const e = await refusal({ ...V1, ...clone(fx("vis0_carry_a").spec), width_mm: w })
+      expect(e, "refused").not.toBeNull()
+      expect(e!.code).toBe("FIGURE_OVER_CAPACITY")
+      const { d, maks } = lineOf(e!)
+      expect(d.limit).toBeLessThan(d.measured)
+      expect(maks).toBeLessThan(d.measured)
+    })
+  }
+})
