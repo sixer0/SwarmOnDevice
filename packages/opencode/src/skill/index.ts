@@ -130,7 +130,7 @@ export const FLUX3_IMAGE_GEN_SKILL_DESCRIPTION =
   "FLUX 3 image generation: make raster images (product shots, landscapes, characters, illustrations) with the person's local FLUX 3 service over its HTTP API, check its health first and degrade cleanly when it is down. Load it when a task needs a raster image made on this machine. Not for diagrams or charts: use Studio's figure tools for those."
 export const FLUX3_IMAGE_GEN_SKILL_CONTENT: string = FLUX3_IMAGE_GEN_SKILL_BODY
 
-const RESERVED_SKILL_NAMES = new Set([
+export const RESERVED_SKILL_NAMES: ReadonlySet<string> = new Set([
   KNOWLEDGE_LIBRARY_SKILL_NAME,
   DATUM_SKILL_NAME,
   MISSION_CONTROL_SKILL_NAME,
@@ -147,6 +147,18 @@ export const SKILL_TRIGGERS_INVALID = "SKILL_TRIGGERS_INVALID"
 export const SKILL_HASH_MAX_BYTES = 1048576
 /** N8-044: the drafts folder name, global under the data dir and per project under `.swarm/`. Never discovered. */
 export const SKILL_DRAFTS_DIR = "skill-drafts"
+/** N8-035: a name the save and draft routes take (discovered skills keep today's rule). Checked before any path join. */
+export const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
+/** N8-036: the most UTF-8 bytes a SKILL.md saved or drafted through Swarm may have (N8-050). */
+export const SKILL_CONTENT_MAX_BYTES = 65536
+/** N8-398: the longest one-line description a saved skill may have (N8-053). */
+export const SKILL_DESCRIPTION_MAX = 1024
+/** N8-408: drafts waiting per scope (N8-405). */
+export const SKILL_DRAFTS_MAX = 20
+
+/** N8-039: where a listed skill lives. Settings edits and deletes only `global` and `project` (01b section 4.3). */
+export const Scope = Schema.Literals(["builtin", "global", "project", "other"])
+export type Scope = Schema.Schema.Type<typeof Scope>
 
 // The longest value per list (01b section 3.1). Mission types follow Studio's mission `type` maxLength of 64.
 const TRIGGER_MAX = { keywords: TRIGGER_LIMITS.keyword, files: TRIGGER_LIMITS.glob, missionTypes: 64 } as const
@@ -169,6 +181,10 @@ export const Info = Schema.Struct({
   disabled: Schema.optional(Schema.Boolean),
   /** N8-397: true for a REQUIRED_SKILL_NAMES skill, which `skills.disabled` cannot turn off. */
   required: Schema.optional(Schema.Boolean),
+  /** N8-039: set by `GET /skill` (and the skill routes); the agent-facing reads leave it out. */
+  scope: Schema.optional(Scope),
+  /** N8-399: sha256 hex of the SKILL.md bytes, set by `GET /skill`; absent for built-ins. */
+  hash: Schema.optional(Schema.String),
 })
 export type Info = Schema.Schema.Type<typeof Info>
 
@@ -505,6 +521,8 @@ const scan = Effect.fnUntraced(function* (
   )
 
   for (const match of matches) {
+    // 01b section 5.3 (defence in depth): a draft is never loaded, also where a `skills.paths` entry holds a drafts root.
+    if (match.split(/[\\/]/).includes(SKILL_DRAFTS_DIR)) continue
     state.matches.add(match)
     state.dirs.add(path.dirname(match))
   }

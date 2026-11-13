@@ -8,6 +8,7 @@ import { CommitDraft } from "@/project/commit-draft"
 import { SessionRerunnable } from "@/session/rerunnable"
 import { Vcs } from "@/project/vcs"
 import { Skill } from "@/skill"
+import { SkillManage } from "@/skill/manage"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
@@ -85,7 +86,12 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
     })
 
     const getSkill = Effect.fn("InstanceHttpApi.skill")(function* () {
-      return yield* skill.all()
+      // 1.2.8 row 40c (N8-039, N8-399): the list Settings shows, with each skill's scope and the hash PUT /skill takes.
+      const ctx = yield* InstanceState.context
+      const list = yield* skill.all()
+      return yield* Effect.promise(() =>
+        SkillManage.listed(list, { directory: ctx.directory, worktree: ctx.worktree }),
+      )
     })
 
     const getLsp = Effect.fn("InstanceHttpApi.lsp")(function* () {

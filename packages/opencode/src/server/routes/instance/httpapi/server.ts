@@ -103,6 +103,7 @@ import { providerHandlers } from "./handlers/provider"
 import { ptyConnectHandlers, ptyHandlers } from "./handlers/pty"
 import { questionHandlers } from "./handlers/question"
 import { memoryHandlers } from "./handlers/memory"
+import { skillHandlers } from "./handlers/skill"
 import { savedCommandHandlers } from "./handlers/saved-command"
 import { sessionHandlers } from "./handlers/session"
 import { syncHandlers } from "./handlers/sync"
@@ -176,6 +177,7 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
     permissionHandlers,
     providerHandlers,
     sessionHandlers,
+    skillHandlers,
     syncHandlers,
     tuiHandlers,
     workspaceHandlers,

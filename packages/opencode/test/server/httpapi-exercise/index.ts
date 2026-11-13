@@ -729,6 +729,31 @@ const scenarios: Scenario[] = [
     .delete("/memory/{id}", "memory.remove")
     .at((ctx) => ({ path: route("/memory/{id}", { id: "missing" }), headers: ctx.headers() }))
     .json(200, boolean),
+  // 1.2.8 row 40c (AC-SKd): the skill routes. The runner holds no desktop nonce, so every write is refused person-only.
+  http.protected
+    .get("/skill/source", "skill.source")
+    .at((ctx) => ({ path: "/skill/source?scope=project&name=missing-skill", headers: ctx.headers() }))
+    .json(404, object, "status"),
+  http.protected.get("/skill/drafts", "skill.drafts").json(200, array),
+  ...(
+    [
+      ["put", "/skill", "skill.save", "/skill", { scope: "project", name: "x", content: "x" }],
+      ["delete", "/skill", "skill.delete", "/skill?scope=project&name=x", undefined],
+      ["post", "/skill/drafts/{name}/approve", "skill.draftApprove", "/skill/drafts/x/approve", { scope: "project" }],
+      ["delete", "/skill/drafts/{name}", "skill.draftDiscard", "/skill/drafts/x?scope=project", undefined],
+    ] as const
+  ).map(([method, template, name, url, body]) =>
+    http.protected[method](template, name)
+      .at((ctx) => ({ path: url, headers: ctx.headers(), ...(body ? { body } : {}) }))
+      .json(
+        403,
+        (value) => {
+          object(value)
+          check(value.name === "SkillForbiddenError", "a skill write without the desktop nonce is refused")
+        },
+        "status",
+      ),
+  ),
   http.protected.get("/saved-command", "savedCommand.list").json(200, array),
   http.protected
     .post("/saved-command", "savedCommand.save")
