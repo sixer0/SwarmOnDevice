@@ -106,7 +106,8 @@
   "row43": "2026-11-13: 1.2.7 row 43 (F-3, AC-F3, C12 O-1). 1 vendor file re-patched (files[].patch_row43, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (15 JSON example lines: the non-manual GSP document number becomes 000/...; same byte length). Redacted diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/43_row43_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes unchanged (191589 -> 191589, +0). patch_rows += 43",
   "row36": "2026-11-13: 1.2.7 row 36 (T-06 chart half, AC-T06, C8 / D-11b). 1 vendor file patched for the first time (files[].patch_row36, status copied -> patched): engine/chart/family-w1/render.ts (line-count refusal lists each counted series with its colour and the remainder, colourCountDetail). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/36_row36_diffs/. counts by delta: copied 410 -> 409, patched 156 -> 157, bytes 9963798 -> 9965366 (+1568); files/replaced/added unchanged. patch_rows += 36",
   "row37": "2026-11-13: 1.2.7 row 37 (N-6/F-6 guide sentence, N-9 and T-18 guide lines; AC-N6, C3). 1 vendor file re-patched (files[].patch_row37, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (Cakupan sentence after the T-03 table in 4.1.2; png-needs-standalone line in 8.4; no separate quota code line in 8.6). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/. counts by delta: files/copied/patched/replaced/added unchanged; bytes 9965366 -> 9965779 (+413). patch_rows += 37",
-  "row35b": "2026-11-13: 1.2.7 row 35b (N-3 AC-N3, N-7 AC-N7; N7-063, N7-067, N7-139, K7-09). 4 vendor files re-patched (files[].patch_row35b, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts and registry/lint-explain.ts (FAIL per kode and lint findingsTotal count findings, not rows; labelled <CODE>: total N (dirinci I, tidak dirinci R) line), engine/diagram/build/autofit.ts and capacity.ts (AUTO_FIT remainder counts T-03 defects via autoFitRestText). None is a lint-closure file (guard.ts isLintClosurePath): skillSha unchanged. Diffs in docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/. counts by delta: bytes 9965779 -> 9970083 (+4304); files/copied/patched/replaced/added unchanged. patch_rows += 35b"
+  "row35b": "2026-11-13: 1.2.7 row 35b (N-3 AC-N3, N-7 AC-N7; N7-063, N7-067, N7-139, K7-09). 4 vendor files re-patched (files[].patch_row35b, before = previous sha256; status unchanged): scripts/studio/mcp/doc-tools.ts and registry/lint-explain.ts (FAIL per kode and lint findingsTotal count findings, not rows; labelled <CODE>: total N (dirinci I, tidak dirinci R) line), engine/diagram/build/autofit.ts and capacity.ts (AUTO_FIT remainder counts T-03 defects via autoFitRestText). None is a lint-closure file (guard.ts isLintClosurePath): skillSha unchanged. Diffs in docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/. counts by delta: bytes 9965779 -> 9970083 (+4304); files/copied/patched/replaced/added unchanged. patch_rows += 35b",
+  "row37f": "2026-11-13: 1.2.7 row 37 follow-up (controller request: DS-guide sentences for rows 35/35b). 1 vendor file re-patched (files[].patch_row37f, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (8.4: full sha256 and fail per code line in the studio_render text (M-03/M-08), html added as measured source when formats lack html (N-4), witness-pNNN.png is a witness image (N-5); 8.5: total/dirinci line and FAIL per kode counts findings (N-3)). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/STUDIO-AGENT-GUIDE.md.followup.diff. counts by delta: bytes 9970083 -> 9970514 (+431); files/copied/patched/replaced/added unchanged. patch_rows += 37f"
  },
  "counts": {
   "files": 608,
@@ -114,7 +115,7 @@
   "patched": 157,
   "replaced": 12,
   "added": 30,
-  "bytes": 9970083
+  "bytes": 9970514
  },
  "files": [
   {
@@ -143,9 +144,10 @@
   {
    "path": "docs/STUDIO-AGENT-GUIDE.md",
    "status": "patched",
-   "bytes": 192002,
+   "bytes": 192433,
    "source_sha256": "b5429f89523246431aacbfc37749d22c0cf062bbf3f634c4bc269db295e783bb",
-   "sha256": "0157cda6ac4c4f68ffe283aa70e24ccf2163b5043a8c655d2851c15223d97c04",
+   "sha256": "4ce6cbefa1523ea9d2c5d2eab869bfefd058143cc26bbf4d3c4967c7b8cc9e92",
+   "patch_row37f": {"id": "row37f-render-text-guide-lines", "row": "37", "decision": "1.2.7 controller request (DS-guide owner); 01c N-3, N-4, N-5, M-03 text changes", "summary": "8.4: studio_render text carries the full sha256 per file and a fail per code line (M-03/M-08); formats pdf/docx without html: Studio adds html as the measured source (formats added), not a deliverable (N-4); eye gate PNGs are witness-pNNN.png witness images, not deliverables (N-5); 8.5: the <kode>: total N (dirinci 100, tidak dirinci M) line gives the real count, FAIL per kode counts findings (N-3)", "before_sha256": "0157cda6ac4c4f68ffe283aa70e24ccf2163b5043a8c655d2851c15223d97c04", "after_sha256": "4ce6cbefa1523ea9d2c5d2eab869bfefd058143cc26bbf4d3c4967c7b8cc9e92", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/STUDIO-AGENT-GUIDE.md.followup.diff", "diff_sha256": "ad6aadb301d902133fb5358622f33da4c811aa5c724936f2672ca71ef24cdf69"},
    "patch_row37": {"id": "row37-n6-n9-t18-guide-lines", "row": "37", "decision": "1.2.7 C3 (N-6/F-6 publish, T-18 no new codes), AC-N6; N-9/T-18 guide lines per 01c", "summary": "4.1.2 after the T-03 table: Cakupan sentence (GEOM_ENTRY_COLLISION fires on hand-drawn or imported SVG; engine layouts keep connector ends at least 1,5 mm apart); 8.4: png: true only with standalone: true and downloadDir, else INVALID_ARGUMENT (N-9); 8.6: no separate quota code (R-70, KUOTA), the quota is the D22 check state (T-18)", "before_sha256": "6d073b699b67ace4169a7889c4af249e618de77c653bb9d4a9d7b515cccbda00", "after_sha256": "0157cda6ac4c4f68ffe283aa70e24ccf2163b5043a8c655d2851c15223d97c04", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/37_row37_diffs/STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "bad44d465c0c4e62db344f4df141136df621219adcee70f7be2a4a35ca97973d"},
    "patch_row43": {"id": "row43-f3-neutral-doc-number", "row": "43", "decision": "1.2.7 C12 O-1 (F-3, AC-F3)", "summary": "15 JSON example lines carried one GSP document number that the Rev A manual does not print; its leading three digits become 000 (000/GSP/<TYPE>/<ROMAN>/<YEAR>, type, month and year kept; same byte length). The diff is redacted: the old value appears only as a sha256 prefix (TERBATAS)", "before_sha256": "1fd558fe0ad2c003698d11e2e559020b1eeb0e4460803d559e44c4539ea80e8d", "after_sha256": "6d073b699b67ace4169a7889c4af249e618de77c653bb9d4a9d7b515cccbda00", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/43_row43_diffs/STUDIO-AGENT-GUIDE.md.redacted.diff", "diff_sha256": "0270d7110751928299c55c98d4628a8ccbe7175b03fd7cd637bd58a08f9200cd"},
    "patch_rowFX10": {"id": "fx-10-guide-fixes", "row": "FX-10", "decision": "1.2.6 review wave F, C19a (M4 F6), gate 04 F8/F12", "summary": "§4.1.2 step 5 and §8.4: the shared figure-gate sentence (machine gate = inline preview, standalone is not the gate; done only after machine gate AND eye check of the rendered PNG; C19a/F6); §4.1.2 caption refusal is 400 SCHEMA_INVALID with checkId CAPTION_TOKEN_DUPLICATE (F8); §8.3 names the RENDER_UNVERIFIED(U24) STALE form (F12)", "before_sha256": "c3f53c973bf9f6713143239861475bd0958933e310b9326ab51796f8a36ef19b", "after_sha256": "1fd558fe0ad2c003698d11e2e559020b1eeb0e4460803d559e44c4539ea80e8d", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx10_diffs/FX-10_docs_STUDIO-AGENT-GUIDE.md.diff", "diff_sha256": "7ba8dd643263dde33d5147bc026961d728f7c52331e6b9c44b7f587d891b6b31"},
@@ -6211,6 +6213,7 @@
   "43",
   "36",
   "37",
-  "35b"
+  "35b",
+  "37f"
  ]
 }

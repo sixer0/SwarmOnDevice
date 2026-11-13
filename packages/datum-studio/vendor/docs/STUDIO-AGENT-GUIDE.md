@@ -1552,12 +1552,15 @@ Baris berkas yang gagal: `<FMT> <id> RENDER_UNVERIFIED(U24) fail=<cek> unknown=<
 baris berkas yang memuat pengukuran ada baris `OVERLAP_CLIP <STATUS> diukur m/n halaman`. Halaman
 diukur per kelompok 20 halaman (`MEASURE_BATCH_PAGES`). Halaman yang tidak sempat diukur membuat cek
 itu `UNKNOWN:MEASURE_TRUNCATED`, dan berkasnya `RENDER_UNVERIFIED(U24)`.
+Teks studio_render memuat sha256 penuh tiap berkas dan baris "fail per code". formats ["pdf"] atau
+["docx"] tanpa html: Studio menambah html sebagai sumber ukur verifikasi (formats added), bukan hasil kirim.
 
 **Aturan.** Berkas boleh diserahkan bila lulus dua gerbang:
 
 1. Gerbang mesin: `RENDER_VERIFIED(U24)` di hasil render, dan `FILE_VERIFIED(sha256)` untuk berkas
    yang diserahkan.
-2. Gerbang mata: buka PNG halaman dari baris `pages:` dan lihat setiap halaman yang memuat figur. Bila
+2. Gerbang mata: buka PNG halaman dari baris `pages:` (`witness-pNNN.png`: gambar saksi, perkiraan
+   halaman cetak, bukan hasil kirim) dan lihat setiap halaman yang memuat figur. Bila
    barisnya `pages: none imaged`, buka PDF atau HTML-nya.
 
 Dalam laporan, tulis label yang dimaksud, jangan "terverifikasi" saja. Gerbang selesai baris misi
@@ -1573,8 +1576,9 @@ png: true hanya bersama standalone: true dan downloadDir; selain itu INVALID_ARG
 ### 8.5 Lint: semua temuan satu cek
 
 Ringkasan lint di `studio_document_status` merinci paling banyak 100 temuan per cek
-(`MAX_FINDINGS_PER_CHECK`). Sisanya ditulis sebagai "N temuan lain tidak dirinci". Daftar penuh satu
-cek dibaca per halaman:
+(`MAX_FINDINGS_PER_CHECK`). Sisanya ditulis sebagai "N temuan lain tidak dirinci". Baris "<kode>: total N
+(dirinci 100, tidak dirinci M)" memberi jumlah nyata; nilai "FAIL per kode" adalah jumlah temuan, bukan
+jumlah baris. Daftar penuh satu cek dibaca per halaman:
 
 ```
 studio_document_status { documentId, findings: { checkId, chapter, offset, limit } }
