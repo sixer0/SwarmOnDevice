@@ -345,6 +345,8 @@ Commands:
   swarm db                  database tools
   swarm trust [dir]         let a folder load its own plugins, tools, MCP servers and permission
                             rules
+  swarm autonomy <action>   turn autonomous mode on or off in the running Swarm app or server, or
+                            show it
 
 Positionals:
   project  path to start swarm in                                                           [string]
@@ -660,6 +662,8 @@ Commands:
   swarm db                  database tools
   swarm trust [dir]         let a folder load its own plugins, tools, MCP servers and permission
                             rules
+  swarm autonomy <action>   turn autonomous mode on or off in the running Swarm app or server, or
+                            show it
 
 Positionals:
   project  path to start swarm in                                                           [string]
@@ -725,6 +729,8 @@ Commands:
   swarm db                  database tools
   swarm trust [dir]         let a folder load its own plugins, tools, MCP servers and permission
                             rules
+  swarm autonomy <action>   turn autonomous mode on or off in the running Swarm app or server, or
+                            show it
 
 Positionals:
   project  path to start swarm in                                                           [string]

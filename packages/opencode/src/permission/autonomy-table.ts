@@ -1321,6 +1321,50 @@ export function callsOwnServer(input: Input) {
   return ownServerCall(input) !== undefined
 }
 
+/** The Swarm CLI by any name it ships under (`swarm`, `swarm-launcher.sh`, `opencode`), as a program's last path part. */
+const SWARM_CLI = /^(?:swarm|opencode)(?:-launcher)?(?:\.sh|\.exe)?$/i
+/** Programs that run other code: their arguments are read as text for the CLI followed by `autonomy`. */
+const AUTONOMY_RUNNERS = new Set([
+  "script", "expect", "unbuffer", "python", "python3", "node", "bun", "bunx", "npx", "deno", "tsx", "perl", "ruby",
+  "osascript",
+])
+const AUTONOMY_IN_TEXT =
+  /(?:^|[\s'"[(,/=])(?:(?:swarm|opencode)(?:-launcher)?(?:\.sh|\.exe)?|index\.[cm]?[jt]s)['"]?(?:\s*,\s*|[\s\\]+)['"]?autonomy(?![\w.-])/i
+
+/**
+ * 1.2.7 U-10 (C63, D-10b): a shell command that runs `swarm autonomy …`, by its name or a path to it, a program name not
+ * written out (`$B`, `$(…)`), through `sh -c`/`eval` two deep, or inside a program that runs other code (a pseudo
+ * terminal wrapper, an interpreter's code). A mention in another program's arguments (`git commit -m`) is not a run.
+ * Residual, as R-F4: a script file that calls it is not read here.
+ */
+function runsAutonomyCommand(command: unknown, depth = 0): boolean {
+  if (typeof command !== "string") return false
+  return liftSubstitutions(command).some((part) =>
+    shellSegments(substituteAssignments(part)).some((words) => {
+      // Past assignments and the words that run what follows them, as `clientCall` reads them.
+      let index = 0
+      while (index < words.length) {
+        const word = words[index]!
+        if (/^[A-Za-z_]\w*=/.test(word)) {
+          index++
+          continue
+        }
+        const name = path.basename(word)
+        if (!CLIENT_WRAPPERS.has(name)) break
+        index++
+        while (index < words.length && (words[index]!.startsWith("-") || /^\d+[smhd]?$/.test(words[index]!))) index++
+        if (name === "eval" || DeletionWords.SHELLS.has(name))
+          return depth < 2 && runsAutonomyCommand(words.slice(index).join(" "), depth + 1)
+      }
+      const program = words[index]
+      if (program === undefined) return false
+      const rest = words.slice(index + 1)
+      if (SWARM_CLI.test(path.basename(program)) || program.startsWith("$")) return rest.includes("autonomy")
+      return AUTONOMY_RUNNERS.has(path.basename(program)) && AUTONOMY_IN_TEXT.test(` ${rest.join(" ")}`)
+    }),
+  )
+}
+
 function editTargets(input: Input) {
   const named = input.patterns.filter((pattern) => pattern !== "*").map((pattern) => path.resolve(input.instance.worktree, pattern))
   const filepath = input.metadata.filepath
@@ -3216,6 +3260,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   const planFile = planEdit && isPlanFile(input)
   if (planEdit && !planFile) return refused("plan_mode")
   if (!planFile && writesAppState(input)) return refused("app_state")
+  // 1.2.7 U-10 (C63): only the person turns the mode on (1.1.1 rule); an agent's `swarm autonomy` never runs.
+  if (input.permission === "bash" && runsAutonomyCommand(input.metadata.command))
+    return { ...refused("own_api"), reason: "person_only" }
   // 1.2.7 F-4 (N7-051): Swarm's own API has its own category, split from `app_state`; a reason names an unresolved form.
   const ownApi = ownServerCall(input)
   if (ownApi) return ownApi.reason ? { ...refused("own_api"), reason: ownApi.reason } : refused("own_api")

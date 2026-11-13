@@ -1,3 +1,4 @@
+import { BYPASS_CONSENT_TEXT } from "@opencode-ai/core/permission/bypass-consent"
 import { DESKTOP_NATIVE_ENGLISH } from "./desktop-native"
 
 export const dict = {
@@ -576,22 +577,16 @@ export const dict = {
   "toast.permissions.autonomous.off.title": "Autonomous mode is off. Decisions already waiting stay in Activity.",
   "toast.permissions.autonomous.scan.title":
     "Swarm listed the secret and sensitive files and the destinations this task may need. Approve them in Activity before you leave.",
-  "dialog.autonomyBypass.title": "Turn on autonomous mode?",
-  "dialog.autonomyBypass.intro":
-    "While this mode is on, nothing waits for you. Approvals are bypassed and the main agent decides, for you and for its subagents. Every action either runs, or the agent gets an immediate answer that tells it what to do instead, so the work never stops to ask you. Tests, builds and installs run the project's code and its packages' code as written, and Swarm does not check what that code does. Every decision is recorded in Activity, including the actions that did not run.",
-  "dialog.autonomyBypass.archive":
-    "Files and folders that Swarm deletes are moved to the archive. Local actions that cannot be undone, such as git reset --hard, git clean or deleting a branch, run after Swarm saves a checkpoint of the files and Git refs they change, and you can revert that checkpoint later. A deletion or a replacement that Swarm can neither archive nor checkpoint does not run: the agent is told at once to name the paths in plain commands, or to copy the file before it replaces it.",
-  "dialog.autonomyBypass.refused":
-    "Actions outside this computer's files do not run, because no checkpoint can undo them: a force push, a remote or cloud deletion, and shutting down or restarting the machine. Local actions that a checkpoint cannot cover, such as dropping database tables, flushing a data store or wiping a disk, do not run either. The agent is told at once to ask you through a decision or to list the step in its final message. Admin rights (sudo) and credential changes are skipped: the agent is told to carry on without that step, because sudo needs your password and cannot run unattended.",
-  "dialog.autonomyBypass.waits":
-    "Every other action runs without asking, including network requests to any site, uploads of files from your computer, sending tokens and keys (also from environment variables), git push without force, deploying and publishing, writes outside the project folder, system services, stopping processes this session did not start, edits to tool and compiler config files, and commands or scripts Swarm does not recognise. You are not asked about any of these, so read the report when the mode is turned off.",
-  "dialog.autonomyBypass.secrets":
-    "Secret and protected files may be read. Their values stay hidden as [hidden:NAME] from the agent, the report and exports.",
-  "dialog.autonomyBypass.report":
-    "When the mode is turned off, a report is posted. It says what was done, what was decided, what was redirected to the archive method and what was refused, and it lists every send and its destination. Any report files are attached.",
-  "dialog.autonomyBypass.scope":
-    "Turned on inside a session, this consent covers that session. Turned on with no session open, it covers the sessions of this folder that have no setting of their own. It lasts until the mode is turned off or Swarm restarts. You are asked again next time.",
-  "dialog.autonomyBypass.accept": "I agree, turn it on",
+  // 1.2.7 U-10: the bypass-v1 consent text has one source, shared with `swarm autonomy on` (core permission/bypass-consent).
+  "dialog.autonomyBypass.title": BYPASS_CONSENT_TEXT.en.title,
+  "dialog.autonomyBypass.intro": BYPASS_CONSENT_TEXT.en.intro,
+  "dialog.autonomyBypass.archive": BYPASS_CONSENT_TEXT.en.archive,
+  "dialog.autonomyBypass.refused": BYPASS_CONSENT_TEXT.en.refused,
+  "dialog.autonomyBypass.waits": BYPASS_CONSENT_TEXT.en.waits,
+  "dialog.autonomyBypass.secrets": BYPASS_CONSENT_TEXT.en.secrets,
+  "dialog.autonomyBypass.report": BYPASS_CONSENT_TEXT.en.report,
+  "dialog.autonomyBypass.scope": BYPASS_CONSENT_TEXT.en.scope,
+  "dialog.autonomyBypass.accept": BYPASS_CONSENT_TEXT.en.accept,
 
   "toast.model.none.title": "No model selected",
   "toast.model.none.description": "Connect a provider to summarize this session",

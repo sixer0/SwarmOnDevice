@@ -89,11 +89,22 @@ export const OWN_API_TEXT =
 export const OWN_API_UNRESOLVED_TEXT =
   "This call did not run. Autonomous mode cannot tell where this network call goes (the address comes from a variable, a config file or another command), and it never calls Swarm's own server. Write the host and port into the command itself."
 
-/** 1.2.7 F-4 (N7-136): the closed reason list of an X `own_api`. Without a reason the address was named in the call. */
-export type OwnApiReason = "config_file" | "unresolved_target"
+/**
+ * 1.2.7 U-10 (C63): X `own_api` with reason `person_only`, an agent's shell running `swarm autonomy` (the 1.1.1 rule: only
+ * the person turns the mode on, never an agent).
+ */
+export const OWN_API_PERSON_ONLY_TEXT =
+  "This call did not run. Only the person turns autonomous mode on or off, in the app or by typing swarm autonomy at their own terminal; an agent never runs that command. Carry on without it, and if the mode should change, say so in your final message for the person."
+
+/**
+ * 1.2.7 F-4 (N7-136): the closed reason list of an X `own_api`. Without a reason the address was named in the call.
+ * 1.2.7 U-10: `person_only`, the `swarm autonomy` command.
+ */
+export type OwnApiReason = "config_file" | "unresolved_target" | "person_only"
 
 /** The text of an X `own_api`: `OWN_API_UNRESOLVED_TEXT` for a reason of the closed list, else `OWN_API_TEXT`. */
 export function ownApiText(reason: string | undefined): string {
+  if (reason === "person_only") return OWN_API_PERSON_ONLY_TEXT
   return reason === "config_file" || reason === "unresolved_target" ? OWN_API_UNRESOLVED_TEXT : OWN_API_TEXT
 }
 
