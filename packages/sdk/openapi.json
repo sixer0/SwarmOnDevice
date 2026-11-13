@@ -24938,6 +24938,7 @@
                   "irreversible",
                   "admin_rights",
                   "checkpoint_failed",
+                  "own_api",
                   "outside_read",
                   "outside_copy",
                   "outside_edit",
@@ -24986,6 +24987,7 @@
                   "irreversible",
                   "admin_rights",
                   "checkpoint_failed",
+                  "own_api",
                   "outside_read",
                   "outside_copy",
                   "outside_edit",
@@ -25000,7 +25002,16 @@
               },
               "via": {
                 "type": "string",
-                "enum": ["grant", "duplicate", "consent", "outward", "user_request", "main_agent", "for_subagent"]
+                "enum": [
+                  "grant",
+                  "duplicate",
+                  "consent",
+                  "outward",
+                  "user_request",
+                  "main_agent",
+                  "for_subagent",
+                  "task_grant"
+                ]
               },
               "duplicateOf": {
                 "type": "string"

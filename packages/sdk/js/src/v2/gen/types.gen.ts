@@ -2489,7 +2489,15 @@ export type AutonomyAuditLine =
         | "by_main_agent"
         | "protected_read"
         | "checkpointed"
-      via?: "grant" | "duplicate" | "consent" | "outward" | "user_request" | "main_agent" | "for_subagent"
+      via?:
+        | "grant"
+        | "duplicate"
+        | "consent"
+        | "outward"
+        | "user_request"
+        | "main_agent"
+        | "for_subagent"
+        | "task_grant"
       duplicateOf?: string
       consentID?: string
       destination?: string
