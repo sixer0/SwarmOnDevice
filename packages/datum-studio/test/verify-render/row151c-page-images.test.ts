@@ -60,7 +60,7 @@ describe("row 151c (DEFECT-157-1): a page without an image is never silent", () 
     expect(lines).toContain("  pages note: pages 2 not imaged (the image layout has 1 pages, the print has 2)")
     expect(verificationLines(report, { made: 1, reason: null }).some((l) => l.includes("pages note"))).toBe(false)
     // The images line stays the only page line when there is no note (no "none imaged" next to real images).
-    expect(verificationLines(report, { made: 1, reason: null }).filter((l) => l.startsWith("  pages"))).toEqual(["  pages: /s/verify/o1/p001.png"])
+    expect(verificationLines(report, { made: 1, reason: null }).filter((l) => l.startsWith("  pages"))).toEqual(["  pages: /s/verify/o1/p001.png", "  pages are witness images (approximation of the printed page; not a deliverable)"]) // 1.2.7 row 35 (N-5, N7-140)
     // The bridge's approximation text (with an apostrophe) is printed.
     expect(verificationLines(report, { made: 1, reason: null, note: "images approximate: pages cut by the bridge's line-break estimate, not by the printer" })).toContain("  pages note: images approximate: pages cut by the bridge's line-break estimate, not by the printer")
   })

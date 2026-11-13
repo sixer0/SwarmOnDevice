@@ -35,8 +35,28 @@ import { overlapCoverageText } from "./overlap-clip.ts"
 import { allUnknownOutput, isVerifyFormat, outputState, verifyOutputs, type VerifyOptions, type VerifyOutputFile } from "./verify-outputs.ts"
 
 export const RENDER_VERIFY_TOOL = "studio_render"
-export const RENDER_VERIFY_DESCRIPTION_SUFFIX = "Returns a verification report; each output is verified or unverified (U24). Read it before you report the work."
+// 1.2.7 row 35 for row 41 (T-18, N7-074, K7-08): the D22 figure-quota sentence lives here, not in the byte-pinned V tools.ts.
+export const RENDER_VERIFY_DESCRIPTION_SUFFIX =
+  "Returns a verification report; each output is verified or unverified (U24). Read it before you report the work. Kuota gambar: cek D22; pengecualian lewat parameter figure.quota.exceptionReason (tercatat REPORT)."
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/
+const SHA256 = /^[0-9a-f]{64}$/
+/** 1.2.7 row 35 (N-4, N7-064): why an added format is in the outputs. */
+const FORMATS_ADDED_WHY = "(measured source for verification; not a deliverable)"
+/** 1.2.7 row 35 (N-5, N7-140): page images are witnesses of the layout, not deliverables. */
+export const PAGE_WITNESS_LINE = "  pages are witness images (approximation of the printed page; not a deliverable)"
+
+/**
+ * 1.2.7 row 35 (M-03/M-08, N7-065): FAIL count per check id over all outputs. n per failing output is the listed
+ * findings plus the truncated ones, at least 1; sorted by n desc, then id. `-` when no check fails.
+ */
+export function failPerCodeLine(r: OutputVerificationReport): string {
+  const n = new Map<string, number>()
+  for (const v of r.outputs)
+    for (const c of v.checks)
+      if (c.status === "FAIL") n.set(c.id, (n.get(c.id) ?? 0) + Math.max(1, (Array.isArray(c.findings) ? c.findings.length : 0) + (Number.isFinite(c.truncated) ? c.truncated : 0)))
+  const parts = [...n.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map(([id, k]) => `${SAFE.test(id) ? id : "?"}=${k}`)
+  return `  fail per code: ${parts.join(", ") || "-"}`
+}
 
 /** The store calls the wrapper needs (SqliteStudioStore; row 149 for the verification records). */
 export interface RenderVerifyStore {
@@ -101,13 +121,24 @@ function recordReport(r: OutputVerificationReport, v: VerifiedOutput): Record<st
   return { $schema: r.$schema, checksVersion: r.checksVersion, documentId: r.documentId, revisionNo: r.revisionNo, renderJobId: r.renderJobId, scope: r.scope, draft: r.draft, layout: r.layout, ...v }
 }
 
-/** Safe-token text lines of §6.2. */
-export function verificationLines(r: OutputVerificationReport, pageImages: { made: number; reason: string | null; note?: string | null }): string[] {
+/**
+ * Safe-token text lines of §6.2. `formatsAdded` defaults to the report's own list (1.2.7 row 35, N-4: the unit
+ * case passes it explicitly).
+ */
+export function verificationLines(
+  r: OutputVerificationReport,
+  pageImages: { made: number; reason: string | null; note?: string | null },
+  formatsAdded: ReadonlyArray<string> = Array.isArray(r.formatsAdded) ? r.formatsAdded : [],
+): string[] {
   const ok = r.outputs.filter((v) => v.state === "verified").length
   const tok = (s: string) => (SAFE.test(s) ? s : "?")
   // 1.2.6 row 77 (M-07, N-039/N-040): the page verdict is labelled RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24), never a
   // bare VERIFIED, so it is not read as the file-level FILE_VERIFIED(sha256) check of studio_file_verify.
   const lines = [`verification: ${r.overall === "verified" ? "RENDER_VERIFIED(U24)" : "RENDER_UNVERIFIED(U24)"} (${ok}/${r.outputs.length} outputs verified)`]
+  // 1.2.7 row 35 (N-4, C3, N7-064): an html/svg the wrapper added is kept (measured source, layout witness) and said.
+  for (const f of ["html", "svg"] as const) if (formatsAdded.includes(f)) lines.push(`  formats added: ${f} ${FORMATS_ADDED_WHY}`)
+  // 1.2.7 row 35 (M-03/M-08, N7-065): the full sha256 of the output closes each output line (only a well-formed one).
+  const sha = (v: VerifiedOutput) => (typeof v.sha256 === "string" && SHA256.test(v.sha256) ? ` sha256=${v.sha256}` : "")
   // 1.2.6 row 30 (T-13, N-032): OVERLAP_CLIP coverage on its own line under the output line ("diukur m/n halaman"),
   // so the summary lines keep their shape; the UNKNOWN reason (MEASURE_TRUNCATED) stays in unknown= unchanged.
   const coverageLine = (v: VerifiedOutput) => {
@@ -117,19 +148,21 @@ export function verificationLines(r: OutputVerificationReport, pageImages: { mad
   }
   for (const v of r.outputs) {
     if (v.state === "verified") {
-      lines.push(`  ${v.format} ${tok(v.outputId)} RENDER_VERIFIED(U24)`)
+      lines.push(`  ${v.format} ${tok(v.outputId)} RENDER_VERIFIED(U24)${sha(v)}`)
     } else {
       const fail = v.checks.filter((c) => c.status === "FAIL").map((c) => c.id)
       const unknown = v.checks.filter((c) => c.status === "UNKNOWN").map((c) => `${c.id}:${c.reason ?? "?"}`)
-      lines.push(`  ${v.format} ${tok(v.outputId)} RENDER_UNVERIFIED(U24) fail=${fail.join(",") || "-"} unknown=${unknown.join(",") || "-"}`)
+      lines.push(`  ${v.format} ${tok(v.outputId)} RENDER_UNVERIFIED(U24) fail=${fail.join(",") || "-"} unknown=${unknown.join(",") || "-"}${sha(v)}`)
     }
     const cov = coverageLine(v)
     if (cov) lines.push(cov)
   }
+  lines.push(failPerCodeLine(r))
   if (r.scope === "DOCUMENT" && !r.layoutWitness) lines.push("  layout witness: none (a verified PDF or HTML of this revision is needed)")
   const pngs = [...new Set(r.outputs.flatMap((v) => v.pages.map((p) => p.png)).filter((p): p is string => typeof p === "string"))]
   if (pngs.length > 0) {
     lines.push(`  pages: ${pngs.join(" ")}`)
+    lines.push(PAGE_WITNESS_LINE) // 1.2.7 row 35 (N-5, N7-140)
     // Row 151c (DEFECT-157-1): a listed page without an image, or approximate images, is said, never silent.
     if (pageImages.note && /^[A-Za-z0-9 _.,:;()@'-]{1,400}$/.test(pageImages.note)) lines.push(`  pages note: ${pageImages.note}`)
   } else if (r.outputs.some((v) => v.format === "HTML" || v.format === "PDF")) {

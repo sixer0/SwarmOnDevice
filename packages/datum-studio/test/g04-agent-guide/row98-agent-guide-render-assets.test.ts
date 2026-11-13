@@ -114,7 +114,7 @@ describe("row 98: two meanings of verified (M-07, T-13, W-02, W-14)", () => {
     const trunc = { id: "OVERLAP_CLIP", status: "UNKNOWN", reason: "MEASURE_TRUNCATED", coverage: { measuredPages: 40, totalPages: 60 } }
     const bad = verificationLines(rep([out("o2", [trunc], "unverified")], "unverified") as never, { made: 0, reason: "x" })
     expect(bad[0]).toBe("verification: RENDER_UNVERIFIED(U24) (0/1 outputs verified)")
-    expect(bad).toContain("  HTML o2 RENDER_UNVERIFIED(U24) fail=- unknown=OVERLAP_CLIP:MEASURE_TRUNCATED")
+    expect(bad).toContain(`  HTML o2 RENDER_UNVERIFIED(U24) fail=- unknown=OVERLAP_CLIP:MEASURE_TRUNCATED sha256=${"a".repeat(64)}`) // 1.2.7 row 35 (M-03, N7-065)
     expect(R).toContain("`<FMT> <id> RENDER_UNVERIFIED(U24) fail=<cek> unknown=<cek>`")
     expect(bad).toContain("    OVERLAP_CLIP UNKNOWN:MEASURE_TRUNCATED diukur 40/60 halaman")
     expect(overlapCoverageText({ id: "OVERLAP_CLIP", coverage: { measuredPages: 4, totalPages: 6 } })).toBe("diukur 4/6 halaman")
