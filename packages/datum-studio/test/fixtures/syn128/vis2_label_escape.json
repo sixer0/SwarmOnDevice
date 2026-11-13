@@ -1,0 +1,233 @@
+{
+  "$comment": "Swarm 1.2.8 rows 55/55b (SR8-23, AC-VIS2a, register N8-475). Synthetic labels only. `spec`: a phase label with <, & and \" (row 55 asserts literal text through the lane-label text path). `pools`: the same with a pool label carrying <, & and \" (row 55b draws pools and asserts it).",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "swimlane",
+    "id": "9.23",
+    "title": "Gambar sintetis label lolos.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "phases": [
+      {
+        "id": "f1",
+        "label": "Fase <1> & \"A\""
+      },
+      {
+        "id": "f2",
+        "label": "Fase 2"
+      },
+      {
+        "id": "f3",
+        "label": "Fase 3"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f1"
+        }
+      },
+      {
+        "id": "b",
+        "label": "Cek B",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f1"
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "lane": "Lajur 3",
+          "phase": "f2"
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f2"
+        }
+      },
+      {
+        "id": "e",
+        "label": "Langkah E",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f3"
+        }
+      },
+      {
+        "id": "f",
+        "label": "Langkah F",
+        "class": {
+          "lane": "Lajur 3",
+          "phase": "f3"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "serah"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "control",
+        "label": "ya"
+      },
+      {
+        "from": "c",
+        "to": "d",
+        "kind": "control",
+        "label": "kirim"
+      },
+      {
+        "from": "d",
+        "to": "e",
+        "kind": "control",
+        "label": "teruskan"
+      },
+      {
+        "from": "e",
+        "to": "f",
+        "kind": "control",
+        "label": "selesai"
+      }
+    ]
+  },
+  "pools": {
+    "$schema": "studio.diagram/v1",
+    "family": "swimlane",
+    "id": "9.24",
+    "title": "Gambar sintetis label lolos.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "phases": [
+      {
+        "id": "f1",
+        "label": "Fase <1> & \"A\""
+      },
+      {
+        "id": "f2",
+        "label": "Fase 2"
+      },
+      {
+        "id": "f3",
+        "label": "Fase 3"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f1",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "b",
+        "label": "Cek B",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f1",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "lane": "Lajur 3",
+          "phase": "f2",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f2",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "e",
+        "label": "Langkah E",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f3",
+          "pool": "k1"
+        }
+      },
+      {
+        "id": "f",
+        "label": "Langkah F",
+        "class": {
+          "lane": "Lajur 3",
+          "phase": "f3",
+          "pool": "k1"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "serah"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "control",
+        "label": "ya"
+      },
+      {
+        "from": "c",
+        "to": "d",
+        "kind": "control",
+        "label": "kirim"
+      },
+      {
+        "from": "d",
+        "to": "e",
+        "kind": "control",
+        "label": "teruskan"
+      },
+      {
+        "from": "e",
+        "to": "f",
+        "kind": "control",
+        "label": "selesai"
+      }
+    ],
+    "pools": [
+      {
+        "id": "k1",
+        "label": "Kolam <X> & \"Y\""
+      }
+    ]
+  }
+}

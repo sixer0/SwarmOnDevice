@@ -63,6 +63,7 @@ import { autoFitDiagram, type DiagramGeometryIssue } from "./autofit";
 import type { EdgeLabelPlan } from "../fit/labels";
 import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneGeom } from "./fitlabels";
 import { placeDiagram, type Placement } from "./place";
+import type { SwimFrame } from "../layout-b/swimlane";
 import { reorderPlaced } from "./order";
 import { capacityRetry, isCapacityReject, withAction } from "./capacity";
 import { crossingHops, routePlaced, routeStyleOfPath, type HoppedEdge } from "./route";
@@ -296,6 +297,37 @@ function assertInsideSheet(svg: string, H: number, furnitureMm: number): void {
   }
 }
 
+/**
+ * Swarm 1.2.8 row 55 (VIS-2a, 01f §2.3): dekorasi bingkai swimlane, tanpa data-mark (G-2). Pemisah = garis rambut
+ * ink200 (aturan garis lajur); teks kepala memakai peran label lajur (table_header, ink400, DATUM-28), lewat `svgText`
+ * yang meloloskan XML (SR8-23). Horizontal: fase = kepala di baris atas (tengah pita) + pemisah tegak; garis dan label
+ * lajur tetap digambar jalur lama. Vertikal (transpos): lajur = kolom dengan kepala di baris atas, garis tegak di kiri
+ * tiap kolom; fase = kepala di kolom kiri + pemisah mendatar selebar lembar.
+ */
+function swimFrameSvg(f: SwimFrame, W: number): string[] {
+  const hdr = pt2mm(role("table_header").size) + LATTICE_Y / 2.0;
+  const text = (x: number, y: number, label: string, anchor: "start" | "middle") =>
+    svgText(x, y, label, { role: "table_header", colourToken: "ink400", anchor });
+  const out: string[] = [];
+  if (f.orientation === "horizontal") {
+    f.phases.forEach((p, i) => {
+      if (i > 0) out.push(lineSvg(p.lo, f.top, p.lo, f.bottom, "ink200", STROKE_HAIR));
+      out.push(text((p.lo + p.hi) / 2.0, f.top + hdr, p.label, "middle"));
+    });
+    return out;
+  }
+  for (const ln of f.lanes) {
+    if (ln.lo > 1e-6) out.push(lineSvg(ln.lo, f.top, ln.lo, f.bottom, "ink200", STROKE_HAIR));
+    out.push(lineSvg(ln.lo, f.headBottom, ln.hi, f.headBottom, "ink200", STROKE_HAIR));
+    out.push(text((ln.lo + ln.hi) / 2.0, f.top + hdr, ln.label, "middle"));
+  }
+  f.phases.forEach((p, i) => {
+    if (i > 0) out.push(lineSvg(pyInt(0), p.lo, W, p.lo, "ink200", STROKE_HAIR));
+    out.push(text(0.5, p.lo + hdr, p.label, "start"));
+  });
+  return out;
+}
+
 // ------------------------------------------------------------------ rute
 /** Rute keluarga: sequence = baris waktu (layout-b `routeSequenceMessages`), lainnya = `route_edges`. */
 export function routeFor(s: StudioDiagramV1, p: Placement): { paths: RoutedEdge[]; msgEnd?: number } {
@@ -516,7 +548,10 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
 
   // lajur akuntabilitas + pemisah rambut (P2 swimlane), urutan kemunculan lajur
   const gutter = sheet.gutterW ?? 0;
-  for (const lane of sheet.lanes) {
+  // Swarm 1.2.8 row 55 (VIS-2a, 01f §2.3): fase dan lajur vertikal dari bingkai layout-b; tanpa bingkai = lama.
+  const frame = s.family === "swimlane" ? (place.layout as { frame?: SwimFrame }).frame : undefined;
+  if (frame) sheet.addAll(swimFrameSvg(frame, W));
+  for (const lane of frame?.orientation === "vertical" ? [] : sheet.lanes) {
     sheet.add(lineSvg(pyInt(0), lane.y, W, lane.y, "ink200", STROKE_HAIR));
     sheet.add(svgText(0.5, lane.y + pt2mm(role("table_header").size) + LATTICE_Y / 2.0, lane.name, {
       role: "table_header",

@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 608,
-  "copied": 404,
-  "patched": 162,
+  "copied": 403,
+  "patched": 163,
   "replaced": 12,
   "added": 30,
-  "bytes": 10036300
+  "bytes": 10047280
  },
  "files": [
   {
@@ -2432,9 +2432,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 33525,
+   "bytes": 35517,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "af8634eff47cc6d6765c0c7732cdce6f0bf45b38a7cba4455cfed19ca9ef5383",
+   "sha256": "2a7e5b576e294f14ca9be7fdcded746ff429bac5a297bd5e7dc62470bfcbf711",
+   "patch_row55": {"id": "128-55-vis2a", "row": "55", "decision": "1.2.8 row 55 (AC-VIS2a; 01f 2.1-2.3; SR8-23)", "summary": "NEW swimFrameSvg draws the layout-b swimlane frame (no data-mark): horizontal = phase headers centred in the header row + hairline ink200 separators across all lanes (lane rules and labels by the old loop); vertical = lane rules, header-row bottom line and centred lane headers, phase headers start-anchored in the left column + full-width separators (old lane loop skipped); texts via svgText role table_header ink400 (XML-escaped). Without a frame (no phases, not vertical) the bytes are unchanged", "diff_base": "sha256 before this row", "before_sha256": "af8634eff47cc6d6765c0c7732cdce6f0bf45b38a7cba4455cfed19ca9ef5383", "after_sha256": "2a7e5b576e294f14ca9be7fdcded746ff429bac5a297bd5e7dc62470bfcbf711", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55_row55_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "bcecd90c63864fc8f6b33a139805dd949dbdbb7349267cb6f891bca7462045b9"},
    "patch_row56": {"id": "128-56-vis4", "row": "56", "decision": "1.2.8 row 56 (AC-VIS4; 01f 3.2-3.3, 7 (b); C12 OP-18-6, OP-18-8)", "summary": "edgePathSvg calls pass route: routeStyleOfPath(p) (both label paths); no other change", "diff_base": "sha256 before this row", "before_sha256": "24ec6c45b053f4bb5418068fd9aa54a48201fa0d0a45aebaffcaa371d69f58d5", "after_sha256": "af8634eff47cc6d6765c0c7732cdce6f0bf45b38a7cba4455cfed19ca9ef5383", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56_row56_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "22206595ec526c63cfba4bfd70ae3102b4267cd57d36881ef283757427662780"},
    "patch_row36b": {"id": "127-36b-T12", "row": "36b", "decision": "1.2.7 P-6 / CH-6 (T-12, AC-T12, N7-138)", "summary": "DiagramBuildReport.furniture?: {keyLines, sourceLines, heightMm}, set only when apparatus === figure: keyLines = keyTexts.length (KUNCI lines drawn), sourceLines = srcLines.length (SUMBER lines after wrapping), heightMm = furnitureMm (caption, KUNCI, SUMBER height); feeds the preview route's standalone.furniture (N7-068); report only, SVG bytes unchanged", "before_sha256": "c2fd6e9f8a915bbee1af43127a28b2e1738405bc3ef4ac62a9086ef4e2a89c6b", "after_sha256": "24ec6c45b053f4bb5418068fd9aa54a48201fa0d0a45aebaffcaa371d69f58d5", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/36b_row36b_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "f5ef3702d1aead47d115063d6d2e7deaa2d5fe22fd9eaab2b11beaeb5262f5bd"},
    "patch_row165P": {"id": "row165P-manual-furniture", "row": "165P", "decision": "C205 CP-28/48", "summary": "DiagramBuildOptions.provenance (SUMBER + PROVENANS part with coloured glyphs); caption lines marked, NEW withCaptionAbove moves them above the drawing; foot order KUNCI then SUMBER", "before_sha256": "0feb88508fbedb07c813e0cc4c5bcc65b4647f5bf5d18ccd33fc43041f4392b7", "after_sha256": "54cd9688005a3cd3b5594adfb897acaff8e5b06cf362d647318c1c148e766395", "diff": "implementation/146_row165P_diffs/engine_diagram_build_svg.ts.diff"},
@@ -2822,10 +2823,11 @@
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-b/swimlane.ts",
-   "status": "copied",
-   "bytes": 5056,
+   "status": "patched",
+   "bytes": 14044,
    "source_sha256": "2a80d103643d84ae171d961d0c06400dd23a869b619dd5a4809c2cbb98ca5446",
-   "sha256": "2a80d103643d84ae171d961d0c06400dd23a869b619dd5a4809c2cbb98ca5446"
+   "sha256": "417982750285f95d3d4b93957597b090b349af3ed5296ea6f8bda9d851f5cbd7",
+   "patch_row55": {"id": "128-55-vis2a", "row": "55", "decision": "1.2.8 row 55 (AC-VIS2a; 01f 2.1-2.3; N8-247, N8-248, N8-249)", "summary": "phases or lane_orientation vertical -> NEW layoutSwimFramed: horizontal = phase bands in phases[] order (band = cell depth x (slot + 1 lattice)), header row 2 lattice rows above the lanes; vertical = transpose (lane columns with a header row, phase rows with a gutter-wide header column, rows 2 lattice apart); nodes on the lattice, separators mid-gap; order in a cell = nodes[] order; capacity uses the time mode only (3-lattice nodes, a cell stacked in one column, CAPACITY_ADAPT suggests fewer nodes per phase); SwimlaneLayout.frame (NEW SwimFrame, SwimBand) for build/svg.ts. Without phases and not vertical: old path, byte-identical", "diff_base": "copied source", "before_sha256": "2a80d103643d84ae171d961d0c06400dd23a869b619dd5a4809c2cbb98ca5446", "after_sha256": "417982750285f95d3d4b93957597b090b349af3ed5296ea6f8bda9d851f5cbd7", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55_row55_diffs/engine_diagram_layout-b_swimlane.ts.diff", "diff_sha256": "717094af719747e05f3d4143741972a34e090d23e897e98f55b64a263676e874"}
   },
   {
    "path": "src/lib/studio/engine/diagram/layout-c/geometry.ts",
@@ -6294,6 +6296,7 @@
   "56",
   "52c",
   "33",
-  "35"
+  "35",
+  "55"
  ]
 }
