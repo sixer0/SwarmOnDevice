@@ -13,7 +13,7 @@ import { parseInline } from "../../../src/lib/studio/services/import/inline";
 import { validateBlockV2 } from "../../../src/lib/studio/services/revisions/v2/body";
 import { McpToolError } from "./safety";
 import { tok, type ToolWarning } from "./tool-kit";
-import { isRows, type Cell, type ChartInput, type DiagramInput, type Rows } from "./write-content";
+import { isRows, warnTableOverflow, type Cell, type ChartInput, type DiagramInput, type Rows } from "./write-content";
 
 type Rec = Record<string, unknown>;
 const NOOP = { warn: () => undefined, drop: () => undefined };
@@ -406,11 +406,14 @@ export function tableBlock(rows: Rows, caption: string | undefined, source: stri
   }
   if (!caption?.trim()) warn({ code: "CAPTION_GENERATED", message: `${where}: tabel tanpa caption; keterangan dibangkitkan dari judul bab + judul kolom (pakai { table, caption } untuk teks sendiri)` });
   const src = sourceOf(source, metaSource, warn, issue, where, "tabel");
+  const tableRows = [{ kind: "header", cells: norm[0].map(cellOf) }, ...body.map((r) => ({ kind: "body", cells: r.map(cellOf) }))];
+  // Swarm 1.2.8 row 34 (H-N15, N8-210): tabel yang kemungkinan melebar -> TABLE_OVERFLOW_LIKELY (isi tetap ditulis).
+  warnTableOverflow({ columns, rows: tableRows } as never, warn, where, cap);
   return {
     type: "table",
     caption: inl(cap),
     columns,
-    rows: [{ kind: "header", cells: norm[0].map(cellOf) }, ...body.map((r) => ({ kind: "body", cells: r.map(cellOf) }))],
+    rows: tableRows,
     ...(src !== null ? { source: inl(src) } : {}),
   };
 }

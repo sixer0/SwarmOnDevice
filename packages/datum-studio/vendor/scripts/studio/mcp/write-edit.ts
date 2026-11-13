@@ -7,7 +7,7 @@
 import type { ReportPartMarkdown } from "../../../src/lib/studio/services/draft/md-report";
 import { McpToolError } from "./safety";
 import type { ToolWarning } from "./tool-kit";
-import { blockLines, cellText, expectedParagraphs, guardLine, isRefsHeading, isRows, itemStatusOf, mapHeading, paragraphLines, refsAppendTables, stableKey, workReportChapters, type Block, type Cell } from "./write-content";
+import { blockLines, cellText, expectedParagraphs, guardLine, isRefsHeading, isRows, itemStatusOf, mapHeading, paragraphLines, refsAppendTables, rowsTableShape, stableKey, tableNameOf, warnTableOverflow, workReportChapters, type Block, type Cell } from "./write-content";
 import { exactView, findCell, findSection, findText, fold, notAppliedOf, spansHaveMarkup, spliceSpans, type MatchUnit, type NotApplied, type Tier } from "./write-match";
 
 export type Region = keyof ReportPartMarkdown;
@@ -646,6 +646,10 @@ export function applyEdits(parts: EditPart[], edits: readonly EditOp[], warn: (w
         return joinRow(cells.map(cellText));
       });
       if (generated.length > 0) warn({ code: "ITEM_KEY_GENERATED", message: `${label}: ${generated.length} butir tanpa kunci diberi kunci stabil (${generated.slice(0, 5).join(", ")})` });
+      // Swarm 1.2.8 row 34 (H-N15): tabel sesudah baris baru (judul + baris lama + baris baru) -> TABLE_OVERFLOW_LIKELY.
+      const asCells = (l: string) => splitRow(l).map((c) => c.replace(/\\\|/g, "|"));
+      const whole = [t.header, ...lines.slice(t.start + 1, t.end).filter((l) => !TABLE_SEP_RE.test(l.trim())).map(asCells), ...rows.map(asCells)];
+      warnTableOverflow(rowsTableShape(whole), warn, label, tableNameOf(whole, t.caption));
       for (const l of rows) trust(sec.part, l);
       splice(sec.part, sec.region, t.end, 0, rows);
       if (sec.region === "tail") plan.refCells = true;

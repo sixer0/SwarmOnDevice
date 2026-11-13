@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 608,
-  "copied": 403,
-  "patched": 163,
+  "copied": 402,
+  "patched": 164,
   "replaced": 12,
   "added": 30,
-  "bytes": 10047280
+  "bytes": 10054678
  },
  "files": [
   {
@@ -439,9 +439,10 @@
   {
    "path": "scripts/studio/mcp/write-client-edit.ts",
    "status": "patched",
-   "bytes": 28529,
+   "bytes": 28772,
    "source_sha256": "8ff5a3e35022494e6d11dedb46a5b867a277250b083822aae425010cf05ceacd",
-   "sha256": "8d0293a6069330d2cc8d8b268104c7ceb010a4c79a5bff041214882e393c5414",
+   "sha256": "cca11d5ef51b67f1ef7e4b8d5762c223c9adb00c127fe13f82afb6e5076f8820",
+   "patch_row34": {"id": "128-34-hn15", "row": "34", "decision": "1.2.8 row 34 (AC-HN15, H-N15; N8-210)", "summary": "studio_edit {addRow} on a client document: after the rows are added, warnTableOverflow (write-content.ts) on the whole table -> TABLE_OVERFLOW_LIKELY naming the caption (or the header) with the estimate against the text column; rows still written. Out-of-area for row 34", "diff_base": "sha256 before this row", "before_sha256": "8d0293a6069330d2cc8d8b268104c7ceb010a4c79a5bff041214882e393c5414", "after_sha256": "cca11d5ef51b67f1ef7e4b8d5762c223c9adb00c127fe13f82afb6e5076f8820", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34_row34_diffs/scripts_studio_mcp_write-client-edit.ts.diff", "diff_sha256": "9ac5b75855ba738f78c78275504c9744e356ce2474406b0fda40b245bf852fda"},
    "patch_row207": {"id": "row207-hb2-verification-chain", "row": "207", "decision": "1.2.3 patch HB-2", "summary": "control-sheet entry lists (revisionHistory, verificationChain, distribution) become cell units with column names (ID/EN heads + key); empty columns addressable; slot TableV2 cells via shared tableUnits; remap matches column", "before_sha256": "8ff5a3e35022494e6d11dedb46a5b867a277250b083822aae425010cf05ceacd", "after_sha256": "87e5099ad1cdf381611198eda53154d0c2c956723d4ed050f48f893cda4fe44a", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/207_row207_diffs/write-client-edit.ts.diff"},
    "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "CONTROL_TABLE_COLUMNS looked up with Object.hasOwn (constructor/__proto__ lists are not control tables; security review 209 L-3)", "before_sha256": "87e5099ad1cdf381611198eda53154d0c2c956723d4ed050f48f893cda4fe44a", "after_sha256": "8d0293a6069330d2cc8d8b268104c7ceb010a4c79a5bff041214882e393c5414", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/scripts_studio_mcp_write-client-edit.ts.diff", "diff_sha256": "501c78e99236f53b606cf34360688c4fdf871cc77317432a91e6f4197bda0d26"}
   },
@@ -487,25 +488,28 @@
   {
    "path": "scripts/studio/mcp/write-client.ts",
    "status": "patched",
-   "bytes": 41246,
+   "bytes": 41492,
    "source_sha256": "fb302265284ff31a548215442d02bb646dec8ddf7021f763f7024a500577aaf2",
-   "sha256": "03fc5ea5490d4e04f7195bff82e3764d3ec304ae6ee9dd82fe2ac0d7091d001a",
+   "sha256": "24f6c169922610dcbc0987aee1499a70c98b804ec3f933b2a1c01e92f1337955",
+   "patch_row34": {"id": "128-34-hn15", "row": "34", "decision": "1.2.8 row 34 (AC-HN15, H-N15; N8-210)", "summary": "tableBlock (studio_write and studio_edit {append} client tables): warnTableOverflow (write-content.ts) on the built {columns, rows} -> TABLE_OVERFLOW_LIKELY naming the caption with the estimate against the text column; the stored block is unchanged. Out-of-area for row 34", "diff_base": "sha256 before this row", "before_sha256": "03fc5ea5490d4e04f7195bff82e3764d3ec304ae6ee9dd82fe2ac0d7091d001a", "after_sha256": "24f6c169922610dcbc0987aee1499a70c98b804ec3f933b2a1c01e92f1337955", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34_row34_diffs/scripts_studio_mcp_write-client.ts.diff", "diff_sha256": "b06f8ac20046967812187d073c066f4196b128c71ee198b2e023f24edc051fbe"},
    "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206)", "summary": "NEW diagramBlock(): studio_write/studio_edit client block {diagram:{spec|artifactId, caption, source, keyRow}} -> DiagramV2 (spec untouched, fixed key order; caption/source text -> InlineV2, caption number prefix stripped, source from the block or meta.source, never invented), checked by the shared v2 validator validateBlockV2 (refusal = issue SCHEMA_INVALID with up to 5 validator messages); chapterOf maps it; ClientBlock gains {diagram}; 'blok tidak dikenal' list names {diagram}. Copied -> patched", "before_sha256": "fb302265284ff31a548215442d02bb646dec8ddf7021f763f7024a500577aaf2", "after_sha256": "03fc5ea5490d4e04f7195bff82e3764d3ec304ae6ee9dd82fe2ac0d7091d001a", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-client.ts.diff", "diff_sha256": "a8c94243e67d5e137aa6a8661d3433da9659b52159f8c8675b7004f637a9e28c"}
   },
   {
    "path": "scripts/studio/mcp/write-content.ts",
    "status": "patched",
-   "bytes": 42660,
+   "bytes": 49074,
    "source_sha256": "f383ea10cd07a03b65cc4e76e0340d8fd327c021be1825bd8ea300913174875c",
-   "sha256": "69ddb9d58c014094469b7561391a908226e2491f6ca3fd4afde56aca48ae9685",
+   "sha256": "65a06db2db9641d0e16afb6f77134464f0c0d0b3da079f6356c2ff0b7c5692e5",
+   "patch_row34": {"id": "128-34-hn15", "row": "34", "decision": "1.2.8 row 34 (AC-HN15, H-N15; N8-210)", "summary": "NEW tableOverflowLikely / warnTableOverflow / rowsTableShape / tableNameOf: estimated table width at a likely glyph advance (IBM Plex Sans Condensed class averages, 7.5 pt text, mono 0.6 em numerals, 2.5 mm gaps; words broken exactly as the renderers via table-fit breakableSegments + tableBreakBudget) against tableSpanLimitMm (166 mm); over it -> warning TABLE_OVERFLOW_LIKELY naming the table and the estimate. blockLines (work-report studio_write and studio_edit append) warns for rows and {table}. DT-10a lower bound and render-side TABLE_OVERFLOW unchanged", "diff_base": "sha256 before this row", "before_sha256": "69ddb9d58c014094469b7561391a908226e2491f6ca3fd4afde56aca48ae9685", "after_sha256": "65a06db2db9641d0e16afb6f77134464f0c0d0b3da079f6356c2ff0b7c5692e5", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34_row34_diffs/scripts_studio_mcp_write-content.ts.diff", "diff_sha256": "8df07440fe2871dc4f11fc970c8e5a4dacca6a1eefdb1636ee18a8ba71c93ae4"},
    "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206)", "summary": "NEW DiagramInput; Block union gains {diagram}; a work report refuses {diagram} with INVALID_ARGUMENT 'laporan kerja tidak memuat figur; {diagram} hanya untuk dokumen klien (studio_write dengan template)'; 'blok tidak dikenal' list names {diagram}. Copied -> patched", "before_sha256": "f383ea10cd07a03b65cc4e76e0340d8fd327c021be1825bd8ea300913174875c", "after_sha256": "69ddb9d58c014094469b7561391a908226e2491f6ca3fd4afde56aca48ae9685", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-content.ts.diff", "diff_sha256": "1cdc3cc980fbd45081eecbbb2b3362f528fbb3941687db6d62bf287cc4bcd38c"}
   },
   {
    "path": "scripts/studio/mcp/write-edit.ts",
-   "status": "copied",
-   "bytes": 47523,
+   "status": "patched",
+   "bytes": 48018,
    "source_sha256": "61f937083a261625bd81361627c7b84c98cdae07b8196b3ff5c3338e5be8e5de",
-   "sha256": "61f937083a261625bd81361627c7b84c98cdae07b8196b3ff5c3338e5be8e5de"
+   "sha256": "95b3f571e260a87c68d56dd0d6b4a52fd838e52e2decd2cad818c7e03da24786",
+   "patch_row34": {"id": "128-34-hn15", "row": "34", "decision": "1.2.8 row 34 (AC-HN15, H-N15; N8-210)", "summary": "studio_edit {addRow} on a work report: the whole table after the new rows (header + existing rows + new rows) goes through warnTableOverflow (write-content.ts) -> TABLE_OVERFLOW_LIKELY naming the caption or header; rows still written. Copied -> patched", "diff_base": "copied source", "before_sha256": "61f937083a261625bd81361627c7b84c98cdae07b8196b3ff5c3338e5be8e5de", "after_sha256": "95b3f571e260a87c68d56dd0d6b4a52fd838e52e2decd2cad818c7e03da24786", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/34_row34_diffs/scripts_studio_mcp_write-edit.ts.diff", "diff_sha256": "1340d8334e870fa346be1350d030c3efba1ecde46930a0b9b65aa51f98baa1b9"}
   },
   {
    "path": "scripts/studio/mcp/write-match.ts",
@@ -6297,6 +6301,7 @@
   "52c",
   "33",
   "35",
-  "55"
+  "55",
+  "34"
  ]
 }

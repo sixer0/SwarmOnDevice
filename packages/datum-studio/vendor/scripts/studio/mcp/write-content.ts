@@ -14,6 +14,8 @@ import { getContractKindDef } from "../../../src/lib/studio/registry/contracts";
 import { CONTRACT_ACTOR_PATTERN, CONTRACT_KEY_PATTERN } from "../../../src/lib/studio/contract/env";
 import { mdReportRules, MD_REPORT_DEFAULT_KIND } from "../../../src/lib/studio/services/draft/md-report";
 import { normalizeHeading } from "../../../src/lib/studio/services/import/contract/parse";
+import { breakableSegments, cellTexts, tableBreakBudget, tableSpanLimitMm } from "../../../src/lib/studio/engine/table-fit";
+import type { ParamMap, TableBlock } from "../../../src/lib/studio/contract";
 import { McpToolError } from "./safety";
 import type { ToolWarning } from "./tool-kit";
 
@@ -128,6 +130,117 @@ export function tableLines(rows: Rows, warn: (w: ToolWarning) => void, where: st
   const line = (r: Cell[]) => `| ${r.map(cellText).join(" | ")} |`;
   return [line(norm[0]), `|${" --- |".repeat(width)}`, ...norm.slice(1).map(line)];
 }
+
+// ── Swarm 1.2.8 row 34 (H-N15, N8-210): tabel yang kemungkinan melebar, diperingatkan saat tulis ──
+
+/**
+ * Lebar WAJAR (em) satu karakter teks sel, bukan batas bawah 0.42 em DT-10a (`tableMinWidthMm`, yang hanya menolak
+ * tabel yang PASTI tidak muat). Rata-rata kelas IBM Plex Sans Condensed Regular (wajah tersempit di aset, dibaca dari
+ * hmtx): W 0.81, M 0.73, huruf besar 0.57, huruf kecil 0.46, angka 0.54. Wajah tersempit = perkiraan rendah, jadi
+ * peringatan hanya untuk tabel yang tetap melebar dengan huruf sesempit itu.
+ */
+function likelyEm(ch: string): number {
+  if (ch === "W" || ch === "M") return 0.77;
+  if (/\p{Lu}/u.test(ch)) return 0.57;
+  if (/\p{Ll}/u.test(ch)) return 0.46;
+  if (/\p{Nd}/u.test(ch)) return 0.54;
+  return 0.35;
+}
+const LIKELY_TEXT_PT = 7.5; // = TEXT_PT table-fit.ts (teks sel)
+const LIKELY_MONO_EM = 0.6; // IBM Plex Mono, angka satu baris
+const LIKELY_MONO_PT = 7.8; // = type.scale.tableNumerals.size bawaan table-fit.ts
+const LIKELY_GAP_MM = 2.5; // = COLUMN_GAP_MM table-fit.ts (celah antarkolom HTML)
+const MM_PER_PT = 25.4 / 72;
+const likelyMm = (s: string, pt: number): number => Array.from(s).reduce((a, ch) => a + likelyEm(ch), 0) * pt * MM_PER_PT;
+/** Sel angka (sama dengan `NUMERAL` write-client.ts): kolom yang seluruh isinya angka tidak dibungkus. */
+const LIKELY_NUMERAL = /^[−+-]?(?:\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d+)?\s*%?$/;
+
+type FitShape = Pick<TableBlock, "columns" | "rows">;
+
+/** Larik baris (masukan alat) -> bentuk tabel kontrak untuk perkiraan lebar; kolom serba angka = `numeral`. */
+export function rowsTableShape(rows: Rows): FitShape {
+  const width = Math.max(1, ...rows.map((r) => r.length));
+  const body = rows.slice(1);
+  const columns = Array.from({ length: width }, (_, c) => {
+    const vals = body.map((r) => String(r[c] ?? "").trim()).filter((v) => v !== "");
+    return { role: vals.length > 0 && vals.every((v) => LIKELY_NUMERAL.test(v)) ? "numeral" : "text" };
+  });
+  return {
+    columns,
+    rows: rows.map((r, i) => ({ kind: i === 0 ? "header" : "body", cells: Array.from({ length: width }, (_, c) => ({ text: String(r[c] ?? "").replace(/\s+/g, " ").trim() })) })),
+  } as unknown as FitShape;
+}
+
+export interface TableOverflowLikely {
+  /** Perkiraan lebar tabel (mm): tiap kolom selebar segmen tak-terpatah terpanjangnya + celah antarkolom. */
+  estimatedMm: number;
+  /** Lebar kolom teks (bentang penuh, mm). */
+  spanMm: number;
+  widest: { column: number; row: number; text: string; mm: number };
+}
+
+/**
+ * Perkiraan lebar tabel pada lebar huruf wajar. Kata dipatah persis seperti perender (`breakableSegments` +
+ * `tableBreakBudget`, table-fit.ts:105); sel kolom angka/ID/satuan tidak dibungkus; sel bergabung (gridSpan) tidak
+ * dihitung. Null bila perkiraan muat di kolom teks. Render-side `TABLE_OVERFLOW` (overlap-clip.ts) tidak berubah.
+ */
+export function tableOverflowLikely(t: FitShape, params: ParamMap = {}): TableOverflowLikely | null {
+  const cols = Array.isArray(t.columns) ? t.columns : [];
+  const rows = Array.isArray(t.rows) ? t.rows : [];
+  if (cols.length === 0) return null;
+  const spanMm = tableSpanLimitMm(params);
+  const budget = tableBreakBudget(t, params);
+  const colMm = cols.map(() => 0);
+  const at: Array<{ row: number; text: string } | null> = cols.map(() => null);
+  rows.forEach((r, ri) => {
+    let ci = 0;
+    for (const cell of r.cells ?? []) {
+      const gs = Math.max(1, Math.floor(cell.gridSpan ?? 1));
+      const role = cols[ci]?.role;
+      const nowrap = role === "numeral" || role === "unit" || role === "id";
+      if (gs === 1 && ci < cols.length && cell.vMerge !== "continue") {
+        for (const text of cellTexts(cell)) {
+          const segs = nowrap ? [text.trim()] : text.split(/\s+/).flatMap((w) => (w === "" ? [] : breakableSegments(w, budget.columnsMm[ci] ?? 0)));
+          for (const s of segs) {
+            const mm = nowrap && r.kind !== "header" ? Array.from(s).length * LIKELY_MONO_EM * LIKELY_MONO_PT * MM_PER_PT : likelyMm(s, LIKELY_TEXT_PT);
+            if (mm > colMm[ci]) {
+              colMm[ci] = mm;
+              at[ci] = { row: ri, text: s };
+            }
+          }
+        }
+      }
+      ci += gs;
+    }
+  });
+  const estimatedMm = colMm.reduce((a, b) => a + b, 0) + LIKELY_GAP_MM * (cols.length - 1);
+  if (estimatedMm <= spanMm + 1e-6) return null;
+  let widest: TableOverflowLikely["widest"] | null = null;
+  colMm.forEach((mm, ci) => {
+    const a = at[ci];
+    if (a && (!widest || mm > widest.mm)) widest = { column: ci, row: a.row, text: a.text, mm };
+  });
+  return widest ? { estimatedMm, spanMm, widest } : null;
+}
+
+/**
+ * Peringatan `TABLE_OVERFLOW_LIKELY` (N8-210) bila {@link tableOverflowLikely} memperkirakan tabel lebih lebar dari kolom
+ * teks: menamai tabel (`name`) dan perkiraan lebarnya terhadap kolom teks. Tidak menolak; isi tetap ditulis.
+ */
+export function warnTableOverflow(t: FitShape, warn: (w: ToolWarning) => void, where: string, name: string): void {
+  const o = tableOverflowLikely(t);
+  if (!o) return;
+  const w = o.widest;
+  const cell = w.text.length > 40 ? `${w.text.slice(0, 40)}…` : w.text;
+  const label = name.replace(/\s+/g, " ").trim().slice(0, 80) || "tabel";
+  warn({
+    code: "TABLE_OVERFLOW_LIKELY",
+    message: `${where}: tabel "${label}" kemungkinan lebih lebar dari kolom teks: perkiraan ${o.estimatedMm.toFixed(1)} mm > ${o.spanMm} mm (kolom ${w.column + 1}, baris ${w.row + 1}: "${cell}" ~${w.mm.toFixed(1)} mm tanpa titik patah); render akan menandai TABLE_OVERFLOW. Kurangi kolom, pecah tabel, atau beri spasi pada teks panjang`,
+  });
+}
+
+/** Nama tabel untuk peringatan: caption, atau judul kolom bila tanpa caption. */
+export const tableNameOf = (rows: Rows, caption?: string): string => (typeof caption === "string" && caption.trim() !== "" ? caption : (rows[0] ?? []).map((c) => String(c ?? "").trim()).filter((c) => c !== "").join(" | "));
 
 // ── Judul bagian -> bab kontrak laporan kerja ───────────────────────────
 
@@ -550,12 +663,18 @@ export function expectedParagraphs(b: Block): string[] {
 /** Satu blok -> baris Markdown laporan kerja (paragraf, tabel, daftar, grafik sebagai tabel). */
 export function blockLines(b: Block, warn: (w: ToolWarning) => void, where: string, used: Set<string>, prev?: ReadonlyMap<string, string>): string[] {
   if (typeof b === "string") return b.trim() === "" ? [] : paragraphLines(b.trim(), warn, where);
-  if (isRows(b)) return b.length === 0 ? [] : tableLines(repairItemTable(b, warn, where, used, prev), warn, where);
+  // Swarm 1.2.8 row 34 (H-N15): tabel yang kemungkinan melebar -> TABLE_OVERFLOW_LIKELY (isi tetap ditulis).
+  const table = (rows: Rows, caption?: string): string[] => {
+    const fixed = repairItemTable(rows, warn, where, used, prev);
+    warnTableOverflow(rowsTableShape(fixed), warn, where, tableNameOf(fixed, caption));
+    return tableLines(fixed, warn, where);
+  };
+  if (isRows(b)) return b.length === 0 ? [] : table(b);
   const o = b as unknown as Record<string, unknown>;
   if (isObj(o) && isRows(o.table)) {
     const rows = o.table as Rows;
     const cap = typeof o.caption === "string" && o.caption.trim() !== "" ? ["", ...paragraphLines(o.caption.trim(), warn, where)] : [];
-    return rows.length === 0 ? cap : [...tableLines(repairItemTable(rows, warn, where, used, prev), warn, where), ...cap];
+    return rows.length === 0 ? cap : [...table(rows, typeof o.caption === "string" ? o.caption : undefined), ...cap];
   }
   if (isObj(o) && isObj(o.chart)) {
     const c = o.chart as unknown as ChartInput;
