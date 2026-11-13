@@ -55,7 +55,8 @@ export function failPerCodeLine(r: OutputVerificationReport): string {
     for (const c of v.checks)
       if (c.status === "FAIL") n.set(c.id, (n.get(c.id) ?? 0) + Math.max(1, (Array.isArray(c.findings) ? c.findings.length : 0) + (Number.isFinite(c.truncated) ? c.truncated : 0)))
   const parts = [...n.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map(([id, k]) => `${SAFE.test(id) ? id : "?"}=${k}`)
-  return `  fail per code: ${parts.join(", ") || "-"}`
+  // 1.2.7 row 48b (M2-05): n is summed over outputs (one empty slot in html and pdf = 2); the label says so (N-3).
+  return `  fail per code (summed over outputs): ${parts.join(", ") || "-"}`
 }
 
 /** The store calls the wrapper needs (SqliteStudioStore; row 149 for the verification records). */

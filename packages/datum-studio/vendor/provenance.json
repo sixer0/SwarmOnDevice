@@ -123,7 +123,7 @@
   "patched": 157,
   "replaced": 12,
   "added": 30,
-  "bytes": 9979970
+  "bytes": 9981510
  },
  "files": [
   {
@@ -2235,10 +2235,11 @@
   {
    "path": "src/lib/studio/engine/chart/family-w1/render.ts",
    "status": "patched",
-   "bytes": 22642,
+   "bytes": 23317,
    "source_sha256": "1ede1ac10232b04f9a391cefa96d437b5e12a0f833c920b706a018d46aa28282",
-   "sha256": "26dda8ba32454c47e0c45ae348423c65db80a0c6eeebb252c6a3ba61a1c4474b",
-   "patch_row36": {"id": "127-36-T06", "row": "36", "decision": "1.2.7 C8 / D-11b (T-06 chart half, AC-T06)", "summary": "renderLine: the line-count refusal (DATUM-25 for W-03, chart.kind.W-01.maxLines for W-01) appends colourCountDetail of the counted lines: seri \"<name>\" (#HEX[, putus-putus]) per series with the stroke lineLooks gives it, and the remainder (sisa, U+2212 when negative). Limit and check ids unchanged; single line", "before_sha256": "1ede1ac10232b04f9a391cefa96d437b5e12a0f833c920b706a018d46aa28282", "after_sha256": "26dda8ba32454c47e0c45ae348423c65db80a0c6eeebb252c6a3ba61a1c4474b", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/36_row36_diffs/render.ts.diff", "diff_sha256": "e1ea3f2c17559ed3fcb2a70e1d119ef58a7bdb7b46cf00081063de9a8373eb1c"}
+   "sha256": "e7aafcfde7c281c81834c9d8cd27af059821e37311fa6a60569ec84283d13eb4",
+   "patch_row36": {"id": "127-36-T06", "row": "36", "decision": "1.2.7 C8 / D-11b (T-06 chart half, AC-T06)", "summary": "renderLine: the line-count refusal (DATUM-25 for W-03, chart.kind.W-01.maxLines for W-01) appends colourCountDetail of the counted lines: seri \"<name>\" (#HEX[, putus-putus]) per series with the stroke lineLooks gives it, and the remainder (sisa, U+2212 when negative). Limit and check ids unchanged; single line", "before_sha256": "1ede1ac10232b04f9a391cefa96d437b5e12a0f833c920b706a018d46aa28282", "after_sha256": "26dda8ba32454c47e0c45ae348423c65db80a0c6eeebb252c6a3ba61a1c4474b", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/36_row36_diffs/render.ts.diff", "diff_sha256": "e1ea3f2c17559ed3fcb2a70e1d119ef58a7bdb7b46cf00081063de9a8373eb1c"},
+   "patch_row48b": {"id": "127-48b-t06-accent-shared", "row": "48b", "decision": "1.2.7 C50 row 48b (M2-04, AC-T06)", "summary": "NEW private seriesAccentIndex(series, req, onMissing?): the one accent-series rule (series[].accent plus req.series/req.group, lowest index); resolveSeriesAccent and lineCountDetail both call it, so the line-count refusal names the colours the drawing uses. lineCountDetail keys sources case-exactly (colourCountDetail caseExact), so two series differing only in case keep their own colours. Drawing, check ids and refusal shape unchanged", "before_sha256": "26dda8ba32454c47e0c45ae348423c65db80a0c6eeebb252c6a3ba61a1c4474b", "after_sha256": "e7aafcfde7c281c81834c9d8cd27af059821e37311fa6a60569ec84283d13eb4", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/48b_row48b_diffs/src_lib_studio_engine_chart_family-w1_render.ts.diff", "diff_sha256": "314ef9442bcbfd57616ecba2cd0415244cb838364bcde07ca5e71ff58eb2b61f"}
   },
   {
    "path": "src/lib/studio/engine/chart/family-w1/timeaxis.ts",
@@ -2443,9 +2444,9 @@
   {
    "path": "src/lib/studio/engine/diagram/core/colour.ts",
    "status": "patched",
-   "bytes": 8978,
+   "bytes": 9277,
    "source_sha256": "d79d062e167b06f29b8059487999ac40818a92f039c12176f7b0809768dabf23",
-   "sha256": "ed3ce47b8ced66ae1bc8cac4d22a599777c64bf5311f1583cca6ea9a92b1dc84",
+   "sha256": "daf7d7fd2c7e36d5dfda12bf20eac5a30e24d8f5967fbde8debb6a5ab2aa1756",
    "patch": {
     "id": "row124-revA-diagram-core-colour",
     "row": 124,
@@ -2456,7 +2457,8 @@
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/53_row124_diffs/diagram__core__colour.ts.diff",
     "diff_sha256": "df41ed9337c982a6c077c9da94ead2cfbb52ead1613073296ff224219c6dc57b"
    },
-   "patch_row62": {"id": "row62-t06-colour-detail", "row": "62", "decision": "1.2.6 patch T-06 (U5; register E-10)", "summary": "NEW diagramColourSources (token model keyed by hex with sources edge.kind/mark/class/label/apparatus/symbol); diagramColourValues returns its sorted keys (values unchanged); NEW colourCountDetail formats 'dihitung N: #hex (sources), ... \u2014 sisa R'", "diff_base": "sha256 before this row", "before_sha256": "fce637b6787d54503b9db4710e17d1aa48ad9ba70a569a6e250cf5e505aced17", "after_sha256": "ed3ce47b8ced66ae1bc8cac4d22a599777c64bf5311f1583cca6ea9a92b1dc84", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/62_row62_diffs/src_lib_studio_engine_diagram_core_colour.ts.diff", "diff_sha256": "67a55049903f1004f65837a7a284bce20b4d5c00ef1c80adc3c7771712a414fd"}
+   "patch_row62": {"id": "row62-t06-colour-detail", "row": "62", "decision": "1.2.6 patch T-06 (U5; register E-10)", "summary": "NEW diagramColourSources (token model keyed by hex with sources edge.kind/mark/class/label/apparatus/symbol); diagramColourValues returns its sorted keys (values unchanged); NEW colourCountDetail formats 'dihitung N: #hex (sources), ... \u2014 sisa R'", "diff_base": "sha256 before this row", "before_sha256": "fce637b6787d54503b9db4710e17d1aa48ad9ba70a569a6e250cf5e505aced17", "after_sha256": "ed3ce47b8ced66ae1bc8cac4d22a599777c64bf5311f1583cca6ea9a92b1dc84", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/62_row62_diffs/src_lib_studio_engine_diagram_core_colour.ts.diff", "diff_sha256": "67a55049903f1004f65837a7a284bce20b4d5c00ef1c80adc3c7771712a414fd"},
+   "patch_row48b": {"id": "127-48b-t06-case-exact", "row": "48b", "decision": "1.2.7 C50 row 48b (M2-04, AC-T06)", "summary": "colourCountDetail gains optional 4th param opts { caseExact?: boolean }: look a value up as written instead of upper-cased (chart series names). Default unchanged: diagram DATUM-25 detail byte-identical", "before_sha256": "ed3ce47b8ced66ae1bc8cac4d22a599777c64bf5311f1583cca6ea9a92b1dc84", "after_sha256": "daf7d7fd2c7e36d5dfda12bf20eac5a30e24d8f5967fbde8debb6a5ab2aa1756", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/48b_row48b_diffs/src_lib_studio_engine_diagram_core_colour.ts.diff", "diff_sha256": "c61e423dfde7c36b92e5f331bee2775abafa7f9e7113bc960e78490995c335f2"}
   },
   {
    "path": "src/lib/studio/engine/diagram/core/defect.ts",
@@ -4501,12 +4503,13 @@
   {
    "path": "src/lib/studio/registry/lint-explain.ts",
    "status": "added",
-   "bytes": 12699,
+   "bytes": 13265,
    "source_sha256": null,
-   "sha256": "cb25401deecf67cdf339f2a0b3abd46ae7f2ea7a495fe2ae00d3d05bd6fc53ce",
+   "sha256": "7455cf3c416eedca1fd90d6399485d8b56377589403265d69d7cbc2228eabaff",
    "patch_row35b": {"id": "127-35b-n3-findings-total", "row": "35b", "decision": "1.2.7 row 35b (AC-N3, K7-09, RA-13)", "summary": "NEW export lintCarrierCounts (per code with a FAIL summary row: total, itemised, rest); summarizeLint findingsTotal = real finding count (carrier total once, its itemised rows not again); a listed summary row carries represents = rest (optional LintSummaryFinding field). Older findings[] shape unchanged", "before_sha256": "83972a90af215fe4de100ddb770762e5a09a7b68a45fc8a4f71cc53e8e293dd5", "after_sha256": "cb25401deecf67cdf339f2a0b3abd46ae7f2ea7a495fe2ae00d3d05bd6fc53ce", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/src_lib_studio_registry_lint-explain.ts.diff", "diff_sha256": "4186d1c25f6502186cae6e9ce09dd12ece598d8da15de112f317ae1b7399e081"},
    "note": "NEW Swarm file of row 206 (no clone original): lintRuleExplanation (registry entry + what D16/D17/D18/D19, SLOT_CONTENT_MISSING, CONTENT_CHAPTER_GAP and the render checks DATUM-14/15/25/28/32/33/37 inspect) and summarizeLint (tri-state lint summary: ran, verdict, findings); used by tool-kit compactSummary, studio_document_status and the host verification client entries",
-   "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "lintRuleExplanation: INSPECTS looked up with Object.hasOwn (security review 209 L-3)", "before_sha256": "3de3bcbb48767170085d0c82bd1146c113ba4ab0077047a7c0704ba66b35e3b8", "after_sha256": "83972a90af215fe4de100ddb770762e5a09a7b68a45fc8a4f71cc53e8e293dd5", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/src_lib_studio_registry_lint-explain.ts.diff", "diff_sha256": "7518c1eb3f32d07d024fb1a7be8677cc3319dcb8570294f50ad17207491bc73f"}
+   "patch_row210": {"id": "row210-security-209", "row": "210", "decision": "1.2.3 patch P5 (row 210)", "summary": "lintRuleExplanation: INSPECTS looked up with Object.hasOwn (security review 209 L-3)", "before_sha256": "3de3bcbb48767170085d0c82bd1146c113ba4ab0077047a7c0704ba66b35e3b8", "after_sha256": "83972a90af215fe4de100ddb770762e5a09a7b68a45fc8a4f71cc53e8e293dd5", "diff": "docs/2026-11-09_swarm_1_2_3_patch/implementation/210_row210_diffs/src_lib_studio_registry_lint-explain.ts.diff", "diff_sha256": "7518c1eb3f32d07d024fb1a7be8677cc3319dcb8570294f50ad17207491bc73f"},
+   "patch_row48b": {"id": "127-48b-n3-fail-only", "row": "48b", "decision": "1.2.7 C50 row 48b (M2-06, AC-N3)", "summary": "lintCarrierCounts counts findings of the carrier's status only (findingsAll[].status, missing = FAIL): REPORT findings of a mixed check are not counted under FAIL per kode, the labelled total line or findingsTotal; itemised = rows of that status; findings past the stored bound count under the carrier's status. Unchanged for checks that emit one status", "before_sha256": "cb25401deecf67cdf339f2a0b3abd46ae7f2ea7a495fe2ae00d3d05bd6fc53ce", "after_sha256": "7455cf3c416eedca1fd90d6399485d8b56377589403265d69d7cbc2228eabaff", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/48b_row48b_diffs/src_lib_studio_registry_lint-explain.ts.diff", "diff_sha256": "6635cc73b8c3ae8d5f96d8ae17e061edf0acd3f4242ba1c865b1f849652c24bf"}
   },
   {
    "path": "src/lib/studio/registry/sections.ts",
@@ -6240,6 +6243,7 @@
   "36b",
   "40b",
   "37b",
-  "41b"
+  "41b",
+  "48b"
  ]
 }

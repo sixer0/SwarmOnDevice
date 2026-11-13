@@ -12,7 +12,7 @@ useStudioEnv()
 import { connect, reply } from "../ported/mcp/mcp-harness"
 import { canonicalTemplate, makeDoc, snapshotOf } from "../ported/engine-core/fixtures"
 import { lintStructure } from "../../vendor/src/lib/studio/engine/lint/structure"
-import { summarizeLint } from "../../vendor/src/lib/studio/registry/lint-explain"
+import { lintCarrierCounts, summarizeLint } from "../../vendor/src/lib/studio/registry/lint-explain"
 
 type Rec = Record<string, any>
 const DOC = "cmvdoc00000000000000rel127n3"
@@ -129,5 +129,44 @@ describe("N-3: D01 counts carry one label each (fixture n3_d01_150)", () => {
   test("(g) CHAR: without rev the text names the revision used", async () => {
     const r = await status(LINT)
     expect(r.text).toContain("(rev 7, render penuh boleh)")
+  })
+})
+
+// Swarm 1.2.7 row 48b (M2-06, AC-N3): a check that emits both FAIL and REPORT findings. The engine itemises the
+// first 100 (rows keep their own status) and puts every finding, with its status, on the FAIL summary row. The
+// carrier counts under "FAIL per kode", the labelled total line and findingsTotal count FAIL findings only.
+// Red at HEAD before row 48b: total 120 (dirinci 100, tidak dirinci 20) counted the REPORT findings as FAIL.
+describe("M2-06: a carrier of a mixed FAIL/REPORT check counts FAIL findings only", () => {
+  const st = (i: number): "FAIL" | "REPORT" => (i < 100 ? (i % 10 === 9 ? "REPORT" : "FAIL") : i % 4 === 3 ? "REPORT" : "FAIL")
+  const mixed = (): Rec => {
+    const all = Array.from({ length: 120 }, (_, i) => ({ status: st(i), detail: `temuan uji ${i}` }))
+    const rows: Rec[] = all.slice(0, 100).map((f) => ({ checkId: "D01", status: f.status, detail: f.detail }))
+    rows.push({ checkId: "D01", status: "FAIL", detail: "20 temuan lain tidak dirinci (plafon 100 per cek)", findingsAll: all })
+    rows.push({ checkId: "B02", status: "FAIL", detail: "satu temuan lain" })
+    return { tier: "SERAH", releaseStatus: "FAIL", banner: "x", checks: rows }
+  }
+
+  test("lintCarrierCounts: total 105, itemised 90, rest 15 (stored list); unstored findings keep the carrier status", () => {
+    expect(lintCarrierCounts(mixed()).get("D01")).toEqual({ total: 105, itemised: 90, rest: 15 })
+    const capped = mixed()
+    const carrier = (capped.checks as Rec[]).find((c) => Array.isArray(c.findingsAll))!
+    carrier.findingsAll = carrier.findingsAll.slice(0, 110) // 100..109 stored (2 REPORT: 103, 107); 110..119 not stored
+    carrier.findingsTotal = 120
+    carrier.findingsNotStored = 10
+    expect(lintCarrierCounts(capped).get("D01")).toEqual({ total: 108, itemised: 90, rest: 18 })
+  })
+
+  test("status text and findingsTotal agree: D01=105, labelled line, lint count = sum per code", async () => {
+    const lint = mixed()
+    const r = await status(lint)
+    expect(perCode(r.text).get("D01")).toBe(105)
+    expect(r.text).toContain("D01: total 105 (dirinci 90, tidak dirinci 15)")
+    const sum = [...perCode(r.text).values()].reduce((a, b) => a + b, 0)
+    expect(sum).toBe(106)
+    expect(Number(/lint: FAIL \(dijalankan; (\d+) temuan/.exec(r.text)?.[1])).toBe(sum)
+    expect(r.data.lint.findingsTotal).toBe(sum)
+    const all = summarizeLint(lint, { max: 500 })
+    expect(all.findingsTotal).toBe(106)
+    expect(all.findings.reduce((n, f) => n + (f.represents ?? 1), 0)).toBe(all.findingsTotal)
   })
 })

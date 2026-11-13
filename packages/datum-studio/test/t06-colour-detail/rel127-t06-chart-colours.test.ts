@@ -70,6 +70,34 @@ describe("T-06 chart: line-count refusal names the counted series colours", () =
     expect(r.message).toMatch(/sisa −2\b/);
   });
 
+  // Swarm 1.2.7 row 48b (M2-04, AC-T06): the detail keys each series case-exactly. Red at HEAD before row 48b:
+  // `sources` was keyed by the upper-cased `seri "<name>"`, so "Deret Alfa" took the colour of "DERET ALFA".
+  test("M2-04: two series differing only in case keep their own colours", () => {
+    const spec = fixture("t06_chart_w03_five_lines.json");
+    spec.data.series[1].name = spec.data.series[0].name.toUpperCase();
+    spec.data.series[1].accent = true;
+    const r = refusal(() => chart.renderChart(spec));
+    const listed = items(r.message);
+    expect(listed.map((l) => l.name)).toEqual(spec.data.series.map((s: any) => s.name));
+    const hexOf = (src: string): string => (src.match(/#[0-9A-F]{6}/) as RegExpMatchArray)[0];
+    const accent = hexOf(listed[1].src);
+    expect(hexOf(listed[0].src)).not.toBe(accent);
+    expect(listed[0].src).not.toBe(listed[1].src);
+  });
+
+  // M2-04 CHAR (green before and after): the refusal resolves the accent with the drawing rule (an accent request
+  // names the series; the lowest accented index wins).
+  test("M2-04: an accent request by series name colours that series as the drawing would", () => {
+    const spec = fixture("t06_chart_w03_five_lines.json");
+    spec.data.series[3].accent = true;
+    spec.accent = { series: spec.data.series[1].name };
+    const r = refusal(() => chart.renderChart(spec));
+    const listed = items(r.message);
+    const hexOf = (src: string): string => (src.match(/#[0-9A-F]{6}/) as RegExpMatchArray)[0];
+    // Lowest accented index wins (resolveSeriesAccent): series 1, not series 3.
+    for (const [i, l] of listed.entries()) if (i !== 1) expect(hexOf(l.src)).not.toBe(hexOf(listed[1].src));
+  });
+
   test("CHAR: diagram six-colour refusal keeps `dihitung 6:` and `sisa −1`", () => {
     const spec = fixture("t06_diagram_six_colours.json");
     const r = refusal(() => build.buildDiagramSvg(spec, { release: false }));

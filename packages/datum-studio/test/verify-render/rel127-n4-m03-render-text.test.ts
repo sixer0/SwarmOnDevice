@@ -131,7 +131,7 @@ describe("M-03/M-08 (AC-M03, N7-065): full sha256 per output and a per-code FAIL
     expect(shas.length).toBe(outputs.length)
     // The text sha is the verified output's sha (structuredContent.verification unchanged in shape).
     for (const v of (rr.verification?.outputs ?? []) as S[]) expect(rr._text).toContain(`sha256=${v.sha256}`)
-    const m = /^ {2}fail per code: (.+)$/m.exec(rr._text)
+    const m = /^ {2}fail per code \(summed over outputs\): (.+)$/m.exec(rr._text) // INTENT row 48b (M2-05): labelled
     expect(m).not.toBeNull()
     const n = Number(new RegExp(`(?:^|, )${f.expected.failCode}=(\\d+)`).exec(m![1])?.[1] ?? 0)
     expect(n).toBeGreaterThanOrEqual(1)
@@ -143,11 +143,23 @@ describe("M-03/M-08 (AC-M03, N7-065): full sha256 per output and a per-code FAIL
       out("o2", "PDF", "unverified", [check("FIGURE_FIT", "FAIL", 1, 0), check("OVERLAP_CLIP", "UNKNOWN")], "not-a-sha"),
     ])
     const lines = verificationLines(rep, { made: 0, reason: null })
-    expect(lines).toContain("  fail per code: EMPTY_SLOTS=3, FIGURE_FIT=2")
+    expect(lines).toContain("  fail per code (summed over outputs): EMPTY_SLOTS=3, FIGURE_FIT=2") // INTENT row 48b (M2-05)
     expect(lines.filter((l) => /sha256=/.test(l))).toHaveLength(1)
     expect(lines).toContain(`  HTML o1 RENDER_UNVERIFIED(U24) fail=EMPTY_SLOTS,FIGURE_FIT unknown=- sha256=${"b".repeat(64)}`)
     const ok = verificationLines(report([out("o3", "HTML", "verified", [check("LINT", "PASS")])]), { made: 0, reason: null })
     expect(ok).toContain(`  HTML o3 RENDER_VERIFIED(U24) sha256=${"b".repeat(64)}`)
-    expect(ok).toContain("  fail per code: -")
+    expect(ok).toContain("  fail per code (summed over outputs): -") // INTENT row 48b (M2-05)
+  })
+
+  // Swarm 1.2.7 row 48b (M2-05, AC-M03): the count is summed over outputs, and the line says so. One empty slot
+  // rendered as HTML and PDF prints EMPTY_SLOTS=2. Red at HEAD before row 48b: the line read "fail per code: ...".
+  test("M2-05: the per-code line is labelled as summed over outputs", () => {
+    const rep = report([
+      out("o1", "HTML", "unverified", [check("EMPTY_SLOTS", "FAIL", 1, 0)]),
+      out("o2", "PDF", "unverified", [check("EMPTY_SLOTS", "FAIL", 1, 0)]),
+    ])
+    const lines = verificationLines(rep, { made: 0, reason: null })
+    expect(lines).toContain("  fail per code (summed over outputs): EMPTY_SLOTS=2")
+    expect(lines.some((l) => /^ {2}fail per code: /.test(l))).toBe(false)
   })
 })

@@ -66,9 +66,9 @@ export interface LintSummaryFinding {
 
 /** Swarm 1.2.7 row 35b (N-3, N7-063): real count of one check code that has a summary (carrier) row. */
 export interface LintCarrierCount {
-  /** Every finding of the check (carrier `findingsTotal`, else `findingsAll.length`). */
+  /** Findings of the carrier's status (row 48b, M2-06: REPORT findings of a FAIL carrier are not counted). */
   total: number;
-  /** Findings itemised as their own rows (FAIL/REPORT rows of the code other than the carrier). */
+  /** Findings itemised as their own rows (rows of the code with the carrier's status, other than the carrier). */
   itemised: number;
   /** Findings not itemised (total - itemised). */
   rest: number;
@@ -85,8 +85,14 @@ export function lintCarrierCounts(lint: unknown, status: string = "FAIL"): Map<s
   const rows = lint.checks.filter(isRec);
   for (const c of rows) {
     if (c.status !== status || !Array.isArray(c.findingsAll) || typeof c.checkId !== "string") continue;
-    const total = typeof c.findingsTotal === "number" && Number.isFinite(c.findingsTotal) ? c.findingsTotal : c.findingsAll.length;
-    const itemised = rows.filter((r) => r !== c && r.checkId === c.checkId && !Array.isArray(r.findingsAll) && (r.status === "FAIL" || r.status === "REPORT")).length;
+    // Swarm 1.2.7 row 48b (M2-06): a check may emit FAIL and REPORT findings (engine/lint/structure/context.ts
+    // `toIssues`); only findings of `status` count (an entry without status is FAIL, the engine default). Findings
+    // past the stored bound (`findingsTotal` > stored) have no recorded status and count under the carrier's.
+    const stored = c.findingsAll.length;
+    const matching = c.findingsAll.filter((f) => (isRec(f) && typeof f.status === "string" ? f.status : "FAIL") === status).length;
+    const unstored = typeof c.findingsTotal === "number" && Number.isFinite(c.findingsTotal) ? Math.max(0, c.findingsTotal - stored) : 0;
+    const total = matching + unstored;
+    const itemised = rows.filter((r) => r !== c && r.checkId === c.checkId && !Array.isArray(r.findingsAll) && r.status === status).length;
     out.set(c.checkId, { total, itemised, rest: Math.max(0, total - itemised) });
   }
   return out;

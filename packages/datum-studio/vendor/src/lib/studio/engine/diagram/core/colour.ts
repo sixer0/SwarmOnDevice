@@ -185,8 +185,15 @@ export function diagramColourSources(spec: StudioDiagramV1, sheet: Sheet): Map<s
  * `values` is the authoritative count (the SVG for build, the token model for estimate); a value the
  * source model does not know is labelled `lain di SVG`. A negative remainder uses U+2212.
  */
-export function colourCountDetail(values: readonly string[], sources: ReadonlyMap<string, readonly string[]>, limit: number): string {
-  const items = values.map((v) => `${v} (${(sources.get(v.toUpperCase()) ?? []).join(", ") || "lain di SVG"})`);
+export function colourCountDetail(
+  values: readonly string[],
+  sources: ReadonlyMap<string, readonly string[]>,
+  limit: number,
+  opts: { caseExact?: boolean } = {},
+): string {
+  // Swarm 1.2.7 row 48b (M2-04): `caseExact` looks a value up as written (chart series names, which may differ only
+  // in case); the default upper-cases it (hex colour values). Diagram callers pass no options: output unchanged.
+  const items = values.map((v) => `${v} (${(sources.get(opts.caseExact ? v : v.toUpperCase()) ?? []).join(", ") || "lain di SVG"})`);
   const rest = limit - values.length;
   return `dihitung ${values.length}: ${items.join(", ")} — sisa ${rest < 0 ? `\u2212${-rest}` : String(rest)}`;
 }

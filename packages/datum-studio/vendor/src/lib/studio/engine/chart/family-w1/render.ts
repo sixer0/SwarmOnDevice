@@ -94,6 +94,23 @@ interface SeriesAccent {
   point?: { si: number; ci: number };
 }
 
+/**
+ * Swarm 1.2.7 row 48b (M2-04): the one accent-series rule — series with `accent`, plus the series named by the
+ * accent request (`series`, `group`); the lowest index is drawn as the accent. Shared by the drawing
+ * (`resolveSeriesAccent`) and the line-count refusal detail (`lineCountDetail`), so the refusal names the colours
+ * the chart would draw. `onMissing` receives a requested name that is not in the data.
+ */
+function seriesAccentIndex(series: readonly SeriesIn[], req: AccentRequest, onMissing?: (name: string) => void): { set: Set<number>; index: number } {
+  const set = new Set<number>(series.flatMap((s, i) => (s.accent ? [i] : [])));
+  for (const name of [req.series, req.group]) {
+    if (name === undefined) continue;
+    const i = series.findIndex((s) => s.name === name);
+    if (i >= 0) set.add(i);
+    else onMissing?.(name);
+  }
+  return { set, index: set.size ? Math.min(...set) : -1 };
+}
+
 /** Aksen seri dan titik pada data series; melempar DATUM-26 bila subjek > maks. */
 function resolveSeriesAccent(
   spec: StudioChartV1,
@@ -107,14 +124,7 @@ function resolveSeriesAccent(
   allowPoint: boolean,
 ): SeriesAccent {
   const fid = figureLabel(spec);
-  const set = new Set<number>(series.flatMap((s, i) => (s.accent ? [i] : [])));
-  for (const name of [req.series, req.group]) {
-    if (name === undefined) continue;
-    const i = series.findIndex((s) => s.name === name);
-    if (i >= 0) set.add(i);
-    else issues.push(ignoredAccent(`seri beraksen "${name}" tidak ada di data`));
-  }
-  const sIdx = set.size ? Math.min(...set) : -1;
+  const { set, index: sIdx } = seriesAccentIndex(series, req, (name) => issues.push(ignoredAccent(`seri beraksen "${name}" tidak ada di data`)));
   let point: SeriesAccent["point"];
   if (req.point) {
     if (!allowPoint) {
@@ -183,20 +193,17 @@ function lineLooks(style: W1Style, pal: ChartPalette, n: number, accent: number)
  * remaining allowance (negative when over the limit, U+2212).
  */
 function lineCountDetail(style: W1Style, pal: ChartPalette, series: readonly SeriesIn[], req: AccentRequest, limit: number): string {
-  const set = new Set<number>(series.flatMap((s, i) => (s.accent ? [i] : [])));
-  for (const name of [req.series, req.group]) {
-    const i = name === undefined ? -1 : series.findIndex((s) => s.name === name);
-    if (i >= 0) set.add(i);
-  }
-  const looks = lineLooks(style, pal, series.length, set.size ? Math.min(...set) : -1);
+  // Row 48b (M2-04): the accent index comes from the drawing rule (seriesAccentIndex), and `sources` is keyed
+  // case-exactly (series names are unique case-exactly, requireSeries), so "a" and "A" keep their own colours.
+  const looks = lineLooks(style, pal, series.length, seriesAccentIndex(series, req).index);
   const values = series.map((s) => `seri "${s.name}"`);
   const sources = new Map<string, string[]>(
     series.map((s, i) => {
       const hex = `#${looks[i].stroke.replace(/^#/, "").toUpperCase()}`;
-      return [values[i].toUpperCase(), looks[i].dash ? [hex, "putus-putus"] : [hex]];
+      return [values[i], looks[i].dash ? [hex, "putus-putus"] : [hex]];
     }),
   );
-  return colourCountDetail(values, sources, limit);
+  return colourCountDetail(values, sources, limit, { caseExact: true });
 }
 
 /**
