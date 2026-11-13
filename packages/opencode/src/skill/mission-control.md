@@ -18,9 +18,9 @@ Call studio_mission_create with dryRun: true, fix what it reports, then call it 
 
 ```json
 {"dryRun":true,"mission":{"id":"2026-11-08_example-mission","title":"Example mission","type":"feature-release","owner":"swarm-workflow","rows":[
-  {"id":"1","phase":"identification","kind":"spec","title":"Write the spec","agent":"planner","model":{"tier":"thinker"},"deps":[],"size":"S","status":"pending","output":"identification/02_structured.md","verification":"spec reviewed"},
-  {"id":"2","phase":"implementation","kind":"implementation","title":"Build it","agent":"coder","model":{"tier":"worker","reason":"Swarm tier map: coder runs on worker"},"deps":["1:C"],"size":"M","status":"pending","output":"implementation/02_build.md","verification":"targeted tests pass"},
-  {"id":"3","phase":"verification","kind":"test","title":"Run the tests","agent":"verifier","model":{"tier":"thinker"},"deps":["2:B"],"size":"S","status":"pending","output":"test/01_test_report.md","verification":"suite green"}
+  {"id":"1","phase":"identification","kind":"spec","title":"Write the spec","agent":"planner","model":{"tier":"thinker"},"deps":[],"size":"S","status":"pending","output":"01_identification/02_structured.md","verification":"spec reviewed"},
+  {"id":"2","phase":"implementation","kind":"implementation","title":"Build it","agent":"coder","model":{"tier":"worker","reason":"Swarm tier map: coder runs on worker"},"deps":["1:C"],"size":"M","status":"pending","output":"05_implementation/02_build.md","verification":"targeted tests pass"},
+  {"id":"3","phase":"verification","kind":"test","title":"Run the tests","agent":"verifier","model":{"tier":"thinker"},"deps":["2:B"],"size":"S","status":"pending","output":"07_test/01_test_report.md","verification":"suite green"}
 ]}}
 ```
 
@@ -60,7 +60,7 @@ studio_mission_set_status {"mission":"2026-11-08_example-mission","to":"running"
 
 studio_mission_update_row {"mission":"2026-11-08_example-mission","rows":[{"id":"2","status":"running"}]}
 studio_mission_update_row {"mission":"2026-11-08_example-mission","rows":[{"id":"2","checkpoint":{"n":2,"m":5,"label":"render round 2"}}],"messages":[{"from":"controller","to":"agent","kind":"instruction","text":"Row 2: build it and run the targeted tests.","row":"2"}]}
-studio_mission_update_row {"mission":"2026-11-08_example-mission","rows":[{"id":"2","status":"done","note":"targeted tests: 14 pass, log implementation/02_build.md"}]}
+studio_mission_update_row {"mission":"2026-11-08_example-mission","rows":[{"id":"2","status":"done","note":"targeted tests: 14 pass, log 05_implementation/02_build.md"}]}
 studio_mission_update_row {"mission":"2026-11-08_example-mission","rows":[{"id":"3","status":"blocked","note":"what blocks it and what is needed"}]}
 
 While a row runs, progress and hand-offs go on it as a checkpoint {n, m, label} and messages {from, to, kind, text, row} (second line), sent before the done patch. running -> done needs a note (the check and its result); needs-review is optional: use it only when someone else must judge the result. blocked and dropped need a note. Never drop a row to get past a gate.
@@ -72,9 +72,9 @@ Read the result, not only the call: each patch applies or is refused on its own,
 Decisions live in the mission store: it is the one decision record. Record each decision before the change it allows; decisions are append-only, and a correction is a new decision with "supersedes":["C2"]. After approval, adding a row, changing a structural field (phase, kind, deps, agent, title, output, verification, ownership, size, model), dropping a row or reopening a done row needs a decision id. rows[].decision gives one patch its own decision and overrides the call-level decision.
 
 studio_mission_record_decision {"mission":"2026-11-08_example-mission","decision":{"id":"C2","by":"controller","date":"2026-11-08","text":"Add a docs check; row 3 is covered by row 2.","rows":["3","4"]}}
-studio_mission_update_row {"mission":"2026-11-08_example-mission","rows":[{"id":"4","decision":"C2","add":{"id":"4","phase":"verification","kind":"test","title":"Check the docs","agent":"verifier","model":{"tier":"thinker"},"deps":["2:B"],"size":"S","status":"pending","output":"test/02_docs_check.md","verification":"links resolve"}},{"id":"3","decision":"C2","status":"dropped","note":"covered by row 2"}]}
+studio_mission_update_row {"mission":"2026-11-08_example-mission","rows":[{"id":"4","decision":"C2","add":{"id":"4","phase":"verification","kind":"test","title":"Check the docs","agent":"verifier","model":{"tier":"thinker"},"deps":["2:B"],"size":"S","status":"pending","output":"07_test/02_docs_check.md","verification":"links resolve"}},{"id":"3","decision":"C2","status":"dropped","note":"covered by row 2"}]}
 
-Rows added or dropped after approval show in studio_mission_get as derived.drift, each with its decision id. docs/<mission>/decisions/decisions.md is an export of that register (studio_mission_export), never a second place to write decisions.
+Rows added or dropped after approval show in studio_mission_get as derived.drift, each with its decision id. docs/<mission>/09_decisions/decisions.md is an export of that register (studio_mission_export), never a second place to write decisions.
 
 An open issue found on the way is a finding: studio_mission_record_finding {"mission":"2026-11-08_example-mission","finding":{"id":"F1","severity":"medium","title":"Docs link check is manual","sourceRow":"2","ownerRow":"4","status":"open"}}. An open finding names the row that owns the fix (ownerRow); accepted or deferred needs a decision.
 
@@ -94,7 +94,7 @@ Stopping unfinished: studio_mission_set_status {"mission":"2026-11-08_example-mi
 
 Before closing, check that each row's status matches the work actually done (a skipped step is dropped with a note saying why): studio_mission_get {"mission":"2026-11-08_example-mission","include":["rows","findings","deliverables"]}
 
-Close in one call: studio_mission_set_status {"mission":"2026-11-08_example-mission","to":"done"}. It is refused MISSION_ROWS_OPEN while a row is not done or dropped; on success it returns the decision register, decisions {count, ids}. Then write the record files: studio_mission_export {"mission":"2026-11-08_example-mission","write":true}. They go under docs/<mission>/; when they exist add "overwrite":true and the old copies are kept in that folder's .bak/.
+Close in one call: studio_mission_set_status {"mission":"2026-11-08_example-mission","to":"done"}. It is refused MISSION_ROWS_OPEN while a row is not done or dropped; on success it returns the decision register, decisions {count, ids}. Then write the record files: studio_mission_export {"mission":"2026-11-08_example-mission","write":true}. They go under docs/<mission>/ in numbered folders (01_identification/ .. 10_report/, then 11_deliverables/); a folder that already holds an older unnumbered export keeps it (folderLayout: legacy) and nothing is moved. When they exist add "overwrite":true and the old copies are kept in that folder's .bak/. Save final deliverables with studio_file_verify, downloadDir "docs/<mission>/11_deliverables".
 
 ## Refusals: what each code means and the next call
 

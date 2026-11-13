@@ -22,6 +22,7 @@ import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool
 import { checkMissionSchema, describeAjvError } from "../../store/mission/validate.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 import { readActivityAt, readDeliverables, readMessagesTail, type OutputVerificationSource } from "./deliverables.ts"
+import { EXPORT_PATHS, LEGACY_EXPORT_PATHS, type ExportFileKey } from "./export/render.ts"
 
 /** The part of SqliteStudioStore the mission tools use (row 126/155: + the G4 source, row 149's listOutputVerifications, see deliverables.ts). */
 export interface MissionHostStore extends OutputVerificationSource {
@@ -479,7 +480,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_export",
       "Export a mission to /docs",
-      `Render the §9 Markdown files of a mission (blueprint rows, status, decisions, delegation trail). write: true writes them under <session root>/docs/<mission>/ only; an existing file is refused (FILE_EXISTS) unless overwrite (a backup copy is made first in that folder's ${BACKUP_DIR_NAME}/ subfolder, never beside the file; each file returns backupResidue, the backups of that file now kept there).`,
+      `Render the §9 Markdown files of a mission (blueprint, status, decisions, delegation trail). write: true writes under <session root>/docs/<mission>/ only, in numbered folders (01_identification .. 11_deliverables); a folder holding an older unnumbered export keeps it (folderLayout: legacy), nothing moved. An existing file is FILE_EXISTS unless overwrite (backup first in that folder's ${BACKUP_DIR_NAME}/; backupResidue counts them).`,
       false,
       async (a, s) => {
         const mission = a.mission as string
@@ -488,7 +489,17 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const files = (Array.isArray(a.files) ? a.files : [...EXPORT_FILES]) as ExportFile[]
         const rendered = await opts.exporter({ mission, files, store })
         const base = path.join(s.fileRoot, "docs", mission)
-        const out = rendered.map((f) => {
+        // 1.2.7 row 28 (U-6, U1/Q3): new exports use the numbered folders; a folder that already holds a 1.2.6 export
+        // (identification/02_structured_rows.md or decisions/decisions.md) and no 01_identification/ or 09_decisions/
+        // keeps the legacy paths. Nothing is renamed, moved or deleted; the path guards below are unchanged.
+        const legacyFiles = [LEGACY_EXPORT_PATHS.blueprint, LEGACY_EXPORT_PATHS.decisions]
+        const numberedDirs = [path.dirname(EXPORT_PATHS.blueprint), path.dirname(EXPORT_PATHS.decisions)]
+        const folderLayout: "numbered" | "legacy" =
+          legacyFiles.some((p) => nfs.exists(path.join(base, p))) && !numberedDirs.some((d) => nfs.exists(path.join(base, d))) ? "legacy" : "numbered"
+        const keyOf = new Map((Object.keys(EXPORT_PATHS) as ExportFileKey[]).map((k) => [EXPORT_PATHS[k] as string, k]))
+        const out = rendered.map((f0) => {
+          const k = keyOf.get(f0.path)
+          const f = folderLayout === "legacy" && k ? { ...f0, path: LEGACY_EXPORT_PATHS[k] } : f0
           const rel = path.normalize(f.path)
           if (path.isAbsolute(rel) || rel.startsWith("..")) throw new MissionToolError("PATH_OUTSIDE_ROOT", "export path leaves docs/<mission>/", { path: f.path })
           const bytes = Buffer.from(f.markdown, "utf8")
@@ -512,7 +523,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const listed = out.map(({ path: p, bytes, sha256, markdown }) => ({ path: p, bytes, sha256, markdown, ...(backups.get(p) ?? {}) }))
         const residue = [...backups.values()].reduce((n, b) => n + b.backupResidue, 0)
         const bakNote = a.write === true && a.overwrite === true ? `; backups in ${BACKUP_DIR_NAME}/, backupResidue ${residue}` : ""
-        return { text: `${listed.length} files${a.write === true ? ` written under ${base}` : " (not written)"}: ${listed.map((f) => f.path).join(", ")}${bakNote}`, data: { files: listed, written: a.write === true } }
+        return { text: `${listed.length} files${a.write === true ? ` written under ${base}` : " (not written)"} (folders: ${folderLayout}): ${listed.map((f) => f.path).join(", ")}${bakNote}`, data: { files: listed, written: a.write === true, folderLayout } }
       },
     ),
     tool(

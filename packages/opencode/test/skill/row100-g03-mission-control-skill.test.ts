@@ -73,7 +73,8 @@ describe("row 100 S-03b: delegation rules", () => {
 describe("row 100 W-08: one decision source", () => {
   test("decisions live in the mission store; decisions.md is its export", () => {
     expect(flat).toContain("Decisions live in the mission store: it is the one decision record.")
-    expect(flat).toContain("docs/<mission>/decisions/decisions.md is an export of that register (studio_mission_export), never a second place to write decisions.")
+    // 1.2.7 row 28 (U-6, INTENT): the export folder is numbered (09_decisions).
+    expect(flat).toContain("docs/<mission>/09_decisions/decisions.md is an export of that register (studio_mission_export), never a second place to write decisions.")
   })
 })
 
