@@ -150,6 +150,8 @@ import type {
   MemorySettingsResponses,
   MemoryUpdateErrors,
   MemoryUpdateResponses,
+  MemoryVaultErrors,
+  MemoryVaultResponses,
   ModelRef,
   MoveSessionDestination,
   OutputFormat,
@@ -179,6 +181,9 @@ import type {
   ProjectInitGitResponses,
   ProjectListErrors,
   ProjectListResponses,
+  ProjectRehomeErrors,
+  ProjectRehomeInput,
+  ProjectRehomeResponses,
   ProjectTrustDecideErrors,
   ProjectTrustDecideResponses,
   ProjectTrustErrors,
@@ -3492,6 +3497,38 @@ export class Memory extends HeyApiClient {
   }
 
   /**
+   * Get the vault mirror of project memory
+   *
+   * Return the project's folder under the vault's swarm-memory folder, the path of its index note, and whether that note exists and is still Swarm's own. Writes nothing. A language, when given, is remembered for the next mirror run, which then re-renders the generated labels once in that language.
+   */
+  public vault<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      language?: "en" | "id"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "language" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<MemoryVaultResponses, MemoryVaultErrors, ThrowOnError>({
+      url: "/memory/vault",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Remove a note
    *
    * Remove a note from the project memory.
@@ -3977,6 +4014,45 @@ export class Project extends HeyApiClient {
     )
     return (options?.client ?? this.client).patch<ProjectUpdateResponses, ProjectUpdateErrors, ThrowOnError>({
       url: "/project/{projectID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Move a mission into a group
+   *
+   * Move docs/<missionId> from the Default Project root into a one-level group folder, with the mission's memory notes and sessions, under a write-ahead journal that undoes every step on a failure. Any refusal leaves the disk unchanged. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 (also on a server holding no nonce).
+   */
+  public rehome<ThrowOnError extends boolean = false>(
+    parameters?: {
+      "x-swarm-desktop-nonce"?: string
+      directory?: string
+      workspace?: string
+      projectRehomeInput?: ProjectRehomeInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "projectRehomeInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProjectRehomeResponses, ProjectRehomeErrors, ThrowOnError>({
+      url: "/project/rehome",
       ...options,
       ...params,
       headers: {
