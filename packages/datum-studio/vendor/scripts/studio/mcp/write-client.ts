@@ -10,9 +10,10 @@ import type { InlineV2 } from "../../../src/lib/studio/contract";
 import { STUDIO_TIERS } from "../../../src/lib/studio/contract/enums";
 import { chapterLabelText, CONTROL_FIELD_LABELS, FRONT_PAYLOAD_LABELS, WRAPPER_TEXT, type WrapperLang } from "../../../src/lib/studio/engine/front/texts";
 import { parseInline } from "../../../src/lib/studio/services/import/inline";
+import { validateBlockV2 } from "../../../src/lib/studio/services/revisions/v2/body";
 import { McpToolError } from "./safety";
 import { tok, type ToolWarning } from "./tool-kit";
-import { isRows, type Cell, type ChartInput, type Rows } from "./write-content";
+import { isRows, type Cell, type ChartInput, type DiagramInput, type Rows } from "./write-content";
 
 type Rec = Record<string, unknown>;
 const NOOP = { warn: () => undefined, drop: () => undefined };
@@ -323,6 +324,39 @@ export function chartBlock(c: ClientChart, metaSource: string | null, warn: (w: 
   return { type: "chart", code, data, ...(c.unit ? { unit: c.unit } : {}), caption: inl(caption), ...(source !== null ? { source: inl(source) } : {}) };
 }
 
+// ── diagram ─────────────────────────────────────────────────────────────
+
+const DIAGRAM_MAX_ISSUES = 5;
+/**
+ * Swarm 1.2.8 row 33 (H-NA, N8-206): `{ diagram: { spec | artifactId, caption, source, keyRow } }` -> blok `DiagramV2`
+ * apa adanya (spec tidak diubah; urutan kunci masukan tidak berpengaruh). Caption/source teks -> InlineV2 (nomor di
+ * awal caption dibuang seperti grafik; sumber tidak dikarang: blok, atau meta.source). Validator v2 bersama
+ * (`validateBlockV2`, sama dengan R16) menolak spec yang tidak sah dengan pesannya sendiri (isu SCHEMA_INVALID).
+ */
+export function diagramBlock(d: DiagramInput, metaSource: string | null, warn: (w: ToolWarning) => void, where: string, issue: IssueSink = THROW): Rec {
+  const { spec, artifactId, caption, source, keyRow, ...rest } = d as DiagramInput & Rec;
+  const cap = typeof caption === "string" ? (caption.trim() === "" ? undefined : inl(stripCaptionPrefix(caption.trim(), warn, where))) : caption;
+  let src: unknown = source;
+  if (typeof source === "string" || source === undefined) {
+    const s = sourceOf(typeof source === "string" ? source : undefined, metaSource, warn, issue, where, "diagram");
+    src = s !== null ? inl(s) : undefined;
+  }
+  const block: Rec = {
+    type: "diagram",
+    ...(spec !== undefined ? { spec } : {}),
+    ...(artifactId !== undefined ? { artifactId } : {}),
+    ...(cap !== undefined ? { caption: cap } : {}),
+    ...(src !== undefined ? { source: src } : {}),
+    ...(keyRow !== undefined ? { keyRow } : {}),
+    ...rest,
+  };
+  const found = validateBlockV2(block, "/diagram");
+  if (found.length === 0) return block;
+  const shown = found.slice(0, DIAGRAM_MAX_ISSUES).map((i) => `${i.pointer} ${i.message}`);
+  issue({ where, code: "SCHEMA_INVALID", message: `blok {diagram} ditolak validator v2: ${shown.join("; ")}${found.length > DIAGRAM_MAX_ISSUES ? ` (+${found.length - DIAGRAM_MAX_ISSUES} isu lain)` : ""}` });
+  return {};
+}
+
 // ── tabel ───────────────────────────────────────────────────────────────
 
 const NUMERAL = /^[−+-]?(?:\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d+)?\s*%?$/;
@@ -383,7 +417,7 @@ export function tableBlock(rows: Rows, caption: string | undefined, source: stri
 
 // ── bab ─────────────────────────────────────────────────────────────────
 
-export type ClientBlock = string | Rows | { table: Rows; caption?: string; source?: string; unit?: string } | { chart: ClientChart } | { list: string[]; ordered?: boolean } | { subheading: string };
+export type ClientBlock = string | Rows | { table: Rows; caption?: string; source?: string; unit?: string } | { chart: ClientChart } | { diagram: DiagramInput } | { list: string[]; ordered?: boolean } | { subheading: string };
 export interface ClientSection {
   heading: string;
   blocks: ClientBlock[];
@@ -558,10 +592,11 @@ export function chapterOf(sec: ClientSection, key: string, title: string, metaSo
       sections.push({ title: inl(t), blocks: [] });
     } else if (isRows(o.table)) push(tableBlock(o.table, o.caption as string | undefined, o.source as string | undefined, metaSource, warn, w, title, issue, o.unit as string | undefined));
     else if (o.chart !== null && typeof o.chart === "object") push(chartBlock(o.chart as ClientChart, metaSource, warn, w, title, issue));
+    else if (o.diagram !== null && typeof o.diagram === "object" && !Array.isArray(o.diagram)) push(diagramBlock(o.diagram as DiagramInput, metaSource, warn, w, issue));
     else if (Array.isArray(o.list)) {
       const items = (o.list as unknown[]).map((x) => String(x).trim()).filter((x) => x !== "").map((x) => inl(x));
       if (items.length > 0) push({ type: "list", ...(o.ordered === true ? { ordered: true } : {}), items });
-    } else issue({ where: w, code: "INVALID_ARGUMENT", message: "blok tidak dikenal (string, larik baris, {table}, {chart}, {list}, {subheading})" });
+    } else issue({ where: w, code: "INVALID_ARGUMENT", message: "blok tidak dikenal (string, larik baris, {table}, {chart}, {diagram}, {list}, {subheading})" });
   });
   if (stripped > 0) warn({ code: "SUBHEADING_NUMBER_STRIPPED", message: `${where}: ${stripped} nomor sumber di awal sub-judul dibuang; mesin menomori sub-bagian mengikuti nomor bab (${key}.1, ${key}.2, ...)` });
   if (intro.length === 0 && sections.every((s) => s.blocks.length === 0)) return null;

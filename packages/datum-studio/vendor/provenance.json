@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 608,
-  "copied": 406,
-  "patched": 160,
+  "copied": 404,
+  "patched": 162,
   "replaced": 12,
   "added": 30,
-  "bytes": 10028638
+  "bytes": 10033120
  },
  "files": [
   {
@@ -281,9 +281,10 @@
   {
    "path": "scripts/studio/mcp/doc-tools.ts",
    "status": "patched",
-   "bytes": 77935,
+   "bytes": 78118,
    "source_sha256": "af47f4e9a923028b33ead625d6b22d9c7a308e5d430cf1bde5f09a9e32fc7df8",
-   "sha256": "0cf32b93b0bc57e35d21756eb9ff1a4d0c0b8bd12c69ee3f34e8655014c879e5",
+   "sha256": "5cde02720abd09712e259d0268db75a7925f9bb96cb8a8747e60d1ec58d992b4",
+   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA, D-H8; N8-205)", "summary": "studio_chapter_submit prepare: a JSON-string submission is parsed once (parseJsonArgOnce) before the schema; a parsed object replaces it with warning ARGS_PARSED, anything else keeps INVALID_ARGUMENT /submission must be object; description and schema unchanged", "before_sha256": "0cf32b93b0bc57e35d21756eb9ff1a4d0c0b8bd12c69ee3f34e8655014c879e5", "after_sha256": "5cde02720abd09712e259d0268db75a7925f9bb96cb8a8747e60d1ec58d992b4", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "d233c8c69d9532b8e174830677b98b59205e12c99daad73d3af8fa82308dc2fb"},
    "patch_row32": {"id": "128-32-hn13", "row": "32", "decision": "1.2.8 row 32 (AC-HN13, H-N13; N8-208, N8-209)", "summary": "studio_chapter_import_markdown summary counts fences kept as code (warnings DIAGRAM_FENCE_INVALID + FENCE_KEPT_AS_CODE): importSummary.keptAsCode and text '<n> konstruk dipetakan, <m> kept as code, <w> peringatan, <d> dibuang'; description and schema unchanged", "before_sha256": "6ade167842fae5b4a145def40b6c35b7beb1ddc0414ce55e1af8123e92ccc06d", "after_sha256": "0cf32b93b0bc57e35d21756eb9ff1a4d0c0b8bd12c69ee3f34e8655014c879e5", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/32_row32_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "75c1c2b588a83c32d44f103c6a0ae2dacb4f208d293d515bfc3a75cf94ab24ab"},
    "patch_row35b": {"id": "127-35b-n3-status-counts", "row": "35b", "decision": "1.2.7 row 35b (AC-N3, N7-063)", "summary": "studio_document_status text: FAIL per kode counts findings, not rows (a code whose FAIL summary row carries findingsAll counts its real total; the summary row is never a finding); one line per such code after FAIL per kode: '<CODE>: total N (dirinci I, tidak dirinci R)' (N7-063); the '+N temuan lain' line subtracts what the listed rows stand for (a listed summary row stands for its rest). Under 100 findings per code the text is byte-identical; description and schema unchanged", "before_sha256": "019ebf9473a4576b6b538790c5be7a02e3a99ed00b03869a253535f05bd63cf4", "after_sha256": "6ade167842fae5b4a145def40b6c35b7beb1ddc0414ce55e1af8123e92ccc06d", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/35b_row35b_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "28d2d9adb76210d0e2037a66e434410e8d76aaf1ea8c36aaea784cea238cf886"},
    "patch_row78b": {"id": "row78b-status-render-verdict", "row": "78b", "decision": "1.2.6 C16 (U24)", "summary": "studio_document_status default text: each output line carries the stored U24 page verdict from R05 outputs[].renderVerification (RENDER_VERIFIED(U24) / RENDER_UNVERIFIED(U24) [STALE] fail= unknown=, OVERLAP_CLIP coverage line; RENDER_VERIFY_PENDING when absent), within DOCUMENT_STATUS_TEXT_MAX_BYTES; export RENDER_VERIFY_PENDING; description and schema unchanged", "before_sha256": "662ae158ac9979aa492ec2cda5a343484c52798e513f2c23e126523c5328bdf7", "after_sha256": "70fea230599bbdb987270c3af5167e237f6804ff4db4fe4dc1a590c6b5ee0e47", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/78b_row78b_diffs/scripts_studio_mcp_doc-tools.ts.diff", "diff_sha256": "c297a6ceb76078675001f1719163962137364578ae653754c290a06b34947eec"},
@@ -391,9 +392,10 @@
   {
    "path": "scripts/studio/mcp/tool-kit.ts",
    "status": "patched",
-   "bytes": 25271,
+   "bytes": 26137,
    "source_sha256": "25435916568dbd4df59e5fe4fd9a21dbe1b2b477e38fab302bfa16e88afec36b",
-   "sha256": "8b15acb5545aeb5a15c9ac1ca9c82d254fe43942f17861c47b83d64184c9907f",
+   "sha256": "421520a6872e309c1e1cfba51619f1bfaf212e71105efac45f661bff793873ac",
+   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA, D-H8; N8-205)", "summary": "NEW parseJsonArgOnce(args, key): a string argument is JSON-parsed once; only a plain object replaces it (warning ARGS_PARSED '<key> berupa teks JSON diurai satu kali; kirim <key> sebagai objek'); a non-parsing string, a string of a string or a non-object stays as is for the schema. ARGS_PARSED added to INFORMATIONAL_WARNING_CODES", "before_sha256": "8b15acb5545aeb5a15c9ac1ca9c82d254fe43942f17861c47b83d64184c9907f", "after_sha256": "421520a6872e309c1e1cfba51619f1bfaf212e71105efac45f661bff793873ac", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_tool-kit.ts.diff", "diff_sha256": "85428e92e48de7f2cacd09242c73e93e498eea62b57f8230ee88358aaf51ab95"},
    "patch_row53a": {"id": "row53a-m01-render-timeout", "row": "53a", "decision": "1.2.6 patch M-01 (U1; register N-044; 01d L1)", "summary": "http() request gains optional timeoutMs, forwarded to studioRequest opts (absent = STUDIO_HTTP_TIMEOUT_MS); a timed-out StudioUnreachableError keeps code REMOTE_UNREACHABLE and adds extra.timedOut = true", "before_sha256": "01b088ee9ce003b442ae97083684eaab9b67501d2450cb29e74c104c46e2e113", "after_sha256": "8b15acb5545aeb5a15c9ac1ca9c82d254fe43942f17861c47b83d64184c9907f", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/53a_row53a_diffs/scripts_studio_mcp_tool-kit.ts.diff", "diff_sha256": "5cd208598120a1cc444a6cd2b6af5b8e2f90588eb019b67b7057350502ecc2ae"},
    "patch_row69c": {
     "id": "row69c-archived-issue-code",
@@ -483,17 +485,19 @@
   },
   {
    "path": "scripts/studio/mcp/write-client.ts",
-   "status": "copied",
-   "bytes": 38866,
+   "status": "patched",
+   "bytes": 41246,
    "source_sha256": "fb302265284ff31a548215442d02bb646dec8ddf7021f763f7024a500577aaf2",
-   "sha256": "fb302265284ff31a548215442d02bb646dec8ddf7021f763f7024a500577aaf2"
+   "sha256": "03fc5ea5490d4e04f7195bff82e3764d3ec304ae6ee9dd82fe2ac0d7091d001a",
+   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206)", "summary": "NEW diagramBlock(): studio_write/studio_edit client block {diagram:{spec|artifactId, caption, source, keyRow}} -> DiagramV2 (spec untouched, fixed key order; caption/source text -> InlineV2, caption number prefix stripped, source from the block or meta.source, never invented), checked by the shared v2 validator validateBlockV2 (refusal = issue SCHEMA_INVALID with up to 5 validator messages); chapterOf maps it; ClientBlock gains {diagram}; 'blok tidak dikenal' list names {diagram}. Copied -> patched", "before_sha256": "fb302265284ff31a548215442d02bb646dec8ddf7021f763f7024a500577aaf2", "after_sha256": "03fc5ea5490d4e04f7195bff82e3764d3ec304ae6ee9dd82fe2ac0d7091d001a", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-client.ts.diff", "diff_sha256": "a8c94243e67d5e137aa6a8661d3433da9659b52159f8c8675b7004f637a9e28c"}
   },
   {
    "path": "scripts/studio/mcp/write-content.ts",
-   "status": "copied",
-   "bytes": 41965,
+   "status": "patched",
+   "bytes": 42660,
    "source_sha256": "f383ea10cd07a03b65cc4e76e0340d8fd327c021be1825bd8ea300913174875c",
-   "sha256": "f383ea10cd07a03b65cc4e76e0340d8fd327c021be1825bd8ea300913174875c"
+   "sha256": "69ddb9d58c014094469b7561391a908226e2491f6ca3fd4afde56aca48ae9685",
+   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206)", "summary": "NEW DiagramInput; Block union gains {diagram}; a work report refuses {diagram} with INVALID_ARGUMENT 'laporan kerja tidak memuat figur; {diagram} hanya untuk dokumen klien (studio_write dengan template)'; 'blok tidak dikenal' list names {diagram}. Copied -> patched", "before_sha256": "f383ea10cd07a03b65cc4e76e0340d8fd327c021be1825bd8ea300913174875c", "after_sha256": "69ddb9d58c014094469b7561391a908226e2491f6ca3fd4afde56aca48ae9685", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-content.ts.diff", "diff_sha256": "1cdc3cc980fbd45081eecbbb2b3362f528fbb3941687db6d62bf287cc4bcd38c"}
   },
   {
    "path": "scripts/studio/mcp/write-edit.ts",
@@ -550,9 +554,10 @@
   {
    "path": "scripts/studio/mcp/write-tools.ts",
    "status": "patched",
-   "bytes": 56747,
+   "bytes": 57105,
    "source_sha256": "0f7e2787cedd3522727213af4b02be81a54906a5b9634b18c89bcb7beb2f3148",
-   "sha256": "55d6b3d4c50cdeef7f45bf8546f15e849bf7a2968a385d91730974dedd1aa181",
+   "sha256": "b56ccd5137908646c4207f4579efd7c0c7902636a61e11dfc4cffe5ac8296d51",
+   "patch_row33": {"id": "128-33-hna", "row": "33", "decision": "1.2.8 row 33 (AC-HNA, H-NA; N8-206; tools/list budget C27)", "summary": "BLOCK schema gains {diagram:{type:object}} (content checked by the v2 validator at run time); SECTIONS description names {diagram:{spec,caption,source}} and shortens the chart part; append refusal list names {diagram}. Budget offset: DETAIL and studio_edit adoptExisting lose their descriptions (the DOCUMENT_OWNED_BY_OTHER refusal names adoptExisting). tools/list incl. write 39662 -> 39660 B, host 73728 -> 73726 B, vendor default 29997 B unchanged", "before_sha256": "55d6b3d4c50cdeef7f45bf8546f15e849bf7a2968a385d91730974dedd1aa181", "after_sha256": "b56ccd5137908646c4207f4579efd7c0c7902636a61e11dfc4cffe5ac8296d51", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/33_row33_diffs/scripts_studio_mcp_write-tools.ts.diff", "diff_sha256": "da15b23327dc8310a85277c2b5b1f3c78da0d6bece4f20e9a5c06bc0ce704a57"},
    "patch_row41": {"id": "127-41-T18", "row": "41", "decision": "1.2.7 C3 / D-7 (T-18, AC-T18, N7-074)", "summary": "studio_write description: N7-074 sentence (Kuota gambar: cek D22; pengecualian lewat parameter figure.quota.exceptionReason (tercatat REPORT).); WRITE_EXAMPLE reduced to one section, intro and chapter/client wording shortened so the description stays <= 450 chars (447); table form stays in SECTIONS.description; no schema or behaviour change", "before_sha256": "7ab6e9d6ebe2da9350de28a1806de1850f7a3a869229af50d507e374560a7ac7", "after_sha256": "2ae3f60b55d07695df46363aa060c16e7998dfb387dadeee798e53e2b696a83b", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/41_row41_diffs/write-tools.ts.diff", "diff_sha256": "4c993699c9b346d8ef0bc03e2f10509622c619c052f0eecb74d1c8255b5de571"},
    "patch_row41b": {"id": "127-41b-T18", "row": "41b", "decision": "1.2.7 C50 / M2-02 (T-18, N7-074)", "summary": "studio_write description: T-18 sentence says the exception is set by an admin and agents ask the person (no agent-sent parameter; guide 8.6); D22 and figure.quota.exceptionReason stay findable; description 447 -> 448 chars (<= 450); no schema or behaviour change", "before_sha256": "2ae3f60b55d07695df46363aa060c16e7998dfb387dadeee798e53e2b696a83b", "after_sha256": "55d6b3d4c50cdeef7f45bf8546f15e849bf7a2968a385d91730974dedd1aa181", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/41b_diffs/write-tools.ts.diff", "diff_sha256": "3e6f6e786d941c0d64b6b17304a0f0176424d0c4556eb97ba0203cae48b41b53"},
    "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_edit description: find also reaches figure captions/sources, change {what,why,impact} goes to the revision history (M-06); addRow example shortened (<= 450 chars); no schema or behaviour change", "before_sha256": "f3486cc67e329b3f4b5b98a590ed109fdfaab0753f2fd965d2444d176f7b4575", "after_sha256": "7ab6e9d6ebe2da9350de28a1806de1850f7a3a869229af50d507e374560a7ac7", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_write-tools.ts.diff", "diff_sha256": "6fbb07a4e110c5107301bf7a452b4c8b37551cc6021d6dff08cbd71e38dac04a"},
@@ -6284,6 +6289,7 @@
   "32",
   "53a",
   "56",
-  "52c"
+  "52c",
+  "33"
  ]
 }

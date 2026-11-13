@@ -120,7 +120,7 @@ export interface ToolWarning {
  * ringkas: SECTION_CREATED (bab dibuat), ROWS_COALESCED_TO_TABLE (baris datar menjadi tabel, bisa menjadi butir record),
  * VERDICT_NORMALIZED (vonis diubah ke enum).
  */
-export const INFORMATIONAL_WARNING_CODES: ReadonlySet<string> = new Set(["ITEM_KEY_COLUMN_ADDED", "ITEM_KEY_GENERATED", "ARGS_UNWRAPPED", "META_LIFTED_FROM_EDITS"]);
+export const INFORMATIONAL_WARNING_CODES: ReadonlySet<string> = new Set(["ITEM_KEY_COLUMN_ADDED", "ITEM_KEY_GENERATED", "ARGS_UNWRAPPED", "META_LIFTED_FROM_EDITS", "ARGS_PARSED"]);
 
 /** Saring peringatan informasional untuk hasil ringkas; `detail: true` mengembalikan daftar utuh. */
 export function quietWarnings(warnings: readonly ToolWarning[], detail: boolean): ToolWarning[] {
@@ -216,6 +216,26 @@ export function unwrapToolArgs(toolName: string, args: unknown): { args: unknown
   if (Object.keys(args).some((k) => k !== "arguments" && k !== "name")) return { args, warning: null };
   if (args.name !== undefined && args.name !== toolName && args.name !== `mcp__studio__${toolName}`) return { args, warning: null };
   return { args: args.arguments, warning: { code: "ARGS_UNWRAPPED", message: "argumen terbungkus { arguments, name } dibuka satu tingkat; kirim argumen alat langsung sebagai objek" } };
+}
+
+/**
+ * Swarm 1.2.8 row 33 (H-NA, D-H8, N8-205): sebagian klien mengirim argumen objek bersarang sebagai teks JSON. Medan
+ * `key` yang berupa teks diurai SATU kali; hanya hasil berupa objek biasa yang menggantikan teks itu (di tempat) dan
+ * memberi peringatan ARGS_PARSED. Teks yang tidak terurai, teks berisi teks, atau hasil bukan objek dibiarkan apa
+ * adanya sehingga skema alat menolaknya seperti sebelumnya (`/<key> must be object`).
+ */
+export function parseJsonArgOnce(args: Args, key: string): ToolWarning[] {
+  const v = args[key];
+  if (typeof v !== "string") return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(v);
+  } catch {
+    return [];
+  }
+  if (!isRecord(parsed)) return [];
+  args[key] = parsed;
+  return [{ code: "ARGS_PARSED", message: `${key} berupa teks JSON diurai satu kali; kirim ${key} sebagai objek` }];
 }
 
 /** Nama berkas virtual untuk laporan yang dikirim sebagai teks (tidak pernah ada di disk). */

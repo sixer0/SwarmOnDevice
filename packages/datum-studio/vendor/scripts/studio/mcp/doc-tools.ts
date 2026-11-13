@@ -40,6 +40,7 @@ import {
   neutralizeDeep,
   num,
   obj,
+  parseJsonArgOnce,
   pick,
   plainAgentId,
   query,
@@ -711,6 +712,8 @@ const chapterSubmitTool: ToolDef = {
   ),
   annotations: { title: "Kirim bab JSON (R12)", ...WRITE, idempotentHint: true },
   toolsets: ["documents"],
+  // Swarm 1.2.8 row 33 (H-NA, D-H8): submission sebagai teks JSON diurai sekali sebelum skema (ARGS_PARSED).
+  prepare: (a) => parseJsonArgOnce(a, "submission"),
   async run(a, ctx) {
     let body = withBodyAgent(a.submission as Rec, a, ctx);
     requireBodyBytes(body, "submission");

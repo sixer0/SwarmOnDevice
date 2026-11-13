@@ -35,7 +35,18 @@ export interface RefInput {
   pid?: string;
   revision?: string | number;
 }
-export type Block = string | Rows | { table: Rows; caption?: string; source?: string; unit?: string } | { chart: ChartInput } | { list: string[]; ordered?: boolean } | { subheading: string } | { ref: RefInput };
+/**
+ * Swarm 1.2.8 row 33 (H-NA, N8-206): blok `{ diagram }` = isi blok `DiagramV2` (spec XOR artifactId, caption, source,
+ * keyRow); caption/source boleh teks atau InlineV2. Hanya dokumen klien (laporan kerja tidak memuat figur).
+ */
+export interface DiagramInput {
+  spec?: Record<string, unknown>;
+  artifactId?: string;
+  caption?: string | Record<string, unknown>;
+  source?: string | Record<string, unknown>;
+  keyRow?: unknown;
+}
+export type Block = string | Rows | { table: Rows; caption?: string; source?: string; unit?: string } | { chart: ChartInput } | { diagram: DiagramInput } | { list: string[]; ordered?: boolean } | { subheading: string } | { ref: RefInput };
 export interface SectionInput {
   heading: string;
   blocks: Block[];
@@ -563,7 +574,8 @@ export function blockLines(b: Block, warn: (w: ToolWarning) => void, where: stri
     warn({ code: "SUBHEADING_AS_PARAGRAPH", message: `${where}: laporan kerja tanpa sub-bagian; sub-judul ditulis sebagai paragraf` });
     return o.subheading.trim() === "" ? [] : paragraphLines(o.subheading.trim(), warn, where);
   }
-  throw new McpToolError("INVALID_ARGUMENT", `${where}: blok tidak dikenal (string = paragraf, larik baris = tabel, {table}, {chart}, {list}, {subheading}, {ref})`);
+  if (isObj(o) && isObj(o.diagram)) throw new McpToolError("INVALID_ARGUMENT", `${where}: laporan kerja tidak memuat figur; {diagram} hanya untuk dokumen klien (studio_write dengan template). Tidak ada yang ditulis`);
+  throw new McpToolError("INVALID_ARGUMENT", `${where}: blok tidak dikenal (string = paragraf, larik baris = tabel, {table}, {chart}, {diagram}, {list}, {subheading}, {ref})`);
 }
 
 /**

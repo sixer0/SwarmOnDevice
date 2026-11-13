@@ -62,6 +62,8 @@ const BLOCK = {
       },
       ["chart"],
     ),
+    // Swarm 1.2.8 row 33 (H-NA, N8-206): isi DiagramV2; divalidasi validator v2 saat dijalankan (skema penuh tidak diulang di tools/list).
+    obj({ diagram: { type: "object" } }, ["diagram"]),
     obj({ list: { type: "array", minItems: 1, maxItems: 200, items: { type: "string", maxLength: 4000 } }, ordered: { type: "boolean" } }, ["list"]),
     obj({ subheading: { type: "string", minLength: 1, maxLength: 200 } }, ["subheading"]),
     // IMPL-W3 butir 7: rujukan terstruktur (laporan kerja) -> tabel Rujukan disusun mesin.
@@ -73,13 +75,14 @@ const SECTIONS = {
   minItems: 1,
   maxItems: 60,
   items: obj({ heading: { type: "string", minLength: 1, maxLength: 200 }, blocks: { type: "array", maxItems: 400, items: BLOCK } }, ["heading", "blocks"]),
-  description: "Bagian: heading + blocks (string=paragraf, [[header],[baris]...]=tabel, {table,caption,source}, {chart:{categories,series:[{name,values}],caption,source,stacked?}}, {list}, {subheading}).",
+  description: "Bagian: heading + blocks (string=paragraf, [[header],[baris]...]=tabel, {table,caption,source}, {chart:{categories,series,caption,source}}, {diagram:{spec,caption,source}}, {list}, {subheading}).",
 } as const;
 const META = { type: "object", maxProperties: 40, additionalProperties: { type: "string", maxLength: 2000 }, description: "Kunci-nilai datar. Laporan: status, owner, taskRef, reportedAt (kosong = jam server). Klien: title, number (nomor tampilan), author, checker, approver, rev, date, classification, source." } as const;
 /** IMPL-W4 butir 2: saluran meta studio_edit. */
 const META_EDIT = { ...META, description: "Kepala tanpa tulis ulang: status, verdict, reportedAt (laporan; kosong = jam server); number, rev, date, title (klien)." } as const;
 /** IMPL-W4 butir 5: hasil rinci (peringatan penuh, nextSteps, daftar judul penuh) hanya bila diminta. */
-const DETAIL = { type: "boolean", description: "Hasil rinci." } as const;
+// Swarm 1.2.8 row 33 (tools/list budget): no description; the name says it (full warnings, nextSteps, titles).
+const DETAIL = { type: "boolean" } as const;
 const TEMPLATE = { type: "string", pattern: "^(latest|[a-z0-9][a-z0-9-]{0,63})$", description: "Dokumen klien: slug templat DATUM atau latest; kosong = laporan kerja." } as const;
 
 // ── Bersama ─────────────────────────────────────────────────────────────
@@ -752,7 +755,7 @@ export function prepareStructEdits(edits: Args[]): void {
         const ref = isRecord(b) && b.ref !== undefined && !toRefs;
         if (ref || !blockValid(b)) {
           const err = blockValid.errors?.[0];
-          throw new McpToolError("INVALID_ARGUMENT", `edit ${i + 1}: append blok ${k + 1} ${ref ? "{ref} hanya untuk append ke section Rujukan" : `tidak sah (${tok(err?.instancePath || "/", "/")} ${String(err?.message ?? "").slice(0, 120)})`}; blok: string, [[baris]], {table}, {chart}, {list}, {subheading}. Tidak ada yang ditulis`, { pointer: `/edits/${i}/append` });
+          throw new McpToolError("INVALID_ARGUMENT", `edit ${i + 1}: append blok ${k + 1} ${ref ? "{ref} hanya untuk append ke section Rujukan" : `tidak sah (${tok(err?.instancePath || "/", "/")} ${String(err?.message ?? "").slice(0, 120)})`}; blok: string, [[baris]], {table}, {chart}, {diagram}, {list}, {subheading}. Tidak ada yang ditulis`, { pointer: `/edits/${i}/append` });
         }
       });
       e.append = blocks;
@@ -783,7 +786,8 @@ const editTool: ToolDef = {
   name: "studio_edit",
   description:
     "Sunting seperti patch tanpa basis. find = frasa >= 3 kata, juga caption/sumber figur; {cell:{row,column},value}; {after,insert}; {section,append} mis. {section:\"Bukti\",append:[\"Teks.\"]}; {section,addRow:[\"\",\"Uji X\",\"done\"]}; {pid,at,replace}; {figure,chart}; meta; change {what,why,impact} masuk riwayat revisi. Alamat gagal -> notApplied, sisanya disimpan. ReportedAt laporan = jam server. Argumen harus objek JSON, bukan string berisi JSON.",
-  inputSchema: obj({ documentId: S.documentId, mission: S.mission, docKey: S.docKey, edits: EDITS, meta: META_EDIT, change: CHANGE, agentId: S.agentId, adoptExisting: { type: "boolean", description: "Sunting dokumen buatan agentId lain (eksplisit)." }, detail: DETAIL }, []),
+  // Swarm 1.2.8 row 33 (tools/list budget): adoptExisting without description; the DOCUMENT_OWNED_BY_OTHER refusal names it.
+  inputSchema: obj({ documentId: S.documentId, mission: S.mission, docKey: S.docKey, edits: EDITS, meta: META_EDIT, change: CHANGE, agentId: S.agentId, adoptExisting: { type: "boolean" }, detail: DETAIL }, []),
   annotations: { title: "Sunting teks dokumen", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   toolsets: ["write"],
   prepare: normalizeEditArgs,
