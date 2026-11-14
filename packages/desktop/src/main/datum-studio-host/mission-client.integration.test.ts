@@ -82,7 +82,7 @@ async function stopHost(h: Host | undefined) {
 }
 
 /** Test-only raw MCP caller for the fixture set-up (agent "claude", project cwd): NOT the client under test. */
-function raw(h: Host, agent = "claude", cwd = PROJECT, key?: string) {
+function raw(h: Host, agent = "claude", cwd = PROJECT, key?: string, callerSession?: string) {
   let sid: string | undefined
   let id = 0
   const post = async (body: Record<string, unknown>) => {
@@ -93,6 +93,7 @@ function raw(h: Host, agent = "claude", cwd = PROJECT, key?: string) {
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
       ...(key !== undefined ? { "x-swarm-mission-control-key": key } : {}),
+      ...(callerSession !== undefined ? { "x-studio-caller-session": callerSession } : {}),
     }
     if (sid) headers["mcp-session-id"] = sid
     const r = await fetch(h.url, { method: "POST", headers, body: JSON.stringify(body) })
@@ -166,7 +167,9 @@ describe("row 127: mission bridge against the real host", () => {
   beforeAll(async () => {
     const call = raw(host!)
     // The U1 "go" models the person: it is recorded from an attested (key-bearing) request.
-    const created = await raw(host!, "claude", PROJECT, host!.key)("studio_mission_create", {
+    // 1.2.9 row 52a (C03): mission.sessions links only the calling session, so the create comes from the swarm client with
+    // IT_SES as its caller session (the one case row 52 still links); the session-filtered list below keeps its meaning.
+    const created = await raw(host!, "swarm", PROJECT, host!.key, IT_SES)("studio_mission_create", {
       mission: { id: M, title: "Row 127 bridge mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, sessions: [{ client: "swarm", ref: IT_SES }], rows: [row("1"), row("2", ["1:B"])], decisions: [{ id: "U1", by: "user", date: "2026-11-07", text: "go" }] },
     })
     if (!created.ok) quote("mission create refused", created)
