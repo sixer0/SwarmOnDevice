@@ -11,6 +11,7 @@ import { decorationOf, type Box, type HeadSize } from "../fit/lint";
 import { labelAtBaseline, placeEdgeLabels, type EdgeLabelInput, type EdgeLabelPlan, layoutNotes } from "../fit/labels";
 import { diagramFitAllows, diagramFitNote } from "../fit/state";
 import { capLineMm, capWidthMm, nodeTextLayout } from "../fit/text";
+import { flowDirectionOf } from "../layout-a/flow";
 
 const SUGGEST_EDGE = "persingkat label tepi (maks ~20 karakter)";
 
@@ -35,12 +36,62 @@ export interface ZoneGeom {
   ly: number;
 }
 
-/** Geometri zona Garis A; saat fit label dijepit ke dalam lembar (rect tidak diubah). */
-export function zoneGeom(z: DiagramZone, members: readonly SheetNode[], sheet: Sheet, fit: boolean): ZoneGeom {
-  const zx = Math.min(...members.map((m) => m.x)) - sheet.colMm / 2;
-  const zy = Math.min(...members.map((m) => m.y)) - LATTICE_Y * 2;
-  const zw = Math.max(...members.map((m) => m.x + m.w)) - zx + sheet.colMm / 2;
-  const zh = Math.max(...members.map((m) => m.y + m.h)) - zy + LATTICE_Y * 2;
+/**
+ * Swarm 1.2.9 row 29 (AC-A06, register N9-051): least distance (mm, centre lines) from a zone frame to every member
+ * outline and to every non-member outline it runs beside (C10(b)); the precedent is `SHARED_BAND_CLEAR_MM` in route.ts.
+ * @internal test seam
+ */
+export const ZONE_CLEAR_MM = 1.5;
+
+/**
+ * Row 29 (AC-A06): the frame pads (left, top, right, bottom) of a zone around its members' box. A pad starts at the
+ * Garis A default (half a column across, two lattice rows down) and is capped where a non-member outline lies beside
+ * that side over an overlapping span, so the frame stays `ZONE_CLEAR_MM` off it and `ZONE_CLEAR_MM` outside the
+ * members; with less than twice that room the frame takes the middle. A pad with no such neighbour keeps its value, so
+ * a zone with room around it keeps its bytes.
+ */
+function zonePads(members: readonly SheetNode[], sheet: Sheet, box: readonly [number, number, number, number]): [number, number, number, number] {
+  const [x0, y0, x1, y1] = box;
+  const cap = (pad: number, room: number) => Math.min(pad, room >= 2 * ZONE_CLEAR_MM ? room - ZONE_CLEAR_MM : room / 2);
+  let [pl, pt, pr, pb] = [sheet.colMm / 2, LATTICE_Y * 2, sheet.colMm / 2, LATTICE_Y * 2];
+  const others = [...sheet.nodes.values()].filter((nd) => !members.includes(nd)).map(nodeBox);
+  // top and bottom against a node over the frame's x span, wholly above or below the members
+  for (const [nx0, ny0, nx1, ny1] of others) {
+    if (!(nx0 < x1 + pr && nx1 > x0 - pl)) continue;
+    if (ny0 >= y1 - 1e-6) pb = cap(pb, ny0 - y1);
+    if (ny1 <= y0 + 1e-6) pt = cap(pt, y0 - ny1);
+  }
+  // left and right against a node over the (capped) frame's y span, wholly left or right of the members
+  for (const [nx0, ny0, nx1, ny1] of others) {
+    if (!(ny0 < y1 + pb && ny1 > y0 - pt)) continue;
+    if (nx0 >= x1 - 1e-6) pr = cap(pr, nx0 - x1);
+    if (nx1 <= x0 + 1e-6) pl = cap(pl, x0 - nx1);
+  }
+  return [pl, pt, pr, pb];
+}
+
+/** Row 29 (AC-A06): whether zone frames keep `ZONE_CLEAR_MM` (every spec except a legacy flow, C10(a)/C12). */
+export function zoneClearOn(s: StudioDiagramV1): boolean {
+  return !(s.family === "flow" && !flowDirectionOf(s as StudioDiagramV1 & { direction?: unknown }));
+}
+
+/**
+ * Geometri zona Garis A; saat fit label dijepit ke dalam lembar (rect tidak diubah).
+ * Row 29 (AC-A06): with `clear` the pads keep `ZONE_CLEAR_MM` off non-member outlines (`zonePads`). The caller passes
+ * false for a legacy flow (family `flow` without `direction`, frozen at its 1.2.5 bytes, 01e A15, C10(a), C12).
+ */
+export function zoneGeom(z: DiagramZone, members: readonly SheetNode[], sheet: Sheet, fit: boolean, clear = false): ZoneGeom {
+  const box = [
+    Math.min(...members.map((m) => m.x)),
+    Math.min(...members.map((m) => m.y)),
+    Math.max(...members.map((m) => m.x + m.w)),
+    Math.max(...members.map((m) => m.y + m.h)),
+  ] as const;
+  const [pl, pt, pr, pb] = clear ? zonePads(members, sheet, box) : [sheet.colMm / 2, LATTICE_Y * 2, sheet.colMm / 2, LATTICE_Y * 2];
+  const zx = box[0] - pl;
+  const zy = box[1] - pt;
+  const zw = box[2] - zx + pr;
+  const zh = box[3] - zy + pb;
   const label = String(z.label !== undefined ? z.label : z.id !== undefined ? z.id : "zona");
   let lx = zx + 1.0;
   let ly = zy + pt2mm(5.0);
@@ -111,9 +162,10 @@ function headSize(h: EdgeArrows["end"] | EdgeArrows["start"]): HeadSize | null {
 export function fitEdgeLabels(a: FitLabelInputs): EdgeLabelPlan {
   const nodeBoxes = a.nodes.map(nodeBox);
   const obstacles: Box[] = a.nodes.map(nodeTextBox);
+  const clear = zoneClearOn(a.s); // row 29 (AC-A06)
   for (const z of a.s.zones ?? []) {
     const members = (z.members ?? []).map((m) => a.sheet.nodes.get(m)).filter((m): m is SheetNode => m !== undefined);
-    if (members.length) obstacles.push(zoneLabelBox(zoneGeom(z, members, a.sheet, true)));
+    if (members.length) obstacles.push(zoneLabelBox(zoneGeom(z, members, a.sheet, true, clear)));
   }
   const hdr = pt2mm(role("table_header").size);
   for (const lane of a.sheet.lanes) obstacles.push(textBox(0.5, lane.y + hdr + LATTICE_Y / 2.0, headerWidth(lane.name), hdr, "start"));

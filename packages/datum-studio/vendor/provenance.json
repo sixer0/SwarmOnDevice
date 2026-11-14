@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10281620
+  "bytes": 10286360
  },
  "files": [
   {
@@ -2383,9 +2383,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/fitlabels.ts",
    "status": "patched",
-   "bytes": 8962,
+   "bytes": 11713,
    "source_sha256": "da41b8084aecd1bb3b2d85d2f41c75b649a89cf27a574d4858dcfbe181c0c24f",
-   "sha256": "da3b097721ddcaf85544ead1f2a7b501c8a6a45549edc61339377618fd21c4d0",
+   "sha256": "8cef6a537cf919c7f0e6b0e1a55fd76c78f76c56ab17a4ac2ba5e75c1491043b",
+   "patch_row129-29": {"id": "129-29-a06-zone-clearance", "row": "29", "decision": "1.2.9 AC-A06 (B9-A06; N9-051, N9-105, N9-205; C2 ruling 2, C10(b), 01a AT-A06; legacy-flow freeze 01e A15 as C10(a)/C12)", "summary": "NEW ZONE_CLEAR_MM = 1.5 (@internal test seam) and zonePads: zoneGeom (new optional `clear`) caps a frame pad where a non-member outline (nodeBox) lies beside that side over an overlapping span, so the frame keeps 1.5 mm off it and 1.5 mm outside the members (the middle when the room is under 3 mm); pads with no such neighbour keep their values (bytes unchanged); NEW zoneClearOn(s): false for a legacy flow (family flow without direction); fitEdgeLabels passes it", "diff_base": "sha256 before this row", "before_sha256": "da3b097721ddcaf85544ead1f2a7b501c8a6a45549edc61339377618fd21c4d0", "after_sha256": "8cef6a537cf919c7f0e6b0e1a55fd76c78f76c56ab17a4ac2ba5e75c1491043b", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/29_row29_diffs/engine_diagram_build_fitlabels.ts.diff", "diff_sha256": "099a286f5cbc1a4e01ee5f0061c0b8e2b1774b8c44e602b0350fa0c5a2249ebc"},
    "patch_row56d": {"id": "128-56d-jogs-rules", "row": "56d", "decision": "C134, C137 (1.2.8 row 56d; M3 gate G3-06, G3-07, G3-09)", "summary": "G3-09: each EdgeLabelInput carries the drawn dash pattern (edgeLineDash of kind + line)", "diff_base": "sha256 before this row", "before_sha256": "954c8efebcfc421783c50cd755c83ee9e810724506e2bf342f39229060ddab77", "after_sha256": "da3b097721ddcaf85544ead1f2a7b501c8a6a45549edc61339377618fd21c4d0", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56d_row56d_diffs/engine_diagram_build_fitlabels.ts.diff", "diff_sha256": "9fe9c5fe3b431fcdb7fc57fd1603b218d75b3cd390b91092037b3bcd8ceb8dd0"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C71, C86, C101, C102, C116)", "summary": "fitEdgeLabels takes the sheet's lane/phase/pool decoration (decorationOf: rules + header texts as obstacles) and each edge's drawn head sizes (headSize from edgeArrowsOfPaths)", "diff_base": "sha256 before this row", "before_sha256": "0207661b6b66d833008ea371d9a73f1ca92f8472f61e2c76b5f76c5133ce9bb9", "after_sha256": "954c8efebcfc421783c50cd755c83ee9e810724506e2bf342f39229060ddab77", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_build_fitlabels.ts.diff", "diff_sha256": "1c394fe31c3cec5f66bd4115e414d178bad894dc4de6d1d5c62d4da3f3357413"},
    "patch_row57b": {"id": "128-57b-vis8-vis9", "row": "57b", "decision": "1.2.8 row 57b (AC-VIS8, AC-VIS9; 01f 3.1-3.5; C78, C86, C101, C111; N8-212, N8-262..266, N8-468, N8-471, N8-477..479)", "summary": "fitEdgeLabels: an edge with label_at gets its fixed position (labelAtBaseline) and fixed: true (edgeArrowsOfPaths matching)", "diff_base": "sha256 before this row", "before_sha256": "da41b8084aecd1bb3b2d85d2f41c75b649a89cf27a574d4858dcfbe181c0c24f", "after_sha256": "0207661b6b66d833008ea371d9a73f1ca92f8472f61e2c76b5f76c5133ce9bb9", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57b_row57b_diffs/engine_diagram_build_fitlabels.ts.diff", "diff_sha256": "488b338e31b3988f75387c2ea4d1776220e6b56995c19e68acbf51e13e8b5e29"}
@@ -2493,9 +2494,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 50917,
+   "bytes": 51034,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "938036ded9e20f516b200b4058ee8fb233add533a23713e84b0e4268803bc0c6",
+   "sha256": "7538c7f6356589451f587a0b1acf97828c62c1a6f48572488f4ba6240ba5f715",
+   "patch_row129-29": {"id": "129-29-a06-zone-clearance", "row": "29", "decision": "1.2.9 AC-A06 (B9-A06; N9-051, N9-204; C10(b), 01a AT-A06; C10(a)/C12)", "summary": "the zone drawing passes zoneClearOn(s) to zoneGeom (pads keep ZONE_CLEAR_MM off non-members; a legacy flow keeps its frame); the sheet clip and the graph sheet extents are unchanged", "diff_base": "sha256 before this row", "before_sha256": "938036ded9e20f516b200b4058ee8fb233add533a23713e84b0e4268803bc0c6", "after_sha256": "7538c7f6356589451f587a0b1acf97828c62c1a6f48572488f4ba6240ba5f715", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/29_row29_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "e63cbe9e2d166a7685856e7d8c28abf261a873f88196a11292a876256fa68ae6"},
    "patch_row129-27": {"id": "129-27-a04-label-dash", "row": "27", "decision": "1.2.9 AC-A04 (B9-A04; N9-060, N9-103; 01a AT-A04; legacy-flow freeze 01e A15 as C10(a)/C12)", "summary": "labelPos takes the drawn dash pattern (dash?: readonly number[]) and passes it to spotClear, so the first render leaves no dash fragment beside a label band; NEW file-local labelDashOf builds it per connector from edgeLineDash as build/fitlabels.ts does (solid = undefined) and is passed at the three labelPos sites (graphFit, origOf, non-fit labels); legacy flows (family flow without direction) get no dash and keep their bytes", "diff_base": "sha256 before this row", "before_sha256": "1396532469654c349e83ea2195b2eb1a003e40cd9b66746e066b049ac5e72f89", "after_sha256": "938036ded9e20f516b200b4058ee8fb233add533a23713e84b0e4268803bc0c6", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/27_row27_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "8cc0c468b1e6886878e1c2c853257cde88856d3252d5cd697c062cc9f99baabd"},
    "patch_row55c": {"id": "128-55c-frame-hop", "row": "55c", "decision": "C133, C134 (1.2.8 row 55c; M3 gate G3-01, G3-02, G3-15)", "summary": "NEW jumpHops (exported): crossingHops runs on the straight runs of each path (repeated / straight-through vertices merged), so a crossing on such a vertex hops (vis9 at 128 mm, swimlane6 wrap); a hop closer than the hop radius to a bend of its run moves along the run; drawn paths unchanged. Zone rect clipped to the figure box only where it ran outside (dg_topology x -5.33). Vertical pools: lane header rule skipped when there is no lane header row", "diff_base": "sha256 before this row", "before_sha256": "c95342afce323965cbe024805613a23410c48642f28163bedd1a1e5af1661322", "after_sha256": "1396532469654c349e83ea2195b2eb1a003e40cd9b66746e066b049ac5e72f89", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55c_row55c_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "4b029372512e1fa516ddc6a30919d481fcb8c197d64dcab2a2c7781eef0ba98d"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C71, C101, C102, C116, C123)", "summary": "laneDecorSvg builds the swimlane frame/pool/lane decoration once (same elements, same order) and hands it to fitEdgeLabels; labelPos keeps the old spot when its band clears the own heads, stray pieces and node boxes (spotClear), else slides along the straight runs (runOrder); shadows of shadowed nodes drawn before the connectors (nodeShadowSvg, nodeSvg shadowDrawn)", "diff_base": "sha256 before this row", "before_sha256": "d96a86febf33c3635be757f766bafaad47736e8dd5a378c234ad78f5ee6ca0e5", "after_sha256": "c95342afce323965cbe024805613a23410c48642f28163bedd1a1e5af1661322", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "9ae8d47bdb9b2cd823e36373df73f666742a0b309b48a22d63726068c73fdb2c"},
@@ -2878,9 +2880,10 @@
   {
    "path": "src/lib/studio/engine/diagram/layout-a/layered.ts",
    "status": "patched",
-   "bytes": 4790,
+   "bytes": 6662,
    "source_sha256": "e2aeaaaf87dff87779b6aaa3610860ed717fc93bb043a80e234e6c5747abb44d",
-   "sha256": "6e755e65086a0f5db6387c4b81d8ece4a621e6690f53569a3bc7a9af07ecbe50",
+   "sha256": "7bffb8b81c61e628051d9740a1a23c7e53965c3ea0b73455c15651b5dfd519b6",
+   "patch_row129-29": {"id": "129-29-a06-zone-clearance", "row": "29", "decision": "1.2.9 AC-A06 (B9-A06; N9-206 (C17, P-10); 01a AT-A06 fix (1))", "summary": "NEW zoneTierWidth: a tier holding a zone member whose half-column frame pad would leave the sheet narrows one lattice column at a time (x stays centred and on the lattice; floor 3 columns); the fit width is chosen first and the text plan runs on the final width; no zone = an empty member set = the layout unchanged", "diff_base": "sha256 before this row", "before_sha256": "6e755e65086a0f5db6387c4b81d8ece4a621e6690f53569a3bc7a9af07ecbe50", "after_sha256": "7bffb8b81c61e628051d9740a1a23c7e53965c3ea0b73455c15651b5dfd519b6", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/29_row29_diffs/engine_diagram_layout-a_layered.ts.diff", "diff_sha256": "98ef004aeb6921e1773b8a24f8f42bb55714a6dc6ac40f16d23b0790780309f7"},
    "patch": {
     "id": "row162-elk-layout-hook",
     "row": 162,
@@ -6432,6 +6435,7 @@
   "129-32-a10a-header-text",
   "129-28-a05-terukur-mark",
   "129-33-a10b-double-back",
-  "129-30b-a08"
+  "129-30b-a08",
+  "129-29-a06-zone-clearance"
  ]
 }

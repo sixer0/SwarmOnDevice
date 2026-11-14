@@ -64,7 +64,7 @@ import { routeSequenceMessages, type SequenceLayout } from "../layout-b";
 import { flowDirectionOf, flowSerialisedNote } from "../layout-a/flow";
 import { autoFitDiagram, type DiagramGeometryIssue } from "./autofit";
 import type { EdgeLabelPlan } from "../fit/labels";
-import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneGeom } from "./fitlabels";
+import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneClearOn, zoneGeom } from "./fitlabels";
 import { placeDiagram, type Placement } from "./place";
 import { poolFlowCrossesNotes, type SwimFrame, type SwimPool } from "../layout-b/swimlane";
 import { reorderPlaced } from "./order";
@@ -801,7 +801,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   for (const z of s.zones ?? []) {
     const members = (z.members ?? []).map((m) => sheet.nodes.get(m)).filter((m): m is SheetNode => m !== undefined);
     if (!members.length) throw new DiagramDefect(`zona '${String(z.id)}' tanpa anggota dikenal (P5 trust zone)`, { checkId: "P5-zone" });
-    const { x: zx, y: zy, w: zw, h: zh, lx, ly } = zoneGeom(z, members, sheet, fitOn); // P2-16: label dijepit saat fit
+    // P2-16: label dijepit saat fit. 1.2.9 row 29 (AC-A06): pads keep ZONE_CLEAR_MM off non-members (not legacy flows).
+    const { x: zx, y: zy, w: zw, h: zh, lx, ly } = zoneGeom(z, members, sheet, fitOn, zoneClearOn(s));
     // Swarm 1.2.8 row 55b (VIS-2b, 01f §1 Group, N8-252): style "group" = BPMN group, rounded (rx 1.6 mm) dashdot;
     // absent or "zone" = today's dashed rect, byte-identical.
     const group = (z as { style?: unknown }).style === "group";
