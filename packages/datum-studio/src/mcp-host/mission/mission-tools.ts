@@ -561,7 +561,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           const sha256 = createHash("sha256").update(bytes).digest("hex")
           return { path: path.join("docs", mission, rel), abs: path.join(base, rel), bytes: bytes.length, sha256, markdown: f.markdown, data: bytes }
         })
-        const backups = new Map<string, { backup: string | null; backupResidue: number }>()
+        // 1.2.9 row 38 (AC-A12b, N9-061): backupRemoved = old backups of the file that retention removed on this write.
+        const backups = new Map<string, { backup: string | null; backupResidue: number; backupRemoved: number }>()
         if (a.write === true) {
           const roots = [s.fileRoot]
           if (a.overwrite !== true) {
@@ -572,12 +573,13 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           for (const f of out) {
             // 1.2.6 row 89 (T-17 mission hunk, N-055/N-057): the guarded write keeps backups in <dir>/.bak/.
             const w = writeFileGuarded(f.abs, f.data, { roots, purpose: "write-report", overwrite: a.overwrite === true, nfs, now })
-            backups.set(f.path, { backup: w.backup ? path.relative(s.fileRoot, w.backup).split(path.sep).join("/") : null, backupResidue: w.backupResidue })
+            backups.set(f.path, { backup: w.backup ? path.relative(s.fileRoot, w.backup).split(path.sep).join("/") : null, backupResidue: w.backupResidue, backupRemoved: w.backupRemoved })
           }
         }
         const listed = out.map(({ path: p, bytes, sha256, markdown }) => ({ path: p, bytes, sha256, markdown, ...(backups.get(p) ?? {}) }))
         const residue = [...backups.values()].reduce((n, b) => n + b.backupResidue, 0)
-        const bakNote = a.write === true && a.overwrite === true ? `; backups in ${BACKUP_DIR_NAME}/, backupResidue ${residue}` : ""
+        const removed = [...backups.values()].reduce((n, b) => n + b.backupRemoved, 0)
+        const bakNote = a.write === true && a.overwrite === true ? `; backups in ${BACKUP_DIR_NAME}/, backupResidue ${residue}, backupRemoved ${removed}` : ""
         return { text: `${listed.length} files${a.write === true ? ` written under ${base}` : " (not written)"} (folders: ${folderLayout}): ${listed.map((f) => f.path).join(", ")}${bakNote}`, data: { files: listed, written: a.write === true, folderLayout } }
       },
     ),
