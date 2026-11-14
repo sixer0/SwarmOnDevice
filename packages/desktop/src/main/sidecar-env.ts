@@ -7,7 +7,7 @@
 // which finds `<XDG_STATE_HOME>/swarm/datum-studio.env` through the XDG_STATE_HOME the sidecar already gets
 // (sidecar.ts prepareSidecarEnv), and the Studio token stays in that 0600 file, never in this environment.
 
-import { statSync } from "node:fs"
+import { lstatSync } from "node:fs"
 import { isAbsolute } from "node:path"
 import { defaultProjectDir } from "./onboarding-test-root"
 
@@ -24,12 +24,14 @@ export const RENDER_TOKEN_KEY = "DATUM_RENDER_TOKEN"
  * On a first launch the sidecar starts before onboarding creates the folder; the server's re-home route looks at the
  * folder when the person acts (missing -> REHOME_FOLDER_MISSING), so a folder made later works without a restart.
  * Only a non-folder at that path (a file, a link to a file) is not passed on.
+ * Row 68h (S-21, C184): looked at with lstat, so a symlink there (to a folder elsewhere, or dangling so that a later
+ * folder fills it) is not passed on either; the server would otherwise take a root outside Documents.
  */
 export function launchDefaultProjectDir() {
   const dir = defaultProjectDir()
   if (!dir || !isAbsolute(dir)) return undefined
   try {
-    return statSync(dir).isDirectory() ? dir : undefined
+    return lstatSync(dir).isDirectory() ? dir : undefined
   } catch (error) {
     return (error as { code?: unknown }).code === "ENOENT" ? dir : undefined
   }

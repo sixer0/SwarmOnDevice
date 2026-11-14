@@ -301,12 +301,25 @@ type Plan = {
 async function realRoot(ports: Ports) {
   const value = ports.root
   if (!value || !path.isAbsolute(value)) throw new Refusal("REHOME_ROOT_UNKNOWN", "no Default Project root")
-  const real = await fs.realpath(value).catch(() => undefined)
+  const given = path.resolve(value)
+  // Row 68h (S-21): the Default Project itself must be a real folder, looked at without following links when the person
+  // acts. A link planted there (also a dangling one that a later folder fills) would otherwise become the root and send
+  // an approved move outside Documents. The detail is the last segment only.
+  if ((await lstatOrUndefined(given))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", path.basename(given))
+  const real = await fs.realpath(given).catch(() => undefined)
   // Row 68f: the first launch's onboarding creates the folder after the server started; until then it is missing.
   if (!real) throw new Refusal("REHOME_FOLDER_MISSING", path.basename(value))
   const stat = await lstatOrUndefined(real)
   if (!stat?.isDirectory()) throw new Refusal("REHOME_OUTSIDE_ROOT", "no Default Project root")
-  return { real, given: path.resolve(value) }
+  // Row 68h: and it resolves inside its own parent (a link swapped in between the two looks above resolves elsewhere).
+  const parent = await fs.realpath(path.dirname(given)).catch(() => undefined)
+  if (!parent || real !== path.join(parent, path.basename(given))) throw new Refusal("REHOME_SYMLINK", path.basename(given))
+  return { real, given }
+}
+
+/** Row 68h (S-21): a root of the move (`from`, a group) given as a symlink is refused by its last segment only. */
+async function notLinked(folder: string) {
+  if ((await lstatOrUndefined(folder))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", path.basename(folder))
 }
 
 /** Row 68g: a folder named for the person without its absolute part: relative to R inside it, else its last segment. */
@@ -358,6 +371,7 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
 
   // Direction: root -> group, or (compensation, §7.4) the group -> root reverse of a completed move.
   if (!path.isAbsolute(input.from)) throw new Refusal("REHOME_OUTSIDE_ROOT", "from")
+  await notLinked(input.from)
   const fromReal = await fs.realpath(input.from).catch(() => undefined)
   if (!fromReal) throw new Refusal("REHOME_SOURCE_MISSING", "from")
   if (compensating) {
@@ -546,8 +560,12 @@ async function doStep(ports: Ports, journal: Journal, step: JournalStep, plan: P
       data.renamed = true
       // SR8-18(b): the moved folder must really sit at realpath(to)/docs/<missionId>.
       const real = await fs.realpath(plan.target).catch(() => undefined)
-      const expected = path.join(await fs.realpath(plan.to), "docs", journal.missionId)
+      const realTo = await fs.realpath(plan.to)
+      const expected = path.join(realTo, "docs", journal.missionId)
       if (real !== expected) throw new Error("moved folder is not where it should be")
+      // Row 68h (S-21): `to` is still R or one of its groups. A group swapped for a link after preflight resolves outside
+      // R; the step fails and the rollback moves the folder back.
+      if (realTo !== plan.root && path.dirname(realTo) !== plan.root) throw new Error("moved folder left the Default Project")
       return
     }
     case "memory": {

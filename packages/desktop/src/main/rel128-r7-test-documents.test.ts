@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, sep } from "node:path"
 
@@ -145,6 +145,27 @@ describe("sidecar env (AC-PROJa)", () => {
     prepareOnboardingTestRoot({ OPENCODE_TEST_ONBOARDING: "1", OPENCODE_TEST_ONBOARDING_ROOT: fixed })
     writeFileSync(join(fixed, "Documents", "Default Project"), "not a folder")
 
+    expect(KEY in createSidecarEnv({ PATH: "/bin" }, undefined, "darwin")).toBe(false)
+  })
+
+  // 1.2.8 row 68h (S-21, C184): a link planted at the Default Project path (to a folder elsewhere, or dangling so that a
+  // later folder fills it) is never passed on, so the server cannot be told a root outside Documents.
+  test("a symlink where the folder should be is not passed on, to a folder or dangling; an inherited value is dropped", () => {
+    const fixed = testRoot()
+    prepareOnboardingTestRoot({ OPENCODE_TEST_ONBOARDING: "1", OPENCODE_TEST_ONBOARDING_ROOT: fixed })
+    const at = join(fixed, "Documents", "Default Project")
+    const elsewhere = join(fixed, "elsewhere")
+    symlinkSync(elsewhere, at)
+    expect(KEY in createSidecarEnv({ PATH: "/bin", [KEY]: "/elsewhere" }, undefined, "darwin")).toBe(false)
+    mkdirSync(elsewhere, { recursive: true })
+    expect(KEY in createSidecarEnv({ PATH: "/bin", [KEY]: "/elsewhere" }, undefined, "darwin")).toBe(false)
+  })
+
+  test("outside test mode, a symlink at the real Documents' Default Project path is not passed on", () => {
+    prepareOnboardingTestRoot({})
+    const elsewhere = join(testRoot(), "elsewhere")
+    mkdirSync(elsewhere, { recursive: true })
+    symlinkSync(elsewhere, join(realDocuments, "Default Project"))
     expect(KEY in createSidecarEnv({ PATH: "/bin" }, undefined, "darwin")).toBe(false)
   })
 
