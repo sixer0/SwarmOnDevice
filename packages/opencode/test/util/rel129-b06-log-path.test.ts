@@ -6,7 +6,13 @@
 //     root, label `~`).
 // (2) source checks: both callers import the shared helper and no longer carry the bare-path regexp; across src/**
 //     that regexp source is in exactly one file, util/log-path.ts.
-// Synthetic inputs only (syn129); os.homedir is stubbed, the real home is never read.
+// Synthetic inputs only (syn129); the home folder is set through OPENCODE_TEST_HOME (Global.Path.home, the one home
+// source, 1.2.9 row 67b/67d C79) with os.homedir stubbed to the same value, so the real home is never read.
+//
+// 1.2.9 row 67b (C79, gate 67 finding 2): the path rules (R2/R3) run BEFORE the home folder is replaced, so a path
+// under home becomes `<path>` and no folder name below home reaches a log line; `~` is only applied to what is left
+// (a path glued to `[\w.~-]`, RN-15). Row 67d (finding 4): log-path and vault-mirror share one home source and one
+// boundary rule (`replaceHome`).
 
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import fs from "node:fs/promises"
@@ -26,9 +32,16 @@ afterEach(() => {
   restore?.()
   restore = undefined
 })
-const home = (value: string) => {
-  const spy = spyOn(os, "homedir").mockReturnValue(value)
-  restore = () => spy.mockRestore()
+const home = (value: string, homedir = value) => {
+  restore?.()
+  const before = process.env.OPENCODE_TEST_HOME
+  process.env.OPENCODE_TEST_HOME = value
+  const spy = spyOn(os, "homedir").mockReturnValue(homedir)
+  restore = () => {
+    spy.mockRestore()
+    if (before === undefined) delete process.env.OPENCODE_TEST_HOME
+    else process.env.OPENCODE_TEST_HOME = before
+  }
 }
 
 // [#, input, roots, expected] — the AT-B06 table, HEAD column.
@@ -57,7 +70,17 @@ const TABLE: [string, string, Roots | undefined, string][] = [
 const HOME_ROWS: [string, string, Roots | undefined, string][] = [
   ["S9-07a", "a -/Users/x/y", undefined, "a -~/y"],
   ["S9-07b", "git -C/Users/x/repo", undefined, "git -C~/repo"],
-  ["1h", "open /Users/x/y.md failed", undefined, "open ~/y.md failed"],
+  // 67b INTENT (C79): was "open ~/y.md failed" (row 45); a path under home is a path, so `<path>` as in 1.2.8.
+  ["1h", "open /Users/x/y.md failed", undefined, "open <path> failed"],
+  // 67b (gate 67 finding 2): a folder name under home inside a quoted mkdir never reaches the line.
+  [
+    "67b-mkdir",
+    "EACCES: permission denied, mkdir '/Users/x/Documents/Syn129 Folder/g'",
+    undefined,
+    "EACCES: permission denied, mkdir '<path>'",
+  ],
+  ["67b-bare", "open /Users/x/Documents/syn129-folder/a.md failed", undefined, "open <path> failed"],
+  ["67b-double", 'open "/Users/x/Documents/syn129-folder/a.md" failed', undefined, 'open "<path>" failed'],
   ["11h", "a -/Users/x", undefined, "a -~"],
   ["5h", "unsafe /Users/x/.swarm/vault/notes/a.md", [{ path: "/Users/x/.swarm/vault", label: "<vault>" }], "unsafe <vault>/notes/a.md"],
   ["9h", "C:\\Users\\x\\y failed", undefined, "<path> failed"],
@@ -65,8 +88,15 @@ const HOME_ROWS: [string, string, Roots | undefined, string][] = [
   ["45a-sibling", "a -/Users/xy/z", undefined, "a -/Users/xy/z"],
   ["45a-end", "a -/Users/x", undefined, "a -~"],
   ["45a-slash", "a -/Users/x/z", undefined, "a -~/z"],
-  ["45a-quote", "at '/Users/x'", undefined, "at '~'"],
+  // 67b INTENT (C79): was "at '~'" (row 45a); a quoted path is `'<path>'` whatever it holds.
+  ["45a-quote", "at '/Users/x'", undefined, "at '<path>'"],
+  // 67d (gate 67 finding 4): `.`, `@` and `+` after the home folder continue a segment, so it is not the home folder.
+  ["67d-dot", "a -/Users/x.old/z", undefined, "a -/Users/x.old/z"],
+  ["67d-at", "a -/Users/x@syn/z", undefined, "a -/Users/x@syn/z"],
+  ["67d-plus", "a -/Users/x+syn/z", undefined, "a -/Users/x+syn/z"],
 ]
+// rows whose input holds a sibling of the home folder, not the home folder itself
+const SIBLING = new Set(["45a-sibling", "67d-dot", "67d-at", "67d-plus"])
 
 describe("AT-B06 behaviour table (home folder not a prefix of the input)", () => {
   for (const [id, input, roots, expected] of TABLE) {
@@ -85,11 +115,18 @@ describe("S9-07 the home folder is always the last root, label ~ (HOME=/Users/x)
       home("/Users/x")
       const out = withoutPaths(input, roots)
       expect(out).toBe(expected)
-      // a sibling account (45a) is not the home folder, so it keeps its own name
-      if (id === "45a-sibling") expect(out).not.toContain("~y")
+      // a sibling account (45a, 67d) is not the home folder, so it keeps its own name
+      if (SIBLING.has(id)) expect(out).not.toContain("~")
       else expect(out).not.toContain("/Users/x")
+      expect(out).not.toMatch(/syn129|Syn129/)
     })
   }
+
+  test("67d: the home folder comes from Global.Path.home (OPENCODE_TEST_HOME), not os.homedir", async () => {
+    const withoutPaths = await load()
+    home("/Users/x", NOT_A_PREFIX)
+    expect(withoutPaths("a -/Users/x/y")).toBe("a -~/y")
+  })
 
   test("a Windows home folder is replaced the same way", async () => {
     const withoutPaths = await load()
@@ -118,6 +155,38 @@ describe("one implementation: both callers use util/log-path", () => {
       bare: false,
       local: false,
     })
+  })
+
+  test("67d: vault-mirror's home replacer uses the shared replaceHome and Global.Path.home, with no boundary of its own", async () => {
+    const text = await fs.readFile(VAULT_MIRROR, "utf8")
+    const body = /function withoutHome\b[\s\S]*?\n}\n/.exec(text)?.[0] ?? ""
+    expect({
+      imports: /import\s*\{[^}]*\breplaceHome\b[^}]*\}\s*from\s*"@\/util\/log-path"/.test(text),
+      calls: (body.match(/\breplaceHome\(/g) ?? []).length,
+      home: body.includes("Global.Path.home"),
+      lookahead: body.includes("(?!"),
+    }).toEqual({ imports: true, calls: 2, home: true, lookahead: false })
+  })
+
+  test("67d: log-path reads the home folder from Global.Path.home, not os.homedir", async () => {
+    const text = await fs.readFile(path.join(SRC, "util", "log-path.ts"), "utf8")
+    expect({ global: text.includes("Global.Path.home"), homedir: text.includes("homedir") }).toEqual({
+      global: true,
+      homedir: false,
+    })
+  })
+
+  test("67d: replaceHome, raw and Markdown-escaped, keeps a sibling followed by . @ + and replaces the home folder", async () => {
+    const { replaceHome } = await import("../../src/util/log-path")
+    const { escapeText } = await import("../../src/memory/vault-mirror")
+    for (const tail of [".old", "@syn", "+syn", "y", "-syn", "_syn", "~syn"]) {
+      const sibling = `/Users/x${tail}/z`
+      expect(replaceHome(sibling, "/Users/x", "~")).toBe(sibling)
+      expect(replaceHome(escapeText(sibling), escapeText("/Users/x"), escapeText("~"), true)).toBe(escapeText(sibling))
+    }
+    expect(replaceHome("a /Users/x/z and /Users/x", "/Users/x", "~")).toBe("a ~/z and ~")
+    expect(replaceHome(escapeText("a /Users/x/z."), escapeText("/Users/x"), escapeText("~"), true)).toBe(escapeText("a ~/z."))
+    expect(replaceHome("a /Users/x/z", "/", "~")).toBe("a /Users/x/z")
   })
 
   test("handlers/project.ts imports withoutPaths and has no local bare-path regexp", async () => {

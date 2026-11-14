@@ -20,7 +20,7 @@ import { Flock } from "@opencode-ai/core/util/flock"
 import { Vault } from "@opencode-ai/core/vault"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { Secrets } from "@/tool/secrets"
-import { withoutPaths } from "@/util/log-path"
+import { replaceHome, withoutPaths } from "@/util/log-path"
 import { MemoryLearn } from "./learn"
 import { MISSION_ID_PATTERN } from "./memory"
 
@@ -274,15 +274,14 @@ function refLabel(ref: Ref) {
   return ref.line ? `${refPath(ref.path)}:${ref.line}` : refPath(ref.path)
 }
 
-/** Defence in depth (G2-01): the home folder, raw or Markdown-escaped, becomes `~` in every rendered note. */
+/**
+ * Defence in depth (G2-01): the home folder, raw or Markdown-escaped, becomes `~` in every rendered note. One home
+ * source and one boundary rule with the log scrubber (1.2.9 row 67d, C79: `replaceHome`).
+ */
 function withoutHome(text: string) {
   const home = Global.Path.home
   if (!home || !path.isAbsolute(home) || path.dirname(home) === home) return text
-  const literal = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const tail = "(?![A-Za-z0-9_-])"
-  return text
-    .replace(new RegExp(literal(escapeText(home)) + tail, "g"), escapeText("~"))
-    .replace(new RegExp(literal(home) + tail, "g"), "~")
+  return replaceHome(replaceHome(text, escapeText(home), escapeText("~"), true), home, "~")
 }
 
 // ---------------------------------------------------------------------------------------------------------------
