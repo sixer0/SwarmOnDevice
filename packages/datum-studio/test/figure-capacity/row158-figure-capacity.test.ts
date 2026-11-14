@@ -118,7 +118,9 @@ describe("row 158: at-capacity figures render unchanged (sha256 before the patch
     // Swarm 1.2.8 row 55c (C133 item 2, INTENT): the wrap connector crosses the two short links on a straight-through
     // vertex; both crossings now get their hop arc (two <path ... A 0.9 ...> lines added, nothing else changed).
     // Before: 35fc58a4b53635a5...
-    swimlane6: "ce07445b3a6fc7ba9c5c90e6779492f6b1efa754a0acbce09184611f093bb85d",
+    // Swarm 1.2.9 row 26 (AC-A02, INTENT): connector paths no longer repeat a vertex (repeated points dropped, nothing
+    // else changed; PNG pixel-identical). Before: ce07445b3a6fc7ba...
+    swimlane6: "b61154c5ab8278dc9e956e3e8c052bee36e2e743d1fe0c859ac0356bca141c73",
     // Row 165C (F113-9, C23 recorded diff): node g0 sits on the sheet edge, its outline is now drawn half a stroke
     // inside (x 0.0 -> 0.23, width 21.33 -> 21.1); the only changed line. Before: 28b63edf50ac499f...
     // Swarm 1.2.6 row 59 (T-02, N-016, controller ruling): the compacted block (x0 = 0) is translated inside the
@@ -127,7 +129,9 @@ describe("row 158: at-capacity figures render unchanged (sha256 before the patch
     // and after). Before: d53b6de116c453f1...
     // Swarm 1.2.8 row 57c (C71, INTENT): the four DATA labels sit above their lines, clear of the heads they covered.
     // Before: 83560e3921069988...
-    graph5: "48a7d3cd8534b2c75d27dcf5520ec2b8f171666327cfbc8903639ee8e97a7f2e",
+    // Swarm 1.2.9 row 26 (AC-A02, INTENT): connector paths no longer repeat a vertex (repeated points dropped, nothing
+    // else changed; PNG pixel-identical). Before: 48a7d3cd8534b2c7...
+    graph5: "cded02f4d77f76f400bcddd985e816ff506ae283359811fcba02351372a52839",
     bars30: "4c083a8330ada122686d85bce992ef43590e83479b0261f0c01eca1bb956390f",
     columns12: "1060e9b9d8043480cde380c532614a7f5ec3331e64590f5e20217cc19f90a107",
     // Swarm 1.2.6 row 66 (T-10, N-030, controller ruling): the 20 long labels now wrap to two lines under the

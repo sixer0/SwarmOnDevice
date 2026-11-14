@@ -1111,6 +1111,31 @@ export function polylineD(pts: ReadonlyArray<readonly [number, number]>): string
   return `M ${pts.map(([px, py]) => `${r2(px)} ${r2(py)}`).join(" L ")}`;
 }
 
+/**
+ * Swarm 1.2.9 row 26 (AC-A02, C12): point lists whose link path keeps its repeated vertices. `routePlaced` marks the
+ * routes of a legacy flow (family `flow` without `direction`), whose bytes are frozen at 1.2.5 (01e A15).
+ */
+const KEEP_REPEATS = new WeakSet<object>();
+
+/** Swarm 1.2.9 row 26 (AC-A02, C12): draw this point list as it is, repeated vertices included (legacy flows). */
+export function keepLinkRepeats(pts: ReadonlyArray<readonly [number, number]>): void {
+  KEEP_REPEATS.add(pts);
+}
+
+/**
+ * Swarm 1.2.9 row 26 (AC-A02): `polylineD` without a vertex equal (after rounding) to the one before it. A repeated
+ * vertex draws nothing, so the drawn length and the dash phase stay; the last non-zero piece keeps the marker's
+ * direction. A path that would keep fewer than two vertices is drawn as before.
+ */
+function linkPathD(pts: ReadonlyArray<readonly [number, number]>): string {
+  const out: string[] = [];
+  for (const [px, py] of pts) {
+    const v = `${r2(px)} ${r2(py)}`;
+    if (v !== out[out.length - 1]) out.push(v);
+  }
+  return out.length >= 2 ? `M ${out.join(" L ")}` : polylineD(pts);
+}
+
 /** Jalur konektor (6 jenis, pola garis ISO 128-2, kepala panah per jenis). */
 export function edgePathSvg(
   pts: ReadonlyArray<readonly [number, number]>,
@@ -1134,7 +1159,9 @@ export function edgePathSvg(
   const tStart = arrows.start ? headTrimMm(kind, arrows.start, arrows.line) : 0;
   if (tEnd > 0) drawn = trimPolyline(drawn, tEnd);
   if (tStart > 0) drawn = trimPolyline([...drawn].reverse(), tStart).reverse();
-  return `<path d="${polylineD(drawn)}" ${attrs}${start}${end}${markAttrs("link", opts, kind)}${route}/>`;
+  // Swarm 1.2.9 row 26 (AC-A02): repeated vertices are dropped, except on a legacy flow's route (C12).
+  const d = KEEP_REPEATS.has(pts) ? polylineD(drawn) : linkPathD(drawn);
+  return `<path d="${d}" ${attrs}${start}${end}${markAttrs("link", opts, kind)}${route}/>`;
 }
 
 /** Swarm 1.2.8 row 57 (VIS-7, D-V4, 01f §5.2): one drawn arrowhead (type other than `none`, size key). */

@@ -654,6 +654,25 @@ const CHAR_JOG_INTENT: Record<string, [string, string, string]> = {
   "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec": [JOG_56D, "ac8c1dbc22b0a5c2", "ac8c1dbc22b0a5c2"],
   "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec": [JOG_56D, "ac8c1dbc22b0a5c2", "ac8c1dbc22b0a5c2"],
 }
+/**
+ * Swarm 1.2.9 row 26 (AC-A02, INTENT; C12): link paths of non-legacy figures no longer repeat a vertex (a repeated
+ * point draws nothing; every other byte, the markers and the verdicts unchanged; the PNGs are pixel-identical). Key ->
+ * [AC line, HEAD sync hash, HEAD auto hash]; replaces the BASE, 56c, 57c and 56d values. Legacy flows keep their bytes.
+ * Generated with REL128_VIS0_CHAR_PRINT=1 on the row 26 engine (scratch clone of HEAD 0552f875f8 + the row 26 files).
+ */
+const CHAR_A02_INTENT: Record<string, [string, string, string]> = {
+  "engine-rev-a/svg/fixtures/case04.studio.json#": ["AC-A02", "d09309c43d10f8d7", "d09309c43d10f8d7"],
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json#": ["AC-A02", "8f93bae416f193d9", "8f93bae416f193d9"],
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec": ["AC-A02", "1487fd9747fc27e9", "1487fd9747fc27e9"],
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#": ["AC-A02", "0e93add1660c4656", "28e3b2983ce685e1"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/1/spec": ["AC-A02", "f89823a7648f0338", "f89823a7648f0338"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/4/spec": ["AC-A02", "448bde9827606685", "448bde9827606685"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/6/spec": ["AC-A02", "ba103e7454844e3f", "ba103e7454844e3f"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/7/spec": ["AC-A02", "e7b955c18483d103", "e7b955c18483d103"],
+  "fixtures/syn127/n7_autofit_t03_rest.json#/spec": ["AC-A02", "03948be68a8e7e86", "03948be68a8e7e86"],
+  "fixtures/syn128/hnb_fit_to_zero.json#/spec": ["AC-A02", "d776a251b4e285eb", "d776a251b4e285eb"],
+  "fixtures/syn128/r18g_lr_166.json#/spec": ["AC-A02", "e7c979dc83dc3cd4", "e7c979dc83dc3cd4"],
+}
 describe("char", () => {
   let corpus: CharEntry[] = []
   const now: Record<string, string> = {}
@@ -674,7 +693,7 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      const route = CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d INTENT: listed HEAD hashes replace BASE's
+      const route = CHAR_A02_INTENT[c.key] ?? CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d / 1.2.9 row 26 INTENT: listed HEAD hashes replace BASE's
       expect([n.so, n.ao], c.key).toEqual(route ? [route[1], route[2]] : [b.so, b.ao])
     }
   })

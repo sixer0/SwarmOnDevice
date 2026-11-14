@@ -11,6 +11,7 @@
  */
 import type { DiagramEdge, RoutedEdge, StudioDiagramV1 } from "../../../contract";
 import { LATTICE_Y, polylineD, snap, type Sheet, type SheetNode } from "../core";
+import { keepLinkRepeats } from "../core/svg"; // Swarm 1.2.9 row 26 (AC-A02, C12)
 import { diagramFitNote, diagramFitRoute } from "../fit/state";
 import { nudgeRoutes, offRules, routeRulesOf } from "./lanesroute";
 import { activeElkRoutes } from "../elk/routes";
@@ -110,8 +111,18 @@ function routeRackSide(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
   });
 }
 
-/** HS `route_edges` atas lembar tertempat (keluarga selain sequence). */
+/**
+ * HS `route_edges` atas lembar tertempat (keluarga selain sequence).
+ * Swarm 1.2.9 row 26 (AC-A02, C12): the routes of a legacy flow (family `flow` without `direction`, frozen at its
+ * 1.2.5 bytes by 01e A15) are marked so their link paths keep repeated vertices; other routes drop them when drawn.
+ */
 export function routePlaced(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
+  const out = routePlacedEdges(s, sheet);
+  if (s.family === "flow" && !flowDirectionOf(s as StudioDiagramV1 & { direction?: unknown })) for (const p of out) keepLinkRepeats(p.points);
+  return out;
+}
+
+function routePlacedEdges(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
   clearFirstRender(); // Swarm 1.2.8 row 35 (H-NB2): a new first-render routing starts with no recorded self-correction
   const elk = activeElkRoutes(s, sheet);
   if (elk) return glueToOutlines(elk, sheet);
