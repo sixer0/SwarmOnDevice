@@ -69,9 +69,10 @@ const decodeSessionID = Schema.decodeUnknownOption(SessionID)
 
 const locationRef = (directory: string) => Location.Ref.make({ directory: AbsolutePath.make(directory) })
 
-/** What `runningTerminalCwds` reads, one loaded folder (`dir`, the instance directory) at a time. */
-// 1.2.9 row 53 (N9-069).
-/** @internal test seam */
+/**
+ * What `runningTerminalCwds` reads, one loaded folder (`dir`, the instance directory) at a time.
+ * Exported for tests (production logic: `rehomePorts.terminals` uses it). 1.2.9 row 53 (N9-069).
+ */
 export interface TerminalScan {
   /** Directories of the instances the server has loaded. */
   loaded(): Promise<readonly string[]>
@@ -90,9 +91,9 @@ export interface TerminalScan {
  *   with REHOME_SESSION_ACTIVE "terminal check unavailable" (N9-009, path-free), never an HTTP 500;
  * - missing without built services: no services means no terminal, so nothing is listed. Services are never built
  *   for a missing folder (that build was the 1.2.8 row 68g 500).
+ *
+ * Exported for tests (production logic: `rehomePorts.terminals` uses it). 1.2.9 row 53 (N9-069).
  */
-// 1.2.9 row 53 (N9-069).
-/** @internal test seam */
 export async function runningTerminalCwds(scan: TerminalScan): Promise<string[]> {
   const cwds: string[] = []
   for (const dir of await scan.loaded()) {
@@ -208,8 +209,9 @@ let decisionForTests: Rehome.Ports["decision"]
 /**
  * Route tests that make a real move (C06 INTENT) answer the decision read with a fake bound port; `undefined` restores
  * the Studio read. Reachable from code only: no route, header or environment variable sets it.
+ *
+ * @internal test seam
  */
-/** @internal test seam */
 export function setRehomeDecisionForTests(port: Rehome.Ports["decision"]) {
   decisionForTests = port
 }
