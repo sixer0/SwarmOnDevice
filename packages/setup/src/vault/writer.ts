@@ -60,7 +60,7 @@ import { MODES } from "../constants.ts"
 import { decodeUtf8Strict } from "../mcpproxy/sanitise.ts" // consume r94's fail-closed decoder
 import { ENV_NAMES, MCP_SERVER_NAME, VAULT_INBOX, VAULT_ROOT } from "../mcpproxy/register.ts"
 import { resolveVault, type VaultPaths } from "./wiring.ts"
-import { classificationWord } from "./classified.ts"
+import { classifiedNote, slugify } from "./classified.ts"
 
 /** Note-size bound: parity with the proxy's MAX_WRITE_BYTES (mcpproxy/proxy.ts:77). */
 export const MAX_NOTE_BYTES = 64 * 1024
@@ -181,17 +181,13 @@ export function writeInboxNote(
   if (bytes > MAX_NOTE_BYTES) return refuse("content_too_large")
   // B01 (1.2.9 row 40, S9-03): the name as given, its slug and the content are checked before the
   // name is validated and before canonicalInbox, so a refusal never creates the inbox folder.
-  if (
-    (classificationWord(input.name) ?? classificationWord(slugify(input.name)) ?? classificationWord(input.content)) !==
-    undefined
-  )
-    return refuse("classified_content")
+  if (classifiedNote(input.name, input.content) !== undefined) return refuse("classified_content")
   const shape = validateNoteName(input.name)
   if (!shape.ok) return shape
   const inbox = canonicalInbox(resolveVault(options.env))
   if (!inbox.ok) return inbox
   const stamp = (options.now ?? (() => new Date()))().toISOString().replace(/[:]/g, "-")
-  const slug = slugify(input.name) // mirrors proxy.ts slugify (unification = row 106/97 handoff)
+  const slug = slugify(input.name) // shared with proxy.ts (vault/classified.ts, row 67c)
   let target = join(inbox.dir, `${stamp}-${slug}.md`)
   for (let n = 1; existsSync(target) && n <= MAX_COLLISION_SUFFIX; n++)
     target = join(inbox.dir, `${stamp}-${slug}-${n}.md`)
@@ -313,18 +309,6 @@ function tryRealpath(p: string): string | null {
   } catch {
     return null
   }
-}
-
-/** Byte-for-byte mirror of proxy.ts slugify (r94): lowercase, non-alnum runs to "-", trim,
- *  40-char cap, "note" fallback. Kept local because proxy.ts does not export it and
- *  mcpproxy/ is r94's area; the equivalence unit pins identical output on shared vectors. */
-function slugify(name: string): string {
-  const s = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-  return s === "" ? "note" : s
 }
 
 function byteLen(s: string): number {

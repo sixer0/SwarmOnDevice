@@ -28,7 +28,7 @@ import { expandTilde } from "../paths.ts"
 import { sanitise, wrapUntrusted, decodeUtf8Strict } from "./sanitise.ts"
 import { checkUrl } from "./urlpolicy.ts"
 import { appendAudit, type AuditOptions, type AuditRecord } from "./audit.ts"
-import { classificationWord } from "../vault/classified.ts"
+import { classifiedNote, slugify } from "../vault/classified.ts"
 import { ENV_NAMES, MCP_SERVER_NAME, VAULT_INBOX } from "./register.ts"
 
 // --- transport seam -------------------------------------------------------------------
@@ -703,6 +703,18 @@ async function runVault(
     })
     return { text: "BLOCKED_BY_POLICY: action must be write | list | read.", isError: true }
   }
+  // B01 (1.2.9 row 40, S9-03; row 67c): a write is checked for a classification word BEFORE the
+  // inbox folder is created, so a refusal creates nothing (as writeInboxNote). The check keeps its
+  // place after the name rules and the size bound: a name that fails them, or an oversized note,
+  // falls through to the path_confined / content_too_large refusals below.
+  if (action === "write") {
+    const name = typeof nameRaw === "string" ? nameRaw : ""
+    const content = typeof contentRaw === "string" ? contentRaw : ""
+    if (nameShapeOk(name) && byteLen(content) <= MAX_WRITE_BYTES) {
+      const word = classifiedNote(name, content)
+      if (word !== undefined) return refuseClassified(word, content, deps, started, agent, session)
+    }
+  }
   const inbox = ensureInbox(deps.inboxDir())
   if (action === "list") {
     const names = readdirSync(inbox)
@@ -887,31 +899,7 @@ function vaultWrite(
     })
     return { text: `BLOCKED_BY_POLICY: content exceeds the ${MAX_WRITE_BYTES}-byte note bound.`, isError: true }
   }
-  // B01 (1.2.9 row 40, S9-03): the name as given, its slug and the content are checked before the
-  // slug is used for any path. The audit line carries no url, no sha256, no content and no word.
-  const word =
-    classificationWord(nameHint) ?? classificationWord(slugify(nameHint)) ?? classificationWord(content)
-  if (word !== undefined) {
-    audit(deps, {
-      ts,
-      component: "swarm-web",
-      tool: "vault_inbox",
-      action: "write",
-      decision: "denied",
-      reason: "classified_content",
-      query: null,
-      url: null,
-      host: null,
-      bytes_in: byteLen(content),
-      latency_ms: deps.now().getTime() - started,
-      agent,
-      session,
-    })
-    return {
-      text: `BLOCKED_BY_POLICY: classified_content: the note holds the classification word ${word}; nothing was written. For classified work write only the mission id, date, status and links, without the word.`,
-      isError: true,
-    }
-  }
+  // The classification check ran in runVault before the inbox folder was created (row 67c).
   // Create-only (§7): filename is GENERATED `<UTC ts>-<slug>.md`; collisions take a numeric
   // suffix; "wx" makes overwrite structurally impossible, and no delete/rename exists here.
   const slug = slugify(nameHint)
@@ -969,6 +957,36 @@ function vaultWrite(
   return { text: `Wrote ${target}`, isError: false }
 }
 
+/** B01 refusal (N9-005). The audit line carries no url, no sha256, no content and no word. */
+function refuseClassified(
+  word: string,
+  content: string,
+  deps: ProxyDeps,
+  started: number,
+  agent: string | null,
+  session: string | null,
+): ToolOutcome {
+  audit(deps, {
+    ts: deps.now().toISOString(),
+    component: "swarm-web",
+    tool: "vault_inbox",
+    action: "write",
+    decision: "denied",
+    reason: "classified_content",
+    query: null,
+    url: null,
+    host: null,
+    bytes_in: byteLen(content),
+    latency_ms: deps.now().getTime() - started,
+    agent,
+    session,
+  })
+  return {
+    text: `BLOCKED_BY_POLICY: classified_content: the note holds the classification word ${word}; nothing was written. For classified work write only the mission id, date, status and links, without the word.`,
+    isError: true,
+  }
+}
+
 /** §7 confinement, fail-closed (refuse the whole call, never clamp): reject empty, `..`,
  *  absolute paths, any path separator, NUL, CR/LF, and dotfiles; then require the realpath of
  *  an EXISTING candidate to carry the canonical inbox as a prefix — a symlink whose target
@@ -976,9 +994,7 @@ function vaultWrite(
  *  canonical inbox itself is returned so the caller writes inside it; a dangling symlink at the
  *  name resolves via its PARENT (the inbox) and is later overwritten by the create-only open. */
 export function confine(inbox: string, name: string): string | null {
-  if (name === "" || name.includes("\0") || name.includes("\n") || name.includes("\r")) return null
-  if (name.startsWith("/") || name.includes("..") || name.includes("/")) return null
-  if (name.startsWith(".")) return null // dotfiles are not notes
+  if (!nameShapeOk(name)) return null
   const inboxReal = safeRealpath(inbox)
   if (inboxReal === null) return null
   const candidate = safeRealpath(join(inbox, name))
@@ -990,6 +1006,14 @@ export function confine(inbox: string, name: string): string | null {
   // Non-existing: the create-only write lands at join(inboxReal, name), which is by construction
   // inside the canonical inbox. Return that so the caller never writes through a symlinked inbox.
   return join(inboxReal, name)
+}
+
+/** §7 name rules that need no filesystem: not empty, no NUL / CR / LF, not absolute, no `..`,
+ *  no path separator, not a dotfile. */
+function nameShapeOk(name: string): boolean {
+  if (name === "" || name.includes("\0") || name.includes("\n") || name.includes("\r")) return false
+  if (name.startsWith("/") || name.includes("..") || name.includes("/")) return false
+  return !name.startsWith(".") // dotfiles are not notes
 }
 
 // --- helpers --------------------------------------------------------------------------------
@@ -1035,17 +1059,8 @@ function resolveRelative(base: string, ref: string): string | null {
   }
 }
 
-function slugify(name: string): string {
-  const s = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-  return s === "" ? "note" : s
-}
-
 function nameIsClassified(name: string): boolean {
-  return (classificationWord(name) ?? classificationWord(slugify(name))) !== undefined
+  return classifiedNote(name, "") !== undefined
 }
 
 function byteLen(s: string): number {

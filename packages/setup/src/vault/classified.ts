@@ -9,8 +9,9 @@
 // characters inside a word, look-alike letters and HTML entities pass (pinned "not matched" by the
 // drift test; release note RN-07).
 //
-// Pure: no imports, no filesystem access. Both inbox writers (mcpproxy/proxy.ts vaultWrite and
-// vault/writer.ts writeInboxNote) call classificationWord before anything is written.
+// Pure: no imports, no filesystem access. Both inbox writers (mcpproxy/proxy.ts runVault and
+// vault/writer.ts writeInboxNote) call classifiedNote before anything is written or created
+// (row 67c: one check, one slugify, shared by both writers and the proxy's audit name guard).
 
 export const CLASSIFIED_WORDS = ["TERBATAS", "RAHASIA", "CONFIDENTIAL", "RESTRICTED"] as const
 
@@ -24,4 +25,23 @@ export function classificationWord(text: string): string | undefined {
   if (match === null) return undefined
   const upper = match[0].toUpperCase()
   return CLASSIFIED_WORDS.find((word) => word === upper)
+}
+
+/** The note's file-name slug (r94): lowercase, non-alnum runs to "-", trim, 40-char cap, "note"
+ *  fallback. The single copy used by both inbox writers, so the generated file names and the
+ *  slug check below cannot drift apart. */
+export function slugify(name: string): string {
+  const s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+  return s === "" ? "note" : s
+}
+
+/** B01 (S9-03): the classification word held by the name as given, by its slug, or by the
+ *  content, checked in that order; undefined when the note is clean. Pass "" as content to check
+ *  a name alone. */
+export function classifiedNote(name: string, content: string): string | undefined {
+  return classificationWord(name) ?? classificationWord(slugify(name)) ?? classificationWord(content)
 }

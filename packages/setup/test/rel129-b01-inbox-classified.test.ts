@@ -162,6 +162,22 @@ describe("AC-B01a proxy vault_inbox refuses classified notes (P1-P7)", () => {
   }
 })
 
+// Row 67c (gate 67 finding 3, C79): the proxy checks a write BEFORE it creates the inbox folder,
+// so a classified refusal leaves no folder behind (as writeInboxNote already does, W-tests below).
+describe("AC-B01a proxy refusal creates no inbox folder (P8, row 67c)", () => {
+  for (const s of CLASSIFIED) {
+    it(`P8.${s.id}: refused with classified_content, inbox folder and vault root still absent`, async () => {
+      const b = box({ createInbox: false })
+      const out = result(await callWrite(b, s.name, s.content))
+      expect(out).toEqual({ text: refusalText(s.word), isError: true })
+      expect(existsSync(b.inbox)).toBe(false)
+      expect(existsSync(b.root)).toBe(false)
+      expect(lastAudit(b)).toMatchObject({ decision: "denied", reason: "classified_content", url: null })
+      expectAuditClean(auditText(b), s.word, s.content)
+    })
+  }
+})
+
 describe("AC-B01a writeInboxNote refuses classified notes (W1-W7)", () => {
   for (const s of CLASSIFIED) {
     it(`W${s.id}: refused with classified_content, inbox stays empty`, () => {
