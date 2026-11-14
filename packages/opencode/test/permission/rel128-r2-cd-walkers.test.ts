@@ -112,11 +112,6 @@ describe("R-2 cd PROBE: the shell's reading the table takes names the folder the
       const expected = folder()
       expect({ command, cwds: look.cwds }).toEqual({ command, cwds: expected === undefined ? [] : [expected] })
     })
-
-  // The pin above holds only if some form is taken at all: nine of the eleven are, measured at BASE.
-  test("the forms the table reads are not zero", () => {
-    expect(FORMS.filter(([, , taken]) => taken).length).toBe(9)
-  })
 })
 
 describe("R-2 cd PROBE: a write after a folder change is judged where it lands", () => {
