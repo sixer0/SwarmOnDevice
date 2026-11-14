@@ -41,10 +41,9 @@ describe('penjaga byte-identik render bersih (manifest sha256)', () => {
     expect(Object.keys(m.fitted).filter((id) => id.startsWith('diagram/')).length).toBeGreaterThan(10);
   });
 
-  // row42 SKIP S4 (C40, rows 124/124b; C23 recorded diffs): sha256 pins of figure SVGs made by the pre-patch engine. Row 124
-  // changes every figure on purpose (unused defs removed, GAMBAR caption label, key wrap; row 124 report §4: geometry-lint
-  // scores identical, bytes not). Re-pinning here would only copy today's output; C23 tracks the change as a recorded diff.
-  it.skip('setiap render di manifest masih bersih dan sha256-nya sama persis', () => {
+  // Swarm 1.2.9 row 36 (AC-A07, N9-106): guard on again (was row42 SKIP S4). The manifest was re-recorded once at the
+  // 1.2.9 head; every changed key is attributed in docs implementation/36_a07_manifest_guard.md.
+  it('setiap render di manifest masih bersih dan sha256-nya sama persis', () => {
     const m = readJson<CleanSvgManifest>(CLEAN_SVG_MANIFEST);
     const byId = new Map(renders.map((r) => [r.id, r]));
     const mismatch: string[] = [];
@@ -57,10 +56,9 @@ describe('penjaga byte-identik render bersih (manifest sha256)', () => {
     expect(mismatch).toEqual([]);
   });
 
-  // row42 SKIP S4 (C40, rows 124/124b; C23 recorded diffs): sha256 pins of figure SVGs made by the pre-patch engine. Row 124
-  // changes every figure on purpose (unused defs removed, GAMBAR caption label, key wrap; row 124 report §4: geometry-lint
-  // scores identical, bytes not). Re-pinning here would only copy today's output; C23 tracks the change as a recorded diff.
-  it.skip('render fit (bercacat di render pertama) juga terkunci: perubahan wajib lewat pembaruan manifest', () => {
+  // Swarm 1.2.9 row 36 (AC-A07, N9-106): guard on again (was row42 SKIP S4). The manifest was re-recorded once at the
+  // 1.2.9 head; every changed key is attributed in docs implementation/36_a07_manifest_guard.md.
+  it('render fit (bercacat di render pertama) juga terkunci: perubahan wajib lewat pembaruan manifest', () => {
     const m = readJson<CleanSvgManifest>(CLEAN_SVG_MANIFEST);
     const byId = new Map(renders.map((r) => [r.id, r]));
     const mismatch = Object.entries(m.fitted)
@@ -70,10 +68,9 @@ describe('penjaga byte-identik render bersih (manifest sha256)', () => {
     expect(renders.filter((r) => !(r.id in m.renders) && !(r.id in m.fitted)).map((r) => r.id)).toEqual([]);
   });
 
-  // row42 SKIP S4 (C40, rows 124/124b; C23 recorded diffs): sha256 pins of figure SVGs made by the pre-patch engine. Row 124
-  // changes every figure on purpose (unused defs removed, GAMBAR caption label, key wrap; row 124 report §4: geometry-lint
-  // scores identical, bytes not). Re-pinning here would only copy today's output; C23 tracks the change as a recorded diff.
-  it.skip('render bersih baru wajib ditambahkan ke manifest secara eksplisit', () => {
+  // Swarm 1.2.9 row 36 (AC-A07, N9-106): guard on again (was row42 SKIP S4). The manifest was re-recorded once at the
+  // 1.2.9 head; every changed key is attributed in docs implementation/36_a07_manifest_guard.md.
+  it('render bersih baru wajib ditambahkan ke manifest secara eksplisit', () => {
     const m = readJson<CleanSvgManifest>(CLEAN_SVG_MANIFEST);
     expect(clean.map((r) => r.id).filter((id) => !(id in m.renders))).toEqual([]);
   });
