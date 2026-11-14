@@ -6,6 +6,8 @@ import { describe, expect, test } from "bun:test"
 // text, the two R-6 keys are gone, and the 90 keys are held by both exemption lists (en and id only, the 1.2.6/1.2.7 convention).
 // Row 24a (C99) adds the two placement retry keys: 92 keys, pin 324. Row 24b (C128) adds placement.otherFolder: 93, pin 325.
 // Row 24c (C176) adds placement.rootUnknown and placement.folderMissing: 95, pin 327.
+// 1.2.9 row 24 (INTENT, N9-042/N9-045): `session.mission.tidy.done` is replaced by two plural forms and leaves this list
+// (94 keys here; the new keys are pinned in release-129-strings.test.ts), and the pin is 329.
 
 const app = async (locale: string): Promise<Record<string, string>> => (await import(`./${locale}.ts`)).dict
 
@@ -70,7 +72,6 @@ const NEW_APP: Record<string, { en: string; id: string }> = {
   "session.mission.tidy.approve": { en: "Approve and move {{count}} missions", id: "Setujui dan pindahkan {{count}} misi" },
   "session.mission.tidy.decline": { en: "Not now", id: "Jangan sekarang" },
   "session.mission.tidy.progress": { en: "Moving {{done}} of {{total}}…", id: "Memindahkan {{done}} dari {{total}}…" },
-  "session.mission.tidy.done": { en: "{{count}} missions moved. Their memory notes moved with them.", id: "{{count}} misi dipindahkan. Catatan memorinya ikut dipindahkan." },
   "session.mission.tidy.stopped": { en: "Stopped at {{mission}}: {{reason}} That move was undone; earlier moves stay.", id: "Berhenti di {{mission}}: {{reason}} Pemindahan itu dibatalkan; pemindahan sebelumnya tetap." },
   "session.mission.move.done": { en: "Moved to {{group}}. Its memory notes moved with it.", id: "Dipindahkan ke {{group}}. Catatan memorinya ikut dipindahkan." },
   "session.mission.move.error.sourceMissing": { en: "The mission folder is no longer there.", id: "Folder misi sudah tidak ada." },
@@ -125,8 +126,8 @@ const PRIVACY_SENTENCE = {
 }
 
 describe("1.2.8 i18n contract (N8-303)", () => {
-  test("the register lists 95 new app keys", () => {
-    expect(Object.keys(NEW_APP).length).toBe(95)
+  test("the register lists 94 new app keys", () => {
+    expect(Object.keys(NEW_APP).length).toBe(94)
   })
 
   test("every new key carries the register text in en and id", async () => {
@@ -162,7 +163,7 @@ describe("1.2.8 i18n contract (N8-303)", () => {
     }
   })
 
-  test("the 95 new keys are exempt in both lists, memory.privacy is not, and no other locale carries them", async () => {
+  test("the 94 new keys are exempt in both lists, memory.privacy is not, and no other locale carries them", async () => {
     const parity = await Bun.file(new URL("./parity.test.ts", import.meta.url)).text()
     const guard = await Bun.file(new URL("./parity-exemption-guard.test.ts", import.meta.url)).text()
     for (const key of Object.keys(NEW_APP)) {
@@ -175,8 +176,8 @@ describe("1.2.8 i18n contract (N8-303)", () => {
     for (const key of Object.keys(NEW_APP)) expect({ key, present: Object.hasOwn(fr, key) }).toEqual({ key, present: false })
   })
 
-  test("the exemption pin is 327 at both sites", async () => {
+  test("the exemption pin is 329 at both sites", async () => {
     const guard = await Bun.file(new URL("./parity-exemption-guard.test.ts", import.meta.url)).text()
-    expect(guard.split("toBe(327)").length - 1).toBe(2)
+    expect(guard.split("toBe(329)").length - 1).toBe(2)
   })
 })

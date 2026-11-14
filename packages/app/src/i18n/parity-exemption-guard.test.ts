@@ -314,9 +314,11 @@ const APPROVED_EXEMPT_KEYS = [
   "session.mission.tidy.approve",
   "session.mission.tidy.decline",
   "session.mission.tidy.progress",
-  "session.mission.tidy.done",
+  "session.mission.tidy.done.one",
+  "session.mission.tidy.done.other",
   "session.mission.tidy.stopped",
   "session.mission.move.done",
+  "session.mission.move.error.approval",
   "session.mission.move.error.sourceMissing",
   "session.mission.move.error.targetExists",
   "session.mission.move.error.outsideRoot",
@@ -366,10 +368,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the three-hundred-and-twenty-seven approved keys and nothing else", () => {
+  test("the exemption holds exactly the three-hundred-and-twenty-nine approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(327)
-    expect(new Set(exemptKeys).size).toBe(327)
+    expect(exemptKeys.length).toBe(329)
+    expect(new Set(exemptKeys).size).toBe(329)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -386,9 +388,12 @@ describe("i18n parity exemption guard", () => {
   })
 
   test("the exemption can only relieve the presence filter, nothing else in the gate", () => {
-    // Two occurrences means the helper declaration plus the single `missing` call site in the first
-    // parity test. A third would mean the exemption reached the placeholder, plural or `extra` checks.
-    expect(gateSource.split("exemptFromPresence").length - 1).toBe(2)
+    // Three occurrences: the helper declaration, the single `missing` call site in the first parity test, and (1.2.9
+    // row 24, INTENT, N9-040/041) the one in `requiredPluralFamilies`, which only spares a locale the extra CLDR
+    // categories of an exempt plural family it does not carry yet. A fourth would mean the exemption reached the
+    // placeholder or `extra` checks on its own.
+    expect(gateSource.split("exemptFromPresence").length - 1).toBe(3)
+    expect(gateSource.split("requiredPluralFamilies(").length - 1).toBe(4)
     // Both completeness assertions must still demand a literally empty `missing` array. If either one
     // became a threshold (`missing.slice`, `missing.length`), the exemption would start absorbing real
     // drift instead of only the named keys.
@@ -692,9 +697,11 @@ describe("i18n parity exemption guard", () => {
           "session.mission.tidy.approve",
           "session.mission.tidy.decline",
           "session.mission.tidy.progress",
-          "session.mission.tidy.done",
+          "session.mission.tidy.done.one",
+          "session.mission.tidy.done.other",
           "session.mission.tidy.stopped",
           "session.mission.move.done",
+          "session.mission.move.error.approval",
           "session.mission.move.error.sourceMissing",
           "session.mission.move.error.targetExists",
           "session.mission.move.error.outsideRoot",
