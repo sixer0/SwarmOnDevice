@@ -24,6 +24,7 @@ import { resetRenderRateLimiter } from "../../vendor/src/lib/studio/http/render-
 import { resetBridgePdfReadiness } from "../../vendor/src/lib/studio/services/render"
 import { startRenderBridge } from "../../../desktop/src/main/datum-render/index.ts"
 import { renderWebPreferences } from "../../../desktop/src/main/datum-render/pages.ts"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 export type PhaseConfig = {
   phase: "A" | "B"
@@ -124,6 +125,8 @@ export async function startHost(cfg: Pick<PhaseConfig, "phase" | "pkg" | "storeR
   const host = await startStudioHostServer({
     store,
     token: TOKEN,
+    // 1.2.9 row 50c (C46): a Mission Control key, so `person` (below) can record the person's U decisions attested.
+    missionControlKey: PERSON_KEY,
     hostname: "127.0.0.1",
     port: 0,
     log: () => {},
@@ -160,7 +163,9 @@ export async function startHost(cfg: Pick<PhaseConfig, "phase" | "pkg" | "storeR
     await closeHostStore(store)
     log(`host closed; lock file present after close: ${existsSync(path.join(cfg.storeRoot, "datum-studio.lock"))}`)
   }
-  return { call, local, sql, stop, url: host.url }
+  // Row 50c: the person's calls (by: user decisions) as attested requests; `call` stays the unattested agent client.
+  const person = personCaller({ url: host.url, token: TOKEN, cwd: project, agent: "claude", fetchImpl: realFetch })
+  return { call, local, sql, stop, url: host.url, person }
 }
 
 export type Host = Awaited<ReturnType<typeof startHost>>

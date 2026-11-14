@@ -38,7 +38,8 @@ const row = { id: "1", phase: "implementation", kind: "implementation", title: "
 
 describe("rel129 A12b: studio_mission_export reports backupRemoved", () => {
   test("two overwrites over six prior backups of one file: per-file backupRemoved >= 1, the text names the sum", async () => {
-    await store.transaction(async (tx) => store.missions.create(tx, { id: MI, title: "syn129 a12b", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-14", text: "approve" }] } as never))
+    // 1.2.9 row 50c (C46): U1 is the person's decision, stored from an attested request.
+    await store.transaction(async (tx) => store.missions.create(tx, { id: MI, title: "syn129 a12b", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-14", text: "approve" }] } as never, { attested: true }))
     const first = (await exp.call({ mission: MI, files: ["status", "decisions"], write: true }, session)) as S
     expect(first.isError).not.toBe(true)
     const dir = path.join(PROJECT, "docs", MI)
@@ -70,7 +71,7 @@ describe("rel129 A12b: studio_mission_export reports backupRemoved", () => {
 
   test("a write without overwrite carries backupRemoved 0 per file and no backup note", async () => {
     const MI2 = "2026-11-14_syn129-a12b-new"
-    await store.transaction(async (tx) => store.missions.create(tx, { id: MI2, title: "syn129 a12b new", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-14", text: "approve" }] } as never))
+    await store.transaction(async (tx) => store.missions.create(tx, { id: MI2, title: "syn129 a12b new", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-14", text: "approve" }] } as never, { attested: true })) // row 50c (C46)
     const res = (await exp.call({ mission: MI2, files: ["status"], write: true }, session)) as S
     expect(res.isError).not.toBe(true)
     expect(data(res).files[0].backupRemoved).toBe(0)

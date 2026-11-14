@@ -14,6 +14,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSyn
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { MISSION_CONTROL_KEY_HEADER, PERSON_KEY } from "../mission-tools/_attested-person.ts"
 import { BLUEPRINT_HEADER, DECISIONS_HEADER, PROFILE_HEADER, droppedRow, readBlueprint, readDecisions, toMissionRow, type HandRow, type ImportNote } from "./hand-written.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
@@ -84,6 +85,7 @@ let store: Awaited<ReturnType<Mod["openHostStore"]>>
 let host: Awaited<ReturnType<Mod["startStudioHostServer"]>>
 let hostBad: Awaited<ReturnType<Mod["startStudioHostServer"]>>
 let swarm: Client
+let person: Client
 const logs: Array<{ level: string; source: string; message: string; context?: Record<string, unknown> }> = []
 const log = (level: "info" | "warn" | "error", source: string, message: string, context?: Record<string, unknown>) => logs.push({ level, source, message, ...(context ? { context } : {}) })
 const quoted: string[] = []
@@ -93,11 +95,11 @@ const quote = (label: string, v: unknown) => {
   console.log(`[row120] ${line}`)
 }
 
-async function client(url: string, agent: string, cwd = PROJECT): Promise<Client> {
+async function client(url: string, agent: string, cwd = PROJECT, key?: string): Promise<Client> {
   const c = new Client({ name: "row120-test", version: "0" })
   const t = new StreamableHTTPClientTransport(new URL(url), {
     fetch: realFetch as never,
-    requestInit: { headers: { authorization: `Bearer ${TOKEN}`, "x-studio-agent": agent, "x-studio-caller-cwd": encodeURIComponent(cwd) } },
+    requestInit: { headers: { authorization: `Bearer ${TOKEN}`, "x-studio-agent": agent, "x-studio-caller-cwd": encodeURIComponent(cwd), ...(key !== undefined ? { [MISSION_CONTROL_KEY_HEADER]: key } : {}) } },
   })
   await c.connect(t)
   return c
@@ -175,15 +177,18 @@ beforeAll(async () => {
   store = await mod.openHostStore(STORE, { release: "1.2.0", logFile: LOG, missionGuard: true })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.0" })
   // The default exporter (no `exporter` option) = the row 120 renderer; start.ts makes the same call.
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log }) })
   // A host whose renderer tries to leave docs/<mission>/ (the seam's own path rule).
   const bad = async () => [{ path: "../../escape.md", markdown: "# escape\n" }]
   hostBad = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: bad }) })
   swarm = await client(host.url, "swarm")
+  // 1.2.9 row 50c (C46): the hand-written register's U decisions are the person's, imported from an attested request.
+  person = await client(host.url, "swarm", PROJECT, PERSON_KEY)
 })
 
 afterAll(async () => {
   await swarm?.close().catch(() => undefined)
+  await person?.close().catch(() => undefined)
   await hostBad?.close()
   await host?.close()
   mod?.configureTemplateSource(null)
@@ -225,7 +230,7 @@ describe.skipIf(!HAVE_TASK)("row 120: slice mission (9 rows + dropped 38, 5 deci
     const rows = SLICE_ROWS.map((id) => toMissionRow(handById.get(id)!, notes))
     const decisions = dec.decisions.filter((d) => SLICE_DECISIONS.includes(d.id)).map(({ line: _l, ...d }) => d)
     expect(decisions.map((d) => d.id)).toEqual(["U14", "C19", "U19", "C51", "C71"]) // recorded (file) order
-    await ok(swarm, "studio_mission_create", {
+    await ok(person, "studio_mission_create", {
       mission: {
         id: SLICE,
         title: "Swarm 1.2.0 with DATUM built in, full dmg installer",
@@ -419,7 +424,7 @@ describe("row 120: this task's whole blueprint and decisions as one mission (§1
       return issues.length === 0
     })
     quote("hand-written decisions refused by studio.mission/v1 Decision", refusedDecisions)
-    await ok(swarm, "studio_mission_create", {
+    await ok(person, "studio_mission_create", {
       mission: {
         id: FULL,
         title: "Swarm 1.2.0 with DATUM built in, full dmg installer",

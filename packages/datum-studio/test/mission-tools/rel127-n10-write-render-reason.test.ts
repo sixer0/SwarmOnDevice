@@ -16,6 +16,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY, personCaller } from "./_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -66,6 +67,8 @@ const log = (level: "info" | "warn" | "error", source: string, message: string, 
 }
 const quote = (label: string, v: unknown) => console.log(`[rel127-n10] ${label}: ${JSON.stringify(v)}`)
 
+/** 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request). */
+const asPerson = (name: string, args: Record<string, unknown>) => personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })(name, args)
 async function call(name: string, args: Record<string, unknown>): Promise<S> {
   const r = await c.callTool({ name, arguments: args })
   const text = ((r.content ?? []) as Array<{ type: string; text?: string }>).filter((x) => x.type === "text").map((x) => x.text ?? "").join("\n")
@@ -103,7 +106,7 @@ beforeAll(async () => {
   bridge = await import("../../src/store-bridge/index.ts")
   store = await mod.openHostStore(STORE, { release: "1.2.7", logFile: LOG, missionGuard: true })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.7" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   c = new Client({ name: "rel127-n10-test", version: "0" })
   await c.connect(
     new StreamableHTTPClientTransport(new URL(host.url), {
@@ -111,7 +114,7 @@ beforeAll(async () => {
       requestInit: { headers: { authorization: `Bearer ${TOKEN}`, "x-studio-agent": "swarm", "x-studio-caller-cwd": encodeURIComponent(PROJECT) } },
     }),
   )
-  const cr = await call("studio_mission_create", {
+  const cr = await asPerson("studio_mission_create", {
     mission: { id: M, title: "N-10 mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: ["1", "2", "3"].map(row), decisions: [{ id: "U1", by: "user", date: "2026-11-13", text: "go" }] },
   })
   expect(cr.ok).toBe(true)

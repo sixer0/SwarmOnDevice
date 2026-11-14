@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, realpathSync } from "node:fs"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY, personCaller } from "./_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -63,7 +64,7 @@ async function start(missionGuard: boolean) {
   await resetEnvCache()
   store = await mod.openHostStore(STORE, { release: "1.2.1", logFile: LOG, missionGuard })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.1" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   c = new Client({ name: "row136b-test", version: "0" })
   await c.connect(
     new StreamableHTTPClientTransport(new URL(host.url), {
@@ -80,6 +81,8 @@ async function stop() {
   if (store) await mod.closeHostStore(store)
 }
 
+/** 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request). */
+const asPerson = (name: string, args: Record<string, unknown>) => personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })(name, args)
 async function call(name: string, args: Record<string, unknown>): Promise<S> {
   const r = await c.callTool({ name, arguments: args })
   return { ...((r.structuredContent ?? {}) as S), _isError: r.isError === true }
@@ -144,7 +147,7 @@ beforeAll(async () => {
   mod = (await import("../../src/mcp-host/index.ts")) as Mod
   await start(true)
   expect(store.missionGuardEnabled).toBe(true)
-  const cr = await call("studio_mission_create", {
+  const cr = await asPerson("studio_mission_create", {
     mission: { id: M, title: "Row 136b mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: ["1", "2", "3", "4"].map(row), decisions: [{ id: "U1", by: "user", date: "2026-11-07", text: "go" }] },
   })
   expect(cr.ok).toBe(true)

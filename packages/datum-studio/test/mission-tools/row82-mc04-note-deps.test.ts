@@ -31,7 +31,7 @@ const U1 = { id: "U1", by: "user", date: "2026-11-12", text: "User approves the 
 
 // Row 1 has no deps; row 2 depends on row 1 by build (B), so row 2 is dep-blocked while row 1 is not done.
 async function approvedMission(id: string) {
-  await store.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row82" }, rows: [row("1"), row("2", ["1:B"])], decisions: [U1] } as never))
+  await store.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row82" }, rows: [row("1"), row("2", ["1:B"])], decisions: [U1] } as never, { attested: true })) // 1.2.9 row 50c (C46): U1 is the person's decision (attested request)
   await store.transaction(async (t) => M.approve(t, id, "U1"))
 }
 const rowOf = (mission: string, id: string) => M.get(mission)!.mission.rows!.find((r: S) => r.id === id) as S

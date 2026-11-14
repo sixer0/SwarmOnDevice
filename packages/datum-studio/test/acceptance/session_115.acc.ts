@@ -17,6 +17,7 @@ import path from "node:path"
 import { inflateSync } from "node:zlib"
 import { strFromU8, unzipSync } from "fflate"
 import { realBridgeRunnable, startRealBridge, type RealBridge } from "../verify-gate-e2e/real-bridge"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 export const PKG = path.resolve(import.meta.dir, "..", "..")
 export const SW = path.resolve(PKG, "..", "..")
@@ -115,7 +116,7 @@ export class AccSession {
     this.store = await this.mod.openHostStore(this.storeDir, { release, logFile: path.join(this.work, "logs", "store.jsonl"), missionGuard: true })
     this.mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release })
     const facts = { home: this.home, resourcesPath: path.join(this.work, "Swarm.app", "Contents", "Resources"), execPath: path.join(this.work, "Swarm.app", "Contents", "MacOS", "Swarm") }
-    this.host = await this.mod.startStudioHostServer({ store: this.store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts, extensions: this.mod.missionHostExtension(this.store, { log, exporter: null }) })
+    this.host = await this.mod.startStudioHostServer({ store: this.store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts, extensions: this.mod.missionHostExtension(this.store, { log, exporter: null }) })
     const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
     const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
     this.client = new Client({ name: "acc115", version: "0" })
@@ -134,7 +135,8 @@ export class AccSession {
   async openMission(rows: string[]) {
     const row = (flow: string, i: number) => ({ id: String(i + 1), phase: "implementation", kind: "test", title: `Flow ${flow}`, agent: "test-expert", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: `test/${flow}.md`, verification: "flow passes", review: "gate" })
     const ok = (r: S) => r._isError !== true && r.ok !== false
-    const cr = await this.call("studio_mission_create", { mission: { id: this.mission, title: "Acceptance session 115", type: "feature-release", owner: "master-controller", project: { dir: this.project }, rows: rows.map((f, i) => row(f, i)), decisions: [{ id: "U1", by: "user", date: "2026-11-13", text: "go" }] } })
+    // 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request).
+    const cr = await this.asPerson("studio_mission_create", { mission: { id: this.mission, title: "Acceptance session 115", type: "feature-release", owner: "master-controller", project: { dir: this.project }, rows: rows.map((f, i) => row(f, i)), decisions: [{ id: "U1", by: "user", date: "2026-11-13", text: "go" }] } })
     if (!ok(cr)) throw new Error(`mission create: ${cr._text}`)
     if (!ok(await this.call("studio_mission_approve", { mission: this.mission, decision: "U1" }))) throw new Error("mission approve")
     if (!ok(await this.call("studio_mission_set_status", { mission: this.mission, to: "running" }))) throw new Error("mission running")
@@ -147,6 +149,11 @@ export class AccSession {
   async resetLimits() {
     ;(await import("../../vendor/src/lib/studio/http/render-guard")).resetRenderRateLimiter()
     ;(await import("../../vendor/src/lib/studio/http/quota")).resetQueryRateLimiter()
+  }
+
+  /** 1.2.9 row 50c (C46): a call that records as the person (by: user) goes as an attested request (the key on it). */
+  async asPerson(name: string, args: Record<string, unknown>): Promise<S> {
+    return (await personCaller({ url: this.host.url, token: TOKEN, cwd: this.project, fetchImpl: this.realFetch })(name, args)) as S
   }
 
   async call(name: string, args: Record<string, unknown>): Promise<S> {

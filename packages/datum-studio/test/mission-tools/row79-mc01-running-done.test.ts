@@ -38,7 +38,7 @@ const U1 = { id: "U1", by: "user", date: "2026-11-12", text: "User approves the 
 
 async function runningMission(id: string, st: SqliteStudioStore = store) {
   const M = st.missions
-  await st.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row79" }, rows: [row("1"), row("2")], decisions: [U1] } as never))
+  await st.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row79" }, rows: [row("1"), row("2")], decisions: [U1] } as never, { attested: true })) // 1.2.9 row 50c (C46): U1 is the person's decision (attested request)
   await st.transaction(async (t) => M.approve(t, id, "U1"))
   await st.transaction(async (t) => M.updateRows(t, id, [{ id: "1", status: "running" }]))
 }

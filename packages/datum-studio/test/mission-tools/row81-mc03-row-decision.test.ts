@@ -31,7 +31,7 @@ const decision = (id: string) => ({ id, by: "user", date: "2026-11-12", text: `d
 /** An approved mission with decisions U1 (approval), U2, U3 recorded. */
 async function approved(id: string) {
   await store.transaction(async (t) => {
-    M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row81" }, rows: [row("1")], decisions: [decision("U1"), decision("U2"), decision("U3")] } as never)
+    M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row81" }, rows: [row("1")], decisions: [decision("U1"), decision("U2"), decision("U3")] } as never, { attested: true }) // 1.2.9 row 50c (C46): the person's decisions (attested request)
     M.approve(t, id, "U1")
   })
 }

@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, realpathSync } from "node:fs"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY, personCaller } from "./_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -62,6 +63,8 @@ const log = (level: "info" | "warn" | "error", source: string, message: string, 
 }
 const quote = (label: string, v: unknown) => console.log(`[row86] ${label}: ${JSON.stringify(v)}`)
 
+/** 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request). */
+const asPerson = (name: string, args: Record<string, unknown>) => personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })(name, args)
 async function call(name: string, args: Record<string, unknown>): Promise<S> {
   const r = await c.callTool({ name, arguments: args })
   return { ...((r.structuredContent ?? {}) as S), _isError: r.isError === true }
@@ -129,7 +132,7 @@ beforeAll(async () => {
   bridge = await import("../../src/store-bridge/index.ts")
   store = await mod.openHostStore(STORE, { release: "1.2.6", logFile: LOG, missionGuard: true })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.6" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   c = new Client({ name: "row86-test", version: "0" })
   await c.connect(
     new StreamableHTTPClientTransport(new URL(host.url), {
@@ -141,7 +144,7 @@ beforeAll(async () => {
     [MA, "Row 86 owner mission"],
     [MB, "Row 86 reviser mission"],
   ] as const) {
-    const cr = await call("studio_mission_create", {
+    const cr = await asPerson("studio_mission_create", {
       mission: { id, title, type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1"), row("2")], decisions: [{ id: "U1", by: "user", date: "2026-11-12", text: "go" }] },
     })
     expect(cr.ok).toBe(true)
@@ -228,7 +231,7 @@ describe("row 86 MC-08: a document owned by mission A and revised under mission 
     expect(line).toContain("| 2 |")
     // A fresh mission with nothing: no Deliverables part at all.
     const id = "2026-11-12_m86-empty"
-    expect((await call("studio_mission_create", { mission: { id, title: "Empty", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1")], decisions: [{ id: "U1", by: "user", date: "2026-11-12", text: "go" }] } })).ok).toBe(true)
+    expect((await asPerson("studio_mission_create", { mission: { id, title: "Empty", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1")], decisions: [{ id: "U1", by: "user", date: "2026-11-12", text: "go" }] } })).ok).toBe(true)
     const [empty] = await missionDocsExporter({ mission: id, files: ["status"], store: store as never })
     expect(empty!.markdown).not.toContain("Deliverables")
   })

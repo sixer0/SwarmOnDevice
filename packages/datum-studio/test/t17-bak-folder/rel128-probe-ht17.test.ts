@@ -207,7 +207,7 @@ describe("rel128 probe HT17 S3: studio_mission_export write + overwrite (mission
       const exp = tools.find((x) => x.name === "studio_mission_export")!
       const session = { sessionId: "mcp-ht17", agentId: "swarm", fileRoot: project }
       const row = { id: "1", phase: "implementation", kind: "implementation", title: "Row 1", agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "implementation/1.md", verification: "tests pass" }
-      await store.transaction(async (tx) => M.create(tx, { id: MI, title: "Mission ht17", type: "feature-release", owner: "master-controller", project: { dir: project }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-14", text: "approve" }] } as never))
+      await store.transaction(async (tx) => M.create(tx, { id: MI, title: "Mission ht17", type: "feature-release", owner: "master-controller", project: { dir: project }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-14", text: "approve" }] } as never, { attested: true })) // 1.2.9 row 50c (C46): the person's U1 (attested request)
       await store.transaction(async (tx) => M.approve(tx, MI, "U1"))
       await store.transaction(async (tx) => M.setStatus(tx, MI, "running"))
       const data = (res) => res.structuredContent?.data ?? res.structuredContent
