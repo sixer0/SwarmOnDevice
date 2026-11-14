@@ -562,8 +562,10 @@ const CHAR_INTENT: Record<string, [string, string]> = {
     ["AC-VIS-56c", "83825ace228e8e9e 411292684f467f10 83825ace228e8e9e 411292684f467f10 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[R1]"],
   // Swarm 1.2.9 row 31 (AC-A09, INTENT): at 166 mm m1 runs 7.1 mm down Sumber 0's right side and Tujuan's left side;
   // the new kind reports it (GEOM_EDGE_ALONG, eye-checked in the Q1 sweep). Bytes unchanged.
+  // Swarm 1.2.9 row 33 (AC-A10b, INTENT): the same m1 leaves Sumber 0 to x 36.76 and turns straight back (a 4.76 mm
+  // spur); GEOM_EDGE_DOUBLE_BACK reports it too (eye-checked in the row 33 Q1 sweep). Bytes unchanged.
   "fixtures/syn127/f6_fan_in_specs.json#/specs/6/spec":
-    ["AC-A09", "f6b91b24aa6af503 eea8450c80a2d003 f6b91b24aa6af503 eea8450c80a2d003 | V[] I[] G[GEOM_EDGE_ALONG:REPORT] E[] | V[] I[] G[GEOM_EDGE_ALONG:REPORT] E[R2]"],
+    ["AC-A09, AC-A10b", "f6b91b24aa6af503 eea8450c80a2d003 f6b91b24aa6af503 eea8450c80a2d003 | V[] I[] G[GEOM_EDGE_ALONG:REPORT,GEOM_EDGE_DOUBLE_BACK:REPORT] E[] | V[] I[] G[GEOM_EDGE_ALONG:REPORT,GEOM_EDGE_DOUBLE_BACK:REPORT] E[R2]"],
 }
 /**
  * Swarm 1.2.8 row 56c (C51, C75, C101; user item 7): intended changes of the bytes outside <marker>, key -> [reason,

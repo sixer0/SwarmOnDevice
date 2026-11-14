@@ -68,7 +68,10 @@ describe("rel128-hd35 notation sets (AC-HD35)", () => {
         const ev = lint(c.shapes)
         expect(/<circle\b[^>]*data-node="n1"/.test(ev.svg)).toBe(true)
         expect(ev.defects.filter((d) => d.other === "n1")).toEqual([])
-        expect(ev.defects).toEqual(lint(c.shapes.map((s) => (s.startsWith("event_") ? "box" : s))).defects)
+        // Swarm 1.2.9 row 33 (AC-A10b, INTENT, C65): with the event, connector 0 runs to x 79.43 and comes 10.1 mm back
+        // over its own stroke (a real spur, eye-checked); edgeDoublesBack reports it. Every other defect equals the box twin.
+        expect(ev.defects.filter((d) => d.kind !== "edgeDoublesBack")).toEqual(lint(c.shapes.map((s) => (s.startsWith("event_") ? "box" : s))).defects)
+        expect(ev.defects.filter((d) => d.kind === "edgeDoublesBack").map((d) => [d.text, d.other, d.amount])).toEqual([["konektor 0", "x 79.43, y 13.52", 10.1]])
       })
       continue
     }

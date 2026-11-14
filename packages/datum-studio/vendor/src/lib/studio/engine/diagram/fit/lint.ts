@@ -67,7 +67,8 @@ export type DiagramDefectKind =
   | "edgeOutside"
   | "edgeEndOffNode"
   | "edgeAlongOutline"
-  | "edgeOverHeader";
+  | "edgeOverHeader"
+  | "edgeDoublesBack";
 
 export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "textOverlap",
@@ -87,6 +88,7 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "edgeEndOffNode",
   "edgeAlongOutline",
   "edgeOverHeader",
+  "edgeDoublesBack",
 ];
 
 /**
@@ -165,6 +167,8 @@ const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   "edgeAlongOutline",
   // Swarm 1.2.9 row 32 (AC-A10a): same reason.
   "edgeOverHeader",
+  // Swarm 1.2.9 row 33 (AC-A10b): same reason.
+  "edgeDoublesBack",
 ]);
 export const STUB_SEGMENT_MIN_MM = 2.0;
 /** Row 53 (H-TAG): tolerance of the tag-inside-outline check (0.01 mm output grid plus float noise). */
@@ -1218,6 +1222,38 @@ function edgesOverHeaders(
   return out;
 }
 
+/**
+ * Swarm 1.2.9 row 33 (AC-A10b, N9-031): connectors that double back on themselves. After repeated vertices are removed,
+ * two consecutive segments that are collinear (sine of the angle between them at most 1e-3, the 0.01 mm output grid)
+ * and point in opposite directions, of any length. 1.2.8 B4: a via clamped at the figure edge sends `masuk` up to
+ * y 2.38 and straight back down over its own stroke. An SVG-side predicate: the router's `doublesBack` (build/route.ts)
+ * is not imported across the engine boundary. One entry per connector (the first reversal): the turning point and the
+ * shorter of the two legs (the spur).
+ */
+function edgesDoublingBack(links: ReadonlyArray<ReadonlyArray<Pt>>): Array<{ link: number; at: Pt; length: number }> {
+  const out: Array<{ link: number; at: Pt; length: number }> = [];
+  links.forEach((raw, li) => {
+    const pts: Pt[] = [];
+    for (const p of raw) {
+      const q = pts[pts.length - 1];
+      if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6) pts.push(p);
+    }
+    for (let k = 1; k + 1 < pts.length; k++) {
+      const ux = pts[k][0] - pts[k - 1][0];
+      const uy = pts[k][1] - pts[k - 1][1];
+      const vx = pts[k + 1][0] - pts[k][0];
+      const vy = pts[k + 1][1] - pts[k][1];
+      const lu = Math.hypot(ux, uy);
+      const lv = Math.hypot(vx, vy);
+      if (ux * vx + uy * vy < 0 && Math.abs(ux * vy - uy * vx) <= 1e-3 * lu * lv) {
+        out.push({ link: li, at: pts[k], length: Math.min(lu, lv) });
+        return;
+      }
+    }
+  });
+  return out;
+}
+
 function emptyCounts(): Record<DiagramDefectKind, number> {
   return {
     textOverlap: 0,
@@ -1237,6 +1273,7 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
     edgeEndOffNode: 0,
     edgeAlongOutline: 0,
     edgeOverHeader: 0,
+    edgeDoublesBack: 0,
   };
 }
 
@@ -1387,6 +1424,10 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
   // Swarm 1.2.9 row 32 (AC-A10a): a connector over or at the edge of a pool, lane, phase or group header text.
   for (const h of edgesOverHeaders(texts, links, linkHalf, nodes, throughText)) {
     defects.push({ kind: "edgeOverHeader", text: texts[h.text].text, other: `konektor ${h.link}` });
+  }
+  // Swarm 1.2.9 row 33 (AC-A10b): a connector that doubles back on itself (e.g. a via clamped at the figure edge).
+  for (const r of edgesDoublingBack(links)) {
+    defects.push({ kind: "edgeDoublesBack", text: `konektor ${r.link}`, other: `x ${r.at[0].toFixed(2)}, y ${r.at[1].toFixed(2)}`, amount: Number(r.length.toFixed(2)) });
   }
   const counts = emptyCounts();
   for (const d of defects) counts[d.kind]++;

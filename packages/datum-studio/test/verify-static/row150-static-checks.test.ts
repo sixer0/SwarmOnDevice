@@ -286,8 +286,9 @@ describe("row 150: FIGURE_FIT", () => {
   // 1.2.8 row 68a (INTENT, C166): edgeOutside (connector past the figure) and edgeEndOffNode (end on no node) fail too, 11 -> 13.
   // Swarm 1.2.9 row 31 (AC-A09, INTENT): edgeAlongOutline (connector along another node's outline, GEOM_EDGE_ALONG) fails too, 13 -> 14.
   // Swarm 1.2.9 row 32 (AC-A10a, INTENT): edgeOverHeader (connector over a pool/lane header text, GEOM_EDGE_HEADER) fails too, 14 -> 15.
-  it("diagram edgeCross / edgeCollinear are report-only; the other fifteen kinds fail (spec §3.5, T-03, 1.2.8 rows 55c, 58b, 68a, 1.2.9 rows 31, 32)", () => {
-    expect([...DIAGRAM_FAIL_KINDS].sort()).toEqual(["arrowTangent", "edgeAlongOutline", "edgeEndOffNode", "edgeEntryCollision", "edgeOutside", "edgeOverHeader", "edgeThroughNode", "frameOutside", "labelCollision", "lineThroughText", "stubSegment", "textExceedsNode", "textOutside", "textOverNode", "textOverlap"])
+  // Swarm 1.2.9 row 33 (AC-A10b, INTENT): edgeDoublesBack (connector doubling back, GEOM_EDGE_DOUBLE_BACK) fails too, 15 -> 16.
+  it("diagram edgeCross / edgeCollinear are report-only; the other sixteen kinds fail (spec §3.5, T-03, 1.2.8 rows 55c, 58b, 68a, 1.2.9 rows 31, 32, 33)", () => {
+    expect([...DIAGRAM_FAIL_KINDS].sort()).toEqual(["arrowTangent", "edgeAlongOutline", "edgeDoublesBack", "edgeEndOffNode", "edgeEntryCollision", "edgeOutside", "edgeOverHeader", "edgeThroughNode", "frameOutside", "labelCollision", "lineThroughText", "stubSegment", "textExceedsNode", "textOutside", "textOverNode", "textOverlap"])
   })
   it("engine fit notes CAPTION_WRAP / CAPTION_TRUNCATED fail FIGURE_FIT (1.2.6 row 28, T-01 INTENT, N-015)", () => {
     expect([...FIGURE_FIT_FAIL_NOTES].sort()).toEqual(["CAPTION_TRUNCATED", "CAPTION_WRAP"])
