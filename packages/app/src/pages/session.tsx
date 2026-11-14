@@ -180,7 +180,12 @@ export function TargetSessionRouteContent() {
     // when session content falls back to the route error boundary.
     <TargetServerScopedProviders directory={directory} sessionID={() => params.id}>
       <TargetSessionSettingsCommand />
-      <SessionRouteErrorBoundary sessionID={params.id} serverKey={requireServerKey(params.serverKey)} padded>
+      <SessionRouteErrorBoundary
+        sessionID={params.id}
+        serverKey={requireServerKey(params.serverKey)}
+        directory={directory()}
+        padded
+      >
         <ResolvedTargetSessionRoute />
       </SessionRouteErrorBoundary>
     </TargetServerScopedProviders>
@@ -193,13 +198,21 @@ function TargetSessionSettingsCommand() {
 }
 
 export function SessionRouteErrorBoundary(
-  props: ParentProps<{ sessionID?: string; serverKey?: ServerConnection.Key; padded?: boolean }>,
+  props: ParentProps<{
+    sessionID?: string
+    serverKey?: ServerConnection.Key
+    padded?: boolean
+    /** The project directory this route renders for, when known (row 79a3). */
+    directory?: string
+  }>,
 ) {
   const settings = useSettings()
   return (
     // 1.2.9 row 79a (LIVE-C07): a session read that failed with LOCATION_NOT_FOLDER (a file at the project path)
     // shows no error page while the folder-missing notice is open; Restore / Recreate reset this boundary.
+    // Row 79a3 (C118): only a notice for this route's own directory hides it, so another folder's notice does not.
     <FolderNoticeBoundary
+      directory={props.directory}
       fallback={(error) =>
         settings.general.newLayoutDesigns() ? (
           <SessionRouteFrame padded={props.padded}>

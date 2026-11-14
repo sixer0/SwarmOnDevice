@@ -407,6 +407,70 @@ describe("79a2 open notices per path, dropped on every dismissal", () => {
   })
 })
 
+describe("79a3 the session-route boundary passes its directory", () => {
+  const OTHER = "/syn129-79a3/Other Project"
+
+  // The real SessionRouteErrorBoundary (session.tsx), legacy layout: its fallback is the ErrorPage.
+  const mountRoute = async (directory: string | undefined) => {
+    // The diff and markdown workers are `?worker&url` imports that only Vite resolves.
+    mock.module(new URL("../../session-ui/src/pierre/worker.ts", import.meta.url).pathname, () => ({
+      workerFactory: () => undefined,
+      getWorkerPool: () => undefined,
+      getWorkerPools: () => ({}),
+    }))
+    mock.module(new URL("../../session-ui/src/components/markdown-worker.ts", import.meta.url).pathname, () => ({
+      parseMarkdown: () => undefined,
+      projectMarkdown: () => undefined,
+      disposeMarkdownProjection: () => undefined,
+      highlightStreamingCode: () => undefined,
+      disposeStreamingCode: () => undefined,
+      MarkdownWorkerDisposedError: class extends Error {},
+      MarkdownWorkerSupersededError: class extends Error {},
+      MarkdownWorkerUnavailableError: class extends Error {},
+    }))
+    // The legacy layout (its fallback is the ErrorPage); the page itself draws a marker, as in the other cases.
+    const settings = await import("@/context/settings")
+    mock.module("@/context/settings", () => ({
+      ...settings,
+      useSettings: () => ({ general: { newLayoutDesigns: () => false } }),
+    }))
+    mock.module("@/pages/error", () => ({ ErrorPage: (props: { error: unknown }) => errorPage(props.error) }))
+    const session = await import(new URL("../src/pages/session.tsx", import.meta.url).pathname)
+    const root = document.createElement("div")
+    document.body.appendChild(root)
+    dispose = render(
+      () =>
+        createComponent(session.SessionRouteErrorBoundary, {
+          sessionID: SID,
+          directory,
+          get children() {
+            return createComponent(ProjectView, {})
+          },
+        }),
+      root,
+    )
+    await tick()
+  }
+  const errorCount = () => count("[data-error-page]")
+
+  test("a notice for path A does not hide the session route's error for path B", async () => {
+    const helper = notice()
+    await helper.notice(OTHER, onOpen)
+    await mountRoute(DIR)
+    expect(world.reads).toBe(1)
+    expect(notices().length).toBe(1)
+    expect(errorCount()).toBe(1)
+  })
+
+  test("a notice for path A hides the session route's error for path A", async () => {
+    const helper = notice()
+    await helper.notice(DIR, onOpen)
+    await mountRoute(DIR)
+    expect(world.reads).toBe(1)
+    expect(errorCount()).toBe(0)
+  })
+})
+
 describe("79a wiring: the live boundaries use it", () => {
   const source = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8")
   const between = (text: string, start: string, end: string) => {

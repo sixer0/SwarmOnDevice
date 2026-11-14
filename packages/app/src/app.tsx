@@ -103,7 +103,8 @@ const SessionRoute = () => {
   })
 
   return (
-    <SessionRouteErrorBoundary sessionID={params.id}>
+    // Row 79a3: the directory this route renders for (the stored project path, as the folder notice records it).
+    <SessionRouteErrorBoundary sessionID={params.id} directory={sdk().directory}>
       <SessionPage />
     </SessionRouteErrorBoundary>
   )
