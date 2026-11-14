@@ -33,6 +33,11 @@ export type MissionControlMount = {
   prompt: (text: string) => Promise<unknown>
   /** `(p) => tabs().open(file.tab(p))` */
   openFile?: (path: string) => void
+  /**
+   * 1.2.9 row 56b: `(abs) => platform.revealPath(abs)` (showItemInFolder only, never opens, U3); absent = the
+   * deliverables list's own platform reveal. Also what Open does for a line found outside the session's folder.
+   */
+  revealFile?: (absPath: string) => void
   /** 1.2.8 row 46 (01d §4): whether any of these sessions is busy (the placement's join/new wait for idle) */
   sessionBusy?: (sessions: string[]) => boolean
   /**
@@ -132,6 +137,16 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
     setSheet(true)
     if (aside && deliverables) missionFilesScroll(aside, deliverables)
     else deliverables?.scrollIntoView?.({ block: "nearest" })
+  }
+  // 1.2.9 row 56b (AC-C08a residual, C53): deliverables found in another folder than the session's (a root mission seen
+  // from a group) are revealed in that folder. The file tab only reads inside the session's folder, so Open shows the
+  // file where it is (reveal, never run) instead of opening a same-named path under the session's folder.
+  const folder = () => state.deliverablesFolder
+  const revealElsewhere = (path: string) => {
+    const dir = folder()
+    if (!dir) return
+    const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/"
+    props.revealFile?.(`${dir.replace(/[\\/]+$/, "")}${sep}${path.split("/").join(sep)}`)
   }
 
   return (
@@ -366,7 +381,10 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
                       mission={mission()}
                       selected={row()}
                       onSelectAgent={selectAgent}
-                      openFile={props.openFile}
+                      openFile={folder() ? revealElsewhere : props.openFile}
+                      openPane={folder() ? () => {} : undefined}
+                      revealFile={props.revealFile}
+                      directory={folder()}
                     />
                   </div>
                 </aside>

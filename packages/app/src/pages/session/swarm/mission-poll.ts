@@ -102,6 +102,13 @@ export type MissionControlState = {
    * control shows one muted line for it instead of nothing; any answered list clears it.
    */
   unavailable: boolean
+  /**
+   * 1.2.9 row 56b (AC-C08a residual, C53): the folder the shown mission's deliverables were found in (the folder
+   * `deliverablesDir` chose), when it is not the session's own folder, for example the Default Project root seen from a
+   * session in one of its groups. Open and Reveal of those lines act on that folder (mission-control.tsx).
+   * `undefined` = the session's folder, or no lookup: Open and Reveal work as before.
+   */
+  deliverablesFolder?: string
 }
 
 /**
@@ -136,7 +143,15 @@ const realTimers: Timers = {
 }
 
 export function emptyMissionState(): MissionControlState {
-  return { options: [], selected: undefined, mission: null, readFailed: false, listed: false, unavailable: false }
+  return {
+    options: [],
+    selected: undefined,
+    mission: null,
+    readFailed: false,
+    listed: false,
+    unavailable: false,
+    deliverablesFolder: undefined,
+  }
 }
 
 export function createMissionPoller(input: {
@@ -319,7 +334,10 @@ export function createMissionPoller(input: {
       lookup,
       mission.deliverables.filter((d) => d.origin !== "folder").map((d) => d.projectPath),
     )
-    emit({ options, selected, mission, readFailed: false })
+    // 1.2.9 row 56b: the lines' folder travels with them, so Open and Reveal never resolve them against the session.
+    const deliverablesFolder =
+      lookup && canonicalPathKey(lookup) !== canonicalPathKey(directory) ? lookup : undefined
+    emit({ options, selected, mission, readFailed: false, deliverablesFolder })
   }
 
   const refresh = () => {

@@ -1232,6 +1232,8 @@ export default function Page() {
           >[0])
         },
         openFile: (path) => tabs().open(file.tab(path)),
+        // 1.2.9 row 56b: reveal (showItemInFolder only) for deliverables found outside this session's folder.
+        revealFile: platform.revealPath ? (abs) => void platform.revealPath?.(abs).catch(() => false) : undefined,
         // 1.2.8 row 46 (01d §4): placement join/new wait while a session linked to the mission works.
         sessionBusy: (ids) => ids.some((id) => (sync().data.session_status[id]?.type ?? "idle") !== "idle"),
       }
