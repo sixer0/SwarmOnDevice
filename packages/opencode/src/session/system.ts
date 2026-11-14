@@ -51,7 +51,7 @@ const INSTALLED_TOOL_LINES: Record<InstalledTools.ComponentId, { text: string; m
   obsidian: {
     // N8-122 (OBS-g, R20-C26): the vault rule shows only where the inbox tool is connected, since it cannot be followed
     // without it.
-    text: "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
+    text: "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
     mcp: InstalledTools.SWARM_WEB_MCP,
   },
 }
