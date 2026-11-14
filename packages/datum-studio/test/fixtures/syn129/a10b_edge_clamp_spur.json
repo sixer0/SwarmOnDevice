@@ -1,0 +1,65 @@
+{
+ "$comment": "Swarm 1.2.9 row 23, register N9-154, used by row 33 (AC-A10b, test N9-110) and the Q1 sweep. Legacy flow (family `flow`, no `direction`; B4 MASUK style): the `masuk` connector (a -> b, edge index 0) has vias on the nodes own cells, so the via is clamped at the figure edge and the route doubles back. The `keluar` connector (b -> c, edge index 1) has repeated vertices but no reversal (negative control). Preview path. Measured at BASE d4282fcfd8 (RB): edge 0 `M 42.67 16.67 L 2.38 16.67 L 2.38 2.38 L 2.38 4.76 L 2.38 40.48 L 42.67 40.48` at 128 mm (x 64.0 at 166 mm), one collinear reversal at both widths; edge 1 `M 58.67 47.62 L 58.67 52.39` with the vertex (58.67, 52.39) four times, 0 reversals; preview defects none. Synthetic labels only.",
+ "figure": {
+  "caption": "Alur sintetis titik belok terjepit di tepi gambar.",
+  "source": "Sumber sintetis uji row 23 (Swarm 1.2.9).",
+  "spec": {
+   "family": "flow",
+   "labels_verified": true,
+   "nodes": [
+    {
+     "id": "a",
+     "label": "Mulai A",
+     "shape": "stadium",
+     "class": {
+      "col": 0,
+      "row": 0
+     }
+    },
+    {
+     "id": "b",
+     "label": "Proses B",
+     "shape": "box",
+     "class": {
+      "col": 0,
+      "row": 1
+     }
+    },
+    {
+     "id": "c",
+     "label": "Selesai C",
+     "shape": "stadium",
+     "class": {
+      "col": 0,
+      "row": 2
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "a",
+     "to": "b",
+     "kind": "data",
+     "label": "masuk",
+     "route": "orthogonal",
+     "via": [
+      {
+       "col": 0,
+       "row": 0
+      },
+      {
+       "col": 0,
+       "row": 1
+      }
+     ]
+    },
+    {
+     "from": "b",
+     "to": "c",
+     "kind": "data",
+     "label": "keluar"
+    }
+   ]
+  }
+ }
+}
