@@ -127,6 +127,7 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer | "too-la
 /**
  * 1.2.8 row 45b: true when the request's header (every request since 1.2.9 row 50b) equals the per-launch key (HMAC
  * digests + timingSafeEqual, as the bearer token). No key configured, no header, an array header or an empty value -> false.
+ * @internal test seam
  */
 export function missionControlKeyOk(header: string | string[] | undefined, key: string | undefined): boolean {
   if (typeof key !== "string" || key.length === 0 || typeof header !== "string" || header.length === 0) return false

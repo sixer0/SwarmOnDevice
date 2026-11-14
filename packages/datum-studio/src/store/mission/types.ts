@@ -271,11 +271,11 @@ export interface DecisionOption {
 }
 
 /** 1.2.8 row 45 (N8-146, N8-147): a decision request about where missions live (01d §3.3). */
-export type DecisionTopic = "project-placement" | "project-tidy"
+type DecisionTopic = "project-placement" | "project-tidy"
 /** 1.2.8 row 45 (N8-149): product, institution or research theme (U1). */
 export type GroupKind = "product" | "institution" | "theme"
 /** 1.2.8 row 45 (N8-148): one tidy proposal line; `group: null` = the mission stays at the root. */
-export interface TidyProposalItem {
+interface TidyProposalItem {
   mission: string
   group: string | null
   groupKind?: GroupKind

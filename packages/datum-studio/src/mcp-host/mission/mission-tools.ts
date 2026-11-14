@@ -249,10 +249,10 @@ export function writeOptions(args: Record<string, unknown>, s: HostToolSession):
 }
 
 /** 1.2.8 row 39 (N8-014): text of the warning on a done close Swarm's memory did not check. */
-export const MEMORY_INDEX_UNCHECKED_TEXT = "no Swarm memory check on this call; if the mission has a final report, add its index entry"
+const MEMORY_INDEX_UNCHECKED_TEXT = "no Swarm memory check on this call; if the mission has a final report, add its index entry"
 
 /** 1.2.8 row 45 (01d §2.1 rules 1-4): `dir` is a real folder directly in its parent (no link) holding a valid `.swarm/group.json`. */
-export function groupMarkerOk(dir: string, nfs: NodeFs): boolean {
+function groupMarkerOk(dir: string, nfs: NodeFs): boolean {
   const file = path.join(dir, ".swarm", "group.json")
   try {
     if (nfs.lstat && [dir, path.dirname(file), file].some((p) => nfs.lstat!(p).isSymbolicLink)) return false

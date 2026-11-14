@@ -115,7 +115,7 @@ export const MEMORY_INDEX_META = "studio/memoryIndex"
 const MEMORY_INDEX_MISSION_RE = /^\d{4}-\d{2}-\d{2}[_-][a-z0-9][a-z0-9_-]{0,80}$/
 
 /** Row 39: a well-formed `studio/memoryIndex` value, from Swarm only; undefined otherwise (ignored, never refused). */
-export function memoryIndexOf(agentId: string, raw: unknown): HostToolSession["memoryIndex"] {
+function memoryIndexOf(agentId: string, raw: unknown): HostToolSession["memoryIndex"] {
   if (agentId !== "swarm" || raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined
   const { missionId, present } = raw as Record<string, unknown>
   if (typeof missionId !== "string" || !MEMORY_INDEX_MISSION_RE.test(missionId) || typeof present !== "boolean") return undefined

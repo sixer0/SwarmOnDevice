@@ -283,3 +283,65 @@ describe("AC-A03.62", () => {
     }
   }
 })
+
+/**
+ * Rows 63a-63c (AC-A03.63a/b/c): the declaration of `name` in `rel` (repo-relative) and the lines above it. A file that
+ * does not declare the name exactly once is a failure of the list, not an empty answer.
+ */
+async function a03SweepDecl(rel: string, name: string): Promise<{ line: string; above: string[]; text: string }> {
+  const text = await Bun.file(path.join(repo, rel)).text()
+  const lines = text.split("\n")
+  const re = new RegExp(`^(?:export\\s+)?(?:declare\\s+)?(?:async\\s+)?(?:const|let|function|class|interface|type|enum)\\s+${name}\\b`)
+  const at = lines.flatMap((l, i) => (re.test(l) ? [i] : []))
+  if (at.length !== 1) throw new Error(`${rel}: ${name} is declared ${at.length} times, expected 1`)
+  return { line: lines[at[0]], above: lines.slice(0, at[0]), text }
+}
+
+/** True when `name` leaves `rel` through an `export { ... }` list (a way round the keyword). */
+function a03SweepListed(text: string, name: string): boolean {
+  return new RegExp(`export\\s*(?:type\\s*)?\\{[^}]*\\b${name}\\b`).test(text)
+}
+
+/** N9-071 in either form (C91 OP-60-3): the exact line directly above the declaration, or the tag inside the doc block directly above. */
+function a03SweepMarked(above: string[]): boolean {
+  let i = above.length - 1
+  if (i < 0 || !above[i].trim().endsWith("*/")) return false
+  const block = [above[i]]
+  while (i > 0 && !above[i].trim().startsWith("/**")) block.unshift(above[--i])
+  return block.some((l) => l.includes("@internal test seam"))
+}
+
+/** The sweep rows' two checks: the B names are no longer exported, the D seams are exported and marked. */
+function a03SweepCases(keep: ReadonlyArray<readonly [string, readonly string[]]>, seams: ReadonlyArray<readonly [string, readonly string[]]>) {
+  for (const [file, names] of keep)
+    for (const name of names)
+      test(`${name} (${file}) is file-local: declared once, no export keyword, not in an export list`, async () => {
+        const d = await a03SweepDecl(file, name)
+        expect(d.line.startsWith("export")).toBe(false)
+        expect(a03SweepListed(d.text, name)).toBe(false)
+      })
+  for (const [file, names] of seams)
+    for (const name of names)
+      test(`${name} (${file}) stays exported and carries N9-071`, async () => {
+        const d = await a03SweepDecl(file, name)
+        expect(d.line.startsWith("export")).toBe(true)
+        expect(a03SweepMarked(d.above)).toBe(true)
+      })
+}
+
+describe("AC-A03.63a", () => {
+  // Row 63a: datum-studio host (packages/datum-studio outside vendor/). 10 names with no outside reader lose `export`;
+  // 4 test seams (a test reader, no production reader) stay exported and carry N9-071. List: implementation/60_a03_list.md.
+  a03SweepCases(
+    [
+      ["packages/datum-studio/src/mcp-host/figure-quota.ts", ["FIGURE_QUOTA_PARAM", "FIGURE_QUOTA_TOOLS", "FigureQuota", "FigureQuotaReader", "FigureQuotaOptions"]],
+      ["packages/datum-studio/src/mcp-host/mission/mission-tools.ts", ["MEMORY_INDEX_UNCHECKED_TEXT", "groupMarkerOk"]],
+      ["packages/datum-studio/src/mcp-host/tool-table.ts", ["memoryIndexOf"]],
+      ["packages/datum-studio/src/store/mission/types.ts", ["DecisionTopic", "TidyProposalItem"]],
+    ],
+    [
+      ["packages/datum-studio/src/mcp-host/figure-quota.ts", ["figureQuotaOf", "figureQuotaLine", "readFigureQuota"]],
+      ["packages/datum-studio/src/mcp-host/http-server.ts", ["missionControlKeyOk"]],
+    ],
+  )
+})

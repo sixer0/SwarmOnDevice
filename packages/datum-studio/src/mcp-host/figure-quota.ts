@@ -19,20 +19,23 @@ import type { MissionLog } from "./mission/tool-result.ts"
 import { sessionLogRef, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
 
 /** The resolved quota parameter (P7-37) read by lint D22; read here, never written. */
-export const FIGURE_QUOTA_PARAM = "figure.quota.maxPerDocument"
+const FIGURE_QUOTA_PARAM = "figure.quota.maxPerDocument"
 /** The block types the quota counts (= D22, register N-113). */
 const QUOTA_TYPES: ReadonlySet<string> = new Set(["chart", "diagram", "image"])
 /** The two kept tools that print the quota line (N8-211). */
-export const FIGURE_QUOTA_TOOLS = ["studio_document_get", "studio_figure_preview"] as const
+const FIGURE_QUOTA_TOOLS = ["studio_document_get", "studio_figure_preview"] as const
 
-export interface FigureQuota {
+interface FigureQuota {
   /** Figures (chart, diagram, image) in the revision. */
   count: number
   /** The resolved quota. */
   max: number
 }
 
-/** The quota of one revision: null when the template sets no quota (null or not a finite number). */
+/**
+ * The quota of one revision: null when the template sets no quota (null or not a finite number).
+ * @internal test seam
+ */
 export function figureQuotaOf(snapshot: Pick<AnyNormSnapshot, "doc" | "blocks">, params: ParamMap | undefined): FigureQuota | null {
   const raw = params?.[FIGURE_QUOTA_PARAM]
   if (typeof raw !== "number" || !Number.isFinite(raw)) return null
@@ -40,22 +43,28 @@ export function figureQuotaOf(snapshot: Pick<AnyNormSnapshot, "doc" | "blocks">,
   return { count, max: Math.max(0, Math.floor(raw)) }
 }
 
-/** N8-211: the tool text line (numbers only, outside every untrusted block). */
+/**
+ * N8-211: the tool text line (numbers only, outside every untrusted block).
+ * @internal test seam
+ */
 export function figureQuotaLine(q: FigureQuota): string {
   return `kuota gambar: ${q.count}/${q.max}`
 }
 
 /** Reads the quota of a document revision (current when `revisionNo` is undefined) from the installed store. */
-export type FigureQuotaReader = (documentId: string, revisionNo: number | undefined) => Promise<FigureQuota | null>
+type FigureQuotaReader = (documentId: string, revisionNo: number | undefined) => Promise<FigureQuota | null>
 
-/** Production reader: the revision and its pinned template, loaded as the figure preview route does (read only). */
+/**
+ * Production reader: the revision and its pinned template, loaded as the figure preview route does (read only).
+ * @internal test seam
+ */
 export const readFigureQuota: FigureQuotaReader = async (documentId, revisionNo) => {
   const { loadFigureContext } = await import("./local-api/routes/figure-preview-load.ts")
   const ctx = await loadFigureContext(documentId, revisionNo)
   return figureQuotaOf(ctx.snapshot, ctx.template.params)
 }
 
-export interface FigureQuotaOptions {
+interface FigureQuotaOptions {
   log: MissionLog
   /** Test seam: the quota reader (default `readFigureQuota`). */
   read?: FigureQuotaReader
