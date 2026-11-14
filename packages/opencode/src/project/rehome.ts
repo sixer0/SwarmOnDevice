@@ -351,7 +351,10 @@ async function realRoot(ports: Ports) {
 
 /** Row 68h (S-21): a root of the move (`from`, a group) given as a symlink is refused by its last segment only. */
 async function notLinked(folder: string) {
-  if ((await lstatOrUndefined(folder))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", path.basename(folder))
+  // 1.2.9 row 58b (AC-C11, S-31): `lstat` of "Alias/" follows the link, so look at the resolved path; it drops a
+  // trailing separator, and the check and the detail then name the same string.
+  const resolved = path.resolve(folder)
+  if ((await lstatOrUndefined(resolved))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", path.basename(resolved))
 }
 
 /** Row 68g: a folder named for the person without its absolute part: relative to R inside it, else its last segment. */
