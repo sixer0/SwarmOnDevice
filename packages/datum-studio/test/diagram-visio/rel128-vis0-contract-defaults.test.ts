@@ -696,9 +696,9 @@ describe("char", () => {
   test("explicit-default twins render byte-equal to the spec without the fields, verdicts equal (§3.6 clause 2)", async () => {
     const has = schemaTwinFields()
     console.log(`[rel128-vis0 char] twin fields in the schema: ${has.size} of ${TWIN_FIELDS.length}`)
-    // All or none: BASE has no 1.2.8 field; HEAD (row 52 on) has every one. A partial set means a schema regression.
-    expect([0, TWIN_FIELDS.length]).toContain(has.size)
-    if (has.size === 0) return
+    // The 1.2.9 base (d4282fcfd8) already has every twin field, so the premise must hold: an empty or partial set is a
+    // schema regression and fails here instead of skipping the loop (AC-B07b; the 1.2.8 BASE/HEAD dual mode is gone).
+    expect(has.size).toBe(TWIN_FIELDS.length)
     let twins = 0
     for (const c of corpus) {
       const twin = explicitDefaults(c.v1, has)
