@@ -153,7 +153,7 @@ describe("1.2.8 row 46b AC-PROJg: the tidy list in the existing decision card", 
     expect(`${Object.keys(sent).sort().join(",")} ${sent.request} ${sent.option}`).toBe("mission,option,request D-2 approve")
     expect(calls.answer.length).toBe(0)
     expect(calls.toast.length).toBe(1)
-    expect(calls.toast[0]![0] === tr("session.mission.tidy.done", { count: "2" })).toBe(true)
+    expect(calls.toast[0]![0] === tr("session.mission.tidy.done.other", { count: "2" })).toBe(true)
   })
 
   test("decline is the ordinary answer; nothing moves", async () => {

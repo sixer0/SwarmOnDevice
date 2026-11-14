@@ -54,6 +54,12 @@ export function checkInstruction(raw: string): InstructionCheck {
 
 export type Translate = (key: string, params?: Record<string, string | number | boolean>) => string
 
+/**
+ * 1.2.9 row 24a (AC-C04, N9-043): the count-aware lookup of the tidy result (`language.plural`). The key literal makes
+ * the app typecheck prove that `"session.mission.tidy.done"` is a `PluralKey` where mission-command.tsx passes it.
+ */
+export type Plural = (key: "session.mission.tidy.done", count: number, params?: Record<string, string | number | boolean>) => string
+
 /** Feed "who" label (§5.6): owner = You, controller = Swarm, agent = its name or "Agent"; a row adds " · <row>". */
 export function feedWho(line: MissionFeedLine, t: Translate) {
   const party = (side: MissionFeedLine["from"]) =>
@@ -180,6 +186,9 @@ export function moveErrorText(result: { code: string; message: string }, t: Tran
     return t("session.mission.placement.otherFolder")
   // row 24c (C176): rehome refusals from row 68f. Desktop names the missing folder as "<route text>: <folder>".
   if (result.code === "REHOME_ROOT_UNKNOWN") return t("session.mission.placement.rootUnknown")
+  // 1.2.9 row 24a (N9-044, 01c §3.4): the answer could not be confirmed; desktop joins "<route text>: <detail>".
+  if (result.code === "REHOME_APPROVAL_MISSING" && /: decision( unchecked)?$/.test(result.message))
+    return t("session.mission.move.error.approval")
   const folder = result.code === "REHOME_FOLDER_MISSING" ? result.message.split(": ").slice(1).join(": ") : ""
   if (folder) return t("session.mission.placement.folderMissing", { folder })
   if (key[result.code]) return t(key[result.code]!)
@@ -252,6 +261,8 @@ export function createCommandController(input: {
   /** a normal prompt to the open session's root (§2); rejects on failure */
   prompt: (text: string) => Promise<unknown>
   t: Translate
+  /** 1.2.9 row 24a: `language.plural` for the tidy result; absent = the `.other` form (language.tsx's own fallback) */
+  plural?: Plural
   onState: (state: MissionCommandState) => void
   now?: () => string
   /** 1.2.8 row 46: the success toast of a placement (N8-168); 1.2.8 row 46b: "error" for a stopped tidy (N8-167) */
@@ -265,6 +276,9 @@ export function createCommandController(input: {
     input.onState(state)
   }
   const keyOf = (mission: string, request: string) => `${mission}/${request}`
+  // 1.2.9 row 24a (AC-C04): one mission reads "1 mission moved" (N9-040), more read N9-041.
+  const tidyDone = (count: number) =>
+    input.plural ? input.plural("session.mission.tidy.done", count) : input.t("session.mission.tidy.done.other", { count })
 
   /** Local lines and errors belong to one mission (§2: gone on the next mission switch). */
   const forMission = (mission: string) => {
@@ -346,7 +360,7 @@ export function createCommandController(input: {
     input.refresh()
     input.toast?.(
       tidy
-        ? input.t("session.mission.tidy.done", { count: result.data.moved ?? 0 })
+        ? tidyDone(result.data.moved ?? 0)
         : input.t("session.mission.move.done", { group: result.data.group ?? option.group ?? "" }),
     )
     return true

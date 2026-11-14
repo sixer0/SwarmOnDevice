@@ -61,6 +61,8 @@ export function MissionCommand(props: {
     refresh: () => props.refresh(),
     prompt: (text) => props.prompt(text),
     t,
+    // 1.2.9 row 24a (AC-C04): the tidy result through the plural lookup (PluralKey N9-043)
+    plural: language.plural,
     onState: (next) => setState(reconcile(next)),
     toast: (text, variant = "success") => (props.toast ? props.toast(text, variant) : showToast({ title: text, variant })),
   })

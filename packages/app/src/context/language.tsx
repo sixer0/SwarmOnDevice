@@ -33,6 +33,8 @@ type PluralKey =
   | "session.question.pending"
   | "session.followupDock.summary"
   | "session.revertDock.summary"
+  // 1.2.9 row 24a (N9-043, AC-C04): the tidy result, "1 mission moved" / "2 missions moved".
+  | "session.mission.tidy.done"
 type Source = { dict: Record<string, string> }
 
 function cookie(locale: Locale) {
