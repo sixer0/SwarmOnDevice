@@ -254,26 +254,17 @@ export const SettingsSkills: Component<{ v2?: boolean; directory?: Accessor<stri
   // which the server refuses with no write: SKILL_SHELL_UNTRUSTED (untrusted project) shows its text and no confirm;
   // only SKILL_SHELL_UNCONFIRMED opens the second confirm.
   const approve = (draft: SkillDraftRow, confirmed: boolean) => {
-    if (draft.runsCommands && !confirmed) {
-      setState({ confirm: undefined })
-      return run(async () => {
-        const result = await client().skill.draftApprove({ name: draft.name, scope: draft.scope }, await headers())
-        if (result.error && skillErrorCode(result.error) === "SKILL_SHELL_UNCONFIRMED") {
-          setState({ confirm: { kind: "commands", key: keyOf(draft.scope, draft.name) } })
-          return {}
-        }
-        if (!result.error) {
-          saved(result.data)
-          reload()
-        }
-        return result
-      })
-    }
+    const first = draft.runsCommands && !confirmed
+    if (first) setState({ confirm: undefined })
     return run(async () => {
       const result = await client().skill.draftApprove(
         { name: draft.name, scope: draft.scope, ...(draft.runsCommands && confirmed ? { acceptCommands: true } : {}) },
         await headers(),
       )
+      if (first && result.error && skillErrorCode(result.error) === "SKILL_SHELL_UNCONFIRMED") {
+        setState({ confirm: { kind: "commands", key: keyOf(draft.scope, draft.name) } })
+        return {}
+      }
       if (!result.error) {
         setState({ confirm: undefined })
         saved(result.data)
