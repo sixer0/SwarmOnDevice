@@ -3193,6 +3193,8 @@ export type RehomeRefusedError = {
       | "REHOME_ROLLED_BACK"
       | "REHOME_SESSION_ACTIVE"
       | "REHOME_ROLLBACK_FAILED"
+      | "REHOME_ROOT_UNKNOWN"
+      | "REHOME_FOLDER_MISSING"
     message: string
     detail?: string
     step?: string
