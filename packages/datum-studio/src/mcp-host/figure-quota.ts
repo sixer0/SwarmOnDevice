@@ -16,7 +16,7 @@ import { TOOLS } from "../../vendor/scripts/studio/mcp/tools"
 import { walkDoc } from "../../vendor/src/lib/studio/engine/lint/structure/walk"
 import type { AnyNormSnapshot, ParamMap } from "../../vendor/src/lib/studio/contract"
 import type { MissionLog } from "./mission/tool-result.ts"
-import type { HostToolExtension, HostToolNext, HostToolSession } from "./tool-table.ts"
+import { sessionLogRef, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
 
 /** The resolved quota parameter (P7-37) read by lint D22; read here, never written. */
 export const FIGURE_QUOTA_PARAM = "figure.quota.maxPerDocument"
@@ -111,7 +111,7 @@ export function figureQuotaWrappers(opts: FigureQuotaOptions): HostToolExtension
             tool: name,
             documentId,
             agentId: session.agentId,
-            sessionId: session.sessionId,
+            ...sessionLogRef(session),
             message: err.message,
             stack_trace: err.stack,
           })

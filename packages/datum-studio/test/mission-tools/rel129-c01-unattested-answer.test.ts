@@ -13,6 +13,7 @@ import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
+import { personCaller } from "./_attested-person.ts"
 
 type S = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -465,5 +466,65 @@ describe("N9-128 AC-C01 row 50: unattested by: user answers, decisions, create d
     }
     walk(WORK)
     for (const f of files) for (const sid of [attestedSid, replaySid]) expect(readFileSync(f, "utf8").includes(sid), path.basename(f)).toBe(false)
+  })
+})
+
+// ── Row 68b (gate 68 F2, C80): the template tools, studio_asset_put and the figure-quota line share one host log
+// helper keyed on the attestation the session OPENED with, so a keyless replay (call session unattested) is covered too.
+
+describe("N9-128 AC-C01 row 68b: no attested session id in template, asset or replayed tool log lines", () => {
+  test("attested session: a template call, an asset upload and a keyless replay of a template call leave the id in no log line", async () => {
+    // The person's session (desktop shape, key on every request): `_attested-person.ts`, keyed for this host.
+    let personSid = ""
+    const capture = async (input: string | URL | Request, init?: RequestInit) => {
+      const r = await fetch(input, init)
+      personSid ||= r.headers.get("mcp-session-id") ?? ""
+      return r
+    }
+    const person = personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, key: KEY, fetchImpl: capture as unknown as typeof fetch })
+    const tpl = await person("studio_template_check", { slug: "syn129-no-such-template" })
+    expect(tpl.tool ?? tpl.rpc).toBe("studio_template_check")
+    const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    const asset = await person("studio_asset_put", { dataBase64: PNG })
+    expect(asset.tool ?? asset.rpc).toBe("studio_asset_put")
+    expect(personSid.length).toBeGreaterThan(0)
+    // Keyless replay of the same session id: runs unattested, still never logs the opened-attested id.
+    const replay = await rawCall(personSid, "2025-06-18", "studio_template_check", { slug: "syn129-no-such-template" })
+    expect(replay.tool).toBe("studio_template_check")
+
+    const tplLines = logs.filter((l) => l.source === "datum-studio-host.templates" && /^template tool /.test(l.message))
+    expect(tplLines.length).toBeGreaterThanOrEqual(2)
+    expect(logs.filter((l) => JSON.stringify(l).includes(personSid)).length).toBe(0)
+    for (const l of tplLines.slice(-2)) {
+      expect(l.context?.attested, l.message).toBe(true)
+      expect(l.context && "sessionId" in l.context, l.message).toBe(false)
+    }
+
+    // Durable files: the tools' daily JSONL (written async) and the store log; the asset line must be there.
+    const files = (): string[] => {
+      const out: string[] = []
+      const walk = (d: string) => {
+        for (const n of readdirSync(d)) {
+          const p = path.join(d, n)
+          if (statSync(p).isDirectory()) walk(p)
+          else if (/\.(jsonl|log)$/.test(n)) out.push(p)
+        }
+      }
+      walk(WORK)
+      return out
+    }
+    const assetLine = () => files().some((f) => f.includes("datum-studio-asset-tool") && readFileSync(f, "utf8").includes('"tool":"studio_asset_put"'))
+    for (let i = 0; i < 40 && !assetLine(); i++) await new Promise((r) => setTimeout(r, 50))
+    expect(assetLine()).toBe(true)
+    await new Promise((r) => setTimeout(r, 100))
+    for (const f of files()) expect(readFileSync(f, "utf8").includes(personSid), path.basename(f)).toBe(false)
+    expect(JSON.stringify(logs).includes(KEY)).toBe(false)
+  })
+
+  test("unattested session: template lines keep the session id (debuggable, not a secret)", async () => {
+    const { c, t } = await client("claude")
+    await c.callTool({ name: "studio_template_check", arguments: { slug: "syn129-no-such-template" } })
+    const sid = t.sessionId ?? ""
+    expect(logs.some((l) => l.source === "datum-studio-host.templates" && l.context?.sessionId === sid && !("attested" in (l.context ?? {})))).toBe(true)
   })
 })

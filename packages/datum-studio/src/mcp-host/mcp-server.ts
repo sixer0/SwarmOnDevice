@@ -19,7 +19,7 @@ import { DIAGRAM_GUIDE_NAME, DIAGRAM_GUIDE_URI, DIAGRAM_VISIO_GUIDE_NAME, DIAGRA
 import { ASSET_TOOL_NAME, assetHostExtension } from "./asset-tool.ts"
 import { FIGURE_LOCK_TOOL, FIGURE_LOCKED, FIGURE_LOCKS, withFigureLock, type FigureLockRegistry } from "./figure-lock.ts"
 import { requestCarriesMissionControlKey } from "./http-server.ts"
-import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, sessionForCall, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
+import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, sessionForCall, sessionLogRef, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
 
 /** Row 50b (S9-01): the figure-lock holder label of an attested session (its id is never logged). */
 const ATTESTED_HOLDER = "attested-session"
@@ -98,8 +98,10 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
   const extensions = deps.extensions.some((e) => e.name === ASSET_TOOL_NAME) ? deps.extensions : [...deps.extensions, assetHostExtension()]
   const active = activeHostTools(config.toolsets, extensions)
   const toolDeps = { config: execConfig, fetchImpl: deps.fetchImpl, nfs: deps.nfs ?? REAL_NODE_FS, session: new McpSession(), ...(deps.now ? { now: deps.now } : {}) }
-  // Row 50b (S9-01): a line of an attested session carries `attested: true` and never the session id.
-  const sessionRef = deps.session.attested === true ? { attested: true } : { sessionId: deps.session.sessionId }
+  // Row 50b / 68b (S9-01): a line of an attested session carries `attested: true` and never the session id.
+  const sessionRef = sessionLogRef(deps.session)
+  // Row 68b: the opened attestation rides on every call session (log lines only), so a keyless replay still hides the id.
+  const opened = deps.session.attested === true ? { openedAttested: true as const } : {}
   const emit = (rec: Record<string, unknown>) =>
     deps.log(redactSecret(JSON.stringify({ ts: new Date().toISOString(), source: "datum-studio-host.mcp", ...sessionRef, agentId: deps.session.agentId, ...rec }), secret))
 
@@ -147,7 +149,7 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
     const name = req.params.name
     const args = (req.params.arguments ?? {}) as Record<string, unknown>
     // Row 50b (S9-01): attested only when this request carried the Mission Control key; row 188: the caller's session.
-    const callSession = attestedForRequest(sessionForCall(deps.session, req.params._meta), extra?.requestInfo !== undefined, requestCarriesMissionControlKey())
+    const callSession = { ...attestedForRequest(sessionForCall(deps.session, req.params._meta), extra?.requestInfo !== undefined, requestCarriesMissionControlKey()), ...opened }
     // Row 50b: a call on an attested session that ran unattested is marked on its tool_call line (no id, no key).
     const keyLine = deps.session.attested === true && callSession.attested !== true ? { requestAttested: false } : {}
     const ext = active.extensions.find((e) => e.name === name)
@@ -167,7 +169,7 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
     // Row 57 (S-02, N-024): one figure_revise per {documentId, pid} at a time, across sessions; released in finally.
     if (name === FIGURE_LOCK_TOOL) {
       // Row 50b (S9-01): the holder is logged by another session when it is refused; an attested id never is.
-      const holder = { sessionId: deps.session.attested === true ? ATTESTED_HOLDER : deps.session.sessionId, agentId: deps.session.agentId, since: Date.now() }
+      const holder = { sessionId: "sessionId" in sessionRef ? sessionRef.sessionId : ATTESTED_HOLDER, agentId: deps.session.agentId, since: Date.now() }
       return withFigureLock(deps.figureLocks ?? FIGURE_LOCKS, args, holder, newCallId, () => runKept(name, args, callSession), (k, by) =>
         emit({ level: "warn", event: "tool_call", tool: name, ok: false, code: FIGURE_LOCKED, documentId: k.documentId, [k.by]: k.figure, heldBySession: by.sessionId, heldForMs: Date.now() - by.since }),
       )

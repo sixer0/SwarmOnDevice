@@ -33,6 +33,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"
 import { MAX_MESSAGE_BYTES } from "../../vendor/scripts/studio/mcp/config"
 import { secretEquals } from "../../vendor/src/lib/studio/contract/auth"
+import { sessionLogRef } from "./tool-table.ts"
 
 export const MCP_PATH = "/mcp"
 export const CALLER_CWD_HEADER = "x-studio-caller-cwd"
@@ -143,11 +144,6 @@ export function requestCarriesMissionControlKey(): boolean | undefined {
   return requestKey.getStore()
 }
 
-/** Row 50b (S9-01): a session log line names an attested session by `attested: true`, never by its id. */
-function sessionRef(sessionId: string, attested: boolean): { sessionId: string; attested?: false } | { attested: true } {
-  return attested ? { attested: true } : { sessionId, attested: false }
-}
-
 export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
   interface Entry {
     transport: StreamableHTTPServerTransport
@@ -217,6 +213,8 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
     const cwdRaw = req.headers[CALLER_CWD_HEADER]
     const sessionId = randomUUID()
     const attested = keyOk
+    // Row 68b (S9-01): the shared host log helper; an attested session is `attested: true`, never its id.
+    const logRef = sessionLogRef({ sessionId, ...(attested ? { openedAttested: true as const } : {}) })
     let sessionHandle: SessionHandle
     try {
       const callerSessionRaw = req.headers[CALLER_SESSION_HEADER]
@@ -231,14 +229,14 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
       sessionIdGenerator: () => sessionId,
       onsessioninitialized: (id) => {
         sessions.set(id, { transport, handle: sessionHandle })
-        opts.log({ level: "info", event: "session_open", ...sessionRef(id, attested), agentId })
+        opts.log({ level: "info", event: "session_open", ...logRef, agentId })
       },
       onsessionclosed: (id) => {
         sessions.delete(id)
       },
     })
     transport.onclose = () => {
-      if (sessions.delete(sessionId)) opts.log({ level: "info", event: "session_closed", ...sessionRef(sessionId, attested) })
+      if (sessions.delete(sessionId)) opts.log({ level: "info", event: "session_closed", ...logRef })
       void sessionHandle.close().catch(() => undefined)
     }
     await sessionHandle.server.connect(transport)

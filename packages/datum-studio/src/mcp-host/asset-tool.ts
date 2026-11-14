@@ -30,7 +30,7 @@ import { assetRefOf, decodeImageDetailed, storeAsset } from "../../vendor/src/li
 import { McpToolError } from "../../vendor/scripts/studio/mcp/safety"
 import { docById } from "./local-api/db.ts"
 import { assetMetadataWarning, readAssetFile } from "./local-api/routes/r18-asset-path.ts"
-import type { HostToolExtension, HostToolSession } from "./tool-table.ts"
+import { sessionLogRef, type HostToolExtension, type HostToolSession } from "./tool-table.ts"
 
 type Rec = Record<string, unknown>
 export type AssetToolLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Rec) => void
@@ -141,7 +141,7 @@ export function assetHostExtension(opts: AssetHostExtensionOptions = {}): HostTo
         correlationId: cid,
         tool: ASSET_TOOL_NAME,
         agentId: session.agentId,
-        sessionId: session.sessionId,
+        ...sessionLogRef(session),
         source: typeof a.path === "string" ? "path" : a.dataBase64 !== undefined ? "base64" : "none",
         ...(typeof a.path === "string" ? { file: path.basename(a.path) } : {}),
         ...(typeof a.documentId === "string" ? { documentId: a.documentId.slice(0, ID_MAX) } : {}),
