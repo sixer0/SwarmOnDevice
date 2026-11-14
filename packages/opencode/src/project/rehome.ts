@@ -329,6 +329,11 @@ async function realRoot(ports: Ports) {
   // acts. A link planted there (also a dangling one that a later folder fills) would otherwise become the root and send
   // an approved move outside Documents. The detail is the last segment only.
   if ((await lstatOrUndefined(given))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", path.basename(given))
+  // 1.2.9 row 58 (AC-C10a, C7(d)): its parent too (`~/Documents` linked elsewhere, also a dangling link), one level up
+  // only: macOS /var and /tmp and a linked home folder sit further up and must keep working. The detail names no path.
+  const parentDir = path.dirname(given)
+  const parentDetail = path.basename(parentDir) === "Documents" ? "Documents" : "parent folder"
+  if ((await lstatOrUndefined(parentDir))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", parentDetail)
   const real = await fs.realpath(given).catch(() => undefined)
   // Row 68f: the first launch's onboarding creates the folder after the server started; until then it is missing.
   if (!real) throw new Refusal("REHOME_FOLDER_MISSING", path.basename(value))
@@ -337,6 +342,10 @@ async function realRoot(ports: Ports) {
   // Row 68h: and it resolves inside its own parent (a link swapped in between the two looks above resolves elsewhere).
   const parent = await fs.realpath(path.dirname(given)).catch(() => undefined)
   if (!parent || real !== path.join(parent, path.basename(given))) throw new Refusal("REHOME_SYMLINK", path.basename(given))
+  // Row 58: and the parent resolves inside its own parent (a parent swapped for a link after the lstat above).
+  const grandparent = await fs.realpath(path.dirname(parentDir)).catch(() => undefined)
+  if (!grandparent || parent !== path.join(grandparent, path.basename(parentDir)))
+    throw new Refusal("REHOME_SYMLINK", parentDetail)
   return { real, given }
 }
 
