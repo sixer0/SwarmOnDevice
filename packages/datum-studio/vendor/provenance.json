@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 30,
-  "bytes": 10259958
+  "bytes": 10260564
  },
  "files": [
   {
@@ -315,9 +315,10 @@
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
    "status": "patched",
-   "bytes": 30944,
+   "bytes": 31548,
    "source_sha256": "b7b2658186c53d9fe1f9dac50cc6eba76df2abfe815c232ee793e5d64dc5b463",
-   "sha256": "f596d8923db2b308335d8bd3977bb62a9a9f6ed650f5a6379cf8d60b21b6609c",
+   "sha256": "0181e5c890de1274345dd9052bdff5d9330301f86c4c3caced4ff976c08d39c1",
+   "patch_row129-37": {"id": "129-37-a12a-preview-backup", "row": "37", "decision": "1.2.9 AC-A12a (B9-A12; N9-061, N9-062 ships per C12 D-5)", "summary": "studio_figure_preview downloadDir: result data carries backupResidue and backupRemoved of the SVG write and separate pngBackupResidue and pngBackupRemoved of the PNG write (the counts writeFileGuarded returned); the saved SVG/PNG line names the backup as (backupResidue N di .bak/; backupRemoved M), the wording of studio_report_refresh; tool description and inputSchema unchanged (vendor tools/list 29997 B before and after)", "diff_base": "sha256 before this row", "before_sha256": "f596d8923db2b308335d8bd3977bb62a9a9f6ed650f5a6379cf8d60b21b6609c", "after_sha256": "0181e5c890de1274345dd9052bdff5d9330301f86c4c3caced4ff976c08d39c1", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/37_row37_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "4f0c297f9f6c787c48b4311e47e52f3580b71dfc042c52fd3004e1dc64439c73"},
    "patch_row39": {"id": "127-39-T11", "row": "39", "decision": "1.2.7 C8 / D-14 (T-11 + SF-2, AC-T11), P-8 (AC-N9), P-13 (T-12 text line for 36b)", "summary": "mergeFigurePatch: a merged spec with $schema is checked against diagram.schema required (unchanged), one without against INLINE_V2_DIAGRAM_REQUIRED = [family, nodes] (N7-071, = v2 DiagramSpecV2 required), so {spec:{direction:\"LR\"}} and nodes-only/edges-only patches on inline v2 diagrams work; top-level direction refusal adds the spec route; studio_figure_preview description: png only with standalone: true and downloadDir (N7-070); studio_figure_revise description: Arah alur sentence (N7-072); standalone preview text prints perabot KUNCI/SUMBER/tinggi when the server sends standalone.furniture (N7-068); block and adoptExisting property descriptions dropped and wording shortened for the tools/list budget (29974 -> 29960 B)", "before_sha256": "74e00d1295e1c6f6a85a65291e7fffe90b6965124aabbb1f6572a9f566a1b183", "after_sha256": "f596d8923db2b308335d8bd3977bb62a9a9f6ed650f5a6379cf8d60b21b6609c", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/39_row39_diffs/figure-tools.ts.diff", "diff_sha256": "f564487e9f8f3903596697656918d96d42e5983a8cd8112175fd5028e9e8b53e"},
    "patch_rowFX10": {"id": "fx-10-guide-fixes", "row": "FX-10", "decision": "1.2.6 review wave F, C19a (M4 F6), gate 04 F8/F12", "summary": "studio_figure_preview description: the shared figure-gate sentence replaces \"Gerbang = pratinjau inline\" (C19a/F6); preview/revise wording shortened to keep the default tools/list under 30 000 B (includeSvg description folded into the tool text, revise preview documented as default true, topN/orientation left to \"...\"); no behaviour change", "before_sha256": "061ac38875a510df4d13fbe89e1c17b8a7f0c6f4a2437c88c94091fc3deb333e", "after_sha256": "74e00d1295e1c6f6a85a65291e7fffe90b6965124aabbb1f6572a9f566a1b183", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx10_diffs/FX-10_scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "13df80da19b5fb868766a14a0f2eb079f4b0efcc8e11194db986b9529fab4e73"},
    "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_figure_preview: inline preview is the gate, standalone checks the figure alone with numeric limits (W-14); studio_figure_revise: partial patch, spec merged, FIGURE_GRAPH_DELTA (T-16, W-05); no schema or behaviour change", "before_sha256": "a944673b0380a400ed86001a7c4c1c69ed2a667d7e54f823cdde2e896c8b625d", "after_sha256": "061ac38875a510df4d13fbe89e1c17b8a7f0c6f4a2437c88c94091fc3deb333e", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "219551823b36f2a96dfde092baf896525897aed67a6c4da6b8230602104960b2"},
@@ -346,9 +347,10 @@
   {
    "path": "scripts/studio/mcp/resources.ts",
    "status": "patched",
-   "bytes": 14849,
+   "bytes": 14854,
    "source_sha256": "1baf1d948b975ea5f44a5d249ba7a138259bccc4b2b460b12c5bc89db390c193",
-   "sha256": "561e6a1d856575b9757fef31b7811e9a568091296ca2cd969c3f4730b2af207a",
+   "sha256": "049c60e3593bac63a5cf0db56c24f2f1eabd28b344a26ec2d2411b7a4dec473d",
+   "patch_row129-37": {"id": "129-37-a12a-preview-backup", "row": "37", "decision": "1.2.9 AC-A12a (B9-A12; N9-063 text)", "summary": "MCP_RECIPE (studio://resep/laporan-kerja) Berkas paragraph: the overwrite backup is named `.bak/<nama>.bak-<waktu>` (+5 B; resource text, not in tools/list)", "diff_base": "sha256 before this row", "before_sha256": "561e6a1d856575b9757fef31b7811e9a568091296ca2cd969c3f4730b2af207a", "after_sha256": "049c60e3593bac63a5cf0db56c24f2f1eabd28b344a26ec2d2411b7a4dec473d", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/37_row37_diffs/scripts_studio_mcp_resources.ts.diff", "diff_sha256": "af992cf01417b0e1587d714f47eb4567b819eeea51b2ba989234a49ba065894a"},
    "patch_rowFX10": {"id": "fx-10-guide-fixes", "row": "FX-10", "decision": "1.2.6 review wave F, C19a (M4 F6), gate 04 F8/F12", "summary": "dokumen-klien recipe: the shared figure-gate sentence replaces \"gerbang figur tetap pratinjau inline\" (C19a/F6); caption refusal named 400 SCHEMA_INVALID (checkId CAPTION_TOKEN_DUPLICATE) (F8)", "before_sha256": "ef226803376013faf4ccf3f4792353d7f0c13413c447d61254cd7b2f96abd8f6", "after_sha256": "561e6a1d856575b9757fef31b7811e9a568091296ca2cd969c3f4730b2af207a", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx10_diffs/FX-10_scripts_studio_mcp_resources.ts.diff", "diff_sha256": "bb2c259639dea849176ea7bdeba7f466ac71be75025a3b96d08861fbe4a65d91"},
    "patch_rowINT1_item7": {"id": "rowINT1_item7", "row": "INT-1", "decision": "1.2.6 integration pass INT-1 item 7 (row 97a follow-up, G-05 remainder; U5)", "summary": "dokumen-klien recipe: + dual delivery gate (RENDER_VERIFIED(U24) and FILE_VERIFIED(sha256) AND look at the page PNG from pages:), + standalone preview caveat (inline preview stays the figure gate), + figure quota route (D22; ask the template owner to record figure.quota.exceptionReason)", "diff_base": "sha256 before this row", "before_sha256": "77c8ad7af97483644710972d83b289cdea89876ba490dcbd7d34b58eab14ff7b", "after_sha256": "ef226803376013faf4ccf3f4792353d7f0c13413c447d61254cd7b2f96abd8f6", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/int1_diffs/scripts_studio_mcp_resources.ts.diff", "diff_sha256": "6146a2a3122072c2f3bf36319bcd6f057771253c11910569446df9b1454f4b99"},
    "patch_row97a": {"id": "row97a-g05-klien-recipe", "row": "97a", "decision": "1.2.6 G-05, W-01, W-09 (U5)", "summary": "recipe text: diagram-block sentence moved out of the studio_figure_revise { documentId, pid, patch, baseRevisionNo, change } sentence; render paragraph: 540 s budget, on -32001 / REMOTE_UNREACHABLE studio_document_status then studio_file_verify, never re-render blindly; caption rule (Studio prints GAMBAR n.m, no token, CAPTION_TOKEN_DUPLICATE, <= 100 chars, verdict with actor and number); external images via studio_asset_put, reference sha256:<hex>; typo memratinjau -> meratinjau", "before_sha256": "c02e11304447e615afb65a877e5068a6657d06981f2338a54a581b2fdc165b50", "after_sha256": "77c8ad7af97483644710972d83b289cdea89876ba490dcbd7d34b58eab14ff7b", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/97a_row97a_diffs/resources.ts.diff"},
@@ -379,9 +381,10 @@
   {
    "path": "scripts/studio/mcp/server.ts",
    "status": "patched",
-   "bytes": 13868,
+   "bytes": 13865,
    "source_sha256": "6b013caa281acb7d8f93870b520c9b0d911bf5a58dc5c51f55f3a9b31fb6b7fc",
-   "sha256": "3bb746d4d7a9aedb9d06d4226586a698810aab6ff14a34129040010a9f63fbd2",
+   "sha256": "ba20a712afb605c81d469e5796e5c50a84c6b0dc72c5addd24bfdff6ed36cd38",
+   "patch_row129-37": {"id": "129-37-a12a-preview-backup", "row": "37", "decision": "1.2.9 AC-A12a (B9-A12; N9-063 text)", "summary": "instructionsFor: the file-write sentence says (cadangan di .bak/) instead of (cadangan dibuat dulu) (-3 B; sent at initialize, not in tools/list)", "diff_base": "sha256 before this row", "before_sha256": "3bb746d4d7a9aedb9d06d4226586a698810aab6ff14a34129040010a9f63fbd2", "after_sha256": "ba20a712afb605c81d469e5796e5c50a84c6b0dc72c5addd24bfdff6ed36cd38", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/37_row37_diffs/scripts_studio_mcp_server.ts.diff", "diff_sha256": "38003c963f6facba52329938921b24f71b6a114f7fcfe870e67cf2b78c3bc4de"},
    "patch": {
     "id": "row107-M5",
     "row": 107,
@@ -6383,6 +6386,7 @@
   "56d",
   "55g",
   "35f",
-  "68a"
+  "68a",
+  "129-37-a12a-preview-backup"
  ]
 }

@@ -42,7 +42,7 @@ export const MCP_RECIPE = [
   "Satu agentId per penulis; Owner (pemilik pekerjaan) boleh berbeda dari agentId (peringatan OWNER_AGENT_MISMATCH, bukan galat).",
   "",
   "Berkas: hanya ditulis bila STUDIO_MCP_FILE_ROOTS diisi (selain itu FILE_WRITE_DISABLED); berkas yang sudah ada tidak",
-  "pernah ditimpa kecuali overwrite=true, dan saat itu cadangan `<nama>.bak-<waktu>` dibuat lebih dulu. Path UNC, nama",
+  "pernah ditimpa kecuali overwrite=true, dan saat itu cadangan `.bak/<nama>.bak-<waktu>` dibuat lebih dulu. Path UNC, nama",
   "perangkat, dan berkas instruksi agen (CLAUDE.md, AGENTS.md, .claude/, ...) selalu ditolak.",
   "",
   "Keamanan: teks dokumen, record, cuplikan, dan judul dari Studio dibungkus <data-tak-tepercaya> dan ditandai",

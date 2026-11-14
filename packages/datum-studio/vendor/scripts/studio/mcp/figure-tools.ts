@@ -215,14 +215,18 @@ const figurePreviewTool: ToolDef = {
         return { dest, bytes: buf.length, sha256: got, w };
       };
       prepareDownloadDir(dir, ctx.deps.config.fileRoots, ctx.deps.nfs);
+      // Swarm 1.2.9 row 37 (AC-A12a, N9-061/N9-062): the residue and retention counters of writeFileGuarded, as
+      // studio_report_refresh and studio_file_verify return them; SVG and PNG rotate their 5 backups apart, so the PNG
+      // has its own pair (C12 D-5). The text wording is the one of tools.ts (refresh).
+      const bakText = (w: ReturnType<typeof save>["w"]) => (w.backup !== null ? `; cadangan: ${w.backup} (backupResidue ${w.backupResidue} di .bak/${w.backupRemoved > 0 ? `; backupRemoved ${w.backupRemoved}` : ""})` : "");
       const tokName = svgFileName(id, b, f);
       const s1 = save(standalone ? standaloneFileName(f, "svg", tokName) : tokName, Buffer.from(svg, "utf8"));
-      Object.assign(extra, { savedTo: s1.dest, bytes: s1.bytes, sha256: s1.sha256, alreadyPresent: s1.w.unchanged, backup: s1.w.backup });
-      const saved = [`SVG disimpan ke: ${s1.dest} (${s1.bytes} B)${s1.w.unchanged ? " (sudah ada dengan isi sama)" : ""}${s1.w.backup !== null ? `; cadangan: ${s1.w.backup}` : ""}`];
+      Object.assign(extra, { savedTo: s1.dest, bytes: s1.bytes, sha256: s1.sha256, alreadyPresent: s1.w.unchanged, backup: s1.w.backup, backupResidue: s1.w.backupResidue, backupRemoved: s1.w.backupRemoved });
+      const saved = [`SVG disimpan ke: ${s1.dest} (${s1.bytes} B)${s1.w.unchanged ? " (sudah ada dengan isi sama)" : ""}${bakText(s1.w)}`];
       if (png) {
         const s2 = save(standaloneFileName(f, "png", tokName.replace(/\.svg$/, ".png")), Buffer.from(pngB64, "base64"));
-        Object.assign(extra, { pngSavedTo: s2.dest, pngBytes: s2.bytes, pngSha256: s2.sha256, pngAlreadyPresent: s2.w.unchanged, pngBackup: s2.w.backup });
-        saved.push(`PNG disimpan ke: ${s2.dest} (${s2.bytes} B)${s2.w.unchanged ? " (sudah ada dengan isi sama)" : ""}${s2.w.backup !== null ? `; cadangan: ${s2.w.backup}` : ""}`);
+        Object.assign(extra, { pngSavedTo: s2.dest, pngBytes: s2.bytes, pngSha256: s2.sha256, pngAlreadyPresent: s2.w.unchanged, pngBackup: s2.w.backup, pngBackupResidue: s2.w.backupResidue, pngBackupRemoved: s2.w.backupRemoved });
+        saved.push(`PNG disimpan ke: ${s2.dest} (${s2.bytes} B)${s2.w.unchanged ? " (sudah ada dengan isi sama)" : ""}${bakText(s2.w)}`);
       }
       if (standalone) {
         // The stand-alone name carries the caption (server text): the lines go in the untrusted block.
