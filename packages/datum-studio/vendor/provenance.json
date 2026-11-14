@@ -120,12 +120,12 @@
   "row37c": "2026-11-13: 1.2.7 row 37c (C54; guide follow-up of row 40d, AC-N11). 1 vendor file re-patched (files[].patch_row37c, before = previous sha256; status unchanged): docs/STUDIO-AGENT-GUIDE.md (4: the DT-10a Lebar tabel sentence follows the overflow-only rule: ID list without spaces breaks after , ; / above 16 characters and only when it does not fit its column; URL, document number and path never break and are counted whole). Diff in docs/2026-11-13_swarm_1_2_7_patch/implementation/37c_row37c_diffs/. counts by delta: bytes 9986929 -> 9986981 (+52); files/copied/patched/replaced/added unchanged. patch_rows += 37c"
  },
  "counts": {
-  "files": 608,
+  "files": 610,
   "copied": 399,
   "patched": 167,
   "replaced": 12,
-  "added": 30,
-  "bytes": 10260564
+  "added": 32,
+  "bytes": 10264076
  },
  "files": [
   {
@@ -2425,9 +2425,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/route.ts",
    "status": "patched",
-   "bytes": 88401,
+   "bytes": 30696,
    "source_sha256": "2189c545c59473987ba23d3dc64eeeaf9c336c0624c0e9029a34a29773ffa769",
-   "sha256": "476e58b7532bfe7729140bdfda51fe2c12fc00b3d4dc0972d89fab3c630f088f",
+   "sha256": "9881fc6ecf3a86cbd621dff430718c7a20d8384e0cb8232e0d8a9eece987072e",
+   "patch_row129-25": {"id": "129-25-a01-route-split", "row": "25", "decision": "1.2.9 AC-A01 (B9-A01; N9-078, N9-080, N9-081; C2 lane order, 01a AT-A01)", "summary": "pure refactor, output byte-identical: end placement (shared types/helpers, side choice, glue) moved verbatim to NEW build/route-ends.ts, run shaping and fan groups to NEW build/route-shape.ts (03a lines 107-117); route.ts keeps HoppedEdge, routeRackSide, routePlaced, routeWithSides (unchanged, no reordering), crossingHops and JOG_ALIGN_MM, imports one way (ends <- shape <- route) and re-exports the 12 names it exported before (export { ... } from); imports it no longer uses dropped", "diff_base": "sha256 before this row", "before_sha256": "476e58b7532bfe7729140bdfda51fe2c12fc00b3d4dc0972d89fab3c630f088f", "after_sha256": "9881fc6ecf3a86cbd621dff430718c7a20d8384e0cb8232e0d8a9eece987072e", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/25_row25_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "8ec6b889108bee4d1c02c25fa519ee910c4b578e0340557b781b67e902227f11"},
    "patch_row68a": {"id": "128-68a-via-glue-live", "row": "68a", "decision": "C166 (1.2.8 row 68a; final live check FAIL 68a)", "summary": "via legs: an unglued end of a via edge takes the side facing its nearest via (facingSide); the first/last orthogonal leg leaves/enters along the side normal and goes round the end node when the via lies behind it (legOut); a straight via leg that grazes its side (< STRAIGHT_END_MIN_DEG) or runs back gets a one-row orthogonal approach (straightLeg); via points move EDGE_CLEAR_MM (NEW, half a lattice row) inside the figure (clampIn); a detour that lost the stub approach at an end on a non-box outline (diamond, event, ...) restarts from the stub ends when clean, head-on and without an out-and-back (normalEnds, endNormal, doublesBack)", "diff_base": "sha256 before this row", "before_sha256": "4fdec5c12515d1aa4d3072d7750bb2e81b75a5e368deab3fe32feddbb0ef6e1e", "after_sha256": "476e58b7532bfe7729140bdfda51fe2c12fc00b3d4dc0972d89fab3c630f088f", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/68a_row68a_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "73ecb04c4d8b3e051febc592d62310fba62af585c2cf90191fbfa4c358d08129"},
    "patch_row56d": {"id": "128-56d-jogs-rules", "row": "56d", "decision": "C134, C137 (1.2.8 row 56d; M3 gate G3-06, G3-07, G3-09)", "summary": "G3-06: arcSpan lets a horizontal end move on a stadium/circle round side (ARC_SPAN_FRAC 0.6 r), so an LR start -> decision link is straight; a single end facing a fanned end (one of several on its side) moves in line with it at any offset when its side holds it and the straight run is free; a fan side with such a member is ordered by the other nodes' centres on the first render too; an alignment whose finished route adds a crossing is undone (C137). G3-07: finish() runs offRules on the routes with the sheet's recorded container rules (styled, glued and via routes skipped)", "diff_base": "sha256 before this row", "before_sha256": "7f73cea8e17c5377bd6051761c613da584e4508a6ef8aa2067d9d0305580bcee", "after_sha256": "4fdec5c12515d1aa4d3072d7750bb2e81b75a5e368deab3fe32feddbb0ef6e1e", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56d_row56d_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "88033840eb7c2ef3446cdae893d9cf51efd5f8f72851cea97d57b821f1700950"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C86, C123)", "summary": "markLabelBeside: an untagged, unmarked event with a bottom end and no right end, with room on its right, is labelled beside the circle (setLabelBeside) and glueLabelBelow moves its bottom end onto the circle; sharedBand: two box-like nodes side by side with overlapping spans are joined in the middle of the shared band (single facing ends); facing ends offset sideways by less than one lattice step are aligned on a straight part of the side (straightSpan: box sides, parallelogram/hexagon/stadium top and bottom); an end-on facing pair whose run would turn back is one run (monotone)", "diff_base": "sha256 before this row", "before_sha256": "b3851a5b8b971fdfd882f33b8b08a4c00842b6106f526279ab9796c6d9eaeb7d", "after_sha256": "7f73cea8e17c5377bd6051761c613da584e4508a6ef8aa2067d9d0305580bcee", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "2c3b6190cd6cf2e2a2da2db8690eee6d7b36032083501cf485c39c646a469f96"},
@@ -2460,6 +2461,26 @@
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/53_row124_diffs/diagram__build__route.ts.diff",
     "diff_sha256": "d17766825e118afc58e15f4ba6f3ec58c7cfdbfff03aaf7455574379ac442f11"
    }
+  },
+  {
+   "path": "src/lib/studio/engine/diagram/build/route-ends.ts",
+   "status": "added",
+   "bytes": 36406,
+   "source_sha256": null,
+   "sha256": "4936489aecafaa267a073b986c2267d66cbf77c5cb48df1e1bdef573a2b9757a",
+   "added_by": "129-25",
+   "note": "NEW Swarm file of 1.2.9 row 25 (AC-A01, N9-080; no clone original): connector end placement moved verbatim from build/route.ts (shared Pt/Side/SidePair types and helpers, side choice, glue onto outlines, their constants); imports nothing from route-shape.ts or route.ts; one export list at the end names what route-shape.ts and route.ts use",
+   "patch_row129-25": {"id": "129-25-a01-route-split", "row": "25", "decision": "1.2.9 AC-A01 (B9-A01; N9-080)", "summary": "NEW module split out of route.ts, code moved verbatim (header comment, imports and the export list are the only new lines)", "diff_base": "empty (new file)", "before_sha256": null, "after_sha256": "4936489aecafaa267a073b986c2267d66cbf77c5cb48df1e1bdef573a2b9757a", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/25_row25_diffs/engine_diagram_build_route-ends.ts.diff", "diff_sha256": "1c88841c224e3d771dd37c614bf598b15189b25770b68e4951052565f2504936"}
+  },
+  {
+   "path": "src/lib/studio/engine/diagram/build/route-shape.ts",
+   "status": "added",
+   "bytes": 24811,
+   "source_sha256": null,
+   "sha256": "89925121999e1d74c000bbb65f1ec369c4568f596b5a2674e53d0027b8680244",
+   "added_by": "129-25",
+   "note": "NEW Swarm file of 1.2.9 row 25 (AC-A01, N9-081; no clone original): connector run shaping moved verbatim from build/route.ts (curved and via runs, detours, corner routes, fan groups); imports end placement from route-ends.ts only, nothing from route.ts; one export list at the end names what route.ts uses",
+   "patch_row129-25": {"id": "129-25-a01-route-split", "row": "25", "decision": "1.2.9 AC-A01 (B9-A01; N9-081)", "summary": "NEW module split out of route.ts, code moved verbatim (header comment, imports and the export list are the only new lines)", "diff_base": "empty (new file)", "before_sha256": null, "after_sha256": "89925121999e1d74c000bbb65f1ec369c4568f596b5a2674e53d0027b8680244", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/25_row25_diffs/engine_diagram_build_route-shape.ts.diff", "diff_sha256": "3e5330546ef0ebdf0fe26171610d2169a0293dad02e40311989c915e88b63084"}
   },
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
@@ -6387,6 +6408,7 @@
   "55g",
   "35f",
   "68a",
-  "129-37-a12a-preview-backup"
+  "129-37-a12a-preview-backup",
+  "129-25-a01-route-split"
  ]
 }
