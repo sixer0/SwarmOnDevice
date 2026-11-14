@@ -247,12 +247,16 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
 
           <Show when={state.mission}>
             {(mission) => (
+              // 1.2.8 row 68e (C175): overflow-clip, not overflow-hidden. A hidden box is still a scroll container, so
+              // a scrollIntoView (the dock's Files) or a focus reaching into the closed sheet scrolled it and left the
+              // closed sheet (translated below, inert) painted over the stage: visible buttons no click could reach.
+              // A clipped box cannot be scrolled; it looks the same.
               <div
                 data-mission-main
                 class={
                   sheetMode()
-                    ? "relative min-h-0 flex-1 overflow-hidden"
-                    : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] gap-2 overflow-hidden"
+                    ? "relative min-h-0 flex-1 overflow-clip"
+                    : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] gap-2 overflow-clip"
                 }
               >
                 <div data-mission-stage class="h-full min-h-0 overflow-y-auto" onClick={onStageClick}>
