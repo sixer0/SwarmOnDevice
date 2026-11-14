@@ -122,8 +122,9 @@ describe("1.2.7 U-2 deliverable reveal (model)", () => {
   test("the poll lists docs/<m>/11_deliverables and registers only Studio outputs for the rendered file tab", async () => {
     resetStudioOutputRegistry()
     const asked: string[] = []
-    const listing: Record<string, string[]> = {
-      [`docs/${M}`]: [DOCX_X],
+    // INTENT 1.2.9 row 56 (AC-C08a): 11_deliverables is listed only when the docs/<m> listing holds that folder.
+    const listing: Record<string, Array<string | { name: string; type: "directory" }>> = {
+      [`docs/${M}`]: [DOCX_X, { name: "11_deliverables", type: "directory" }],
       [`docs/${M}/11_deliverables`]: [PDF_P, "page.html", "Tandatangani.command"],
     }
     const states: Array<{ mission: ReturnType<typeof buildMission> | null }> = []

@@ -1211,14 +1211,14 @@ export default function Page() {
     mapOpen: () => sessionMap.opened(),
     // 1.2.7 U-2: a macOS app bundle (`*.app`) is a folder; it is listed so the deliverable can be revealed (never run).
     // Symlinks are never listed (core FileSystem.list), so a link out of the project gets no line.
-    listFiles: (path) =>
+    // 1.2.9 row 56 (AC-C08a): the entries keep their type (mission-poll shows files and `.app` bundles and checks for
+    // the 11_deliverables folder), and each call names the folder deliverablesDir chose (the mission's folder).
+    listFiles: (path, directory) =>
       sdk()
-        .client.file.list({ path })
-        .then((result) =>
-          (result.data ?? [])
-            .filter((node) => node.type === "file" || (node.type === "directory" && /\.app$/i.test(node.name)))
-            .map((node) => node.name),
-        ),
+        .client.file.list({ path, directory })
+        .then((result) => (result.data ?? []).map((node) => ({ name: node.name, type: node.type }))),
+    // The folders the app already has open: each project root and its groups (the directory rule's allow list).
+    openFolders: () => layout.projects.list().flatMap((project) => [project.worktree, ...(project.sandboxes ?? [])]),
   })
   const missions: MissionControlMount | undefined = missionControl.available
     ? {

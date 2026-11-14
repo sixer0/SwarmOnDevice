@@ -13,6 +13,45 @@ import {
 } from "./mission-model"
 import { registerStudioOutputs } from "../studio-output-registry"
 import { MISSION_DELIVERABLES_DIR } from "./mission-deliverables-model"
+import { canonicalPathKey } from "@/utils/path-key"
+
+/**
+ * One entry of a folder listing for the deliverables lookup. A bare name is an entry the caller already chose to
+ * show (a file or an `.app` bundle); it is never taken for a folder.
+ */
+export type MissionFileEntry = string | { name: string; type: "file" | "directory" }
+
+const isAbsolutePath = (path: string) => path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\")
+
+/**
+ * 1.2.9 row 56 (AC-C08a, N9-070): the folder the deliverables of a mission are looked up in. The mission's
+ * `project.dir` is data an agent writes at create, and listing a folder boots a server instance there (which reads
+ * that folder's config), so it is used only when it is the session's folder or a folder the app already has open
+ * (the Default Project root or one of its groups). The answer is the app's own spelling of that folder, never the
+ * agent's. Otherwise `undefined`: no lookup is made. No project folder (an older host): the session's folder.
+ */
+export function deliverablesDir(input: {
+  projectDir: string | undefined
+  session: string
+  open: readonly string[]
+}): string | undefined {
+  const dir = input.projectDir
+  if (!dir) return input.session
+  if (!isAbsolutePath(dir) || dir.split(/[\\/]/).some((part) => part === "." || part === "..")) return
+  const key = canonicalPathKey(dir)
+  return [input.session, ...input.open].find((folder) => isAbsolutePath(folder) && canonicalPathKey(folder) === key)
+}
+
+/** The names a deliverables list shows: files and macOS `.app` bundles (revealed, never run); no other folder. */
+const shownNames = (entries: readonly MissionFileEntry[]) =>
+  entries.flatMap((entry) => {
+    if (typeof entry === "string") return [entry]
+    if (entry.type === "file" || (entry.type === "directory" && /\.app$/i.test(entry.name))) return [entry.name]
+    return []
+  })
+
+const holdsFolder = (entries: readonly MissionFileEntry[], name: string) =>
+  entries.some((entry) => typeof entry !== "string" && entry.type === "directory" && entry.name === name)
 
 export type MissionControlResult<T> = { ok: true; data: T } | { ok: false; code: string; message: string }
 
@@ -106,9 +145,11 @@ export function createMissionPoller(input: {
   /** Row 183: read per list, never fetched here (the session store already holds the run's sessions) */
   sessions?: () => readonly string[] | undefined
   lang: () => "en" | "id"
-  /** names of the files in `docs/<mission>` and `docs/<mission>/11_deliverables` of the session (§7.3, 1.2.7 U-2);
-   * called once per `get` change, per folder */
-  listFiles?: (path: string) => Promise<string[]>
+  /** the entries of `docs/<mission>` and `docs/<mission>/11_deliverables` (§7.3, 1.2.7 U-2), listed in `directory`
+   * (1.2.9 row 56: the folder `deliverablesDir` chose); called once per `get` change, per folder */
+  listFiles?: (path: string, directory: string) => Promise<MissionFileEntry[]>
+  /** 1.2.9 row 56: the folders the app already has open (project roots and their groups), for `deliverablesDir` */
+  openFolders?: () => readonly string[]
   onState: (state: MissionControlState) => void
   timers?: Timers
 }) {
@@ -248,23 +289,34 @@ export function createMissionPoller(input: {
       return fail()
     }
     const listFiles = input.listFiles
-    const present = listFiles
-      ? new Set((await within(() => listFiles(`docs/${selected}`))) ?? [])
-      : new Set<string>()
+    // 1.2.9 row 56 (AC-C08a): the lookups go to the mission's folder under the directory rule; none outside it.
+    const lookup = listFiles
+      ? deliverablesDir({
+          projectDir: got.data.mission.project?.dir,
+          session: directory,
+          open: input.openFolders?.() ?? [],
+        })
+      : undefined
+    const docs = lookup ? ((await within(() => listFiles!(`docs/${selected}`, lookup))) ?? []) : []
     if (stale()) return
+    const present = new Set(shownNames(docs))
     // 1.2.7 U-2 (C10): also docs/<m>/11_deliverables (numbered export, row 28): Studio outputs found there and the
-    // folder lines. One more call, only when the mission is re-read; a missing folder lists as empty.
-    const delivered = listFiles
-      ? new Set((await within(() => listFiles(`docs/${selected}/${MISSION_DELIVERABLES_DIR}`))) ?? [])
-      : new Set<string>()
-    if (stale()) return
+    // folder lines. 1.2.9 row 56: asked for only when the docs/<m> listing holds that folder, so a missing folder is
+    // never looked up poll after poll.
+    const delivered = new Set<string>()
+    if (lookup && holdsFolder(docs, MISSION_DELIVERABLES_DIR)) {
+      const found = await within(() => listFiles!(`docs/${selected}/${MISSION_DELIVERABLES_DIR}`, lookup))
+      if (stale()) return
+      for (const name of shownNames(found ?? [])) delivered.add(name)
+    }
     failures = 0
     seen = { directory, key, selected }
     const mission = buildMission(got.data, input.lang(), present, delivered)
     // Row 165E (C192): the deliverables found in the project are the registered Studio outputs the file tab renders.
-    // Folder lines (1.2.7 U-2) are never registered: a non-Studio .html opens as code (C101).
+    // Folder lines (1.2.7 U-2) are never registered: a non-Studio .html opens as code (C101). The paths are relative
+    // to the folder they were found in (1.2.9 row 56).
     registerStudioOutputs(
-      directory,
+      lookup,
       mission.deliverables.filter((d) => d.origin !== "folder").map((d) => d.projectPath),
     )
     emit({ options, selected, mission, readFailed: false })
@@ -335,7 +387,9 @@ export function createMissionControl(input: {
   watching: Accessor<boolean>
   /** the session map is open (any filter) */
   mapOpen: Accessor<boolean>
-  listFiles?: (path: string) => Promise<string[]>
+  listFiles?: (path: string, directory: string) => Promise<MissionFileEntry[]>
+  /** 1.2.9 row 56: the folders the app already has open (deliverablesDir) */
+  openFolders?: () => readonly string[]
 }) {
   const [state, setState] = createStore<MissionControlState>(emptyMissionState())
   const source = input.source
@@ -347,6 +401,7 @@ export function createMissionControl(input: {
     sessions: input.sessions,
     lang: input.lang,
     listFiles: input.listFiles,
+    openFolders: input.openFolders,
     onState: (next) => setState(reconcile(next)),
   })
 
