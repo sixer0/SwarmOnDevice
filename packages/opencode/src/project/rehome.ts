@@ -43,7 +43,7 @@ export type Code =
   | "REHOME_ROOT_UNKNOWN"
   | "REHOME_FOLDER_MISSING"
 
-export type StepName = "backup" | "group" | "marker" | "docs" | "folder" | "memory" | "sessions"
+type StepName = "backup" | "group" | "marker" | "docs" | "folder" | "memory" | "sessions"
 
 export interface Input {
   missionId: string
@@ -64,11 +64,12 @@ export interface Input {
 /** `renamed` (row 44g, R-02): old id -> new id of moved notes whose id the target store already used; only when any. */
 export type Moved = { folder: boolean; notes: number; sessions: number; renamed?: Record<string, string> }
 export type Planned = { folder: boolean; notes: number; sessions: number; createsGroup: boolean }
-export type Refused = { refused: Code; detail?: string; step?: StepName; journal?: string }
+type Refused = { refused: Code; detail?: string; step?: StepName; journal?: string }
 export type Result = { journalId: string; moved: Moved; replayed?: boolean } | { planned: Planned } | Refused
 
-export type JournalState = "running" | "complete" | "rolled_back" | "rollback_failed"
-export type JournalStep = { name: StepName; status: "planned" | "done" | "undone"; data: Record<string, unknown> }
+type JournalState = "running" | "complete" | "rolled_back" | "rollback_failed"
+type JournalStep = { name: StepName; status: "planned" | "done" | "undone"; data: Record<string, unknown> }
+/** @internal test seam */
 export interface Journal {
   version: 1
   journalId: string

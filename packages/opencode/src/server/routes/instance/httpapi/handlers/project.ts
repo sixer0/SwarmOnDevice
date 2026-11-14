@@ -74,6 +74,7 @@ const locationRef = (directory: string) => Location.Ref.make({ directory: Absolu
  * What `runningTerminalCwds` reads, one loaded folder (`dir`, the instance directory) at a time.
  * Exported for tests (production logic: `rehomePorts.terminals` uses it). 1.2.9 row 53 (N9-069).
  */
+/** @internal test seam */
 export interface TerminalScan {
   /** Directories of the instances the server has loaded. */
   loaded(): Promise<readonly string[]>
@@ -95,6 +96,7 @@ export interface TerminalScan {
  *
  * Exported for tests (production logic: `rehomePorts.terminals` uses it). 1.2.9 row 53 (N9-069).
  */
+/** @internal test seam */
 export async function runningTerminalCwds(scan: TerminalScan): Promise<string[]> {
   const cwds: string[] = []
   for (const dir of await scan.loaded()) {
@@ -119,7 +121,7 @@ export async function runningTerminalCwds(scan: TerminalScan): Promise<string[]>
  * The real ports (row 44 `Rehome.Ports`), built per call so `SWARM_DEFAULT_PROJECT_DIR` is read when the person acts.
  * Busy state and terminals are read only from instances already loaded: a folder no instance has open runs nothing.
  */
-export const rehomePorts = Effect.gen(function* () {
+const rehomePorts = Effect.gen(function* () {
   const sessions = yield* Session.Service
   const status = yield* SessionStatus.Service
   const store = yield* InstanceStore.Service

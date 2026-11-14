@@ -159,3 +159,127 @@ describe("AC-A03.61", () => {
     }
   }
 })
+
+describe("AC-A03.62", () => {
+  // N9-102 block .62 (1.2.9 row 62): opencode, 34 names of 01b/60_a03_list.md un-exported plus the three C91 names of
+  // instance-store.ts (no outside reader, tests only name LOCATION_NOT_FOLDER as a string). DIAGRAM_FLOW_SKILL_NAME,
+  // _CONTENT and _TRIGGERS stay: test/g04-agent-guide/rel128-vis10-guide.test.ts pins their `export const` source text.
+  const oc = "packages/opencode/src"
+  const hp = `${oc}/server/routes/instance/httpapi`
+  const unexport: Record<string, readonly string[]> = {
+    [`${oc}/memory/memory.ts`]: ["indexRefusal"],
+    [`${oc}/memory/vault-mirror.ts`]: ["NoteKind", "ReportSource", "RenderedFile", "reportPath", "MirrorJob"],
+    [`${oc}/permission/autonomy-parts/types.ts`]: ["OwnApiReadCategory"],
+    [`${oc}/project/rehome.ts`]: ["StepName", "Refused", "JournalState", "JournalStep"],
+    [`${oc}/project/instance-store.ts`]: ["LOCATION_NOT_FOLDER", "LOCATION_NOT_FOLDER_MESSAGE", "LocationNotFolderError"],
+    [`${hp}/groups/project.ts`]: ["RehomePath", "RehomeCodes"],
+    [`${hp}/groups/skill.ts`]: ["SkillPaths", "SkillSavePayload", "SkillDraftApprovePayload"],
+    [`${hp}/handlers/project.ts`]: ["rehomePorts"],
+    [`${oc}/skill/index.ts`]: [
+      "SKILL_AUTHORING_SKILL_NAME",
+      "SKILL_AUTHORING_SKILL_CONTENT",
+      "SKILL_AUTHORING_SKILL_TRIGGERS",
+      "OBSIDIAN_MEMORY_SKILL_NAME",
+      "OBSIDIAN_MEMORY_SKILL_DESCRIPTION",
+      "OBSIDIAN_MEMORY_SKILL_CONTENT",
+      "PROJECT_FOLDERS_SKILL_NAME",
+      "PROJECT_FOLDERS_SKILL_DESCRIPTION",
+      "PROJECT_FOLDERS_SKILL_CONTENT",
+      "SWARM_WHATS_NEW_SKILL_NAME",
+      "SWARM_WHATS_NEW_SKILL_CONTENT",
+      "SWARM_WHATS_NEW_SKILL_TRIGGERS",
+      "TRIGGER_LIMITS",
+    ],
+    [`${oc}/skill/manage.ts`]: ["APPROVALS_FILE", "Checked"],
+    [`${oc}/tool/skill_draft.ts`]: ["SKILL_DRAFTS_FULL", "DraftRecord"],
+  }
+  // `^export` lines per file after the sweep (the count before row 62 minus the names above).
+  const exportsAfter: Record<string, number> = {
+    [`${oc}/memory/memory.ts`]: 27,
+    [`${oc}/memory/vault-mirror.ts`]: 30,
+    [`${oc}/permission/autonomy-parts/types.ts`]: 16,
+    [`${oc}/project/rehome.ts`]: 17,
+    [`${oc}/project/instance-store.ts`]: 7,
+    [`${hp}/groups/project.ts`]: 4,
+    [`${hp}/groups/skill.ts`]: 10,
+    [`${hp}/handlers/project.ts`]: 5,
+    [`${oc}/skill/index.ts`]: 50,
+    [`${oc}/skill/manage.ts`]: 38,
+    [`${oc}/tool/skill_draft.ts`]: 3,
+  }
+  // Test-only exports kept (D list of 60_a03_list.md, the Reach seams N9-072, the three DIAGRAM_FLOW names above and the
+  // 1.2.9 seams TerminalScan, runningTerminalCwds, setRehomeDecisionForTests, resetForTests); each carries the marker.
+  const seams: Record<string, readonly string[]> = {
+    [`${oc}/mcp/catalog.ts`]: ["PERSON_ONLY_MCP_TOOLS"],
+    [`${oc}/memory/learn.ts`]: ["INDEX_LOAD_BUDGET_TOKENS", "INDEX_EXPAND_MAX"],
+    [`${oc}/memory/vault-mirror.ts`]: [
+      "MIRROR_REPORT_MAX_BYTES",
+      "VAULT_NOTE_NAME_PATTERN",
+      "MIRROR_PLAIN_FENCE_LANGS",
+      "MIRROR_CLASSIFIED_WORDS",
+      "RenderInput",
+      "noteName",
+      "neutraliseReport",
+      "readReport",
+      "bodyHash",
+      "SyncStage",
+      "SyncIO",
+      "SyncInput",
+      "SyncResult",
+      "MIRROR_DEBOUNCE_MS",
+      "onRun",
+      "hubState",
+    ],
+    [`${oc}/permission/autonomy-parts/own-api.ts`]: ["OWN_API_READ_ROUTES"],
+    [`${oc}/permission/autonomy-texts.ts`]: ["OWN_API_AUTO_APPROVE_RUN_TEXT"],
+    [`${oc}/project/rehome.ts`]: ["Journal"],
+    [`${oc}/session/system.ts`]: ["SkillFocus", "suggestedSkills"],
+    [`${oc}/skill/index.ts`]: [
+      "SKILL_AUTHORING_SKILL_DESCRIPTION",
+      "DIAGRAM_FLOW_SKILL_NAME",
+      "DIAGRAM_FLOW_SKILL_DESCRIPTION",
+      "DIAGRAM_FLOW_SKILL_CONTENT",
+      "DIAGRAM_FLOW_SKILL_TRIGGERS",
+      "SWARM_WHATS_NEW_SKILL_DESCRIPTION",
+      "SKILL_HASH_MAX_BYTES",
+    ],
+    [`${oc}/tool/reach.ts`]: ["forgetSkillFolders", "rememberSkillFolders", "skillFolder"],
+    [`${oc}/tool/remember.ts`]: ["UNTRUSTED_TASK_DEPTH"],
+    [`${oc}/tool/secrets.ts`]: ["resetForTests"],
+    [`${hp}/handlers/project.ts`]: ["TerminalScan", "runningTerminalCwds", "setRehomeDecisionForTests"],
+  }
+
+  test("the list names 37 names in 11 files; 39 seams in 12 files", () => {
+    expect(Object.keys(unexport).length).toBe(11)
+    expect(Object.values(unexport).reduce((n, names) => n + names.length, 0)).toBe(37)
+    expect(Object.keys(seams).length).toBe(12)
+    expect(Object.values(seams).reduce((n, names) => n + names.length, 0)).toBe(39)
+  })
+
+  for (const [file, names] of Object.entries(unexport)) {
+    for (const name of names) {
+      test(`${name} is file-local in ${path.basename(file)}`, () => {
+        const i = declLine(file, name)
+        expect(i).toBeGreaterThanOrEqual(0)
+        expect(linesOf(file)[i]).not.toMatch(/^export\b/)
+      })
+    }
+  }
+
+  for (const [file, count] of Object.entries(exportsAfter)) {
+    test(`${path.basename(file)} keeps ${count} export lines`, () => {
+      expect(exportLines(file).length).toBe(count)
+    })
+  }
+
+  for (const [file, names] of Object.entries(seams)) {
+    for (const name of names) {
+      test(`${name} stays exported in ${path.basename(file)} and carries the test-seam marker`, () => {
+        const i = declLine(file, name)
+        expect(i).toBeGreaterThanOrEqual(0)
+        expect(linesOf(file)[i]).toMatch(/^export\b/)
+        expect(carriesMarker(file, i)).toBe(true)
+      })
+    }
+  }
+})

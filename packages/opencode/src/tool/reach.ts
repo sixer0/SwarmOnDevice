@@ -603,11 +603,13 @@ function ordinary(file: string, instance: InstanceContext) {
  */
 const skillFolderMemo = new Map<string, readonly string[]>()
 
+/** @internal test seam */
 export function rememberSkillFolders(instance: InstanceContext, folders: readonly string[]) {
   skillFolderMemo.set(instance.directory, [...folders])
 }
 
 /** For tests: forget every folder list `rememberSkillFolders` kept. */
+/** @internal test seam */
 export function forgetSkillFolders() {
   skillFolderMemo.clear()
 }
@@ -647,6 +649,7 @@ const under = (root: string, file: string) => file === root || file.startsWith(r
  * root does not make `src/x.ts` a skill file). A path that cannot be worked out (a link loop) is judged by the name as
  * given only; the rules after this one already hold such a write.
  */
+/** @internal test seam */
 export function skillFolder(file: string, instance: InstanceContext) {
   const given = path.resolve(instance.directory, file)
   const target = real(given) ?? given

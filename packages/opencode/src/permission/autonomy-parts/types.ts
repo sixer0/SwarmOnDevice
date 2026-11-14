@@ -28,7 +28,7 @@ export type AllowedCategory = RoutineCategory | "edit-not-ordinary" | OwnApiRead
  * 1.2.8 row 28 (H-U10, N8-386, C13): under consent, a GET/HEAD of a route on `OWN_API_READ_ROUTES` of Swarm's own server,
  * with only `OWN_API_READ_OPTIONS` and no directory outside the caller's worktree, run by the gate without the main agent.
  */
-export type OwnApiReadCategory = "own_api_read"
+type OwnApiReadCategory = "own_api_read"
 export type HeldCategory = PermissionV1.DeferredCategory
 
 /**

@@ -212,6 +212,7 @@ function shellReadsSessions(command: string) {
 }
 
 /** 1.2.8 SR8-06 (N8-395): how deep `readUntrustedInput` follows the child sessions named by completed `task` parts. */
+/** @internal test seam */
 export const UNTRUSTED_TASK_DEPTH = 3
 
 type Messages = Tool.Context["messages"]

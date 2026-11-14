@@ -174,6 +174,7 @@ export { PROMPT_GSP_WORKFLOW, PROMPT_AUTO_WORKFLOW }
 
 /** What `<suggested_skills>` is matched against: the session's first user message (its non-synthetic text and the paths
  *  of its file parts), so the block stays the same for the whole session (prompt cache, P-05; R20-C08). */
+/** @internal test seam */
 export type SkillFocus = { readonly text: string; readonly files: readonly string[] }
 
 /** N8-045: at most this many suggestion lines (and names on the N8-048 line). */
@@ -255,6 +256,7 @@ function fileMatches(pattern: string, candidate: string) {
 
 /** The `<suggested_skills>` block (N8-045) for `list` (the agent's `available` skills, so turned-off and denied skills
  *  never appear), or undefined when nothing matches. Text only: it never loads a skill. */
+/** @internal test seam */
 export function suggestedSkills(list: readonly Skill.Info[], focus: SkillFocus | undefined) {
   if (!focus) return
   const words = suggestTokens(focus.text)

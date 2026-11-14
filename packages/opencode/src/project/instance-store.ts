@@ -44,10 +44,10 @@ interface Entry {
 // answer 500 with an ERROR log line. The boot now refuses it first. The refusal is a Respondable defect, so the HTTP
 // layer answers it as is (400, fixed path-free detail) instead of logging an unexpected error; and because the boot
 // fails, the cache entry is dropped, so the next request after the folder is back boots fresh with its own config.
-export const LOCATION_NOT_FOLDER = "LOCATION_NOT_FOLDER"
-export const LOCATION_NOT_FOLDER_MESSAGE = "location is not a folder"
+const LOCATION_NOT_FOLDER = "LOCATION_NOT_FOLDER"
+const LOCATION_NOT_FOLDER_MESSAGE = "location is not a folder"
 
-export class LocationNotFolderError extends Error implements HttpServerRespondable.Respondable {
+class LocationNotFolderError extends Error implements HttpServerRespondable.Respondable {
   readonly code = LOCATION_NOT_FOLDER
   constructor() {
     super(LOCATION_NOT_FOLDER_MESSAGE)

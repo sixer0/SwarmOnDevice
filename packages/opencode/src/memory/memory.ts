@@ -604,7 +604,7 @@ const indexed = (item: Item) => isIndex(item) || item.kind === "index_rollup" ||
  * INDEX_TEXT_PATTERN, mission id in the line different, not a calendar date, or a report path that is not a plain
  * relative `docs/<missionId>/....md`). Returns the report path when the line is valid.
  */
-export function indexRefusal(input: {
+function indexRefusal(input: {
   text: string
   missionId: string
   kind?: string
