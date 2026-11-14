@@ -257,7 +257,7 @@ describe("migration 0004", () => {
     console.log(`[row149] 0003 -> 0004 counts after  ${JSON.stringify(after)}`)
     // the only delta outside the mission tables pinned at open: journal rows 0004 and 0005 (row 166)
     const strip = (c: Record<string, number>) => Object.fromEntries(Object.entries(c).filter(([k]) => !k.startsWith("mission")))
-    expect({ ...strip(after), migration: after.migration! - 5 }) // row 188: + 0006, 1.2.6 row 86: + 0007, 1.2.8 row 45b: + 0008.toEqual(strip(before))
+    expect({ ...strip(after), migration: after.migration! - 5 }).toEqual(strip(before)) // row 188: + 0006, 1.2.6 row 86: + 0007, 1.2.8 row 45b: + 0008
     expect(contentSha(file)).toBe(shaBefore)
     const r = openSqlite(file, { readonly: true })
     try {
