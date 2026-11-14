@@ -18,6 +18,7 @@ import { Flock } from "@opencode-ai/core/util/flock"
 // The server first: its import graph settles the permission modules' load order (as in rel128-sk-d-skill-routes).
 import { Server } from "../../src/server/server"
 import { DesktopNonce } from "../../src/server/desktop-nonce"
+import { setRehomeDecisionForTests } from "../../src/server/routes/instance/httpapi/handlers/project"
 import { AutonomyTable } from "../../src/permission/autonomy-table"
 import { GlobalBus, type GlobalEvent } from "../../src/bus/global"
 import { resetDatabase } from "../fixture/db"
@@ -107,9 +108,11 @@ beforeEach(async () => {
   )
   process.env.SWARM_DEFAULT_PROJECT_DIR = R
   DesktopNonce.set(NONCE)
+  setRehomeDecisionForTests(async () => ({ ...APPROVED, proposal: approved }))
 })
 afterEach(async () => {
   DesktopNonce.set(undefined)
+  setRehomeDecisionForTests(undefined)
   // A completed move's journal (wiring case) must not count as "a journal written" by the next refusal case.
   await fs.rm(journalDir(), { recursive: true, force: true })
   await disposeAllInstances()
@@ -149,10 +152,26 @@ const body = (over: Body = {}): Body => ({
   to: path.join(R, GROUP),
   sessions: [],
   approvalRef: "D-1",
+  approvalMission: MISSION,
   ...over,
 })
 
+// 1.2.9 row 54 (AC-C06 INTENT, C13): a real move needs the person's answer bound to it. Through the route's test seam,
+// this fake answers as the person (attested) with a tidy list holding every {mission, group} this file posts, so each
+// refusal below is still the check it names; the posts name approvalMission.
+const approved: { mission: string; group: string }[] = []
+const APPROVED = {
+  status: "answered",
+  topic: "project-tidy",
+  option: "approve",
+  by: "user",
+  attested: true,
+  group: undefined,
+} as const
+
 async function rehome(payload: Body, options: { nonce?: string | null } = {}) {
+  if (typeof payload.missionId === "string" && typeof payload.to === "string")
+    approved.push({ mission: payload.missionId, group: path.basename(payload.to) })
   const headers: Record<string, string> = { "x-opencode-directory": R, "content-type": "application/json" }
   if (options.nonce !== null) headers[HEADER] = options.nonce ?? NONCE
   const response = await app().request("/project/rehome", { method: "POST", headers, body: JSON.stringify(payload) })

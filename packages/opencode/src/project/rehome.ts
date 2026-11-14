@@ -113,7 +113,30 @@ export interface Ports {
   publish?(event: { missionId: string; from: string; to: string; sessions: string[]; journalId: string }): Promise<void>
   /** Vault mirror refresh of one store (OBS-b); derived data, a failure is a journal warning only. */
   refreshMirror?(storeKey: string): Promise<void>
+  /**
+   * 1.2.9 row 54 (C06, N9-067): the request `ref` of `mission` as the built-in DATUM Studio holds it (the route reads it
+   * through `studio_mission_get`). Asked before a real move only; absent means the answer cannot be checked.
+   */
+  decision?(mission: string, ref: string): Promise<DecisionRead>
 }
+
+/**
+ * 1.2.9 row 54 (C06, N9-068): what the decision port read. `unchecked`: not the built-in server, not connected, timed
+ * out or unreadable. `open`: the request is absent, open or withdrawn. `answered`: the answer and what binds it to a move
+ * (`group` of the chosen option for a placement, the request's `proposal` for a tidy list; `run` validates both).
+ */
+export type DecisionRead =
+  | { unchecked: true }
+  | { status: "open" }
+  | {
+      status: "answered"
+      topic: string | undefined
+      option: string
+      by: string
+      attested: boolean
+      group: string | undefined
+      proposal: unknown
+    }
 
 /** Test layer only (01d §6.3): never an environment variable or a request field. */
 export interface Options {
@@ -814,6 +837,10 @@ async function run(ports: Ports, input: Input, opts: Options): Promise<Result> {
     }
   }
 
+  // 1.2.9 row 54 (C06): before the lease, so a slow read never holds the move lock; the request record is append-only.
+  const unapproved = await decisionRefusal(ports, input)
+  if (unapproved) return unapproved
+
   const lease = await Flock.acquire("rehome", { timeoutMs: 0 }).catch(() => undefined)
   if (!lease) return { refused: "REHOME_BUSY" }
   try {
@@ -944,6 +971,38 @@ async function run(ports: Ports, input: Input, opts: Options): Promise<Result> {
   } finally {
     await lease.release()
   }
+}
+
+/**
+ * 1.2.9 row 54 (C06, 01c section 3.6): a real move goes ahead only on the person's answer, read from DATUM Studio and
+ * bound to this move. A dry run runs before the person answers; a compensation undoes a move that already passed (its
+ * preflight requires the completed journal it reverses). Fails closed: no port, or a read it could not make, refuses.
+ */
+async function decisionRefusal(ports: Ports, input: Input): Promise<Refused | undefined> {
+  if (input.dryRun || input.compensates !== undefined) return undefined
+  const decision: Refused = { refused: "REHOME_APPROVAL_MISSING", detail: "decision" }
+  const unchecked: Refused = { refused: "REHOME_APPROVAL_MISSING", detail: "decision unchecked" }
+  // A legacy call does not name the mission holding its request, so the answer cannot be bound to this move.
+  if (input.approvalMission === undefined) return decision
+  if (!ports.decision) return unchecked
+  const read = await ports.decision(input.approvalMission, input.approvalRef).catch((): DecisionRead => ({ unchecked: true }))
+  if ("unchecked" in read) return unchecked
+  if (read.status !== "answered" || read.by !== "user" || read.attested !== true) return decision
+  const group = path.basename(input.to)
+  if (read.topic === "project-placement")
+    return input.approvalMission === input.missionId && (read.option === "join" || read.option === "new") && read.group === group
+      ? undefined
+      : decision
+  if (read.topic === "project-tidy")
+    return read.option === "approve" &&
+      Array.isArray(read.proposal) &&
+      read.proposal.some(
+        (item) =>
+          typeof item === "object" && item !== null && item.mission === input.missionId && item.group === group,
+      )
+      ? undefined
+      : decision
+  return decision
 }
 
 const emptyMoved: Moved = { folder: false, notes: 0, sessions: 0 }

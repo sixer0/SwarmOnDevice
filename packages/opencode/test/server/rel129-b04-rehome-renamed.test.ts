@@ -19,6 +19,7 @@ import { Global } from "@opencode-ai/core/global"
 // The server first: its import graph settles the permission modules' load order (as in rel128-proj-i-rehome-refusals).
 import { Server } from "../../src/server/server"
 import { DesktopNonce } from "../../src/server/desktop-nonce"
+import { setRehomeDecisionForTests } from "../../src/server/routes/instance/httpapi/handlers/project"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances } from "../fixture/fixture"
 
@@ -93,9 +94,21 @@ beforeEach(async () => {
   ])
   process.env.SWARM_DEFAULT_PROJECT_DIR = R
   DesktopNonce.set(NONCE)
+  // 1.2.9 row 54 (AC-C06 INTENT, C13): the person's attested placement answer of MISSION into GROUP, through the route's
+  // test seam, so the real move below gets past the decision check.
+  setRehomeDecisionForTests(async () => ({
+    status: "answered",
+    topic: "project-placement",
+    option: "join",
+    by: "user",
+    attested: true,
+    group: GROUP,
+    proposal: undefined,
+  }))
 })
 afterEach(async () => {
   DesktopNonce.set(undefined)
+  setRehomeDecisionForTests(undefined)
   await fs.rm(journalDir(), { recursive: true, force: true })
   await disposeAllInstances()
   await resetDatabase()
@@ -106,7 +119,14 @@ describe("AC-B04 moved.renamed on the rehome route, openapi and SDK", () => {
     const response = await app().request("/project/rehome", {
       method: "POST",
       headers: { "x-opencode-directory": R, "content-type": "application/json", [HEADER]: NONCE },
-      body: JSON.stringify({ missionId: MISSION, from: R, to: path.join(R, GROUP), sessions: [], approvalRef: "D-1" }),
+      body: JSON.stringify({
+        missionId: MISSION,
+        from: R,
+        to: path.join(R, GROUP),
+        sessions: [],
+        approvalRef: "D-1",
+        approvalMission: MISSION,
+      }),
     })
     const json = (await response.json()) as { journalId: string; moved: Record<string, unknown> }
     expect(response.status).toBe(200)

@@ -68,6 +68,17 @@ const ports = (root: string | undefined = R): Rehome.Ports => ({
     if (current) sessions.set(id, { ...current, directory })
   },
   terminals: async () => [],
+  // 1.2.9 row 54 (AC-C06 INTENT, C13): the person's attested placement answer bound to this file's move (the mission
+  // itself into GROUP), so a real move gets past the decision check and meets the checks this file is about.
+  decision: async () => ({
+    status: "answered",
+    topic: "project-placement",
+    option: "join",
+    by: "user",
+    attested: true,
+    group: GROUP,
+    proposal: undefined,
+  }),
 })
 
 /** A Default Project as onboarding leaves it, at `dir`: one mission folder and one marked group. */

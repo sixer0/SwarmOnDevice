@@ -33,6 +33,18 @@ const UNAVAILABLE = "terminal check unavailable"
 const app = () => Server.Default().app
 const sha = (data: string | Buffer) => createHash("sha256").update(data).digest("hex")
 
+// 1.2.9 row 54 (AC-C06 INTENT, 01c AC-C05 "a bound fake decision (section 3.6)"): a real move needs the person's answer
+// bound to it; this fake is the attested placement answer of the mission itself into the group `to`.
+const bound = (to: string): Rehome.DecisionRead => ({
+  status: "answered",
+  topic: "project-placement",
+  option: "join",
+  by: "user",
+  attested: true,
+  group: path.basename(to),
+  proposal: undefined,
+})
+
 let home = ""
 let homeSpy: ReturnType<typeof spyOn> | undefined
 let rootEnv: string | undefined
@@ -64,6 +76,7 @@ afterEach(async () => {
     } catch {}
   }
   DesktopNonce.set(undefined)
+  ProjectHandlers.setRehomeDecisionForTests(undefined)
   await fs.rm(journalDir(), { recursive: true, force: true })
   await disposeAllInstances()
   await resetDatabase()
@@ -123,6 +136,7 @@ describe("C05 route: a running terminal of a removed loaded folder sits in the m
     process.env.SWARM_DEFAULT_PROJECT_DIR = layout.defaultProject
     const R = layout.defaultProject
     const to = layout.groupDir
+    ProjectHandlers.setRehomeDecisionForTests(async () => bound(to))
     await openTerminal(layout.loaded, layout.ptyCwd)
     await layout.removeLoaded()
     expect(await fs.stat(layout.loaded).then(() => true, () => false)).toBe(false)
@@ -236,6 +250,8 @@ describe("C05 seam runningTerminalCwds (N9-069)", () => {
       moveSession: async () => {
         throw new Error("no session moves in this case")
       },
+      // 1.2.9 row 54 (AC-C06 INTENT): the person's attested answer bound to this move, so the terminal check is reached.
+      decision: async () => bound(layout.groupDir),
       terminals: () =>
         seam()(
           fakeScan({

@@ -120,16 +120,35 @@ const ports = (): Rehome.Ports => ({
   refreshMirror: async (key) => {
     mirrored.push(key)
   },
+  decision: async () => ({ ...APPROVED, proposal: approved }),
 })
 
-const call = (over: Partial<Rehome.Input> = {}): Rehome.Input => ({
-  missionId: MISSION,
-  from: R,
-  to: path.join(R, "Lumen"),
-  sessions: ["ses_mission"],
-  approvalRef: "D-1",
-  ...over,
-})
+// 1.2.9 row 54 (AC-C06 INTENT, C13): a real move needs the person's answer bound to it, read through `decision`. This
+// fake answers as the person (attested) with a tidy list holding every {mission, group} a call in this file asks for,
+// so each real move is bound; the calls name approvalMission (the mission itself unless a case names a tidy mission).
+const approved: { mission: string; group: string }[] = []
+const APPROVED = {
+  status: "answered",
+  topic: "project-tidy",
+  option: "approve",
+  by: "user",
+  attested: true,
+  group: undefined,
+} as const
+
+const call = (over: Partial<Rehome.Input> = {}): Rehome.Input => {
+  const input = {
+    missionId: MISSION,
+    from: R,
+    to: path.join(R, "Lumen"),
+    sessions: ["ses_mission"],
+    approvalRef: "D-1",
+    approvalMission: MISSION,
+    ...over,
+  }
+  approved.push({ mission: input.missionId, group: path.basename(input.to) })
+  return input
+}
 
 beforeEach(async () => {
   case_ += 1
@@ -269,32 +288,37 @@ describe("Rehome.run (AC-PROJc, N8-364)", () => {
     expect(published).toHaveLength(3)
   })
 
-  // Row 68c: a call without approvalMission cannot prove which mission holds its request: it replays only a journal
-  // without approvalMission whose folder is still where that journal put it; once the mission is back at `from`, the
-  // same legacy call really moves it. A call naming approvalMission never matches a legacy journal.
-  test("a legacy call (no approvalMission) replays only while the mission is still where that move put it", async () => {
+  // Row 68c: a call without approvalMission cannot prove which mission holds its request.
+  // 1.2.9 row 54 (AC-C06 INTENT, 01c section 3.6 pass condition 1): so a real move without it is refused "decision"
+  // before the replay check, whether or not a journal of it exists; nothing moves. A compensation is exempt from the
+  // decision check and keeps the 68c rule: a repeated compensation of the same journal is a replay.
+  test("a legacy call (no approvalMission) is refused for a real move; a repeated compensation is still a replay", async () => {
     const rehome = Rehome.make(ports())
     const lumen = path.join(R, "Lumen")
+    const legacy = { approvalMission: undefined }
+    const unbound: Rehome.Result = { refused: "REHOME_APPROVAL_MISSING", detail: "decision" }
+    const start = await treeHash(R)
+    expect(await rehome.run(call(legacy))).toEqual(unbound)
+    expect(await treeHash(R)).toBe(start)
     const a = await rehome.run(call())
     if (!("journalId" in a)) throw new Error(JSON.stringify(a))
     const tree = await treeHash(R)
-    expect(await rehome.run(call())).toEqual({ journalId: a.journalId, moved: a.moved, replayed: true })
+    expect(await rehome.run(call(legacy))).toEqual(unbound)
     expect(await rehome.run(call({ approvalMission: "2026-11-14_tidy-a" }))).toMatchObject({ refused: expect.any(String) })
     expect(await treeHash(R)).toBe(tree)
 
     // A repeated compensation of the same journal is a replay.
-    const comp = { from: lumen, to: R, compensates: a.journalId }
+    const comp = { from: lumen, to: R, compensates: a.journalId, ...legacy }
     const undo = await rehome.run(call(comp))
     if (!("journalId" in undo)) throw new Error(JSON.stringify(undo))
     expect(await rehome.run(call(comp))).toEqual({ journalId: undo.journalId, moved: undo.moved, replayed: true })
     expect(published).toHaveLength(2)
 
-    // The mission is at the root again: the same legacy call (another holder's D-1) moves it, it is not a no-op.
-    const again = await rehome.run(call())
-    expect(`${"replayed" in again} ${"journalId" in again && again.journalId !== a.journalId}`).toBe("false true")
-    expect((await fs.stat(path.join(lumen, "docs", MISSION))).isDirectory()).toBe(true)
-    expect(sessions.get("ses_mission")?.directory).toBe(lumen)
-    expect(published).toHaveLength(3)
+    // The mission is at the root again: the legacy call is still refused and leaves it there.
+    expect(await rehome.run(call(legacy))).toEqual(unbound)
+    expect((await fs.stat(path.join(R, "docs", MISSION))).isDirectory()).toBe(true)
+    expect(sessions.get("ses_mission")?.directory).toBe(R)
+    expect(published).toHaveLength(2)
   })
 
   test("new group: creates the folder and its marker; the next call can join it", async () => {
@@ -580,7 +604,11 @@ describe("Rehome.run: a session shared by two missions of one tidy list (row 51c
     expect(await rehome.run(second({ ...other, dryRun: true }))).toEqual(refusal)
     expect(await rehome.run(second(other))).toEqual(refusal)
     // A call without the approval's mission cannot prove it is the same approval either.
-    expect(await rehome.run(second({ approvalRef: "D-1", approvalMission: undefined }))).toEqual(refusal)
+    // 1.2.9 row 54 (AC-C06 INTENT): it cannot be bound to the person's answer, so it is refused before the session check.
+    expect(await rehome.run(second({ approvalRef: "D-1", approvalMission: undefined }))).toEqual({
+      refused: "REHOME_APPROVAL_MISSING",
+      detail: "decision",
+    })
     expect([
       await treeHash(R),
       await fileHash(storeOf(R)),
