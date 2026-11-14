@@ -120,8 +120,11 @@ describe("row 100 G-03 shape test: every quoted call runs against the store", ()
     opened = store
     const tools = missionTools(store, { log: () => {}, exporter: missionDocsExporter }) as S[]
     const session = { sessionId: "mcp-row100", agentId: "swarm", fileRoot: PROJECT, autonomousMode: true }
-    const call = async (tool: string, args: S) => {
-      const res = (await tools.find((t) => t.name === tool)!.call(args, session)) as S
+    // 1.2.9 row 50d (C46, C72): the person's answer comes from an attested session (Mission Control key on the
+    // request, as the host marks it); the agent's calls keep the unattested session.
+    const person = { ...session, attested: true as const }
+    const call = async (tool: string, args: S, as: S = session) => {
+      const res = (await tools.find((t) => t.name === tool)!.call(args, as)) as S
       const text = res.content?.[0]?.text ?? ""
       expect(res.isError ? `${tool} refused: ${text}` : "ok").toBe("ok")
       return (res.structuredContent?.data ?? res.structuredContent) as S
@@ -150,7 +153,7 @@ describe("row 100 G-03 shape test: every quoted call runs against the store", ()
       if (tool === "studio_mission_approve" && !auto) {
         // The person answers the request in Mission Control (the agent never does): simulate that answer.
         const req = quoted.find((c) => c.tool === "studio_mission_request_decision")!.args.request
-        await call("studio_mission_answer_decision", { mission: A, request: req.id, option: req.recommended, by: "user", decisionId: args.decision, date: "2026-11-12", text: "Approved" })
+        await call("studio_mission_answer_decision", { mission: A, request: req.id, option: req.recommended, by: "user", decisionId: args.decision, date: "2026-11-12", text: "Approved" }, person)
       }
       if (tool === "studio_mission_set_status" && args.to === "done") {
         // Finish whatever rows the examples left open, with the same one-call done shape, before the quoted close.
