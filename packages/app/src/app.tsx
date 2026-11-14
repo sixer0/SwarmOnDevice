@@ -28,7 +28,6 @@ import {
   createRenderEffect,
   createResource,
   createSignal,
-  ErrorBoundary,
   For,
   type JSX,
   lazy,
@@ -63,6 +62,7 @@ import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout
 import LegacyLayout from "@/pages/layout"
 import NewLayout from "@/pages/layout-new"
 import { ErrorPage } from "./pages/error"
+import { FolderNoticeBoundary } from "@/pages/layout/folder-missing"
 import { useCheckServerHealth } from "./utils/server-health"
 import { legacySessionHref, legacySessionServer, requireServerKey, sessionHref } from "./utils/session-route"
 import { createSessionLineage } from "@/pages/session/session-lineage"
@@ -410,7 +410,9 @@ export function AppBaseProviders(
       >
         <LanguageProvider locale={props.locale} onNativeTranslations={props.onNativeTranslations}>
           <UiI18nBridge>
-            <ErrorBoundary
+            {/* 1.2.9 row 79a: a LOCATION_NOT_FOLDER failure under an open folder-missing notice shows no error page,
+                and Restore / Recreate reset this boundary (pages/layout/folder-missing.ts). */}
+            <FolderNoticeBoundary
               fallback={(error) => {
                 Sentry.captureException(error)
                 return <ErrorPage error={error} />
@@ -423,7 +425,7 @@ export function AppBaseProviders(
                   </DialogProvider>
                 </WslServersProvider>
               </QueryProvider>
-            </ErrorBoundary>
+            </FolderNoticeBoundary>
           </UiI18nBridge>
         </LanguageProvider>
       </ThemeProvider>

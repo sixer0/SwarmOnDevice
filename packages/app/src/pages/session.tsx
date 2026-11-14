@@ -41,6 +41,7 @@ import { base64Encode, checksum } from "@opencode-ai/core/util/encode"
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
 import { ErrorPage } from "@/pages/error"
+import { FolderNoticeBoundary } from "@/pages/layout/folder-missing"
 import { CommentsProvider, useComments } from "@/context/comments"
 import { useCommand } from "@/context/command"
 import { DirectoryDataProvider } from "@/pages/directory-layout"
@@ -196,7 +197,9 @@ export function SessionRouteErrorBoundary(
 ) {
   const settings = useSettings()
   return (
-    <ErrorBoundary
+    // 1.2.9 row 79a (LIVE-C07): a session read that failed with LOCATION_NOT_FOLDER (a file at the project path)
+    // shows no error page while the folder-missing notice is open; Restore / Recreate reset this boundary.
+    <FolderNoticeBoundary
       fallback={(error) =>
         settings.general.newLayoutDesigns() ? (
           <SessionRouteFrame padded={props.padded}>
@@ -210,7 +213,7 @@ export function SessionRouteErrorBoundary(
       }
     >
       {props.children}
-    </ErrorBoundary>
+    </FolderNoticeBoundary>
   )
 }
 

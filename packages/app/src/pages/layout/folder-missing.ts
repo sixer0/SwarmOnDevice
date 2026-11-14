@@ -1,6 +1,69 @@
-import { createContext, useContext } from "solid-js"
+import {
+  createComponent,
+  createContext,
+  createSignal,
+  ErrorBoundary,
+  onCleanup,
+  Show,
+  untrack,
+  useContext,
+  type JSX,
+} from "solid-js"
 import type { DirectoryCheck } from "@/context/platform"
 import { dismissToast, showToast } from "@/utils/toast"
+
+// 1.2.9 row 79a (LIVE-C07, C112): a file at a project path makes the server answer its loads with 400
+// LOCATION_NOT_FOLDER (row 55). The desktop check calls that path "missing", so the notice below shows, but a reader
+// that threw the 400 into an error boundary also put the full error page behind it, and Restore never reset that
+// boundary. Window-wide: how many folder-missing notices are open, and who resets when a folder comes back.
+const [openNotices, setOpenNotices] = createSignal(0)
+const folderBackListeners = new Set<() => void>()
+
+function isLocationNotFolderError(error: unknown) {
+  const seen = (value: unknown): boolean => {
+    if (typeof value !== "object" || value === null) return false
+    const item = value as { name?: unknown; code?: unknown; data?: { code?: unknown } }
+    return (
+      item.name === "LocationNotFolderError" ||
+      item.code === "LOCATION_NOT_FOLDER" ||
+      item.data?.code === "LOCATION_NOT_FOLDER"
+    )
+  }
+  if (seen(error)) return true
+  const cause = error instanceof Error ? (error.cause as { body?: unknown } | undefined) : undefined
+  return seen(cause?.body)
+}
+
+/**
+ * An error boundary that treats a LOCATION_NOT_FOLDER failure like the missing folder it is: while a folder-missing
+ * notice is open, it shows nothing instead of `fallback` (the notice is the recovery), and when Restore or Recreate
+ * brings a folder back it resets, so the content renders again without a restart. Every other error, and a
+ * LOCATION_NOT_FOLDER with no notice open (web, a remote server), shows `fallback` as before.
+ */
+export function FolderNoticeBoundary(props: {
+  fallback: (error: unknown, reset: () => void) => JSX.Element
+  children?: JSX.Element
+}) {
+  return createComponent(ErrorBoundary, {
+    fallback: (error: unknown, reset: () => void) => {
+      if (!isLocationNotFolderError(error)) return props.fallback(error, reset)
+      folderBackListeners.add(reset)
+      onCleanup(() => folderBackListeners.delete(reset))
+      // As in ErrorBoundary itself, the fallback is created untracked.
+      return createComponent(Show as (props: { when: boolean; children: JSX.Element }) => JSX.Element, {
+        get when() {
+          return openNotices() === 0
+        },
+        get children() {
+          return untrack(() => props.fallback(error, reset))
+        },
+      })
+    },
+    get children() {
+      return props.children
+    },
+  })
+}
 
 // 1.2.7 U-8 (rows 33, 47c, 58b): the one copy of the missing-project-folder check and its notice, shared by the legacy
 // layout and the new layout. A folder that is gone is neither opened nor entered. One persistent toast per path offers
@@ -55,14 +118,20 @@ export function createFolderMissingNotice(deps: FolderMissingDeps): FolderMissin
     const toastId = toasts.get(directory)
     if (toastId === undefined) return
     toasts.delete(directory)
+    setOpenNotices((count) => Math.max(0, count - 1))
     dismissToast(toastId)
   }
 
   async function opened(directory: string, onOpen: () => unknown) {
     const seenMissing = missingFolders.delete(directory)
-    close(directory)
     // A failed reload must not keep the person from the project: opening still runs, as before.
-    if (seenMissing) await (async () => deps.reload?.(directory))().catch(() => undefined)
+    if (seenMissing) {
+      await (async () => deps.reload?.(directory))().catch(() => undefined)
+      // Row 79a: boundaries that hold a LOCATION_NOT_FOLDER failure render their content again (the load re-runs).
+      // Before the notice closes, so the error page never shows in between.
+      for (const reset of [...folderBackListeners]) reset()
+    }
+    close(directory)
     await onOpen()
     return true
   }
@@ -109,6 +178,7 @@ export function createFolderMissingNotice(deps: FolderMissingDeps): FolderMissin
       actions: deps.stored(directory) && !recreateFailed ? [restore, recreate, choose] : [restore, choose],
     })
     toasts.set(directory, toastId)
+    setOpenNotices((count) => count + 1)
   }
 
   async function recreateFolder(directory: string, onOpen: () => unknown) {
