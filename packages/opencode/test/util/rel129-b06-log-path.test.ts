@@ -61,6 +61,11 @@ const HOME_ROWS: [string, string, Roots | undefined, string][] = [
   ["11h", "a -/Users/x", undefined, "a -~"],
   ["5h", "unsafe /Users/x/.swarm/vault/notes/a.md", [{ path: "/Users/x/.swarm/vault", label: "<vault>" }], "unsafe <vault>/notes/a.md"],
   ["9h", "C:\\Users\\x\\y failed", undefined, "<path> failed"],
+  // 45a (C61): the home folder is replaced only at a path boundary.
+  ["45a-sibling", "a -/Users/xy/z", undefined, "a -/Users/xy/z"],
+  ["45a-end", "a -/Users/x", undefined, "a -~"],
+  ["45a-slash", "a -/Users/x/z", undefined, "a -~/z"],
+  ["45a-quote", "at '/Users/x'", undefined, "at '~'"],
 ]
 
 describe("AT-B06 behaviour table (home folder not a prefix of the input)", () => {
@@ -80,7 +85,9 @@ describe("S9-07 the home folder is always the last root, label ~ (HOME=/Users/x)
       home("/Users/x")
       const out = withoutPaths(input, roots)
       expect(out).toBe(expected)
-      expect(out).not.toContain("/Users/x")
+      // a sibling account (45a) is not the home folder, so it keeps its own name
+      if (id === "45a-sibling") expect(out).not.toContain("~y")
+      else expect(out).not.toContain("/Users/x")
     })
   }
 

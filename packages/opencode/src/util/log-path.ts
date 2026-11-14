@@ -1,5 +1,13 @@
 import os from "node:os"
 
+// 1.2.9 row 45a (C61): the home folder is replaced only at a path boundary: followed by the end of the text or by a
+// character that cannot continue a path segment. `/Users/xy/z` is a sibling account, not the home `/Users/x`.
+const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+function replaceRoot(text: string, root: { path: string; label: string }, bounded: boolean) {
+  if (!bounded) return text.split(root.path).join(root.label)
+  return text.replace(new RegExp(escape(root.path) + "(?![\\w.@+~-])", "g"), () => root.label)
+}
+
 /**
  * 1.2.9 row 45 (AC-B06, N9-083): the one log-path scrubber. It replaces the two drifted copies that lived in
  * `memory/vault-mirror.ts` and `server/routes/instance/httpapi/handlers/project.ts`.
@@ -14,10 +22,11 @@ import os from "node:os"
  *   character stays, without the account name (RN-15).
  */
 export function withoutPaths(text: string, roots: readonly { path: string; label: string }[] = []): string {
-  const applied = [...roots, { path: os.homedir(), label: "~" }].filter((root) => root.path.length > 1)
+  const home = { path: os.homedir(), label: "~" }
+  const applied = [...roots, home].filter((root) => root.path.length > 1)
   const labels = applied.map((root) => root.label).filter((label) => label.length > 0)
   return applied
-    .reduce((out, root) => out.split(root.path).join(root.label), text)
+    .reduce((out, root) => replaceRoot(out, root, root === home), text)
     .replace(/'(?:[A-Za-z]:)?[\\/][^']*'/g, "'<path>'")
     .replace(/(?:[A-Za-z]:)?[\\/][^\s'"`,;)]*/g, (match, offset: number, whole: string) => {
       if (offset === 0) return "<path>"
