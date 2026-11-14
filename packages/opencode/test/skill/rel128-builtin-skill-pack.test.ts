@@ -469,3 +469,118 @@ describe("diagram-flow", () => {
     expect(studio.filter((name) => !studioTools.has(name))).toEqual([])
   })
 })
+
+// --- swarm-whats-new (1.2.8 row 58c, U4, C169) --------------------------------------------------------------------------
+// Agent-facing briefs per release 1.2.0 .. 1.2.8. Loads as a reserved built-in, its English and Indonesian triggers
+// suggest it, the text stays compact, newest first, and every tool or skill it names is a registered one.
+describe("swarm-whats-new", () => {
+  const text = skillFile("swarm-whats-new.md")
+  const TRIGGERS = {
+    keywords: [
+      "what's new",
+      "whats new",
+      "changelog",
+      "release notes",
+      "new features",
+      "update swarm",
+      "versi baru",
+      "fitur baru",
+      "apa yang bisa",
+      "catatan rilis",
+    ],
+    files: [],
+    missionTypes: [],
+  }
+  const VERSIONS = ["1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
+
+  it.live("listed as a built-in with its description and English and Indonesian triggers", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const skill = yield* Skill.Service
+        const listed = (yield* skill.available()).find((item) => item.name === "swarm-whats-new")
+        expect(listed?.location).toBe("<built-in>")
+        expect(listed?.description).toBe(s.SWARM_WHATS_NEW_SKILL_DESCRIPTION as string)
+        expect(listed?.description).toContain("Load it when")
+        expect(listed?.triggers).toEqual(TRIGGERS)
+        expect(Skill.parseTriggers(TRIGGERS)).toEqual({ triggers: TRIGGERS })
+        expect((yield* skill.require("swarm-whats-new")).content).toBe(text)
+      }),
+    ),
+  )
+
+  it.live("reserved: a disk copy never replaces it", () => expectReservedBuiltin("swarm-whats-new", "swarm-whats-new.md"))
+
+  it.live("a request in English or Indonesian suggests it; an unrelated request does not", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const skill = yield* Skill.Service
+        const available = yield* skill.available()
+        const suggest = (focus: string) => SystemPrompt.suggestedSkills(available, { text: focus, files: [] }) ?? ""
+        for (const [focus, keyword] of [
+          ["What's new in this Swarm release?", "what's new"],
+          ["Show me the changelog since 1.2.0.", "changelog"],
+          ["Summarise the release notes for agents.", "release notes"],
+          ["Please update swarm memory with the new rules.", "update swarm"],
+          ["Apa saja di versi baru ini?", "versi baru"],
+          ["Jelaskan fitur baru untuk agen.", "fitur baru"],
+          ["Apa yang bisa dilakukan agen sekarang?", "apa yang bisa"],
+          ["Ringkas catatan rilis 1.2.8.", "catatan rilis"],
+        ])
+          // The suggestion block escapes HTML, so the apostrophe of "what's new" arrives as &#39;.
+          expect(suggest(focus)).toContain(`- swarm-whats-new: matched keywords "${keyword.replace("'", "&#39;")}"`)
+        expect(suggest("Summarise the meeting notes in three bullets.")).not.toContain("swarm-whats-new")
+      }),
+    ),
+  )
+
+  test("text: built-in shape, at most 12 KB, one section per version newest first, nothing classified", () => {
+    expectBuiltinShape(text)
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(12 * 1024)
+    const at = VERSIONS.map((version) => text.indexOf(`\n## ${version}`))
+    for (const [index, position] of at.entries()) expect(position > 0 ? VERSIONS[index] : `missing ${VERSIONS[index]}`).toBe(VERSIONS[index]!)
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    expect(text).not.toMatch(/\b004\b|TERBATAS|RAHASIA|CONFIDENTIAL|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|~\//)
+  })
+
+  test("U5: learn, remember, ask before testing, test only after a yes, record; the checklist is its own section", () => {
+    const flow = text.slice(text.indexOf("## Use it in this order"), text.indexOf("\n## 1.2.8"))
+    const steps = ["1. Learn:", "2. Remember", "3. Ask", "4. Test only after a yes", "5. Record"].map((step) => flow.indexOf(step))
+    for (const position of steps) expect(position).toBeGreaterThan(0)
+    expect(steps).toEqual([...steps].sort((a, b) => a - b))
+    expect(flow).toContain('"Apakah Anda mau saya uji semua update barunya?"')
+    expect(flow).toContain("Never start the self-test without a yes.")
+    expect(text.indexOf("## Use it in this order")).toBeLessThan(text.indexOf("\n## 1.2.8"))
+    const checklist = text.slice(text.indexOf("## Self-test checklist (only after the person's yes)"))
+    expect(checklist.length).toBeGreaterThan(200)
+    expect(checklist).toContain(
+      "Nothing that moves missions, deletes, changes config or touches a real project\nwithout a separate yes.",
+    )
+    expect(checklist).toContain("PASS or FAIL")
+  })
+
+  test("names only registered tools and real built-in skills", () => {
+    const studio = new Set([
+      ...STUDIO_TOOLS,
+      ...["figure-tools.ts", "doc-tools.ts", "write-tools.ts", "tools.ts"].flatMap((file) =>
+        [...readOptional(PACKAGES, "datum-studio", "vendor", "scripts", "studio", "mcp", file).matchAll(/"(studio_[a-z_]+)"/g)].map((m) => m[1]!),
+      ),
+      ...[...readOptional(PACKAGES, "datum-studio", "src", "mcp-host", "asset-tool.ts").matchAll(/"(studio_[a-z_]+)"/g)].map((m) => m[1]!),
+    ])
+    // The task tool defines its id in a constant (src/tool/task.ts), so the Tool.define scan does not see it.
+    const taskId = /const id = "([a-z_]+)"/.exec(read(SRC, "tool", "task.ts"))?.[1]
+    expect(taskId).toBe("task")
+    const tools = new Set([...BUILTIN_TOOLS, taskId!])
+    const real = (name: string) => tools.has(name) || studio.has(name) || SWARM_WEB_TOOLS.has(name)
+    const named = namedTools(text)
+    expect(named.length).toBeGreaterThan(15)
+    expect(named.filter((name) => !real(name))).toEqual([])
+    for (const tool of ["remember", "skill", "task", "skill_draft", "studio_mission_set_status", "studio_asset_put", "swarm-web_vault_inbox"])
+      expect(named.includes(tool) || text.includes(`\`${tool}\``) ? tool : `not named: ${tool}`).toBe(tool)
+    for (const tool of ["remember", "skill", "task", "skill_draft", "edit", "write", "apply_patch"])
+      expect(tools.has(tool) ? tool : `not a tool: ${tool}`).toBe(tool)
+    // Every backticked kebab-case name is a built-in skill of this build (the reserved set).
+    const skills = [...new Set([...text.matchAll(/`([a-z0-9]+(?:-[a-z0-9]+)+)`/g)].map((m) => m[1]!))]
+    expect(skills.length).toBeGreaterThan(8)
+    expect(skills.filter((name) => !Skill.RESERVED_SKILL_NAMES.has(name))).toEqual([])
+  })
+})

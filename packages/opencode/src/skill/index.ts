@@ -30,6 +30,7 @@ import SKILL_AUTHORING_SKILL_BODY from "./skill-authoring.md" with { type: "text
 import OBSIDIAN_MEMORY_SKILL_BODY from "./obsidian-memory.md" with { type: "text" }
 import PROJECT_FOLDERS_SKILL_BODY from "./project-folders.md" with { type: "text" }
 import DIAGRAM_FLOW_SKILL_BODY from "./diagram-flow.md" with { type: "text" }
+import SWARM_WHATS_NEW_SKILL_BODY from "./swarm-whats-new.md" with { type: "text" }
 
 const CLAUDE_EXTERNAL_DIR = ".claude"
 const AGENTS_EXTERNAL_DIR = ".agents"
@@ -183,6 +184,32 @@ export const DIAGRAM_FLOW_SKILL_TRIGGERS: Triggers = {
   missionTypes: [],
 }
 
+// Built-in entry shipped with 1.2.8 (row 58c, U4, C169): agent-facing briefs of what changed per release from 1.2.0 to
+// this build, newest first, so an agent knows its current tools, rules and limits and can save them to memory with
+// `remember` when the person asks. Reserved like the others. Every tool and skill name in the text is a real one
+// (checked by test/skill/rel128-builtin-skill-pack.test.ts).
+export const SWARM_WHATS_NEW_SKILL_NAME = "swarm-whats-new"
+export const SWARM_WHATS_NEW_SKILL_DESCRIPTION =
+  "What is new in Swarm for agents, per release from 1.2.0 to this build (1.2.8): what you can now do, what you must do differently (rules, refusals, approvals), which tools and skills exist, and known limits. Load it when asked what changed, what Swarm or an agent can do now, for the changelog, or to save release notes to memory."
+export const SWARM_WHATS_NEW_SKILL_CONTENT: string = SWARM_WHATS_NEW_SKILL_BODY
+/** Keywords in English and Indonesian that suggest the swarm-whats-new built-in (01b section 3.1 limits: 10 entries). */
+export const SWARM_WHATS_NEW_SKILL_TRIGGERS: Triggers = {
+  keywords: [
+    "what's new",
+    "whats new",
+    "changelog",
+    "release notes",
+    "new features",
+    "update swarm",
+    "versi baru",
+    "fitur baru",
+    "apa yang bisa",
+    "catatan rilis",
+  ],
+  files: [],
+  missionTypes: [],
+}
+
 export const RESERVED_SKILL_NAMES: ReadonlySet<string> = new Set([
   KNOWLEDGE_LIBRARY_SKILL_NAME,
   DATUM_SKILL_NAME,
@@ -194,6 +221,7 @@ export const RESERVED_SKILL_NAMES: ReadonlySet<string> = new Set([
   OBSIDIAN_MEMORY_SKILL_NAME,
   PROJECT_FOLDERS_SKILL_NAME,
   DIAGRAM_FLOW_SKILL_NAME,
+  SWARM_WHATS_NEW_SKILL_NAME,
 ])
 
 /** N8-034: limits of a SKILL.md `triggers` map. Over a limit the skill still loads, without triggers (N8-049). */
@@ -776,6 +804,13 @@ const layer = Layer.effect(
         location: "<built-in>",
         content: DIAGRAM_FLOW_SKILL_CONTENT,
         triggers: DIAGRAM_FLOW_SKILL_TRIGGERS,
+      }
+      s.skills[SWARM_WHATS_NEW_SKILL_NAME] = {
+        name: SWARM_WHATS_NEW_SKILL_NAME,
+        description: SWARM_WHATS_NEW_SKILL_DESCRIPTION,
+        location: "<built-in>",
+        content: SWARM_WHATS_NEW_SKILL_CONTENT,
+        triggers: SWARM_WHATS_NEW_SKILL_TRIGGERS,
       }
       const library = LibraryRoot.current()
       if (library.kind !== "available") return s
