@@ -309,11 +309,25 @@ function boxEnds(svg: string): Array<{ link: number; node: string; side: string;
 const ROW158 = (await import("../figure-capacity/fixtures")) as J
 const buildMod = (await import("../../vendor/src/lib/studio/engine/diagram/build")) as J
 const swimlane6 = (): string => buildMod.buildDiagramSvg(structuredClone(ROW158.AT_CAPACITY.swimlane6.spec), { release: true }).svg as string
+// Swarm 1.2.9 row 30b (C63): non-legacy `sld` parity figures whose link 2 (cb1 -> load, ups -> rak) ran along the box
+// side after the detour (arrowTangent 0 deg); red at BASE and at HEAD before the fix, green after.
+const PARITY = path.join(import.meta.dir, "..", "ported", "_fixtures", "tests", "parity", "fixtures")
+const parity = (file: string, ptr: Array<string | number> = []): J =>
+  ptr.reduce<J>((o, k) => o[k], JSON.parse(readFileSync(path.join(PARITY, file), "utf8")) as J)
+const SLD_SPECS: Array<[string, () => J]> = [
+  ["diagram/dg_sld_good.json", () => parity("diagram/dg_sld_good.json")],
+  ["diagram/garis_a/good_sld.json", () => parity("diagram/garis_a/good_sld.json")],
+  ["doc/doc_serah_handover.json ch1 s1 b1", () => parity("doc/doc_serah_handover.json", ["chapters", 1, "sections", 1, "blocks", 1, "spec"])],
+]
+const SLD: Array<[string, () => J, boolean]> = SLD_SPECS.flatMap(([n, spec]) =>
+  [true, false].map((release) => [`${n} @${release ? "rel" : "draft"}`, spec, release] as [string, () => J, boolean]),
+)
 
 describe("68a-6 a non-legacy box end enters (and leaves) its side head-on after a detour; arrowTangent never on a box end", () => {
   const cases: Array<[string, () => Promise<string>]> = [
     ...(["B1_carry_pools_phases", "C1_via"] as const).flatMap((n) => WIDTHS.map((w) => [`${n} @${w}`, async () => (await preview(n, w)).svg] as [string, () => Promise<string>])),
     ["row158 swimlane6 @release", async () => swimlane6()],
+    ...SLD.map(([n, spec, release]) => [`sld ${n}`, async () => buildMod.buildDiagramSvg(spec(), { release }).svg as string] as [string, () => Promise<string>]),
   ]
   for (const [name, svgOf] of cases) {
     test(`${name}: every box end on its normal; no arrowTangent on a box node`, async () => {

@@ -413,6 +413,8 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     if (unaligned) alignedAlt.set(ei, buildPts(unaligned[0], unaligned[1]));
   });
   const out: RoutedEdge[] = [];
+  // A flow without `direction` (legacy serial layout) is frozen at its 1.2.5 bytes (01e A15).
+  const legacyFlow = s.family === "flow" && !dir;
   const finish = (rawPts: readonly Pt[][]): { routes: Pt[][]; moved: number } => {
     let routes = edges.map((e, i) => {
       const pts = rawPts[i];
@@ -425,9 +427,10 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
         // when that is clean, keeps both ends on their normals and never turns straight back on itself.
         const [sa, sb] = sidesOf(e, i);
         if (pts.length < 4 || !normalEnds(pts, sa, sb) || normalEnds(r, sa, sb)) return r;
-        // only where the end lands off the drawn outline (a shape whose outline is not its box); a box end that runs
-        // along its side stays as it was (reported GEOM_ARROW_TANGENT; legacy flows keep their bytes, row 45 A15)
-        const off = (n: SheetNode, side: Side, atStart: boolean) => !boxLike(n) && !endNormal(r, side, atStart);
+        // where the end lands off the drawn outline (a shape whose outline is not its box) or, outside legacy flows, a box
+        // end runs along its side (Swarm 1.2.9 row 30b, AC-A08, C63). A legacy flow's box end stays as it was (reported
+        // GEOM_ARROW_TANGENT; legacy flows keep their bytes, row 45 A15, C10(a), RN-12)
+        const off = (n: SheetNode, side: Side, atStart: boolean) => (!legacyFlow || !boxLike(n)) && !endNormal(r, side, atStart);
         if (!off(nodeOf(sheet, e.from), sa, true) && !off(nodeOf(sheet, e.to), sb, false)) return r;
         try {
           const alt = [pts[0], ...detour(pts.slice(1, -1), [e.from, e.to], nodes, sheet.widthMm, sheet.colMm), pts[pts.length - 1]];
@@ -471,7 +474,6 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   const sides = edges.map((e, i) => sidesOf(e, i));
   const fanned = new Set<number>();
   let fanKept = 0;
-  const legacyFlow = s.family === "flow" && !dir;
   for (const g of legacyFlow ? [] : fanGroups(edges, sides, grouped)) {
     const members = g.members.filter((i) => !fanned.has(i));
     if (members.length < FANOUT_SPLIT_MIN) continue;

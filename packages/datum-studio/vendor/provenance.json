@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10281407
+  "bytes": 10281620
  },
  "files": [
   {
@@ -2431,9 +2431,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/route.ts",
    "status": "patched",
-   "bytes": 31293,
+   "bytes": 31506,
    "source_sha256": "2189c545c59473987ba23d3dc64eeeaf9c336c0624c0e9029a34a29773ffa769",
-   "sha256": "b50455a969333f8bb004d2d9856aba3879b4d0b0f2c20cac87e7e4d69007ec6d",
+   "sha256": "b1c543b2b1762dd9947c25555b4e3520fcf6d48bb648e892b232b9d2a976719a",
+   "patch_row129-30b": {"id": "129-30b-a08", "row": "30b", "decision": "1.2.9 AC-A08 (B9-A08; N9-107; C63, C10(a), 01a AT-A08)", "summary": "finish(): the detour restart (row 68a C166 (4)) also takes a box end that runs along its side after the detour, outside legacy flows; the box exemption (!boxLike) stays for legacy flows only (family flow without direction, frozen at 1.2.5 by 01e A15; RN-12); the legacyFlow predicate moved above finish, unchanged", "diff_base": "sha256 before this row", "before_sha256": "b50455a969333f8bb004d2d9856aba3879b4d0b0f2c20cac87e7e4d69007ec6d", "after_sha256": "b1c543b2b1762dd9947c25555b4e3520fcf6d48bb648e892b232b9d2a976719a", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/30b_row30b_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "a95725817418df6b5cc9b76128a85fa9fabb807d829c58c86cbc09c387f07eef"},
    "patch_row129-26": {"id": "129-26-a02-zero-length", "row": "26", "decision": "1.2.9 AC-A02 (B9-A02; N9-101, N9-203; C12 OP13-1, 01a AT-A02)", "summary": "routePlaced wraps the unchanged body (now routePlacedEdges) and marks the routes of a legacy flow (family flow without direction, frozen at 1.2.5 by 01e A15) with keepLinkRepeats, so their link paths keep repeated vertices (C12); other routes drop them when drawn", "diff_base": "sha256 before this row", "before_sha256": "9881fc6ecf3a86cbd621dff430718c7a20d8384e0cb8232e0d8a9eece987072e", "after_sha256": "b50455a969333f8bb004d2d9856aba3879b4d0b0f2c20cac87e7e4d69007ec6d", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/26_row26_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "5e31d8e16eb23b58a30686b5ea5f7e197aacdce44f5d4754854dc06aad8ddda1"},
    "patch_row129-25": {"id": "129-25-a01-route-split", "row": "25", "decision": "1.2.9 AC-A01 (B9-A01; N9-078, N9-080, N9-081; C2 lane order, 01a AT-A01)", "summary": "pure refactor, output byte-identical: end placement (shared types/helpers, side choice, glue) moved verbatim to NEW build/route-ends.ts, run shaping and fan groups to NEW build/route-shape.ts (03a lines 107-117); route.ts keeps HoppedEdge, routeRackSide, routePlaced, routeWithSides (unchanged, no reordering), crossingHops and JOG_ALIGN_MM, imports one way (ends <- shape <- route) and re-exports the 12 names it exported before (export { ... } from); imports it no longer uses dropped", "diff_base": "sha256 before this row", "before_sha256": "476e58b7532bfe7729140bdfda51fe2c12fc00b3d4dc0972d89fab3c630f088f", "after_sha256": "9881fc6ecf3a86cbd621dff430718c7a20d8384e0cb8232e0d8a9eece987072e", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/25_row25_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "8ec6b889108bee4d1c02c25fa519ee910c4b578e0340557b781b67e902227f11"},
    "patch_row68a": {"id": "128-68a-via-glue-live", "row": "68a", "decision": "C166 (1.2.8 row 68a; final live check FAIL 68a)", "summary": "via legs: an unglued end of a via edge takes the side facing its nearest via (facingSide); the first/last orthogonal leg leaves/enters along the side normal and goes round the end node when the via lies behind it (legOut); a straight via leg that grazes its side (< STRAIGHT_END_MIN_DEG) or runs back gets a one-row orthogonal approach (straightLeg); via points move EDGE_CLEAR_MM (NEW, half a lattice row) inside the figure (clampIn); a detour that lost the stub approach at an end on a non-box outline (diamond, event, ...) restarts from the stub ends when clean, head-on and without an out-and-back (normalEnds, endNormal, doublesBack)", "diff_base": "sha256 before this row", "before_sha256": "4fdec5c12515d1aa4d3072d7750bb2e81b75a5e368deab3fe32feddbb0ef6e1e", "after_sha256": "476e58b7532bfe7729140bdfda51fe2c12fc00b3d4dc0972d89fab3c630f088f", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/68a_row68a_diffs/engine_diagram_build_route.ts.diff", "diff_sha256": "73ecb04c4d8b3e051febc592d62310fba62af585c2cf90191fbfa4c358d08129"},
@@ -6430,6 +6431,7 @@
   "129-27-a04-label-dash",
   "129-32-a10a-header-text",
   "129-28-a05-terukur-mark",
-  "129-33-a10b-double-back"
+  "129-33-a10b-double-back",
+  "129-30b-a08"
  ]
 }
