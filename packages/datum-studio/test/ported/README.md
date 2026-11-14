@@ -8,8 +8,8 @@ ported file is marked in place with `row42 <id>` and listed below. Task record:
 `docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/21_studio_tests.md`.
 
 Run (from `packages/datum-studio`): `bun test test/ported/` (the whole package: `bun test src test`).
-Last run 2026-11-07: **188 files, 3384 pass, 76 skip, 2 todo, 0 fail** (`bun test --todo` runs the 2 todo cases; they
-fail today, see D1).
+Last full run 2026-11-07 (dated snapshot, not re-run for 1.2.9): **188 files, 3384 pass, 76 skip, 2 todo, 0 fail** (`bun test --todo` runs the 2 todo cases; they
+fail today, see D1). Since then `figures/clean-svg-manifest.test.ts` was turned back on (1.2.9 row 36, 5320d3d5d3) and runs 4 pass, 0 skip, 0 todo, so against that snapshot the totals are 3387 pass, 73 skip.
 
 ## Layout
 
@@ -67,7 +67,7 @@ Cases kept but skipped (`it.skip`/`describe.skip`, reason at the line):
 | S1 | 16 | spawn the CLI `scripts/studio/md2contract.ts`, not in the vendored set (import/dc25) |
 | S2 | 7 | spawn `scripts/studio/draft-check.ts` as a CLI; its direct-run entry is removed (row 107 M5) |
 | S3 | 5 | relabelled Plex faces / "IBM Plex Sans Cond" alias not shipped (U9.7, C31, row 108; spec §2 F) |
-| S4 | 4 | byte pins (sha256) of pre-patch DOCX/SVG output; the Rev A fixes change bytes on purpose (C40; C23 recorded diffs) |
+| S4 | 1 | byte pin (sha256) of pre-patch DOCX output (`renderers/docx-determinism`); the Rev A fixes change bytes on purpose (C40; C23 recorded diffs). The 3 SVG guards in `figures/clean-svg-manifest` were re-enabled in 1.2.9 row 36 |
 | S5 | 3 | HTML cover-title leading and DejaVu fallback changed by row 123 CP-37/CP-19 (C40); see O1 |
 | E1 | 1 | needs the Electron render bridge (figure rasterisation); none in a bun unit run (render/c18) |
 | E2 | 1 | needs PNG assets from a seeded local workspace that the clone does not track (renderers/fixhz2) |
@@ -136,7 +136,7 @@ implementation report.
 | `figures/chart-lint.test.ts` | 50 | 0 | 0 | W1, W5, W13 |
 | `figures/chart-params.test.ts` | 21 | 0 | 0 | W1, W5, W13 |
 | `figures/chart-smoke.test.ts` | 121 | 0 | 0 | W1, W5, W13 |
-| `figures/clean-svg-manifest.test.ts` | 1 | 3 | 0 | S4, W1, W5, W13 |
+| `figures/clean-svg-manifest.test.ts` | 4 | 0 | 0 | W1, W5, W13 (S4 guards re-enabled, row 36) |
 | `figures/dc27-chart-custom.test.ts` | 25 | 0 | 0 | W1, W5, W13 |
 | `figures/dc27-preset-sweep.test.ts` | 1 | 0 | 0 | W1, W5, W13 |
 | `figures/diagram-bad-cases.test.ts` | 40 | 1 | 0 | A7, W1, W5, W13 |
