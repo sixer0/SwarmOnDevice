@@ -72,9 +72,11 @@ describe("row 61b T-05: parity fixtures with a marked circle / cylinder", () => 
 
   // Swarm 1.2.9 row 28 (AC-A05, INTENT): the circle's anchor comes from its own square, not the 74.44 mm slot; the
   // glyph sits inside the top of the circle (gap 0.71 mm to the rim). Before: x="74.14" y="64.59" (29.55 mm right of the rim).
+  // Swarm 1.2.9 row 66a (AC-A05, gate 66 F1, INTENT): the glyph leaves the ETHERNET connector's axis (x 37.33) and sits
+  // just right of it, still inside the top of the circle. Before: x="37.91" y="64.59" (ink centre 0.08 mm from the axis).
   it("dg_topology (circle `s1` with a mark): glyph inside the top of its circle", () => {
     const svg = buildDiagramSvgRaw(fixture("dg_topology.json"), { release: false }).svg;
-    expect(svg).toContain('<text x="37.91" y="64.59" font-family="IBM Plex Mono"');
+    expect(svg).toContain('<text x="39.17" y="64.84" font-family="IBM Plex Mono"');
     expect(lintDiagramGeometry(svg).counts.textOverNode).toBe(0);
   });
 });

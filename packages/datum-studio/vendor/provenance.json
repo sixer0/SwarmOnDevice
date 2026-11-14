@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10290166
+  "bytes": 10295095
  },
  "files": [
   {
@@ -2495,9 +2495,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 51034,
+   "bytes": 51854,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "7538c7f6356589451f587a0b1acf97828c62c1a6f48572488f4ba6240ba5f715",
+   "sha256": "bccdff5e20dc0fa157ddf6f0d96d355afc1fdc7597270666566a2026804c53b1",
+   "patch_row129-66a": {"id": "129-66a-a05-mark-off-axis", "row": "66a", "decision": "1.2.9 AC-A05 follow-up (gate 66 finding F1, C77; N9-204; legacy-flow freeze C10(a)/C12)", "summary": "the node pass gives a marked circle the [outer point, end point] pair of every connector end (markEnds) so core markGlyphAnchor keeps its mark off a connector's axis; legacy flows (zoneClearOn false) get none and keep their bytes", "diff_base": "sha256 before this row", "before_sha256": "7538c7f6356589451f587a0b1acf97828c62c1a6f48572488f4ba6240ba5f715", "after_sha256": "bccdff5e20dc0fa157ddf6f0d96d355afc1fdc7597270666566a2026804c53b1", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/66a_row66a_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "461ef591b82601cc39d162c1ede9113ab88aa0e01940b9bf612664ebfded645c"},
    "patch_row129-29": {"id": "129-29-a06-zone-clearance", "row": "29", "decision": "1.2.9 AC-A06 (B9-A06; N9-051, N9-204; C10(b), 01a AT-A06; C10(a)/C12)", "summary": "the zone drawing passes zoneClearOn(s) to zoneGeom (pads keep ZONE_CLEAR_MM off non-members; a legacy flow keeps its frame); the sheet clip and the graph sheet extents are unchanged", "diff_base": "sha256 before this row", "before_sha256": "938036ded9e20f516b200b4058ee8fb233add533a23713e84b0e4268803bc0c6", "after_sha256": "7538c7f6356589451f587a0b1acf97828c62c1a6f48572488f4ba6240ba5f715", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/29_row29_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "e63cbe9e2d166a7685856e7d8c28abf261a873f88196a11292a876256fa68ae6"},
    "patch_row129-27": {"id": "129-27-a04-label-dash", "row": "27", "decision": "1.2.9 AC-A04 (B9-A04; N9-060, N9-103; 01a AT-A04; legacy-flow freeze 01e A15 as C10(a)/C12)", "summary": "labelPos takes the drawn dash pattern (dash?: readonly number[]) and passes it to spotClear, so the first render leaves no dash fragment beside a label band; NEW file-local labelDashOf builds it per connector from edgeLineDash as build/fitlabels.ts does (solid = undefined) and is passed at the three labelPos sites (graphFit, origOf, non-fit labels); legacy flows (family flow without direction) get no dash and keep their bytes", "diff_base": "sha256 before this row", "before_sha256": "1396532469654c349e83ea2195b2eb1a003e40cd9b66746e066b049ac5e72f89", "after_sha256": "938036ded9e20f516b200b4058ee8fb233add533a23713e84b0e4268803bc0c6", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/27_row27_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "8cc0c468b1e6886878e1c2c853257cde88856d3252d5cd697c062cc9f99baabd"},
    "patch_row55c": {"id": "128-55c-frame-hop", "row": "55c", "decision": "C133, C134 (1.2.8 row 55c; M3 gate G3-01, G3-02, G3-15)", "summary": "NEW jumpHops (exported): crossingHops runs on the straight runs of each path (repeated / straight-through vertices merged), so a crossing on such a vertex hops (vis9 at 128 mm, swimlane6 wrap); a hop closer than the hop radius to a bend of its run moves along the run; drawn paths unchanged. Zone rect clipped to the figure box only where it ran outside (dg_topology x -5.33). Vertical pools: lane header rule skipped when there is no lane header row", "diff_base": "sha256 before this row", "before_sha256": "c95342afce323965cbe024805613a23410c48642f28163bedd1a1e5af1661322", "after_sha256": "1396532469654c349e83ea2195b2eb1a003e40cd9b66746e066b049ac5e72f89", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55c_row55c_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "4b029372512e1fa516ddc6a30919d481fcb8c197d64dcab2a2c7781eef0ba98d"},
@@ -2677,9 +2678,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/svg.ts",
    "status": "patched",
-   "bytes": 77366,
+   "bytes": 81475,
    "source_sha256": "6c1846b3c5b2966476dbe1fff3fe44283daea1c70eb7bf12d5b3fbece817c741",
-   "sha256": "51e92bd7a16cd87a7f0596896a2da7dbb1822b5bb875f77e42a5561098862f06",
+   "sha256": "27c69398fd52e9c667a8c0ca9e8886a9ada431eccd1701c85e9730251e55c091",
+   "patch_row129-66a": {"id": "129-66a-a05-mark-off-axis", "row": "66a", "decision": "1.2.9 AC-A05 follow-up (gate 66 finding F1, C77; N9-050, N9-104, N9-203)", "summary": "NEW markOffAxis (file-local): a circle's mark inside the rim that lies within 1.5 pt of the axis of a connector end meeting the circle (end segment continued 2 r inward) moves sideways just clear of it, right first then left, lowered only as far as the rim needs, kept only when it stays inside the rim (row 61b clearance, gap <= LATTICE_Y), clears every axis and stays 1.5 pt above the label; else unchanged. markGlyphAnchor, markGlyphSvg and nodeTextGroundSvg take the optional ends; NodeSvgOptions.markEnds carries them. No ends = bytes as before", "diff_base": "sha256 before this row", "before_sha256": "51e92bd7a16cd87a7f0596896a2da7dbb1822b5bb875f77e42a5561098862f06", "after_sha256": "27c69398fd52e9c667a8c0ca9e8886a9ada431eccd1701c85e9730251e55c091", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/66a_row66a_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "d3eb8d8fa6486d7fc6ddaa2378693ea4efb9db0849227a75d4837dc3747b289b"},
    "patch_row129-28": {"id": "129-28-a05-terukur-mark", "row": "28", "decision": "1.2.9 AC-A05 (B9-A05; N9-050, N9-104, N9-203; C2 ruling 2, 01a AT-A05)", "summary": "markGlyphAnchor, circle: the box anchor comes from the circle's own square (cx + r - pad, cy - r + caption size); the slot anchor is kept only when it lies inside that square (square slots unchanged); curvedGlyphAnchor then moves the glyph inside the rim as before. Hexagon, cylinder, bus and every other shape unchanged", "diff_base": "sha256 before this row", "before_sha256": "f81e90d98b818beb8093e1cbcdd8a91338dec659a042d864ec5b6eca82d02e43", "after_sha256": "51e92bd7a16cd87a7f0596896a2da7dbb1822b5bb875f77e42a5561098862f06", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/28_row28_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "5a29e88b1d6f7284108b0e468c688e4dc71b7846edd5bbafea7ac23e2325b568"},
    "patch_row129-26": {"id": "129-26-a02-zero-length", "row": "26", "decision": "1.2.9 AC-A02 (B9-A02; N9-101, N9-203; C12 OP13-1, 01a AT-A02)", "summary": "edgePathSvg (the link-path emitter) drops a vertex whose rounded pair equals the one before it (linkPathD; repeats draw nothing, so length, dash phase and the last direction stay); a point list marked by keepLinkRepeats (NEW export, WeakSet; legacy flows, C12) is drawn by polylineD as before; RoutedEdge.points, labels and polylineD itself unchanged", "diff_base": "sha256 before this row", "before_sha256": "00159f4f6a68f1c1a83178ac49e9f2e268c169957708b31eea394b6340039a2f", "after_sha256": "f81e90d98b818beb8093e1cbcdd8a91338dec659a042d864ec5b6eca82d02e43", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/26_row26_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "0bc07d5268d1becc706da47868b8d47cbe6b4cb8df4cb6566670de6db1df6b7c"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C119, C123)", "summary": "NEW shadowRectSvg and nodeShadowSvg (the offset shadow alone, shadowUnderlaySvg bytes unchanged); NodeSvgOptions.shadowDrawn: nodeSvg then draws only the paper interior; firstRenderLayout gives an untagged cylinder its below-the-lid layout when the centred label would cross the lid rim", "diff_base": "sha256 before this row", "before_sha256": "8bffe2a67ed2220a830c4f2dedfbb7e866205a748535478e69cd12e1016f33e8", "after_sha256": "00159f4f6a68f1c1a83178ac49e9f2e268c169957708b31eea394b6340039a2f", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "b00c013765ca15244f5ebd278a193e1faef48d99cae867969be4ba3c21c0e3fc"},
@@ -6438,6 +6440,7 @@
   "129-33-a10b-double-back",
   "129-30b-a08",
   "129-29-a06-zone-clearance",
-  "129-66b-bpmn-arrowheads"
+  "129-66b-bpmn-arrowheads",
+  "129-66a-a05-mark-off-axis"
  ]
 }

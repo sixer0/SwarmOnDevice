@@ -860,7 +860,27 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
 
   // simpul + label + glif asal + tag
   // Row 165C (F113-9, CP-37): the sheet size lets nodeSvg keep every outline stroke inside the canvas.
-  nodes.forEach((nd, i) => sheet.addAll(nodeSvg(nd, { index: i, canvas, ...(shadows[i] ? { shadowDrawn: true } : {}) })));
+  // 1.2.9 row 66a (gate 66 F1): a marked circle gets the connector ends, so its mark stays off a connector's axis.
+  // `zoneClearOn` is false for a legacy flow (family `flow` without `direction`), frozen at its 1.2.5 bytes (C10(a), C12).
+  // Each end pairs with the nearest point that differs from it (a route can repeat a vertex), so the end has a direction.
+  const markEnds = zoneClearOn(s)
+    ? hopped.flatMap((p) =>
+        [p.points, [...p.points].reverse()].flatMap((pts) => {
+          const outer = pts.find((q) => Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]) > 1e-6);
+          return outer ? [[outer, pts[0]] as const] : [];
+        }),
+      )
+    : [];
+  nodes.forEach((nd, i) =>
+    sheet.addAll(
+      nodeSvg(nd, {
+        index: i,
+        canvas,
+        ...(shadows[i] ? { shadowDrawn: true } : {}),
+        ...(markEnds.length && nd.spec.mark && nd.spec.shape === "circle" ? { markEnds } : {}),
+      }),
+    ),
+  );
 
   // apparatus figure: SVG memikul caption, baris KUNCI dan SUMBER sendiri (P6)
   // D-288: baris KEY tidak digambar bila halaman mencetak baris KUNCI figur ini (satu aparatus).
