@@ -2,7 +2,7 @@
 
 Team handover (status, build, release, working rules; Bahasa Indonesia): see [HANDOVER.md](HANDOVER.md).
 
-Release history 1.1.0 to 1.2.7 (Bahasa Indonesia): see [CHANGELOG.md](CHANGELOG.md).
+Release history 1.1.0 to 1.2.8 (Bahasa Indonesia): see [CHANGELOG.md](CHANGELOG.md).
 
 Swarm is an on-device AI coding agent published by PT GSP: a command-line tool
 with a terminal UI, plus a macOS desktop app. It runs against model providers you
