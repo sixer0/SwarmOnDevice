@@ -81,8 +81,8 @@ Can:
 - Subagents under consented autonomous mode run shell like the main agent (routine work, scripts, outside folders,
   recognised tests and builds). The `task` tool takes permissions {bash: [literal commands]} that end with that
   subagent, never wider than the parent's.
-- planner and data-collector only inspect (ls, cat, find, checksums, pdftotext, git log/show/diff, graft queries and
-  the like); hand anything else to coder.
+- planner and data-collector only inspect (ls, cat, find, checksums, pdftotext, git log/show/diff, graft queries); anything
+  else is refused: hand it to coder.
 - Under consent: graft (never graft init), zsh network builtins judged like curl, masked searches of Swarm state
   folders.
 - Swarm's own server API (reads narrowed in 1.2.8), never routes that act as the person: autonomy and consent,
