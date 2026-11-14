@@ -1,5 +1,5 @@
 import { existsSync, readdirSync } from "node:fs"
-import { mkdir, stat } from "node:fs/promises"
+import { lstat, mkdir, stat } from "node:fs/promises"
 import { userInfo } from "node:os"
 import { dirname, join } from "node:path"
 import { app } from "electron"
@@ -66,8 +66,11 @@ const errorCode = (error: unknown) =>
 // 1.2.8 R-18c (row 30b): the Default Project is made as the U-8 Recreate makes a folder (SR7-13 rule 1): the leaf
 // only, inside a Documents folder that exists. A Documents folder that no longer exists is not recreated and a
 // non-folder at the path is left alone. Resolves to undefined when the folder is there, else the reason (no path).
+// 1.2.9 row 59 (AC-C10b, N9-013): Documents is looked at with lstat, so a linked Documents (also a dangling one) is
+// refused and nothing is made through it (C7(d): one level up only).
 async function makeDefaultProjectFolder(path: string): Promise<string | undefined> {
-  const documents = await stat(dirname(path)).catch(() => null)
+  const documents = await lstat(dirname(path)).catch(() => null)
+  if (documents?.isSymbolicLink()) return "documents folder is a link"
   if (!documents?.isDirectory()) return "documents folder missing"
   const existing = await stat(path).catch(() => null)
   if (existing) return existing.isDirectory() ? undefined : "not a folder"
