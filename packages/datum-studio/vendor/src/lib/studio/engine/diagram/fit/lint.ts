@@ -97,7 +97,7 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
  * this (mm). A connector drawn on the figure edge (x = 0) has half its line clipped and, with the caption above, lies in
  * the caption band.
  */
-export const EDGE_OUTSIDE_MIN_MM = 0.05;
+const EDGE_OUTSIDE_MIN_MM = 0.05;
 
 /**
  * Swarm 1.2.9 row 31 (AC-A09, register N9-020, N9-023, N9-024; C12 D-1: values fixed, no tuning after the Q1 sweep).
@@ -106,7 +106,9 @@ export const EDGE_OUTSIDE_MIN_MM = 0.05;
  * the connector's half width + the node's half stroke + `EDGE_ALONG_TOL_MM`. The reader takes such a run for part of
  * the node's border (1.2.8 B1: `tidak` ran 11.89 mm down the side of Data E). Container and zone frames are not nodes.
  */
+/** @internal test seam */
 export const EDGE_ALONG_MIN_MM = 1.0;
+/** @internal test seam */
 export const EDGE_ALONG_TOL_MM = 0.1;
 
 /**
@@ -117,7 +119,8 @@ export const EDGE_ALONG_TOL_MM = 0.1;
  * against `KOLAM X` from 47.92) passes between its samples. A header `lineThroughText` already reports is not counted
  * twice; `lineThroughText` itself is not widened (it is in `score` and auto-fit's ROUTE_KINDS).
  */
-export const HEADER_CLEAR_MM = 0.3;
+/** @internal test seam */
+export const HEADER_CLEAR_MM =0.3;
 
 /**
  * Swarm 1.2.8 row 68a (C166 (4); kind `edgeEndOffNode`, check id GEOM_EDGE_END): a connector end (start or end, with or
@@ -125,14 +128,14 @@ export const HEADER_CLEAR_MM = 0.3;
  * node, ends on nothing (a container frame, the paper). The allowance covers the path trimmed under a filled head
  * (row 57b `headTrimMm`, under 1 mm). An end under the label block of an event (`data-label-pos="below"`) belongs to it.
  */
-export const EDGE_END_ON_NODE_MM = 1.2;
+const EDGE_END_ON_NODE_MM =1.2;
 
 /**
  * Swarm 1.2.8 row 68a (C166 (1), (3)): `edgeThroughNode` also counts a connector that runs through the body of its OWN
  * end node (a via leg entering the node and crossing its label, a straight route from one side across the box) at more
  * than this distance (mm) from the end that attaches it; the piece next to that end is how the connector meets the node.
  */
-export const OWN_NODE_END_MM = 1.5;
+const OWN_NODE_END_MM =1.5;
 
 /**
  * Swarm 1.2.8 row 55c (C133, kind `frameOutside`, check id GEOM_FRAME_OUTSIDE): a container frame (pool or lane box,
@@ -140,7 +143,8 @@ export const OWN_NODE_END_MM = 1.5;
  * whose centre line runs past the figure box by more than this (mm) is clipped. Measured on the centre line, so a rule
  * drawn edge to edge (x 0..W) is inside.
  */
-export const FRAME_OUTSIDE_MIN_MM = 0.05;
+/** @internal test seam */
+export const FRAME_OUTSIDE_MIN_MM =0.05;
 
 /**
  * Swarm 1.2.6 T-03 (register N-008..N-010). Thresholds of the three connector-end checks:
@@ -965,7 +969,7 @@ export function decorationOf(parts: readonly string[], widthMm: number): { rules
 }
 
 /** Row 57c: a band edge closer than this to an obstacle is not counted (0.01 mm output grid plus float noise). */
-export const LABEL_COLLISION_EPS_MM = 0.05;
+const LABEL_COLLISION_EPS_MM =0.05;
 
 /**
  * Row 57c: the region an arrowhead covers: a quadrilateral from just past the tip back `L` along the last piece, `W` wide
@@ -1064,7 +1068,7 @@ function ruleVisibleInBand(r: { a: Pt; b: Pt; half: number }, band: Box, links: 
  * Row 57c (N8 request, `GEOM_LABEL_COLLISION`): for every edge-label knockout band (shrunk by `LABEL_COLLISION_EPS_MM`):
  * an arrowhead it covers (`headQuad`), the first node outline it crosses, the first container rule visible inside it.
  */
-export function labelCollisions(
+function labelCollisions(
   bands: ReadonlyArray<{ box: Box; text?: string }>,
   links: ReadonlyArray<ReadonlyArray<Pt>>,
   heads: ReadonlyArray<{ end: HeadSize | null; start: HeadSize | null }>,

@@ -171,7 +171,7 @@ export function rowsTableShape(rows: Rows): FitShape {
   } as unknown as FitShape;
 }
 
-export interface TableOverflowLikely {
+interface TableOverflowLikely {
   /** Perkiraan lebar tabel (mm): tiap kolom selebar segmen tak-terpatah terpanjangnya + celah antarkolom. */
   estimatedMm: number;
   /** Lebar kolom teks (bentang penuh, mm). */
@@ -184,6 +184,7 @@ export interface TableOverflowLikely {
  * `tableBreakBudget`, table-fit.ts:105); sel kolom angka/ID/satuan tidak dibungkus; sel bergabung (gridSpan) tidak
  * dihitung. Null bila perkiraan muat di kolom teks. Render-side `TABLE_OVERFLOW` (overlap-clip.ts) tidak berubah.
  */
+/** @internal test seam */
 export function tableOverflowLikely(t: FitShape, params: ParamMap = {}): TableOverflowLikely | null {
   const cols = Array.isArray(t.columns) ? t.columns : [];
   const rows = Array.isArray(t.rows) ? t.rows : [];

@@ -33,7 +33,7 @@ export interface SwimlaneLayout extends LayoutResult {
 }
 
 /** Satu pita bingkai: lajur (melintang) atau fase (sepanjang waktu); `lo`..`hi` dalam mm. */
-export interface SwimBand {
+interface SwimBand {
   key: string;
   label: string;
   lo: number;

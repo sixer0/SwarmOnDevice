@@ -199,7 +199,7 @@ export function nudgeRoutes(input: readonly Pt[][], ends: ReadonlyArray<readonly
  * Row 56d (C134 G3-07): a container rule of a swimlane frame as `build/svg.ts` draws it (lane rules, phase separators,
  * pool borders, pool head and lane header rules): `vertical` = a line x = `c` from `lo` to `hi` (y), else y = `c` (x).
  */
-export interface RouteRule {
+interface RouteRule {
   vertical: boolean;
   c: number;
   lo: number;
@@ -207,9 +207,9 @@ export interface RouteRule {
 }
 
 /** Row 56d: least distance (mm) between a connector run and a parallel container rule it lies along. */
-export const RULE_CLEAR_MM = 1.0;
+const RULE_CLEAR_MM =1.0;
 /** Row 56d: a run found on a rule moves this far off it (the rule stays visible beside the line). */
-export const RULE_OFFSET_MM = 1.5;
+const RULE_OFFSET_MM =1.5;
 /** Row 56d: least visible line kept before the arrowhead when a run moves (the default head 3.2 mm + 1 mm, as 57c). */
 const RULE_HEAD_RUN_MM = 4.2;
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
+import { readFileSync } from "node:fs"
 import path from "node:path"
 
 // N9-102 (1.2.9 A03). One describe block per AC line (AC-A03.60, .61, .62, .63a, .63b, .63c, .64); each block carries
@@ -38,4 +39,123 @@ describe("AC-A03.60", () => {
   test("INDEX_LIMITS, the value IndexLimits aliased, stays", () => {
     expect(trackedWordHits("INDEX_LIMITS").length).toBeGreaterThan(1)
   })
+})
+
+const MARKER = "@internal test seam"
+
+/** Lines of a tracked source file, split on \n. */
+function linesOf(file: string): string[] {
+  return readFileSync(path.join(repo, file), "utf8").split("\n")
+}
+
+/** Lines that start an export declaration (`export const`, `export function`, `export interface`, `export {` ...). */
+function exportLines(file: string): string[] {
+  return linesOf(file).filter((l) => /^export\b/.test(l))
+}
+
+/** Index of the line that declares `name` (with or without `export`), or -1. */
+function declLine(file: string, name: string): number {
+  const re = new RegExp(`^(export\\s+)?(declare\\s+)?(async\\s+)?(const|let|function|interface|type|class|enum)\\s+${name}\\b`)
+  return linesOf(file).findIndex((l) => re.test(l))
+}
+
+/** True when the comment lines directly above line `i` (its doc block or a one-line comment) carry the N9-071 marker. */
+function carriesMarker(file: string, i: number): boolean {
+  const lines = linesOf(file)
+  const block: string[] = []
+  for (let k = i - 1; k >= 0; k--) {
+    const t = lines[k].trim()
+    if (!(t.startsWith("/**") || t.startsWith("*") || t.startsWith("//"))) break
+    block.push(t)
+    if (t.startsWith("/**")) break
+  }
+  return block.some((t) => t.includes(MARKER))
+}
+
+describe("AC-A03.61", () => {
+  // N9-102 block .61 (1.2.9 row 61): datum-studio vendor, 24 names in the diagram engine and 7 elsewhere. Un-exported:
+  // no file outside the declaring file reads them (rule 3). Test-only exports stay and carry N9-071 (C91).
+  const vd = "packages/datum-studio/vendor"
+  const dg = `${vd}/src/lib/studio/engine/diagram`
+  const unexport: Record<string, readonly string[]> = {
+    [`${dg}/build/lanesroute.ts`]: ["RouteRule", "RULE_CLEAR_MM", "RULE_OFFSET_MM"],
+    [`${dg}/core/svg.ts`]: [
+      "DOUBLED_DIVIDER_CLEAR_MM",
+      "shadowUnderlaySvg",
+      "shadowRectSvg",
+      "doubledDividerY",
+      "EdgeHead",
+      "EdgeLine",
+      "edgeLineWidth",
+      "kindHeadType",
+      "edgeArrowsOf",
+      "edgeLineOf",
+      "edgeMarkerId",
+      "arrowMarkerSvg",
+    ],
+    [`${dg}/fit/labels.ts`]: ["pointAtFraction"],
+    [`${dg}/fit/lint.ts`]: ["EDGE_OUTSIDE_MIN_MM", "EDGE_END_ON_NODE_MM", "OWN_NODE_END_MM", "LABEL_COLLISION_EPS_MM", "labelCollisions"],
+    [`${dg}/fit/text.ts`]: ["labelBelowSizeMm", "subprocessBandMm"],
+    [`${dg}/layout-b/swimlane.ts`]: ["SwimBand"],
+    [`${vd}/scripts/studio/mcp/write-client.ts`]: ["diagramBlock"],
+    [`${vd}/scripts/studio/mcp/write-content.ts`]: ["TableOverflowLikely"],
+    [`${vd}/src/lib/studio/contract/schema/v2/refusal-hints.ts`]: ["LANE_ORIENTATION_CLAUSE"],
+    [`${vd}/src/lib/studio/contract/types/diagram.ts`]: ["DiagramViaPoint"],
+    [`${vd}/src/lib/studio/services/import/markdown.ts`]: ["DIAGRAM_FENCE_INFOS", "DIAGRAM_FENCE_INVALID", "FENCE_KEPT_AS_CODE"],
+  }
+  // Exported lines per file before row 61 (`^export` lines at HEAD before this row) minus the names above.
+  const exportsAfter: Record<string, number> = {
+    [`${dg}/build/lanesroute.ts`]: 6,
+    [`${dg}/core/svg.ts`]: 46,
+    [`${dg}/fit/labels.ts`]: 16,
+    [`${dg}/fit/lint.ts`]: 20,
+    [`${dg}/fit/text.ts`]: 26,
+    [`${dg}/layout-b/swimlane.ts`]: 6,
+    [`${vd}/scripts/studio/mcp/write-client.ts`]: 31,
+    [`${vd}/scripts/studio/mcp/write-content.ts`]: 35,
+    [`${vd}/src/lib/studio/contract/schema/v2/refusal-hints.ts`]: 12,
+    [`${vd}/src/lib/studio/contract/types/diagram.ts`]: 7,
+    [`${vd}/src/lib/studio/services/import/markdown.ts`]: 7,
+  }
+  // Test-only exports kept (D list of 60_a03_list.md, plus the 1.2.9 seams of C91); each carries the marker.
+  const seams: Record<string, readonly string[]> = {
+    [`${dg}/build/svg.ts`]: ["jumpHops"],
+    [`${dg}/build/fitlabels.ts`]: ["ZONE_CLEAR_MM"],
+    [`${dg}/core/svg.ts`]: ["TAG_INSET_MM", "tagAnchor", "headTrimMm"],
+    [`${dg}/core/tokens.ts`]: ["LINE_STYLE_MAX", "LINE_STYLE_MAX_WITH_MARK", "PHASES_MAX", "POOLS_MAX", "VIA_MAX", "ARROW_HEAD_MIN_MM"],
+    [`${dg}/fit/lint.ts`]: ["FRAME_OUTSIDE_MIN_MM", "EDGE_ALONG_MIN_MM", "EDGE_ALONG_TOL_MM", "HEADER_CLEAR_MM"],
+    [`${vd}/scripts/studio/mcp/write-content.ts`]: ["tableOverflowLikely"],
+  }
+
+  test("the list names 31 names in 11 files", () => {
+    expect(Object.keys(unexport).length).toBe(11)
+    expect(Object.values(unexport).reduce((n, names) => n + names.length, 0)).toBe(31)
+  })
+
+  for (const [file, names] of Object.entries(unexport)) {
+    for (const name of names) {
+      test(`${name} is file-local in ${path.basename(file)}`, () => {
+        const i = declLine(file, name)
+        expect(i).toBeGreaterThanOrEqual(0)
+        expect(linesOf(file)[i]).not.toMatch(/^export\b/)
+      })
+    }
+  }
+
+  for (const [file, count] of Object.entries(exportsAfter)) {
+    test(`${path.basename(file)} keeps ${count} export lines`, () => {
+      expect(exportLines(file).length).toBe(count)
+    })
+  }
+
+  for (const [file, names] of Object.entries(seams)) {
+    for (const name of names) {
+      test(`${name} stays exported in ${path.basename(file)} and carries ${MARKER}`, () => {
+        const i = declLine(file, name)
+        expect(i).toBeGreaterThanOrEqual(0)
+        expect(linesOf(file)[i]).toMatch(/^export\b/)
+        expect(carriesMarker(file, i)).toBe(true)
+      })
+    }
+  }
 })

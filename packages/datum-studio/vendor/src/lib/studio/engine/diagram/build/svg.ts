@@ -460,6 +460,7 @@ function straightRuns(pts: readonly PathPt[]): PathPt[] {
  * run (centre closer than the hop radius) moves along the run so the arc stays on the straight piece (still over the
  * crossing); a run shorter than the arc takes it at its middle. Paths without such vertices keep their hops byte for byte.
  */
+/** @internal test seam */
 export function jumpHops(paths: RoutedPaths): HoppedEdge[] {
   const runs = paths.map((p) => ({ ...p, points: straightRuns(p.points) }));
   const found = crossingHops(runs);

@@ -333,7 +333,7 @@ const DIAGRAM_MAX_ISSUES = 5;
  * awal caption dibuang seperti grafik; sumber tidak dikarang: blok, atau meta.source). Validator v2 bersama
  * (`validateBlockV2`, sama dengan R16) menolak spec yang tidak sah dengan pesannya sendiri (isu SCHEMA_INVALID).
  */
-export function diagramBlock(d: DiagramInput, metaSource: string | null, warn: (w: ToolWarning) => void, where: string, issue: IssueSink = THROW): Rec {
+function diagramBlock(d: DiagramInput, metaSource: string | null, warn: (w: ToolWarning) => void, where: string, issue: IssueSink = THROW): Rec {
   const { spec, artifactId, caption, source, keyRow, ...rest } = d as DiagramInput & Rec;
   const cap = typeof caption === "string" ? (caption.trim() === "" ? undefined : inl(stripCaptionPrefix(caption.trim(), warn, where))) : caption;
   let src: unknown = source;

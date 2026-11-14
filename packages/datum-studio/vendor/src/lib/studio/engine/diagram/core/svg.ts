@@ -218,15 +218,15 @@ function outlineD(pts: readonly OutlinePt[]): string {
  * shows only beside and below the node. `doubled`: the inner divider lies in the free band between the text block's
  * ink bottom and the inner rectangle's bottom line, centred in it, at least `DOUBLED_DIVIDER_CLEAR_MM` from both.
  */
-export const DOUBLED_DIVIDER_CLEAR_MM = 0.4;
+const DOUBLED_DIVIDER_CLEAR_MM = 0.4;
 const DOUBLED_INSET_MM = 1.2;
 
-export function shadowUnderlaySvg(x: number, y: number, w: number, h: number): string {
+function shadowUnderlaySvg(x: number, y: number, w: number, h: number): string {
   return shadowRectSvg(x, y, w, h) + `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" fill="${PAPER}"/>`;
 }
 
 /** Row 57c (C123 item 1): the offset shadow rectangle alone (the first element of `shadowUnderlaySvg`). */
-export function shadowRectSvg(x: number, y: number, w: number, h: number): string {
+function shadowRectSvg(x: number, y: number, w: number, h: number): string {
   const off = snap(LATTICE_Y / 2, 0.1);
   return `<rect x="${r2(x + off)}" y="${r2(y + off)}" width="${r2(w)}" height="${r2(h)}" fill="none" stroke="${colourOf("ink200")}" stroke-width="${r2(STROKE_HAIR)}"/>`;
 }
@@ -243,7 +243,7 @@ export function nodeShadowSvg(nd: SheetNode, canvas?: NodeSvgOptions["canvas"]):
 }
 
 /** Row 53b: y of the doubled divider below a text block whose ink ends at `textBottom`, or null when no band fits. */
-export function doubledDividerY(y: number, h: number, textBottom: number): number | null {
+function doubledDividerY(y: number, h: number, textBottom: number): number | null {
   const innerBottom = y + h - DOUBLED_INSET_MM;
   if (innerBottom - textBottom < 2 * DOUBLED_DIVIDER_CLEAR_MM) return null;
   return (textBottom + innerBottom) / 2;
@@ -923,6 +923,7 @@ export function insetForStroke<T extends Pick<SheetNode, "x" | "y" | "w" | "h">>
  * the label block. Shapes not listed (box, shadowed, document, offpage, bus and the BPMN tokens until row 54 draws
  * them) keep the fixed inset; the bus tag stays at the top-left of its box, above the rail (OP-18-10, row 53).
  */
+/** @internal test seam */
 export const TAG_INSET_MM = {
   fixed: pt2mm(1.5),
   bar: PREDEFINED_BAR_MM,
@@ -931,6 +932,7 @@ export const TAG_INSET_MM = {
 } as const;
 
 /** Row 53 (H-TAG): anchor of the tag text of a node (x, baseline, text-anchor), from the shape and the label layout. */
+/** @internal test seam */
 export function tagAnchor(
   nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">,
   fit: ReturnType<typeof nodeTextLayout>,
@@ -1243,7 +1245,7 @@ export function edgePathSvg(
 }
 
 /** Swarm 1.2.8 row 57 (VIS-7, D-V4, 01f §5.2): one drawn arrowhead (type other than `none`, size key). */
-export interface EdgeHead {
+interface EdgeHead {
   type: Exclude<DiagramArrowType, "none">;
   size: DiagramArrowSize;
 }
@@ -1254,7 +1256,7 @@ export interface EdgeHead {
  * non-accent kind is the absent field; `normal` on `accent` draws 0.45 mm instead of 0.72 mm), so the explicit default
  * renders byte-identical to the absent field (01f §3.2.2).
  */
-export interface EdgeLine {
+interface EdgeLine {
   dash?: DashPatternName;
   weight?: DiagramEdgeWeight;
 }
@@ -1273,7 +1275,7 @@ export interface EdgeArrows {
 }
 
 /** Row 57b (VIS-8): stroke width (mm) of a connector: `WEIGHT_MM[weight]` when set, else the kind width. */
-export function edgeLineWidth(kind: DiagramEdgeKind, line?: EdgeLine): number {
+function edgeLineWidth(kind: DiagramEdgeKind, line?: EdgeLine): number {
   return line?.weight ? WEIGHT_MM[line.weight] : edgeStrokeWidth(kind);
 }
 
@@ -1286,7 +1288,7 @@ export function edgeLineDash(kind: DiagramEdgeKind, line?: EdgeLine): string | n
 const DEFAULT_ARROWS: EdgeArrows = { start: null, end: "kind" };
 
 /** Row 57: the end-head type a kind draws when `arrow_end` is absent (EDGE_KINDS head: solid = triangle, open). */
-export function kindHeadType(kind: DiagramEdgeKind): EdgeHead["type"] {
+function kindHeadType(kind: DiagramEdgeKind): EdgeHead["type"] {
   return EDGE_KINDS[kind].head === "solid" ? "triangle" : "open";
 }
 
@@ -1295,7 +1297,7 @@ export function kindHeadType(kind: DiagramEdgeKind): EdgeHead["type"] {
  * equal to the kind's default type at size `m` is the kind head (`head-<kind>`), so a spec that writes the defaults
  * renders byte-identical to one that omits them.
  */
-export function edgeArrowsOf(
+function edgeArrowsOf(
   e: Pick<DiagramEdge, "kind" | "arrow_start" | "arrow_end" | "arrow_start_size" | "arrow_end_size"> &
     Partial<Pick<DiagramEdge, "dash" | "weight" | "label_at">>,
 ): EdgeArrows {
@@ -1339,6 +1341,7 @@ export function edgeArrowsOfPaths(
  * line wider than STROKE_PRIMARY (accent 0.72 mm, weight thick 0.70 mm); 0 otherwise, so other figures keep their bytes.
  * The head's refX moves back by the same amount (`arrowMarkerSvg`), so the tip does not move.
  */
+/** @internal test seam */
 export function headTrimMm(kind: DiagramEdgeKind, head: EdgeHead | "kind", line?: EdgeLine): number {
   const type = head === "kind" ? kindHeadType(kind) : head.type;
   const sw = edgeLineWidth(kind, line);
@@ -1366,7 +1369,7 @@ function trimPolyline(pts: ReadonlyArray<readonly [number, number]>, d: number):
 }
 
 /** Row 57b (VIS-8): the non-default line style of an edge (`EdgeLine`); undefined = the kind's dash and width. */
-export function edgeLineOf(e: Pick<DiagramEdge, "kind"> & Partial<Pick<DiagramEdge, "dash" | "weight">>): EdgeLine | undefined {
+function edgeLineOf(e: Pick<DiagramEdge, "kind"> & Partial<Pick<DiagramEdge, "dash" | "weight">>): EdgeLine | undefined {
   const line: EdgeLine = {};
   if (e.dash !== undefined && e.dash !== EDGE_KINDS[e.kind].pattern) line.dash = e.dash;
   if (e.weight !== undefined && !(e.weight === "normal" && e.kind !== "accent")) line.weight = e.weight;
@@ -1379,7 +1382,7 @@ export function edgeLineOf(e: Pick<DiagramEdge, "kind"> & Partial<Pick<DiagramEd
  * `arrow-end-open-m-control-thin`), because the head's stroke follows the line width; a thick edge never reuses the
  * normal head. `dash` does not enter the id (heads are drawn solid).
  */
-export function edgeMarkerId(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
+function edgeMarkerId(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
   const w = line?.weight ? `-${line.weight}` : "";
   if (head === "kind") return `head-${kind}${w}`;
   return `arrow-${at}-${head.type}-${head.size}-${kind}${w}`;
@@ -1403,7 +1406,7 @@ export function edgeMarkerSvg(kind: DiagramEdgeKind): string {
  * separate definitions with the shape mirrored (tip towards the source); `orient="auto-start-reverse"` is not used
  * (support in the DOCX/PDF chain unverified, 01f risk R3).
  */
-export function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
+function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
   const type = head === "kind" ? kindHeadType(kind) : head.type;
   const L = ARROW_SIZES_MM[head === "kind" ? "m" : head.size];
   const W = 0.89 * L;

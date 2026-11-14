@@ -72,7 +72,7 @@ export function isLabelBelow(shape: string | undefined): boolean {
 }
 
 /** Outline size (mm) of a label-below shape: event diameter or gateway square. */
-export function labelBelowSizeMm(shape: string | undefined): number {
+function labelBelowSizeMm(shape: string | undefined): number {
   return shape !== undefined && shape.startsWith("gateway_") ? BPMN_GATEWAY_SIZE_MM : BPMN_EVENT_DIAMETER_MM;
 }
 
@@ -113,7 +113,7 @@ export function dataFoldMm(w: number): number {
 }
 
 /** Row 54b: height (mm) of the bottom band of a sub-process: half the outline stroke, clearance, [+] square, clearance. */
-export function subprocessBandMm(): number {
+function subprocessBandMm(): number {
   return STROKE_PRIMARY / 2 + SUBPROCESS_GLYPH_CLEAR_MM + SHAPE_GLYPH_MM + SUBPROCESS_GLYPH_CLEAR_MM;
 }
 
