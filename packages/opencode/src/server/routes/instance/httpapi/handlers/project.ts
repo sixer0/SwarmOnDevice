@@ -23,6 +23,7 @@ import { Pty } from "@opencode-ai/core/pty"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import type { InstanceContext } from "@/project/instance-context"
 import { InstanceStore } from "@/project/instance-store"
+import { withoutPaths } from "@/util/log-path"
 import { Cause, Effect, Layer, RcMap, Schema } from "effect"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
@@ -37,18 +38,15 @@ type DesktopNonceHeaders = { readonly [DesktopNonce.HEADER]?: string | undefined
 
 /**
  * G2-02 (row 43f): what a failed re-home logs. fs errors carry absolute paths (home folder, user name), so the line
- * keeps the error code and the message with every absolute path replaced by `<path>`.
+ * keeps the error code and the message with every absolute path replaced by `<path>` (1.2.9 row 45: the shared
+ * `withoutPaths`, home folder as `~`).
  */
 function logSafe(error: unknown) {
   const code = (error as { code?: unknown } | undefined)?.code
   const message = error instanceof Error ? error.message : String(error)
   return {
     ...(typeof code === "string" ? { code } : {}),
-    error: message
-      .replace(/'(?:[A-Za-z]:)?[\\/][^']*'/g, "'<path>'")
-      .replace(/(?:[A-Za-z]:)?[\\/][^\s'"`,;)]*/g, (match, offset: number, text: string) =>
-        offset > 0 && /[\w.~<-]/.test(text[offset - 1]!) ? match : "<path>",
-      ),
+    error: withoutPaths(message),
   }
 }
 

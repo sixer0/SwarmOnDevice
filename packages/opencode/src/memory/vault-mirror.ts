@@ -20,6 +20,7 @@ import { Flock } from "@opencode-ai/core/util/flock"
 import { Vault } from "@opencode-ai/core/vault"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { Secrets } from "@/tool/secrets"
+import { withoutPaths } from "@/util/log-path"
 import { MemoryLearn } from "./learn"
 import { MISSION_ID_PATTERN } from "./memory"
 
@@ -843,17 +844,6 @@ const SUBFOLDERS: readonly string[] = ["notes", "missions", "reports", "skills"]
 /** A temp file of an interrupted run: `.<name>.swarm-<pid>-<8 hex>.tmp`. */
 const TEMP_FILE = /^\.[a-z0-9][a-z0-9.-]{0,80}\.swarm-\d{1,10}-[0-9a-f]{8}\.tmp$/
 
-/** A log reason without absolute paths: the vault root becomes `<vault>`, any other absolute path `<path>`. */
-function withoutPaths(reason: string, rootReal: string) {
-  return reason
-    .split(rootReal)
-    .join("<vault>")
-    .replace(/'(?:[A-Za-z]:)?[\\/][^']*'/g, "'<path>'")
-    .replace(/(?:[A-Za-z]:)?[\\/][^\s'"`,;)]*/g, (match, offset: number, text: string) =>
-      offset > 0 && /[\w.~>-]/.test(text[offset - 1]!) ? match : "<path>",
-    )
-}
-
 class Unsafe extends Error {
   constructor(
     readonly at: string,
@@ -960,7 +950,11 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
       : path.basename(at)
   }
   const unsafe = (at: string, reason: string) => {
-    input.log?.({ code: "VAULT_PATH_UNSAFE", path: shown(at), reason: withoutPaths(reason, rootReal) })
+    input.log?.({
+      code: "VAULT_PATH_UNSAFE",
+      path: shown(at),
+      reason: withoutPaths(reason, [{ path: rootReal, label: "<vault>" }]),
+    })
     return result("unsafe", notCopied)
   }
   if (path.dirname(folderPath) !== mirror || !Vault.contains(rootReal, folderPath)) return unsafe(folderPath, "folder name")
