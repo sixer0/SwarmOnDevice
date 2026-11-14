@@ -673,6 +673,20 @@ const CHAR_A02_INTENT: Record<string, [string, string, string]> = {
   "fixtures/syn128/hnb_fit_to_zero.json#/spec": ["AC-A02", "d776a251b4e285eb", "d776a251b4e285eb"],
   "fixtures/syn128/r18g_lr_166.json#/spec": ["AC-A02", "e7c979dc83dc3cd4", "e7c979dc83dc3cd4"],
 }
+/**
+ * Swarm 1.2.9 row 27 (AC-A04, INTENT): the first render places a label on a dashed connector with the drawn dash
+ * pattern, so its knockout band leaves no dash fragment; one label per key moves along its own run (case04/v2/05
+ * "230 V · 492,6 W" 2.38 mm down; row162 "KENDALI" 0.25 mm left / 2.13 mm up). Markers and verdicts unchanged; legacy
+ * flows keep their bytes. Key -> [AC line, HEAD sync hash, HEAD auto hash]; replaces the BASE, 56c, 57c, 56d and A02
+ * values. Generated with REL128_VIS0_CHAR_PRINT=1 on the row 27 engine (scratch clone of HEAD 2e8d469653 + row 27 svg.ts).
+ */
+const CHAR_A04_INTENT: Record<string, [string, string, string]> = {
+  "engine-rev-a/svg/fixtures/case04.studio.json#": ["AC-A04", "c0bc18b0ed87f111", "c0bc18b0ed87f111"],
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json#": ["AC-A04", "cb2eb7d068181a0c", "cb2eb7d068181a0c"],
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec": ["AC-A04", "31c7431a15105086", "31c7431a15105086"],
+  "engine-rev-a/svg/fixtures/row162_elk_not_better.json#": ["AC-A04", "d28c780630c5ebf5", "d28c780630c5ebf5"],
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#": ["AC-A04", "f6f41d1b018b6e74", "d68c762bbc8a354e"],
+}
 describe("char", () => {
   let corpus: CharEntry[] = []
   const now: Record<string, string> = {}
@@ -693,7 +707,7 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      const route = CHAR_A02_INTENT[c.key] ?? CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d / 1.2.9 row 26 INTENT: listed HEAD hashes replace BASE's
+      const route = CHAR_A04_INTENT[c.key] ?? CHAR_A02_INTENT[c.key] ?? CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d / 1.2.9 rows 26, 27 INTENT: listed HEAD hashes replace BASE's
       expect([n.so, n.ao], c.key).toEqual(route ? [route[1], route[2]] : [b.so, b.ao])
     }
   })

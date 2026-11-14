@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10273884
+  "bytes": 10275226
  },
  "files": [
   {
@@ -2490,9 +2490,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/svg.ts",
    "status": "patched",
-   "bytes": 49575,
+   "bytes": 50917,
    "source_sha256": "a9ab8856426161f4b087bb26315fdd57c534ba81ee3e9d8117eb271d683c4ea0",
-   "sha256": "1396532469654c349e83ea2195b2eb1a003e40cd9b66746e066b049ac5e72f89",
+   "sha256": "938036ded9e20f516b200b4058ee8fb233add533a23713e84b0e4268803bc0c6",
+   "patch_row129-27": {"id": "129-27-a04-label-dash", "row": "27", "decision": "1.2.9 AC-A04 (B9-A04; N9-060, N9-103; 01a AT-A04; legacy-flow freeze 01e A15 as C10(a)/C12)", "summary": "labelPos takes the drawn dash pattern (dash?: readonly number[]) and passes it to spotClear, so the first render leaves no dash fragment beside a label band; NEW file-local labelDashOf builds it per connector from edgeLineDash as build/fitlabels.ts does (solid = undefined) and is passed at the three labelPos sites (graphFit, origOf, non-fit labels); legacy flows (family flow without direction) get no dash and keep their bytes", "diff_base": "sha256 before this row", "before_sha256": "1396532469654c349e83ea2195b2eb1a003e40cd9b66746e066b049ac5e72f89", "after_sha256": "938036ded9e20f516b200b4058ee8fb233add533a23713e84b0e4268803bc0c6", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/27_row27_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "8cc0c468b1e6886878e1c2c853257cde88856d3252d5cd697c062cc9f99baabd"},
    "patch_row55c": {"id": "128-55c-frame-hop", "row": "55c", "decision": "C133, C134 (1.2.8 row 55c; M3 gate G3-01, G3-02, G3-15)", "summary": "NEW jumpHops (exported): crossingHops runs on the straight runs of each path (repeated / straight-through vertices merged), so a crossing on such a vertex hops (vis9 at 128 mm, swimlane6 wrap); a hop closer than the hop radius to a bend of its run moves along the run; drawn paths unchanged. Zone rect clipped to the figure box only where it ran outside (dg_topology x -5.33). Vertical pools: lane header rule skipped when there is no lane header row", "diff_base": "sha256 before this row", "before_sha256": "c95342afce323965cbe024805613a23410c48642f28163bedd1a1e5af1661322", "after_sha256": "1396532469654c349e83ea2195b2eb1a003e40cd9b66746e066b049ac5e72f89", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55c_row55c_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "4b029372512e1fa516ddc6a30919d481fcb8c197d64dcab2a2c7781eef0ba98d"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C71, C101, C102, C116, C123)", "summary": "laneDecorSvg builds the swimlane frame/pool/lane decoration once (same elements, same order) and hands it to fitEdgeLabels; labelPos keeps the old spot when its band clears the own heads, stray pieces and node boxes (spotClear), else slides along the straight runs (runOrder); shadows of shadowed nodes drawn before the connectors (nodeShadowSvg, nodeSvg shadowDrawn)", "diff_base": "sha256 before this row", "before_sha256": "d96a86febf33c3635be757f766bafaad47736e8dd5a378c234ad78f5ee6ca0e5", "after_sha256": "c95342afce323965cbe024805613a23410c48642f28163bedd1a1e5af1661322", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "9ae8d47bdb9b2cd823e36373df73f666742a0b309b48a22d63726068c73fdb2c"},
    "patch_row57b": {"id": "128-57b-vis8-vis9", "row": "57b", "decision": "1.2.8 row 57b (AC-VIS8, AC-VIS9; 01f 3.1-3.5; C78, C86, C101, C111; N8-212, N8-262..266, N8-468, N8-471, N8-477..479)", "summary": "jumps off empties the hops after crossingHops; hopSvg gets the connector's arrows (hop stroke = weight); non-fit label_at labels at labelAtBaseline (no lift); graphFit label bands use it too; arrowsOfPaths delegates to core/svg.ts edgeArrowsOfPaths", "diff_base": "sha256 before this row", "before_sha256": "9d3f4af2d472ceb1cad56fc73d7ab03e287cb80ce5ef2841a0fa9343bcc87d19", "after_sha256": "d96a86febf33c3635be757f766bafaad47736e8dd5a378c234ad78f5ee6ca0e5", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57b_row57b_diffs/engine_diagram_build_svg.ts.diff", "diff_sha256": "7891589c1438fca8f0fdc834b3e58c1c15452dc2a4adcc2ddf0269d7f1e64b3b"},
@@ -6420,6 +6421,7 @@
   "129-39-a13-render-desc",
   "129-31-a09-edge-along",
   "129-26-a02-zero-length",
-  "129-35-a11b-bpmn-layout"
+  "129-35-a11b-bpmn-layout",
+  "129-27-a04-label-dash"
  ]
 }
