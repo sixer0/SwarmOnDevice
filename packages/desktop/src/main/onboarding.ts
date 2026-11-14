@@ -15,7 +15,10 @@ import { DEFAULT_PROJECT_DIR, documentsDir, registerRealDocuments } from "./onbo
 // the person's real Documents during a test. sidecar-env.ts reads the same answer (SWARM_DEFAULT_PROJECT_DIR).
 registerRealDocuments(() => app.getPath("documents"))
 
-/** The Default Project root this launch uses (it may not exist yet). */
+/**
+ * The Default Project root this launch uses (it may not exist yet).
+ * @internal test seam
+ */
 export function defaultProjectPath() {
   return join(documentsDir() ?? app.getPath("documents"), DEFAULT_PROJECT_DIR)
 }

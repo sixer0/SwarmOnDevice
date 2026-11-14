@@ -116,12 +116,12 @@ function stillInScope(data: unknown, basis: Basis) {
 
 /** The rehome route's person-proof header (OC server/desktop-nonce.ts, row 38b). */
 export const DESKTOP_NONCE_HEADER = "x-swarm-desktop-nonce"
-export const REHOME_PATH = "/project/rehome"
+const REHOME_PATH = "/project/rehome"
 /** A move copies a mission folder and memory stores; longer than a store call (mission-client.ts 5 s). */
-export const REHOME_TIMEOUT_MS = 60_000
+const REHOME_TIMEOUT_MS = 60_000
 export const PLACEMENT_TOPIC = "project-placement"
 /** Options of a placement request that move something; `root` is answered through the ordinary `answer` channel. */
-export const PLACE_OPTIONS = ["join", "new"] as const
+const PLACE_OPTIONS = ["join", "new"] as const
 
 /** Desktop mirror of opencode project/rehome.ts and datum-studio validate.ts (N8-150 + SR8-17); drift test N8-458. */
 export const GROUP_NAME_PATTERN = /^[^./\\][^/\\]{0,59}$/
@@ -134,7 +134,7 @@ export function groupNameOk(name: unknown): name is string {
   return !RESERVED_GROUP_NAMES.some((reserved) => reserved === name.toLowerCase())
 }
 
-export type RehomeBody = {
+type RehomeBody = {
   missionId: string
   from: string
   to: string
@@ -146,9 +146,9 @@ export type RehomeBody = {
   compensates?: string
   groupKind?: string
 }
-export type RehomeOk = { journalId?: string; replayed?: boolean; planned?: Record<string, unknown>; moved?: Record<string, unknown> }
+type RehomeOk = { journalId?: string; replayed?: boolean; planned?: Record<string, unknown>; moved?: Record<string, unknown> }
 /** A refusal carries the route's register code (N8-135..N8-141, N8-449, N8-450) or HOST_UNAVAILABLE. */
-export type RehomeResult = { ok: true; data: RehomeOk } | { ok: false; code: string; message: string; journal?: string }
+type RehomeResult = { ok: true; data: RehomeOk } | { ok: false; code: string; message: string; journal?: string }
 export type Rehome = (body: RehomeBody) => Promise<RehomeResult>
 
 type RehomeFetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal; redirect: "error" }) => Promise<Response>
@@ -237,7 +237,7 @@ type PlaceData = { decision: string; group: string; replayed?: true }
 /** 1.2.8 row 46b: the tidy result; `moved` + `total` count the listed missions that have a group. */
 type TidyData = { decision: string; moved: number; total: number }
 /** 1.2.8 row 46b: a tidy refusal or stop names its mission; `moved` is present once the answer was recorded. */
-export type PlaceFailure = { ok: false; code: string; message: string; mission?: string; moved?: number; total?: number }
+type PlaceFailure = { ok: false; code: string; message: string; mission?: string; moved?: number; total?: number }
 type WireAnswer = { option?: unknown; by?: unknown; decision?: unknown; attested?: unknown }
 type WireRequest = {
   id?: unknown
@@ -253,10 +253,13 @@ const badArg = (message: string): MissionControlResult<never> => ({ ok: false, c
 
 /** 1.2.8 row 46b (01d §5): the tidy request topic; options approve / decline (N8-147), `proposal` 1..200 (N8-148, C49). */
 export const TIDY_TOPIC = "project-tidy"
-/** C8 OP-4: a tidy list moves at most this many missions; more go in a second request, approved once on its own. */
+/**
+ * C8 OP-4: a tidy list moves at most this many missions; more go in a second request, approved once on its own.
+ * @internal test seam
+ */
 export const TIDY_BATCH_MAX = 200
 
-export type PlaceOptions = {
+type PlaceOptions = {
   /** Unscoped read of a listed tidy item (the proposal comes from the store, not from the renderer). */
   getItem?: (mission: string) => Promise<MissionControlResult<unknown>>
   /** True when `<dir>/.swarm/group.json` exists: the mission already sits in a marked group (retry no-op). */
@@ -311,7 +314,7 @@ async function moveAndPlace(
  * Row 46 steps 1-5 for a placement, and (1.2.8 row 46b) the tidy list and the retry of an answered placement.
  * `get` is the caller's scoped get (OUT_OF_SCOPE already applied).
  */
-export async function placeMission(
+async function placeMission(
   input: unknown,
   get: (mission: string) => Promise<MissionControlResult<unknown>>,
   client: Pick<MissionControlPlatform, "answer"> & Partial<Pick<MissionControlClient, "setProjectDir">>,

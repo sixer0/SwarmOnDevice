@@ -345,3 +345,28 @@ describe("AC-A03.63a", () => {
     ],
   )
 })
+
+describe("AC-A03.63b", () => {
+  // Row 63b: desktop. 17 names with no outside reader lose `export`; 7 test seams stay exported and carry N9-071.
+  a03SweepCases(
+    [
+      ["packages/desktop/src/main/datum-studio-host/mission-ipc.ts", ["REHOME_PATH", "REHOME_TIMEOUT_MS", "PLACE_OPTIONS", "RehomeBody", "RehomeOk", "RehomeResult", "PlaceFailure", "PlaceOptions", "placeMission"]],
+      ["packages/desktop/src/main/external-url.ts", ["OPEN_OBSIDIAN_NOTE_IPC", "ObsidianNoteResult", "StagedObsidianApp", "resolveStagedObsidianApp", "ExecFileOutput", "verifyStagedObsidianSignature", "ObsidianNoteIpcDeps"]],
+      ["packages/desktop/src/main/sidecar-env.ts", ["DEFAULT_PROJECT_DIR_KEY"]],
+    ],
+    [
+      ["packages/desktop/src/main/datum-studio-host/mission-ipc.ts", ["TIDY_BATCH_MAX"]],
+      ["packages/desktop/src/main/external-url.ts", ["resolveObsidianNoteURL", "OBSIDIAN_TEAM_ID"]],
+      ["packages/desktop/src/main/onboarding.ts", ["defaultProjectPath"]],
+      ["packages/desktop/src/main/proxy-bypass.ts", ["LOOPBACK_PROXY_BYPASS", "loopbackProxyBypassList"]],
+      ["packages/desktop/src/main/sidecar-env.ts", ["launchDefaultProjectDir"]],
+    ],
+  )
+
+  // C24: the mission client sends the key on every request since row 50a; the protocol comment no longer says "at initialize".
+  test("protocol.ts describes the Mission Control key as sent on every request, not at initialize", async () => {
+    const text = await Bun.file(path.join(repo, "packages/desktop/src/main/datum-studio-host/protocol.ts")).text()
+    expect(text).not.toContain("at initialize")
+    expect(text).toContain("on every request")
+  })
+})

@@ -16,7 +16,7 @@ export const RENDER_SOCKET_KEY = "DATUM_RENDER_SOCKET"
  * N8-443 (AC-PROJa, 1.2.8 row 25): the absolute Default Project root, read by the server's re-home route on every call.
  * Not a secret. Row 68f: set also before the folder exists (first launch), see launchDefaultProjectDir.
  */
-export const DEFAULT_PROJECT_DIR_KEY = "SWARM_DEFAULT_PROJECT_DIR"
+const DEFAULT_PROJECT_DIR_KEY = "SWARM_DEFAULT_PROJECT_DIR"
 export const RENDER_TOKEN_KEY = "DATUM_RENDER_TOKEN"
 
 /**
@@ -29,6 +29,7 @@ export const RENDER_TOKEN_KEY = "DATUM_RENDER_TOKEN"
  * 1.2.9 row 59 (AC-C10b, C7(d), C13 OP-15-3): the Documents folder itself (one level up, never further) is looked at
  * with lstat too. A linked Documents, also a dangling one, is not passed on: the person then sees "Default Project not
  * set up" rather than a root that lives somewhere else.
+ * @internal test seam
  */
 export function launchDefaultProjectDir() {
   const dir = defaultProjectDir()

@@ -30,10 +30,10 @@ export function resolveLocalFilePath(value: string) {
 // open-external channel can never reach Obsidian. This block imports only electron types (bun tests it directly).
 
 /** N8-115: the dedicated IPC channel. */
-export const OPEN_OBSIDIAN_NOTE_IPC = "open-obsidian-note"
+const OPEN_OBSIDIAN_NOTE_IPC = "open-obsidian-note"
 
 /** N8-115 / N8-116 result union (R20-C24: with "failed"). */
-export type ObsidianNoteResult = "opened" | "missing" | "outside" | "no-app" | "failed"
+type ObsidianNoteResult = "opened" | "missing" | "outside" | "no-app" | "failed"
 
 // Same rule as core Vault.root() and setup's VAULT_ROOT (drift test core/test/rel128-obs-a-vault-root.test.ts).
 const VAULT_DEFAULT_DIR = ".swarm/vault"
@@ -50,6 +50,7 @@ export function obsidianVaultRoot(env: Record<string, string | undefined> = proc
  * N8-436 (A6): an absolute `.md` path whose real path lies under `realpath(vaultRoot)/swarm-memory/`, a regular file
  * and not a symlink -> `{ url }` with `obsidian://open?path=<encoded real path>`; an absent file -> `missing`;
  * anything else -> `outside`.
+ * @internal test seam
  */
 export async function resolveObsidianNoteURL(
   hubPath: unknown,
@@ -91,10 +92,11 @@ const SHA256_HEX = /^[0-9a-f]{64}$/
 // the app (not only in current.json): tools.lock.json obsidian.team_id is still null, and 6JSW4SJWN9 is the value
 // setup's macSignatureCheck observed on the mounted v1.14.4 app and recorded as current.json observedTeamIdentifier
 // (packages/setup/src/steps/obsidian/index.ts). current.json's observedTeamIdentifier must equal it as well.
+/** @internal test seam */
 export const OBSIDIAN_TEAM_ID = "6JSW4SJWN9"
 const CODESIGN = "/usr/bin/codesign"
 
-export type StagedObsidianApp =
+type StagedObsidianApp =
   | { app: string }
   | { reason: "absent" }
   | { reason: "staged-invalid" | "staged-escape" | "staged-digest" | "staged-signature" }
@@ -110,7 +112,7 @@ async function sha256File(file: string) {
  * segment, app dir a real directory (not a symlink) whose real path stays under the real tool root, binary a regular
  * file inside the real app whose sha256 equals the pointer's appBinarySha256. No pointer or no app dir -> absent.
  */
-export async function resolveStagedObsidianApp(home: string): Promise<StagedObsidianApp> {
+async function resolveStagedObsidianApp(home: string): Promise<StagedObsidianApp> {
   const root = join(home, ...OBSIDIAN_TOOL_REL)
   const pointerFile = join(root, OBSIDIAN_POINTER)
   const pointerInfo = await lstat(pointerFile).catch(() => undefined)
@@ -143,13 +145,13 @@ export async function resolveStagedObsidianApp(home: string): Promise<StagedObsi
 }
 
 /** Row 42e: execFile's output; codesign -dvv prints its identity on stderr. */
-export type ExecFileOutput = { stdout: string; stderr: string }
+type ExecFileOutput = { stdout: string; stderr: string }
 
 /**
  * Row 42e (S-14): `codesign --verify --deep --strict <app>` succeeds and `codesign -dvv <app>` prints
  * TeamIdentifier=OBSIDIAN_TEAM_ID. Any rejection, missing output or other team -> false. execFile, no shell.
  */
-export async function verifyStagedObsidianSignature(
+async function verifyStagedObsidianSignature(
   app: string,
   execFile: (file: string, args: string[]) => Promise<ExecFileOutput | void>,
 ): Promise<boolean> {
@@ -164,7 +166,7 @@ export async function verifyStagedObsidianSignature(
   }
 }
 
-export type ObsidianNoteIpcDeps = {
+type ObsidianNoteIpcDeps = {
   ipcMain: Pick<IpcMain, "handle">
   windowOf: (sender: WebContents) => Pick<BrowserWindow, "isDestroyed" | "webContents"> | null
   isRendererUrl: (url: string | undefined) => boolean

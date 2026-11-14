@@ -6,12 +6,18 @@
 // This module keeps the implicit rule and lists the loopback hosts explicitly as well. Any bypass entries the person
 // passed on the command line are kept, so non-loopback traffic is routed exactly as before.
 
-/** Explicit loopback entries in Chromium ProxyBypassRules syntax (the same set as Chromium's implicit rule). */
+/**
+ * Explicit loopback entries in Chromium ProxyBypassRules syntax (the same set as Chromium's implicit rule).
+ * @internal test seam
+ */
 export const LOOPBACK_PROXY_BYPASS = ["localhost", "*.localhost", "127.0.0.1/8", "[::1]"] as const
 
 const SUBTRACT_IMPLICIT = "<-loopback>"
 
-/** The bypass list to hand Chromium: the existing entries minus `<-loopback>`, plus every loopback entry once. */
+/**
+ * The bypass list to hand Chromium: the existing entries minus `<-loopback>`, plus every loopback entry once.
+ * @internal test seam
+ */
 export function loopbackProxyBypassList(existing?: string | null): string {
   const items = (existing ?? "")
     .split(/[;,]/)

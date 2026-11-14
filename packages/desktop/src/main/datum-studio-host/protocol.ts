@@ -22,7 +22,7 @@ export type HostStartCommand = {
   /**
    * 1.2.8 SR8-05 (AC-SEC05, row 45c): per-launch Mission Control key, 32 random bytes hex, distinct from `token`.
    * Travels only in this message (never in env, argv, `datum-studio.env` or a log line). The mission client sends it
-   * as `x-swarm-mission-control-key` at initialize; the host marks that session attested on a timing-safe match.
+   * as `x-swarm-mission-control-key` on every request (since 1.2.9 row 50a); the host attests each request on a timing-safe match.
    * Optional on the wire: a start without it attests no session.
    */
   missionControlKey?: string
