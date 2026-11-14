@@ -90,13 +90,20 @@ describe("1.2.9 AC-C04 companion: REHOME_APPROVAL_MISSING maps to N9-044", () =>
   const approval =
     "Swarm could not confirm your answer for this move in DATUM Studio. Nothing was moved. Check that DATUM Studio is running, then try again."
 
+  // 1.2.9 row 68a (gate 68 F1, C80; INTENT): the messages the desktop really produces, the route's
+  // REFUSAL_TEXT.REHOME_APPROVAL_MISSING joined with the detail (desktop `rel129-68a-approval-detail.test.ts`).
+  const ROUTE_TEXT = "The move needs the person's answered decision for this mission."
+  const joined = (detail: string) => `${ROUTE_TEXT.replace(/\.$/, "")}: ${detail}`
+
   test("desktop detail ': decision' and ': decision unchecked' -> N9-044", () => {
-    for (const message of ["approval missing: decision", "approval missing: decision unchecked"])
+    for (const message of [joined("decision"), joined("decision unchecked")])
       expect({ message, text: moveErrorText({ code: "REHOME_APPROVAL_MISSING", message }, t) }).toEqual({ message, text: approval })
   })
 
   test("another REHOME_APPROVAL_MISSING detail keeps the generic failed text", () => {
     const text = moveErrorText({ code: "REHOME_APPROVAL_MISSING", message: "approvalRef missing" }, t)
     expect(text).toBe("The mission could not be moved: approvalRef missing")
+    // The unjoined route text (any other detail, row 68a) keeps the generic text too.
+    expect(moveErrorText({ code: "REHOME_APPROVAL_MISSING", message: ROUTE_TEXT }, t)).toBe(`The mission could not be moved: ${ROUTE_TEXT}`)
   })
 })

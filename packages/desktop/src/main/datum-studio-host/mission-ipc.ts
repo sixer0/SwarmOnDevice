@@ -203,13 +203,19 @@ export function createRehomeCaller(opts: {
       // row 68f (C175): a missing folder is named (relative to the Default Project; the route never sends a full path).
       const missing =
         err.code === "REHOME_FOLDER_MISSING" && typeof err.detail === "string" && typeof err.message === "string" && err.detail !== ""
+      // 1.2.9 row 68a (gate 68 F1, C80; N9-044): an answer the route could not confirm reaches the app as
+      // "<route text>: decision" / ": decision unchecked". Only these two fixed, path-free details are joined.
+      const approval =
+        err.code === "REHOME_APPROVAL_MISSING" &&
+        typeof err.message === "string" &&
+        (err.detail === "decision" || err.detail === "decision unchecked")
       if (response.status === 409 && typeof err.code === "string")
         return {
           ok: false,
           code: err.code,
           message: elsewhere
             ? (err.detail as string)
-            : missing
+            : missing || approval
               ? `${(err.message as string).replace(/\.$/, "")}: ${err.detail as string}`
               : typeof err.message === "string"
                 ? err.message
