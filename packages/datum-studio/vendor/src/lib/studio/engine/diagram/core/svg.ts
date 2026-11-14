@@ -639,6 +639,17 @@ export function markGlyphAnchor(nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spe
   }
   // Swarm 1.2.8 row 53 (VIS-1b): on a predefined process the glyph sits inside the right side bar.
   if (shape === "predefined") return { x: boxX - PREDEFINED_BAR_MM, y: boxY };
+  if (shape === "circle" && nd.w > 0 && nd.h > 0) {
+    // Swarm 1.2.9 row 28 (AC-A05, B9-A05): a circle is drawn in the middle of its slot, so the slot's top-right corner
+    // can lie far from the circle (dg_topology s1: slot 74.44 mm wide, mark 29.55 mm right of the rim). The box anchor
+    // is taken from the circle's own square; the slot anchor is kept only when it lies inside that square (a square
+    // slot: unchanged bytes). `curvedGlyphAnchor` then moves the glyph inside the rim when its ink touches it.
+    const r = Math.min(nd.w, nd.h) / 2;
+    const cx = nd.x + nd.w / 2;
+    const cy = nd.y + nd.h / 2;
+    const inSquare = boxX >= cx - r && boxX <= cx + r && boxY >= cy - r && boxY <= cy + r;
+    return curvedGlyphAnchor(nd, shape, inSquare ? boxX : cx + r - pad, inSquare ? boxY : cy - r + capMm, pad, capMm);
+  }
   if (shape === "hexagon" || shape === "cylinder" || shape === "circle" || shape === "bus") {
     return curvedGlyphAnchor(nd, shape, boxX, boxY, pad, capMm);
   }

@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10278202
+  "bytes": 10279041
  },
  "files": [
   {
@@ -2672,9 +2672,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/svg.ts",
    "status": "patched",
-   "bytes": 76527,
+   "bytes": 77366,
    "source_sha256": "6c1846b3c5b2966476dbe1fff3fe44283daea1c70eb7bf12d5b3fbece817c741",
-   "sha256": "f81e90d98b818beb8093e1cbcdd8a91338dec659a042d864ec5b6eca82d02e43",
+   "sha256": "51e92bd7a16cd87a7f0596896a2da7dbb1822b5bb875f77e42a5561098862f06",
+   "patch_row129-28": {"id": "129-28-a05-terukur-mark", "row": "28", "decision": "1.2.9 AC-A05 (B9-A05; N9-050, N9-104, N9-203; C2 ruling 2, 01a AT-A05)", "summary": "markGlyphAnchor, circle: the box anchor comes from the circle's own square (cx + r - pad, cy - r + caption size); the slot anchor is kept only when it lies inside that square (square slots unchanged); curvedGlyphAnchor then moves the glyph inside the rim as before. Hexagon, cylinder, bus and every other shape unchanged", "diff_base": "sha256 before this row", "before_sha256": "f81e90d98b818beb8093e1cbcdd8a91338dec659a042d864ec5b6eca82d02e43", "after_sha256": "51e92bd7a16cd87a7f0596896a2da7dbb1822b5bb875f77e42a5561098862f06", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/28_row28_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "5a29e88b1d6f7284108b0e468c688e4dc71b7846edd5bbafea7ac23e2325b568"},
    "patch_row129-26": {"id": "129-26-a02-zero-length", "row": "26", "decision": "1.2.9 AC-A02 (B9-A02; N9-101, N9-203; C12 OP13-1, 01a AT-A02)", "summary": "edgePathSvg (the link-path emitter) drops a vertex whose rounded pair equals the one before it (linkPathD; repeats draw nothing, so length, dash phase and the last direction stay); a point list marked by keepLinkRepeats (NEW export, WeakSet; legacy flows, C12) is drawn by polylineD as before; RoutedEdge.points, labels and polylineD itself unchanged", "diff_base": "sha256 before this row", "before_sha256": "00159f4f6a68f1c1a83178ac49e9f2e268c169957708b31eea394b6340039a2f", "after_sha256": "f81e90d98b818beb8093e1cbcdd8a91338dec659a042d864ec5b6eca82d02e43", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/26_row26_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "0bc07d5268d1becc706da47868b8d47cbe6b4cb8df4cb6566670de6db1df6b7c"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C119, C123)", "summary": "NEW shadowRectSvg and nodeShadowSvg (the offset shadow alone, shadowUnderlaySvg bytes unchanged); NodeSvgOptions.shadowDrawn: nodeSvg then draws only the paper interior; firstRenderLayout gives an untagged cylinder its below-the-lid layout when the centred label would cross the lid rim", "diff_base": "sha256 before this row", "before_sha256": "8bffe2a67ed2220a830c4f2dedfbb7e866205a748535478e69cd12e1016f33e8", "after_sha256": "00159f4f6a68f1c1a83178ac49e9f2e268c169957708b31eea394b6340039a2f", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "b00c013765ca15244f5ebd278a193e1faef48d99cae867969be4ba3c21c0e3fc"},
    "patch_row53b": {"id": "128-53b-shadow-double", "row": "53b", "decision": "1.2.8 row 53b (C75 item 3, Visio minimum; defects predating 1.2.8)", "summary": "NEW shadowUnderlaySvg (shadow rect + paper rect over the node box) drawn by nodeSvg before the hatch, so the offset shadow no longer shows through a shadowed node or crosses its tag (shapeSvg option shadowUnderlay); NEW DOUBLED_DIVIDER_CLEAR_MM (0.4) and doubledDividerY: the doubled divider sits centred in the band between the text block's ink bottom (nodeTextBottom, shapeSvg option textBottomMm) and the inner rectangle, or is omitted when that band is < 0.8 mm (was h/2 through the label)", "diff_base": "sha256 before this row", "before_sha256": "2e4fd3ac098cfa674e0c5096b275c385e104bb058b7ba4ea626d3ac903d59481", "after_sha256": "8bffe2a67ed2220a830c4f2dedfbb7e866205a748535478e69cd12e1016f33e8", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53b_row53b_diffs/engine_diagram_core_svg.ts.diff", "diff_sha256": "a978e213cf1721a0d39474b58e07afb0988b45aa0a89acfc9fe6cdc12a0fc569"},
@@ -6425,6 +6426,7 @@
   "129-26-a02-zero-length",
   "129-35-a11b-bpmn-layout",
   "129-27-a04-label-dash",
-  "129-32-a10a-header-text"
+  "129-32-a10a-header-text",
+  "129-28-a05-terukur-mark"
  ]
 }
