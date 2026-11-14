@@ -44,6 +44,7 @@ const CHECK: Record<string, string> = {
   frameOutside: "GEOM_FRAME_OUTSIDE",
   edgeOutside: "GEOM_EDGE_OUTSIDE",
   edgeEndOffNode: "GEOM_EDGE_END",
+  edgeAlongOutline: "GEOM_EDGE_ALONG", // Swarm 1.2.9 row 31 (AC-A09, INTENT): B1 TIDAK along Data E now fails FIGURE_FIT
 }
 
 // ── the preview a stored block gets ───────────────────────────────────────────────────────────────────────────────

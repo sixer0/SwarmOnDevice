@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10264373
+  "bytes": 10269811
  },
  "files": [
   {
@@ -2341,9 +2341,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/autofit.ts",
    "status": "patched",
-   "bytes": 12527,
+   "bytes": 12880,
    "source_sha256": "e8181cb03a8dc05e23bf097df9514065fcbde0e2811b597e47dc1745352f3b9b",
-   "sha256": "3ba670da28b2036887e475afe19989140b22600a80984866ecca470b3c254e62",
+   "sha256": "fe31631e38fad074d872a889de259b55d99b4bdda8eb249775dcc196628850f4",
+   "patch_row129-31": {"id": "129-31-a09-edge-along", "row": "31", "decision": "1.2.9 AC-A09 (B9-A09; N9-020, N9-021, N9-025; C2 ruling 1, C10(d))", "summary": "CHECK/WHAT/SUGGEST entries for the new kind edgeAlongOutline: GEOM_EDGE_ALONG (N9-021, the Q1 sweep found 0 unintended flips), 'garis menyusuri tepi simpul lain', 'geser simpul atau atur via agar garis tidak menempel di tepi simpul lain'; ROUTE_KINDS and the auto-fit choice unchanged", "diff_base": "sha256 before this row", "before_sha256": "3ba670da28b2036887e475afe19989140b22600a80984866ecca470b3c254e62", "after_sha256": "fe31631e38fad074d872a889de259b55d99b4bdda8eb249775dcc196628850f4", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/31_row31_diffs/engine_diagram_build_autofit.ts.diff", "diff_sha256": "29e16b3ff5b250262d7114399ea769c502baaebd4f0494c74317601610495d2c"},
    "patch_row68a": {"id": "128-68a-via-glue-live", "row": "68a", "decision": "C166 (1.2.8 row 68a; final live check FAIL 68a)", "summary": "CHECK/WHAT/SUGGEST entries for the new kinds edgeOutside (GEOM_EDGE_OUTSIDE) and edgeEndOffNode (GEOM_EDGE_END); edgeThroughNode suggestion names the own-node case (route orthogonal or another side)", "diff_base": "sha256 before this row", "before_sha256": "b11c6fcd1b236f12828e2629a772946a99089f0b6af1ef3b7a5fe2b47896d8f7", "after_sha256": "3ba670da28b2036887e475afe19989140b22600a80984866ecca470b3c254e62", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/68a_row68a_diffs/engine_diagram_build_autofit.ts.diff", "diff_sha256": "f92bfeb92f1f8273290e0eea4aa089f7561eef600af3ea1ab1b59a958c89bc4e"},
    "patch_row55c": {"id": "128-55c-frame-hop", "row": "55c", "decision": "C133, C134 (1.2.8 row 55c; M3 gate G3-01, G3-02, G3-15)", "summary": "CHECK/WHAT/SUGGEST entries for frameOutside (GEOM_FRAME_OUTSIDE); out of area, Record<DiagramDefectKind> needs them", "diff_base": "sha256 before this row", "before_sha256": "eb8b4aff5436cca6f199f687bc3f24d479dac08fd9bdf99b73dba4d76ffb17fc", "after_sha256": "b11c6fcd1b236f12828e2629a772946a99089f0b6af1ef3b7a5fe2b47896d8f7", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55c_row55c_diffs/engine_diagram_build_autofit.ts.diff", "diff_sha256": "f6bbac7679f215d7f544c33ea8eabc430e597a5a321c57925eb57dbd35218c12"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C71, C86, C101, C102, C111, C116, C119, C121, C123; user item 7; out of area under V-autofit)", "summary": "CHECK/WHAT/SUGGEST entries of the new geometry kind labelCollision (GEOM_LABEL_COLLISION)", "diff_base": "sha256 before this row", "before_sha256": "67c28c94adb892863afd835beb5a1a0e5ed9d880baa62ad865538e30730deb9e", "after_sha256": "eb8b4aff5436cca6f199f687bc3f24d479dac08fd9bdf99b73dba4d76ffb17fc", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_build_autofit.ts.diff", "diff_sha256": "e331068d1c91d9bba2e710f70f318262533b6d9d52df4248937515ccbc2dfbd6"},
@@ -2777,9 +2778,10 @@
   {
    "path": "src/lib/studio/engine/diagram/fit/lint.ts",
    "status": "patched",
-   "bytes": 57530,
+   "bytes": 62615,
    "source_sha256": "2b169e21faaa4064307ab8fdcec45c0b7a0d4f9d2982ebc56094d3a704ebc3d8",
-   "sha256": "c42c5aa54fc5e5c6a56145ae5829bf1608cad6eac1191f3d50ca8a66a990f358",
+   "sha256": "14a217926f8f1c8aa7c6180db9739df091e3d24fcc6330c17f6632bf38ec750f",
+   "patch_row129-31": {"id": "129-31-a09-edge-along", "row": "31", "decision": "1.2.9 AC-A09 (B9-A09; N9-020, N9-023, N9-024; C2 ruling 1, C10(d), C12 D-1)", "summary": "NEW kind edgeAlongOutline (T03_KINDS member: counted, outside score, so no figure changes bytes): a connector step (the first step not against the node its start lies on, the last not against the node its end lies on) that lies along a visible data-node outline (rect, polygon, path; tangent to a circle) over at least EDGE_ALONG_MIN_MM (NEW 1.0) within link half-width + node half-stroke + EDGE_ALONG_TOL_MM (NEW 0.1); one defect per connector and node with the longest run; NodeShape.hidden for stroke=none outlines (annotation lint box)", "diff_base": "sha256 before this row", "before_sha256": "c42c5aa54fc5e5c6a56145ae5829bf1608cad6eac1191f3d50ca8a66a990f358", "after_sha256": "14a217926f8f1c8aa7c6180db9739df091e3d24fcc6330c17f6632bf38ec750f", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/31_row31_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "f50f15238063598d15813ca2700bdf54695c3ee7c6ad93198e91e1c7fe0e9ba9"},
    "patch_row68a": {"id": "128-68a-via-glue-live", "row": "68a", "decision": "C166 (1.2.8 row 68a; final live check FAIL 68a)", "summary": "connectorEnds: edgeThroughNode also for a connector through its own end node (beyond OWN_NODE_END_MM, NEW 1.5); NEW kinds edgeOutside (stroke past the figure box by > EDGE_OUTSIDE_MIN_MM, NEW 0.05) and edgeEndOffNode (target end, or a start with a head, farther than EDGE_END_ON_NODE_MM, NEW 1.2, from every node outline, not inside a node, not under an event label block, not on a sequence lifeline); both counted and FIGURE_FIT fail kinds, outside score like the T-03 kinds", "diff_base": "sha256 before this row", "before_sha256": "31cd8bc7795070feb2c03726337414fc3a333678fc71c848bec08c7d6a1a2f7a", "after_sha256": "c42c5aa54fc5e5c6a56145ae5829bf1608cad6eac1191f3d50ca8a66a990f358", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/68a_row68a_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "16c94a2a8e60fa0dad4ff2eb9f28b2bc4772f6f3e7fd3b6ccb6155c91fdec801"},
    "patch_row55c": {"id": "128-55c-frame-hop", "row": "55c", "decision": "C133, C134 (1.2.8 row 55c; M3 gate G3-01, G3-02, G3-15)", "summary": "NEW kind frameOutside (in score; FIGURE_FIT fail kind): a container frame (unmarked stroked line, unfilled rect of primary stroke or dashed: pool/lane box, lane/phase/pool rule, zone/group outline; a leader before its band is not one) whose centre line runs past the figure box by more than FRAME_OUTSIDE_MIN_MM (NEW, 0.05); scan reads frames", "diff_base": "sha256 before this row", "before_sha256": "bd8ce7ba6c83a493de99a41e0211241c09803cc0309ce25c92bb42f748005db7", "after_sha256": "31cd8bc7795070feb2c03726337414fc3a333678fc71c848bec08c7d6a1a2f7a", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/55c_row55c_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "b5a5535d5a245bf8b34023bf87f8b7364e5d128cced90be83b83477253c04d0a"},
    "patch_row57c": {"id": "128-57c-label-placement", "row": "57c", "decision": "1.2.8 row 57c (C71, C86, C101, C102, C116, C119)", "summary": "NEW kind labelCollision (in score): an edge-label band over an arrowhead (marker size from defs), across a node outline, or across a container rule (solid unmarked line, primary-stroke unfilled rect; a leader before its band is not a rule) where no connector runs along it; scan reads markers, heads per link, rules, band texts; NEW headQuad, polyHitsBox, labelCollisions, decorationOf, LABEL_COLLISION_EPS_MM, HeadSize; a label-below block wholly right of its outline (label beside) is placed", "diff_base": "sha256 before this row", "before_sha256": "84a6736ab16e730c7d8c8ee3b932a1c353798721cbf9f7a2a731ac1ab63662a4", "after_sha256": "bd8ce7ba6c83a493de99a41e0211241c09803cc0309ce25c92bb42f748005db7", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57c_row57c_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "dc17593b0b27f08e67fe81f5d9ad5a3ca4ed4df91dad3377cc888c7235ce82b8"},
@@ -6412,6 +6414,7 @@
   "68a",
   "129-37-a12a-preview-backup",
   "129-25-a01-route-split",
-  "129-39-a13-render-desc"
+  "129-39-a13-render-desc",
+  "129-31-a09-edge-along"
  ]
 }

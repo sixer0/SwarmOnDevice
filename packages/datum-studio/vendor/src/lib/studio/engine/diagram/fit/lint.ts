@@ -65,7 +65,8 @@ export type DiagramDefectKind =
   | "labelCollision"
   | "frameOutside"
   | "edgeOutside"
-  | "edgeEndOffNode";
+  | "edgeEndOffNode"
+  | "edgeAlongOutline";
 
 export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "textOverlap",
@@ -83,6 +84,7 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "frameOutside",
   "edgeOutside",
   "edgeEndOffNode",
+  "edgeAlongOutline",
 ];
 
 /**
@@ -92,6 +94,16 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
  * the caption band.
  */
 export const EDGE_OUTSIDE_MIN_MM = 0.05;
+
+/**
+ * Swarm 1.2.9 row 31 (AC-A09, register N9-020, N9-023, N9-024; C12 D-1: values fixed, no tuning after the Q1 sweep).
+ * `edgeAlongOutline`: a connector segment (not the segment that ends on that node) that lies on an outline segment of
+ * another node (`data-node` rect, polygon, path; a circle it runs tangent to) over at least `EDGE_ALONG_MIN_MM`, within
+ * the connector's half width + the node's half stroke + `EDGE_ALONG_TOL_MM`. The reader takes such a run for part of
+ * the node's border (1.2.8 B1: `tidak` ran 11.89 mm down the side of Data E). Container and zone frames are not nodes.
+ */
+export const EDGE_ALONG_MIN_MM = 1.0;
+export const EDGE_ALONG_TOL_MM = 0.1;
 
 /**
  * Swarm 1.2.8 row 68a (C166 (4); kind `edgeEndOffNode`, check id GEOM_EDGE_END): a connector end (start or end, with or
@@ -131,7 +143,15 @@ export const ENTRY_COLLISION_MM = 1.5;
  * two connector-end kinds `edgeOutside` and `edgeEndOffNode` join them (auto-fit has no move that fixes a via or a glued
  * side; the figures it keeps today keep their bytes).
  */
-const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set(["edgeEntryCollision", "stubSegment", "arrowTangent", "edgeOutside", "edgeEndOffNode"]);
+const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
+  "edgeEntryCollision",
+  "stubSegment",
+  "arrowTangent",
+  "edgeOutside",
+  "edgeEndOffNode",
+  // Swarm 1.2.9 row 31 (AC-A09): outside `score` and auto-fit's ROUTE_KINDS, so no figure changes bytes.
+  "edgeAlongOutline",
+]);
 export const STUB_SEGMENT_MIN_MM = 2.0;
 /** Row 53 (H-TAG): tolerance of the tag-inside-outline check (0.01 mm output grid plus float noise). */
 const TAG_OUTSIDE_MIN_MM = 0.05;
@@ -182,6 +202,8 @@ interface NodeShape {
   rx?: number;
   half: number;
   box: Box;
+  /** Swarm 1.2.9 row 31: drawn with `stroke="none"` (the annotation's lint box); no visible outline to run along. */
+  hidden?: boolean;
 }
 
 function onPolylines(p: Pt, pls: readonly (readonly Pt[])[], half: number): boolean {
@@ -493,7 +515,7 @@ function scan(svg: string): Scan {
       ? [circle.cx - circle.r, circle.cy - circle.r, circle.cx + circle.r, circle.cy + circle.r]
       : bboxOf(outline.flat());
     if (!Number.isFinite(box[0])) continue;
-    nodes.push({ id: nodeId ?? null, outline, circle, ...(rx !== undefined ? { rx } : {}), half, box });
+    nodes.push({ id: nodeId ?? null, outline, circle, ...(rx !== undefined ? { rx } : {}), half, box, ...(a.stroke === "none" ? { hidden: true } : {}) });
   }
   return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, frames };
 }
@@ -1063,6 +1085,92 @@ export function labelCollisions(
   return out;
 }
 
+/**
+ * Swarm 1.2.9 row 31 (AC-A09, N9-020): length (mm) of segment a-b that lies along the outline of node n, within `tol`
+ * of it. Polyline outlines: per outline segment, the part of a-b whose projection falls on it and whose two ends are
+ * within `tol` of it (distance to a segment is convex along a line, so the whole part is); the parts are joined.
+ * Circle: the part of a-b within `tol` of the rim (a connector tangent to the circle), sampled every 0.05 mm.
+ */
+function alongLength(a: Pt, b: Pt, n: NodeShape, tol: number): number {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (L < 1e-9) return 0;
+  const ux = (b[0] - a[0]) / L;
+  const uy = (b[1] - a[1]) / L;
+  const at = (t: number): Pt => [a[0] + ux * t, a[1] + uy * t];
+  if (n.circle) {
+    const c = n.circle;
+    const steps = Math.max(1, Math.ceil(L / 0.05));
+    let len = 0;
+    for (let i = 0; i < steps; i++) {
+      const p = at(((i + 0.5) * L) / steps);
+      if (Math.abs(Math.hypot(p[0] - c.cx, p[1] - c.cy) - c.r) <= tol) len += L / steps;
+    }
+    return len;
+  }
+  const parts: [number, number][] = [];
+  for (const ol of n.outline) {
+    for (let k = 0; k + 1 < ol.length; k++) {
+      const c = ol[k];
+      const d = ol[k + 1];
+      const tc = (c[0] - a[0]) * ux + (c[1] - a[1]) * uy;
+      const td = (d[0] - a[0]) * ux + (d[1] - a[1]) * uy;
+      const t0 = Math.max(0, Math.min(tc, td));
+      const t1 = Math.min(L, Math.max(tc, td));
+      if (t1 - t0 < 1e-9) continue;
+      if (segDist(at(t0), c, d) <= tol && segDist(at(t1), c, d) <= tol) parts.push([t0, t1]);
+    }
+  }
+  parts.sort((p, q) => p[0] - q[0]);
+  let len = 0;
+  let end = -Infinity;
+  for (const [s, e] of parts) {
+    if (e <= end) continue;
+    len += e - Math.max(s, end);
+    end = e;
+  }
+  return len;
+}
+
+/**
+ * Swarm 1.2.9 row 31 (AC-A09, N9-020): connectors that run along the outline of another node (see `EDGE_ALONG_MIN_MM`).
+ * Each straight step of a connector is measured against each visible `data-node` outline; the first step is not
+ * measured against the node its start lies on, the last step not against the node its end lies on (box grown by
+ * `EDGE_END_ON_NODE_MM`; how a connector meets its own end node is `arrowTangent`). One entry per connector and node,
+ * with the longest run.
+ */
+function edgesAlongOutlines(
+  links: ReadonlyArray<ReadonlyArray<Pt>>,
+  linkHalf: readonly number[],
+  nodes: readonly NodeShape[],
+): Array<{ link: number; node: number; length: number }> {
+  const out: Array<{ link: number; node: number; length: number }> = [];
+  const on = (p: Pt, n: NodeShape) =>
+    p[0] >= n.box[0] - EDGE_END_ON_NODE_MM && p[0] <= n.box[2] + EDGE_END_ON_NODE_MM && p[1] >= n.box[1] - EDGE_END_ON_NODE_MM && p[1] <= n.box[3] + EDGE_END_ON_NODE_MM;
+  links.forEach((raw, li) => {
+    const pts: Pt[] = [];
+    for (const p of raw) {
+      const q = pts[pts.length - 1];
+      if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6) pts.push(p);
+    }
+    if (pts.length < 2) return;
+    const lb = bboxOf(pts);
+    nodes.forEach((n, ni) => {
+      if (n.id === null || n.hidden) return;
+      const tol = (linkHalf[li] ?? 0) + n.half + EDGE_ALONG_TOL_MM;
+      if (lb[2] + tol < n.box[0] || lb[0] - tol > n.box[2] || lb[3] + tol < n.box[1] || lb[1] - tol > n.box[3]) return;
+      const fromHere = on(pts[0], n);
+      const toHere = on(pts[pts.length - 1], n);
+      let best = 0;
+      for (let k = 0; k + 1 < pts.length; k++) {
+        if ((k === 0 && fromHere) || (k + 2 === pts.length && toHere)) continue;
+        best = Math.max(best, alongLength(pts[k], pts[k + 1], n, tol));
+      }
+      if (best >= EDGE_ALONG_MIN_MM - 1e-9) out.push({ link: li, node: ni, length: best });
+    });
+  });
+  return out;
+}
+
 function emptyCounts(): Record<DiagramDefectKind, number> {
   return {
     textOverlap: 0,
@@ -1080,6 +1188,7 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
     frameOutside: 0,
     edgeOutside: 0,
     edgeEndOffNode: 0,
+    edgeAlongOutline: 0,
   };
 }
 
@@ -1219,6 +1328,10 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
   }
   // Row 68a (C166): connector ends on their nodes, never through their own node, and inside the figure.
   for (const d of connectorEnds(W, H, links, linkHalf, linkStart, nodes, texts, frames)) defects.push(d);
+  // Swarm 1.2.9 row 31 (AC-A09): a connector running along another node's outline.
+  for (const a of edgesAlongOutlines(links, linkHalf, nodes)) {
+    defects.push({ kind: "edgeAlongOutline", text: `konektor ${a.link}`, other: nodeName(a.node), amount: Number(a.length.toFixed(2)) });
+  }
   const counts = emptyCounts();
   for (const d of defects) counts[d.kind]++;
   return { widthMm: W, heightMm: H, counts, defects, score: defects.filter((d) => !T03_KINDS.has(d.kind)).length };

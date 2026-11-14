@@ -323,6 +323,9 @@ export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   // Swarm 1.2.8 row 68a (C166): a connector past the figure box and a connector end on no node outline (11 -> 13).
   "edgeOutside",
   "edgeEndOffNode",
+  // Swarm 1.2.9 row 31 (AC-A09, C10(d)): a connector running along another node's outline (GEOM_EDGE_ALONG) fails too;
+  // the Q1 sweep over every fixture and example (410 renders) found 0 unintended flips (13 -> 14).
+  "edgeAlongOutline",
 ])
 
 /**
