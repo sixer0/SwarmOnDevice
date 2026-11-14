@@ -42,7 +42,7 @@ import * as SessionToolsModule from "../../src/session/tools"
 import * as InstanceStateModule from "../../src/effect/instance-state"
 
 const { AutonomyTable } = TableModule
-const Reach = ReachModule.Reach as typeof ReachModule.Reach & Record<string, any>
+const Reach = ReachModule.Reach
 const Skill = SkillModule.Skill
 const Permission = PermissionModule.Permission
 
@@ -74,7 +74,7 @@ beforeAll(async () => {
 })
 afterAll(async () => {
   for (const spy of spies) spy.mockRestore()
-  Reach.forgetSkillFolders?.()
+  Reach.forgetSkillFolders()
   rmSync(home, { recursive: true, force: true })
   await fixture[Symbol.asyncDispose]()
 })
@@ -158,7 +158,7 @@ describe("SK-e Reach.editTrust: a skill-folder file is refused before any prompt
   })
 
   test("a folder only the Skill service names (skills.paths): read from Skill.Service.folders()", async () => {
-    Reach.forgetSkillFolders?.()
+    Reach.forgetSkillFolders()
     const custom = path.join(dir, "custom")
     const service = Skill.Service.of({
       get: () => Effect.succeed(undefined),
@@ -174,7 +174,7 @@ describe("SK-e Reach.editTrust: a skill-folder file is refused before any prompt
       ),
     )
     expect(refusedWith(exit)).toBe(N8_058)
-    Reach.forgetSkillFolders?.()
+    Reach.forgetSkillFolders()
   })
 
   test("a checkout file that is not a discovered folder (src/skill/mission-control.md) is unaffected", async () => {
@@ -183,11 +183,11 @@ describe("SK-e Reach.editTrust: a skill-folder file is refused before any prompt
   })
 
   test("SR8-10: a SKILL.md at the project root makes the project root no skill folder; src/x.ts is unaffected", async () => {
-    Reach.rememberSkillFolders?.(instance, [dir, home, "/"])
+    Reach.rememberSkillFolders(instance, [dir, home, "/"])
     expect(Exit.isSuccess(await trust([path.join(dir, "src/x.ts")]))).toBe(true)
     expect(refusedWith(await trust([path.join(dir, "SKILL.md")]))).toBe(N8_058)
     expect(refusedWith(await trust([path.join(dir, "docs/Skill.MD")]))).toBe(N8_058)
-    Reach.forgetSkillFolders?.()
+    Reach.forgetSkillFolders()
   })
 })
 
@@ -313,7 +313,7 @@ describe("SK-e the edit tools: refused without asking, mode on and off, with an 
 // edit tool asked the service (the autonomy table judges a shell write against it, and the edit tools refuse it).
 describe("SK-e row 40h: skill folder before the outside-folder prompt, and the Skill folders known from tool resolve", () => {
   afterEach(async () => {
-    Reach.forgetSkillFolders?.()
+    Reach.forgetSkillFolders()
     await disposeAllInstances()
   })
   // A skills.paths folder outside the project, only the Skill service names it.
@@ -441,10 +441,10 @@ describe("SK-e row 40h: skill folder before the outside-folder prompt, and the S
     Effect.gen(function* () {
       const context = yield* InstanceStateModule.InstanceState.context
       const file = path.join(extra(), "x/run.sh")
-      Reach.forgetSkillFolders?.()
-      expect(Reach.skillFolder?.(file, context) ?? false).toBe(false)
+      Reach.forgetSkillFolders()
+      expect(Reach.skillFolder(file, context)).toBe(false)
       yield* resolve()
-      expect(Reach.skillFolder?.(file, context) ?? false).toBe(true)
+      expect(Reach.skillFolder(file, context)).toBe(true)
       // The autonomy table (mode on, no service to ask) refuses a shell write there on this first call.
       const command = `echo synthetic > ${file}`
       const verdict = AutonomyTable.classifyBase({

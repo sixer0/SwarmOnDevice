@@ -69,19 +69,21 @@ async function side(command: string, agent: string | undefined, caller: "root" |
   return AutonomyTable.SUBAGENT_RUNS_LIKE_ROOT.has(verdict.bypassed) && !AutonomyTable.subagentSendsAnyway(call) ? "runs" : "held"
 }
 
-// Each form with the folder the shell runs the look in; undefined where the shell's folder is not known from the text.
-const FORMS: [string, () => string | undefined][] = [
-  ["cd sub && cat s.md", () => path.join(dir, "sub")],
-  ["cd ./sub && cat s.md", () => path.join(dir, "sub")],
-  ["cd sub/deep/.. && cat s.md", () => path.join(dir, "sub")],
-  ["cd sub/deep && cat ../s.md", () => path.join(dir, "sub/deep")],
-  ['cd "my dir" && cat s.md', () => path.join(dir, "my dir")],
-  ["cd 'sub' && cat s.md", () => path.join(dir, "sub")],
-  ["cd ~ && cat s.md", () => home],
-  ["cd $HOME && cat s.md", () => home],
-  ["cd && cat s.md", () => home],
-  ["cd - && cat s.md", () => undefined],
-  ["pushd sub && cat s.md", () => path.join(dir, "sub")],
+// Each form with the folder the shell runs the look in (undefined where the shell's folder is not known from the text) and
+// whether the table takes a reading with a look in it, measured at BASE d4282fcfd8 (1.2.9 row 46, AC-B07a). `cd && cat s.md`
+// and `cd - && cat s.md` are the two the table does not read; every other form is.
+const FORMS: [string, () => string | undefined, boolean][] = [
+  ["cd sub && cat s.md", () => path.join(dir, "sub"), true],
+  ["cd ./sub && cat s.md", () => path.join(dir, "sub"), true],
+  ["cd sub/deep/.. && cat s.md", () => path.join(dir, "sub"), true],
+  ["cd sub/deep && cat ../s.md", () => path.join(dir, "sub/deep"), true],
+  ['cd "my dir" && cat s.md', () => path.join(dir, "my dir"), true],
+  ["cd 'sub' && cat s.md", () => path.join(dir, "sub"), true],
+  ["cd ~ && cat s.md", () => home, true],
+  ["cd $HOME && cat s.md", () => home, true],
+  ["cd && cat s.md", () => home, false],
+  ["cd - && cat s.md", () => undefined, false],
+  ["pushd sub && cat s.md", () => path.join(dir, "sub"), true],
 ]
 
 describe("R-2 cd PROBE: the read-class walker and the table's walkers land a cd form on one side", () => {
@@ -99,15 +101,22 @@ describe("R-2 cd PROBE: the read-class walker and the table's walkers land a cd 
 })
 
 describe("R-2 cd PROBE: the shell's reading the table takes names the folder the shell runs in", () => {
-  for (const [command, folder] of FORMS)
+  for (const [command, folder, taken] of FORMS)
     test(command, async () => {
       const reading = AutonomyTable.shellReading(await readSteps(command, dir), instance)
       const look = reading?.steps.find((step) => step.argv[0] === "cat")
-      // Not taken, or no look in it: nothing names a wrong folder.
+      // 1.2.9 row 46 (AC-B07a): whether the reading is taken is pinned per form, so a form that stops being read, or a look that
+      // is never found, fails here instead of passing without a check.
+      expect({ command, taken: look !== undefined }).toEqual({ command, taken })
       if (look === undefined) return
       const expected = folder()
       expect({ command, cwds: look.cwds }).toEqual({ command, cwds: expected === undefined ? [] : [expected] })
     })
+
+  // The pin above holds only if some form is taken at all: nine of the eleven are, measured at BASE.
+  test("the forms the table reads are not zero", () => {
+    expect(FORMS.filter(([, , taken]) => taken).length).toBe(9)
+  })
 })
 
 describe("R-2 cd PROBE: a write after a folder change is judged where it lands", () => {
