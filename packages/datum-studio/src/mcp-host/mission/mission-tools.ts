@@ -186,12 +186,23 @@ export function sessionOf(args: Record<string, unknown>, s: HostToolSession): Se
  * Row 188: session links inside a create's MissionDoc (`mission.sessions`) get the same rule: an entry of this agent
  * with a ref the store would refuse becomes the calling session (or is dropped); an invalid entry of another client
  * is dropped. Each change is noted. Entries that are not objects are left for the schema check.
+ * 1.2.9 row 52 (AC-C03, N9-010; C13 OP-15-2): a WELL-FORMED link-client ref is linked only when it is this agent's
+ * calling session (H-N12 per entry). Another ref of this agent is replaced by the calling session; with no calling
+ * session known, or for another link client, the entry is dropped (not refused). One SESSION_REF_IGNORED note per
+ * entry (refs and client ids only). Links are deduplicated by (client, ref) after replacement.
  */
 export function normalizeDocSessions(args: Record<string, unknown>, s: HostToolSession): void {
   const m = args.mission as Record<string, unknown> | undefined
   if (!m || typeof m !== "object" || !Array.isArray(m.sessions)) return
   const known = callerRef(s)
   const out: unknown[] = []
+  const linked = new Set<string>()
+  const push = (link: Record<string, unknown>, client: string) => {
+    const key = `${client}\u0000${String(link.ref)}`
+    if (linked.has(key)) return
+    linked.add(key)
+    out.push(link)
+  }
   for (const e of m.sessions as unknown[]) {
     if (!e || typeof e !== "object" || Array.isArray(e)) {
       out.push(e)
@@ -199,13 +210,23 @@ export function normalizeDocSessions(args: Record<string, unknown>, s: HostToolS
     }
     const link = e as Record<string, unknown>
     const client = typeof link.client === "string" ? link.client : s.agentId
-    if (!LINK_CLIENTS.has(client) || validSessionRef(client, link.ref)) {
+    if (!LINK_CLIENTS.has(client)) {
       out.push(e)
+      continue
+    }
+    if (validSessionRef(client, link.ref)) {
+      if (client !== s.agentId) note(args, `SESSION_REF_IGNORED: mission.sessions entry of client ${client} was dropped (only the calling session is linked)`)
+      else if (!known) note(args, `SESSION_REF_IGNORED: mission.sessions ref ${link.ref} cannot be checked (the calling session is unknown); that entry was dropped`)
+      else if (link.ref === known) push(link, client)
+      else {
+        note(args, `SESSION_REF_IGNORED: mission.sessions ref ${link.ref} is not the calling session; linked the calling session ${known} instead`)
+        push({ ...link, client, ref: known }, client)
+      }
       continue
     }
     if (client === s.agentId && known) {
       note(args, `mission.sessions: ref is not a ${client} session id; the calling session ${known} is linked instead`)
-      out.push({ ...link, client, ref: known })
+      push({ ...link, client, ref: known }, client)
     } else note(args, `mission.sessions: ref is not a ${client} session id; that entry was dropped (omit sessions; Swarm links the calling session)`)
   }
   m.sessions = out
