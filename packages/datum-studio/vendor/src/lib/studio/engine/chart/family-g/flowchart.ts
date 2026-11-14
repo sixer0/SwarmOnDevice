@@ -161,6 +161,10 @@ export function renderFlowchart(spec: StudioChartV1, canvas: ChartCanvas, tpl: R
   let sy = area.h / bh;
   if (sx > sy * 2.5) sx = sy * 2.5;
   if (sy > sx * 1.5) sy = sx * 1.5;
+  // Swarm 1.2.9 row 34 (AC-A11a, N9-077): a chart with a label-below BPMN shape maps with one uniform scale, centred,
+  // so event outlines stay circles and the connector ends `routePlaced` glued onto them stay on their rims. Charts
+  // without such a shape keep the two-axis scale above (g04 byte-identical, C10(f)).
+  if (nodes.some((n) => isLabelBelow(n.spec.shape))) sx = sy = Math.min(sx, sy);
   const ox = area.x + (area.w - bw * sx) / 2;
   const oy = area.y + (area.h - bh * sy) / 2;
   const map = (x: number, y: number): Pt => ({ x: ox + (x - bx) * sx, y: oy + (y - by) * sy });
@@ -420,7 +424,7 @@ function drawLabelBelow(ctx: GCtx, n: SheetNode, b: Box, o: { mark: { mark: "nod
   return fit.fits;
 }
 
-/** Row 54b: closed ellipse as two arcs (chart outlines may be curved; the chart scale is not uniform). */
+/** Row 54b: closed ellipse as two arcs. 1.2.9 row 34: with a label-below shape the chart scale is uniform, so rx = ry. */
 function ellipseD(cx: number, cy: number, rx: number, ry: number): string {
   return `M${num(cx - rx)} ${num(cy)}A${num(rx)} ${num(ry)} 0 1 0 ${num(cx + rx)} ${num(cy)}A${num(rx)} ${num(ry)} 0 1 0 ${num(cx - rx)} ${num(cy)}Z`;
 }
