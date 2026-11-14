@@ -238,6 +238,65 @@ describe("Rehome.run (AC-PROJc, N8-364)", () => {
     expect([await fileHash(storeOf(R)), await fileHash(storeOf(path.join(R, "Lumen")))]).toEqual(stores)
   })
 
+  // 1.2.8 row 68c: request ids are per mission, so the replay check keyed on the request id alone returned tidy A's
+  // D-1 result for tidy B's D-1 move of the same mission and moved nothing. Red at d8552cf94f.
+  test("the same request id held by another mission is not a replay: the second move really moves", async () => {
+    const rehome = Rehome.make(ports())
+    const lumen = path.join(R, "Lumen")
+    const a = await rehome.run(call({ approvalRef: "D-1", approvalMission: "2026-11-14_tidy-a" }))
+    if (!("journalId" in a)) throw new Error(JSON.stringify(a))
+    // Tidy A's move is reversed (its place failed), so the mission is at the root again.
+    const back = await rehome.run(call({ from: lumen, to: R, approvalRef: "D-1", compensates: a.journalId }))
+    if (!("journalId" in back)) throw new Error(JSON.stringify(back))
+    expect((await fs.stat(path.join(R, "docs", MISSION))).isDirectory()).toBe(true)
+    expect(sessions.get("ses_mission")?.directory).toBe(R)
+
+    const b = await rehome.run(call({ approvalRef: "D-1", approvalMission: "2026-11-14_tidy-b" }))
+    expect(`${"replayed" in b} ${"journalId" in b && b.journalId !== a.journalId}`).toBe("false true")
+    expect((await fs.stat(path.join(lumen, "docs", MISSION))).isDirectory()).toBe(true)
+    expect(await fs.lstat(path.join(R, "docs", MISSION)).catch(() => undefined)).toBeUndefined()
+    expect(sessions.get("ses_mission")?.directory).toBe(lumen)
+    expect(published).toHaveLength(3)
+
+    // A true repeat of tidy B's move is still a replay that changes nothing.
+    const tree = await treeHash(R)
+    expect(await rehome.run(call({ approvalRef: "D-1", approvalMission: "2026-11-14_tidy-b" }))).toEqual({
+      journalId: (b as { journalId: string }).journalId,
+      moved: (b as { moved: Rehome.Moved }).moved,
+      replayed: true,
+    })
+    expect(await treeHash(R)).toBe(tree)
+    expect(published).toHaveLength(3)
+  })
+
+  // Row 68c: a call without approvalMission cannot prove which mission holds its request: it replays only a journal
+  // without approvalMission whose folder is still where that journal put it; once the mission is back at `from`, the
+  // same legacy call really moves it. A call naming approvalMission never matches a legacy journal.
+  test("a legacy call (no approvalMission) replays only while the mission is still where that move put it", async () => {
+    const rehome = Rehome.make(ports())
+    const lumen = path.join(R, "Lumen")
+    const a = await rehome.run(call())
+    if (!("journalId" in a)) throw new Error(JSON.stringify(a))
+    const tree = await treeHash(R)
+    expect(await rehome.run(call())).toEqual({ journalId: a.journalId, moved: a.moved, replayed: true })
+    expect(await rehome.run(call({ approvalMission: "2026-11-14_tidy-a" }))).toMatchObject({ refused: expect.any(String) })
+    expect(await treeHash(R)).toBe(tree)
+
+    // A repeated compensation of the same journal is a replay.
+    const comp = { from: lumen, to: R, compensates: a.journalId }
+    const undo = await rehome.run(call(comp))
+    if (!("journalId" in undo)) throw new Error(JSON.stringify(undo))
+    expect(await rehome.run(call(comp))).toEqual({ journalId: undo.journalId, moved: undo.moved, replayed: true })
+    expect(published).toHaveLength(2)
+
+    // The mission is at the root again: the same legacy call (another holder's D-1) moves it, it is not a no-op.
+    const again = await rehome.run(call())
+    expect(`${"replayed" in again} ${"journalId" in again && again.journalId !== a.journalId}`).toBe("false true")
+    expect((await fs.stat(path.join(lumen, "docs", MISSION))).isDirectory()).toBe(true)
+    expect(sessions.get("ses_mission")?.directory).toBe(lumen)
+    expect(published).toHaveLength(3)
+  })
+
   test("new group: creates the folder and its marker; the next call can join it", async () => {
     const to = path.join(R, "Dinas Contoh")
     const result = await Rehome.make(ports()).run(

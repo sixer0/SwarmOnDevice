@@ -772,14 +772,36 @@ async function run(ports: Ports, input: Input, opts: Options): Promise<Result> {
   if (!lease) return { refused: "REHOME_BUSY" }
   try {
     // Idempotency (§6.2): the same completed call returns its result and changes nothing.
-    const done = journals.find(
+    // 1.2.8 row 68c: "the same call" is the same approval as in row 68b: the request id AND the mission holding it
+    // (request ids are per mission, so D-1 of tidy B is not D-1 of tidy A), plus the moved mission, from, to and the
+    // compensated journal. A journal without approvalMission never matches a call that has one, and the reverse.
+    // A legacy call (no approvalMission) cannot prove which mission holds its request, so it matches a legacy journal
+    // only when that journal moved the mission folder. Every replay also requires the folder to be where that journal
+    // put it (at `to`, gone from `from`): a replay never no-ops a mission that has to move (e.g. after a compensation
+    // moved it back, a same-numbered request of another holder, or a legacy caller), which then goes through preflight.
+    const placed = async (j: Journal) => {
+      const at = (dir: string) =>
+        fs.lstat(path.join(dir, "docs", j.missionId)).then((s) => s.isDirectory(), () => false)
+      return (await at(j.to)) && !(await at(j.from))
+    }
+    const candidates = journals.filter(
       (j) =>
         j.journal.state === "complete" &&
         j.journal.missionId === input.missionId &&
         j.journal.from === input.from &&
         j.journal.to === input.to &&
-        j.journal.approvalRef === input.approvalRef,
+        j.journal.approvalRef === input.approvalRef &&
+        j.journal.compensates === input.compensates &&
+        j.journal.approvalMission === input.approvalMission &&
+        (input.approvalMission !== undefined || j.journal.moved?.folder === true),
     )
+    let done: (typeof journals)[number] | undefined
+    for (const j of candidates) {
+      if (j.journal.moved?.folder !== true || (await placed(j.journal))) {
+        done = j
+        break
+      }
+    }
     if (done) return { journalId: done.journal.journalId, moved: done.journal.moved ?? emptyMoved, replayed: true }
 
     let plan: Plan
