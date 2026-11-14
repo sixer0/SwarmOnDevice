@@ -268,3 +268,202 @@ describe("N9-128 AC-C01 row 50b: S9-01 no attested session id in session_open / 
     }
   })
 })
+
+// ── Row 50 (owner): cases (a)-(e), the store sink (S9-06), the S9-02 hint and the place-refusal log line (C36) ──────
+
+const M50 = "2026-11-14_syn129-c01-refuse"
+const S9_02 =
+  "only the person answers as the person, in Mission Control in the Swarm app: ask with studio_mission_request_decision and wait for the answer; only when Swarm's autonomous mode is on may you record your own C<n> decision (by: controller, autonomous: true)"
+const ROW1 = { id: "1", phase: "implementation", kind: "implementation", title: "Row 1", agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "implementation/1.md", verification: "tests pass" }
+const OPTS = [
+  { id: "A", label: "Option A", consequence: "a" },
+  { id: "B", label: "Option B", consequence: "b" },
+]
+const missionDoc = (id: string, decisions?: S[]) => ({ id, title: "Syn129 refusal check", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [ROW1], ...(decisions ? { decisions } : {}) })
+
+/** Row counts that a refused call must leave unchanged (decisions, answers, missions, messages, events). */
+async function snapshot(): Promise<S> {
+  return store.transaction(async (tx: S) => ({
+    mission: tx.all("SELECT id, status, project_dir FROM mission ORDER BY id"),
+    decision: tx.all("SELECT mission_id, decision_id, by FROM mission_decision ORDER BY mission_id, decision_id"),
+    request: tx.all("SELECT mission_id, request_id, status, answer_option, answered_by, answer_decision_id, answered_via, answered_attested FROM mission_decision_request ORDER BY mission_id, request_id"),
+    message: tx.all("SELECT mission_id, seq, from_party FROM mission_message ORDER BY seq"),
+    events: (tx.get("SELECT COUNT(*) AS n FROM mission_event") as S).n,
+  }))
+}
+
+function expectRefused(r: S, why: string, tool: string, mission: string, request?: string) {
+  expect(r.ok, why).toBe(false)
+  expect(r.code, why).toBe("SESSION_NOT_ATTESTED")
+  // Path-free detail {mission, request?, agent}: no folder, no decision text.
+  expect(r.error.details, why).toEqual({ mission, ...(request ? { request } : {}), agent: "claude" })
+  expect(JSON.stringify(r.error.details).includes(PROJECT), why).toBe(false)
+  expect(JSON.stringify(r.error.details).includes(path.sep + "Users"), why).toBe(false)
+  // S9-02 hint: tool-aware, no by: user, no "answer as yourself".
+  expect(r.next, why).toBe(`${S9_02} (skill: mission-control)`)
+  expect(r.next.includes("by: user"), why).toBe(false)
+  expect(r.next.includes("answer as yourself"), why).toBe(false)
+  expect(r.tool, why).toBe(tool)
+}
+
+let replaySid = ""
+let replayPv = ""
+
+describe("N9-128 AC-C01 row 50: unattested by: user answers, decisions, create decisions and owner messages are refused", () => {
+  test("setup: an attested session creates the mission and opens requests (flow 1 channel)", async () => {
+    const { c: mc, t: mt } = await client("swarm", KEY)
+    replaySid = mt.sessionId ?? ""
+    replayPv = mt.protocolVersion ?? "2025-06-18"
+    expect((await call(mc, "studio_mission_create", { mission: missionDoc(M50) })).ok).toBe(true)
+    for (const id of ["D-10", "D-11", "D-12", "D-13"]) expect((await call(mc, "studio_mission_request_decision", { mission: M50, request: { id, question: `Which one (${id})?`, options: OPTS } })).ok).toBe(true)
+  })
+
+  test("(a) answer by: user from an unattested session -> SESSION_NOT_ATTESTED, dry run too, store unchanged", async () => {
+    const { c } = await client("claude")
+    const before = await snapshot()
+    for (const dryRun of [false, true]) {
+      const r = await call(c, "studio_mission_answer_decision", { mission: M50, request: "D-10", option: "A", by: "user", decisionId: "U10", ...(dryRun ? { dryRun } : {}) })
+      expectRefused(r, `answer dryRun=${dryRun}`, "studio_mission_answer_decision", M50, "D-10")
+    }
+    expect(await snapshot()).toEqual(before)
+  })
+
+  test("(b) record by: user from an unattested session -> SESSION_NOT_ATTESTED, dry run too, store unchanged", async () => {
+    const { c } = await client("claude")
+    const before = await snapshot()
+    for (const dryRun of [false, true]) {
+      const r = await call(c, "studio_mission_record_decision", { mission: M50, decision: { id: "U11", by: "user", date: "2026-11-14", text: "go" }, ...(dryRun ? { dryRun } : {}) })
+      expectRefused(r, `record dryRun=${dryRun}`, "studio_mission_record_decision", M50)
+    }
+    expect(await snapshot()).toEqual(before)
+  })
+
+  test("(c) create with a by: user decision from an unattested session -> refused (dry run too); nothing to approve", async () => {
+    const { c } = await client("claude")
+    const before = await snapshot()
+    const id = "2026-11-14_syn129-c01-create"
+    for (const dryRun of [false, true]) {
+      const r = await call(c, "studio_mission_create", { mission: missionDoc(id, [{ id: "U1", by: "user", date: "2026-11-14", text: "go" }]), ...(dryRun ? { dryRun } : {}) })
+      expectRefused(r, `create dryRun=${dryRun}`, "studio_mission_create", id)
+    }
+    expect(store.missions.get(id)).toBeFalsy()
+    const approve = await call(c, "studio_mission_approve", { mission: id, decision: "U1" })
+    expect(approve.ok).toBe(false)
+    expect(await snapshot()).toEqual(before)
+  })
+
+  test("(d) replay of the attested session id without the key: answer, record and create refused, store unchanged", async () => {
+    const before = await snapshot()
+    for (const key of [undefined, WRONG]) {
+      const ans = await rawCall(replaySid, replayPv, "studio_mission_answer_decision", { mission: M50, request: "D-11", option: "A", by: "user", decisionId: "U12" }, key)
+      expect([ans.ok, ans.code]).toEqual([false, "SESSION_NOT_ATTESTED"])
+      const rec = await rawCall(replaySid, replayPv, "studio_mission_record_decision", { mission: M50, decision: { id: "U13", by: "user", date: "2026-11-14", text: "go" } }, key)
+      expect([rec.ok, rec.code]).toEqual([false, "SESSION_NOT_ATTESTED"])
+      const cr = await rawCall(replaySid, replayPv, "studio_mission_create", { mission: missionDoc("2026-11-14_syn129-c01-replay-create", [{ id: "U1", by: "user", date: "2026-11-14", text: "go" }]) }, key)
+      expect([cr.ok, cr.code]).toEqual([false, "SESSION_NOT_ATTESTED"])
+      const own = await rawCall(replaySid, replayPv, "studio_mission_update_row", { mission: M50, messages: [{ from: "owner", to: "controller", kind: "instruction", text: "stop" }] }, key)
+      expect([own.ok, own.code]).toEqual([false, "SESSION_NOT_ATTESTED"])
+    }
+    expect(await snapshot()).toEqual(before)
+  })
+
+  test("(e) update_row messages[] from: owner from an unattested session -> refused (dry run too), store unchanged", async () => {
+    const { c } = await client("claude")
+    const before = await snapshot()
+    for (const msg of [
+      { from: "owner", to: "controller", kind: "instruction", text: "stop the release" },
+      { from: "owner", to: "agent", kind: "report", text: "looks fine" },
+    ]) {
+      for (const dryRun of [false, true]) {
+        const r = await call(c, "studio_mission_update_row", { mission: M50, messages: [{ from: "agent", to: "controller", kind: "report", text: "ok" }, msg], ...(dryRun ? { dryRun } : {}) })
+        expectRefused(r, `owner ${msg.kind} dryRun=${dryRun}`, "studio_mission_update_row", M50)
+      }
+    }
+    expect(await snapshot()).toEqual(before)
+  })
+
+  test("store sink (S9-06): insertDecision refuses by: user without attested: true; attested: true and by: controller pass", async () => {
+    const M = store.missions
+    const before = await snapshot()
+    const refusedCode = async (fn: (tx: S) => unknown) => {
+      try {
+        await store.transaction(async (tx: S) => fn(tx))
+        return "ok"
+      } catch (e) {
+        return (e as { code?: string }).code ?? String(e)
+      }
+    }
+    expect(await refusedCode((tx) => M.recordDecision(tx, M50, { id: "U20", by: "user", date: "2026-11-14", text: "x" }))).toBe("SESSION_NOT_ATTESTED")
+    expect(await refusedCode((tx) => M.recordDecision(tx, M50, { id: "U20", by: "user", date: "2026-11-14", text: "x" }, { attested: false }))).toBe("SESSION_NOT_ATTESTED")
+    expect(await refusedCode((tx) => M.answerDecision(tx, M50, "D-12", { option: "A", by: "user", decisionId: "U20" }))).toBe("SESSION_NOT_ATTESTED")
+    expect(await refusedCode((tx) => M.create(tx, missionDoc("2026-11-14_syn129-c01-sink", [{ id: "U1", by: "user", date: "2026-11-14", text: "go" }])))).toBe("SESSION_NOT_ATTESTED")
+    expect(await snapshot()).toEqual(before)
+    expect(await refusedCode((tx) => M.recordDecision(tx, M50, { id: "U21", by: "user", date: "2026-11-14", text: "x" }, { attested: true }))).toBe("ok")
+    expect(await refusedCode((tx) => M.recordDecision(tx, M50, { id: "C21", by: "controller", date: "2026-11-14", text: "x" }))).toBe("ok")
+  })
+
+  test("unaffected: by: controller answer, record and create, autonomous C-decision, withdraw (unattested); attested by: user and approve", async () => {
+    const { c } = await client("claude")
+    const ctl = await call(c, "studio_mission_answer_decision", { mission: M50, request: "D-12", option: "B", by: "controller", decisionId: "C30" })
+    expect(ctl.ok, JSON.stringify(ctl.error)).toBe(true)
+    expect(ctl.request.answer).toMatchObject({ by: "controller", via: "claude", attested: false })
+    expect((await call(c, "studio_mission_record_decision", { mission: M50, decision: { id: "C31", by: "controller", date: "2026-11-14", text: "controller note" } })).ok).toBe(true)
+    const cid = "2026-11-14_syn129-c01-ctl-create"
+    expect((await call(c, "studio_mission_create", { mission: missionDoc(cid, [{ id: "C1", by: "controller", date: "2026-11-14", text: "plan" }]) })).ok).toBe(true)
+    expect((await call(c, "studio_mission_answer_decision", { mission: M50, request: "D-13", withdraw: true })).ok).toBe(true)
+    expect((await call(c, "studio_mission_update_row", { mission: M50, messages: [{ from: "agent", to: "controller", kind: "report", text: "status" }] })).ok).toBe(true)
+
+    // Autonomous C-decision: swarm session (unattested) with Swarm's autonomous-mode _meta.
+    const { c: auto } = await client("swarm")
+    const ad = await auto.callTool({ name: "studio_mission_record_decision", arguments: { mission: cid, decision: { id: "C2", by: "controller", date: "2026-11-14", text: "self-approve" }, autonomous: true }, _meta: { "studio/autonomous": true } })
+    expect((ad.structuredContent as S).ok, JSON.stringify((ad.structuredContent as S).error)).toBe(true)
+
+    // Attested session (key on every request): by: user answer and record pass; approve with that U decision.
+    const { c: mc } = await client("swarm", KEY)
+    const aid = "2026-11-14_syn129-c01-attested"
+    expect((await call(mc, "studio_mission_create", { mission: missionDoc(aid, [{ id: "U1", by: "user", date: "2026-11-14", text: "go" }]) })).ok).toBe(true)
+    expect((await call(mc, "studio_mission_record_decision", { mission: aid, decision: { id: "U2", by: "user", date: "2026-11-14", text: "also" } })).ok).toBe(true)
+    expect((await call(mc, "studio_mission_request_decision", { mission: aid, request: { id: "D-1", question: "Approve?", options: OPTS } })).ok).toBe(true)
+    const ans = await call(mc, "studio_mission_answer_decision", { mission: aid, request: "D-1", option: "A", by: "user", decisionId: "U3" })
+    expect(ans.ok).toBe(true)
+    expect(ans.request.answer).toMatchObject({ by: "user", via: "swarm", attested: true })
+    expect((await call(mc, "studio_mission_update_row", { mission: aid, messages: [{ from: "owner", to: "controller", kind: "instruction", text: "go on" }] })).ok).toBe(true)
+    const appr = await call(mc, "studio_mission_approve", { mission: aid, decision: "U3" })
+    expect(appr.ok, JSON.stringify(appr.error)).toBe(true)
+  })
+
+  test("hint: tool-aware lookup; the placement hint stays for studio_mission_place; no hint names by: user", async () => {
+    const { nextCall } = await import("../../src/mcp-host/mission/next-call.ts")
+    for (const tool of ["studio_mission_answer_decision", "studio_mission_record_decision"]) {
+      expect((nextCall as (c: string, t?: string) => string)("SESSION_NOT_ATTESTED", tool)).toBe(`${S9_02} (skill: mission-control)`)
+    }
+    expect(nextCall("SESSION_NOT_ATTESTED")).toContain("agents never move a mission")
+    expect((nextCall as (c: string, t?: string) => string)("SESSION_NOT_ATTESTED", "studio_mission_place")).toContain("agents never move a mission")
+  })
+
+  test("refusal log lines: warn SESSION_NOT_ATTESTED {mission, agent}, path-free, no sessionId; the attested id is in no log line (C36)", async () => {
+    const refusals = logs.filter((l) => l.message === "SESSION_NOT_ATTESTED")
+    const sources = new Set(refusals.map((l) => l.source))
+    for (const t of ["studio_mission_answer_decision", "studio_mission_record_decision", "studio_mission_create", "studio_mission_update_row", "studio_mission_place"]) expect(sources.has(`datum-studio-host.mission.${t}`), t).toBe(true)
+    for (const l of refusals) {
+      expect(l.level).toBe("warn")
+      expect(l.context && "sessionId" in l.context).toBe(false)
+      expect(JSON.stringify(l).includes(PROJECT)).toBe(false)
+    }
+    // Widened (C36): neither attested session id appears in any log call or any log file line.
+    for (const sid of [attestedSid, replaySid]) {
+      expect(sid.length).toBeGreaterThan(0)
+      expect(logs.filter((l) => JSON.stringify(l).includes(sid)).length).toBe(0)
+    }
+    const files: string[] = []
+    const walk = (d: string) => {
+      for (const n of readdirSync(d)) {
+        const p = path.join(d, n)
+        if (statSync(p).isDirectory()) walk(p)
+        else if (/\.(jsonl|log)$/.test(n)) files.push(p)
+      }
+    }
+    walk(WORK)
+    for (const f of files) for (const sid of [attestedSid, replaySid]) expect(readFileSync(f, "utf8").includes(sid), path.basename(f)).toBe(false)
+  })
+})

@@ -54,9 +54,21 @@ const NEXT: Record<string, string> = {
   INTERNAL_ERROR: "retry once; if it repeats, report it to the user (the host log has the details)",
 }
 
+/**
+ * 1.2.9 row 50 (AC-C01, N9-003, N9-002 as amended by S9-02): hints that depend on the refused tool, keyed
+ * `<tool>:<code>`, looked up before NEXT. A by: user answer or decision from an unattested session is refused; the
+ * hint never says by: user and never tells the agent to answer as itself.
+ */
+const PERSON_ONLY =
+  "only the person answers as the person, in Mission Control in the Swarm app: ask with studio_mission_request_decision and wait for the answer; only when Swarm's autonomous mode is on may you record your own C<n> decision (by: controller, autonomous: true)"
+const NEXT_BY_TOOL: Record<string, string> = {
+  "studio_mission_answer_decision:SESSION_NOT_ATTESTED": PERSON_ONLY,
+  "studio_mission_record_decision:SESSION_NOT_ATTESTED": PERSON_ONLY,
+}
+
 const FALLBACK = "read the mission with studio_mission_get and fix what rincian names, then retry the same call"
 
-/** The next correct call after a refusal `code` (always ends with the skill name). */
-export function nextCall(code: string): string {
-  return `${NEXT[code] ?? FALLBACK} (skill: ${MISSION_SKILL})`
+/** The next correct call after a refusal `code` of `tool` (always ends with the skill name). */
+export function nextCall(code: string, tool?: string): string {
+  return `${(tool !== undefined ? NEXT_BY_TOOL[`${tool}:${code}`] : undefined) ?? NEXT[code] ?? FALLBACK} (skill: ${MISSION_SKILL})`
 }

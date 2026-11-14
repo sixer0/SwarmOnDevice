@@ -223,7 +223,8 @@ export function autonomousModeOf(s: HostToolSession): boolean {
 export function writeOptions(args: Record<string, unknown>, s: HostToolSession): MissionWriteOptions {
   const actor = actorOf(args, s)
   const session = sessionOf(args, s)
-  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s), ...(s.memoryIndex ? { memoryIndex: s.memoryIndex } : {}) }
+  // 1.2.9 row 50 (S9-06): the request's attestation (per request, S9-01) goes to the store's decision sink.
+  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s), ...(s.memoryIndex ? { memoryIndex: s.memoryIndex } : {}), attested: s.attested === true }
 }
 
 /** 1.2.8 row 39 (N8-014): text of the warning on a done close Swarm's memory did not check. */
@@ -327,6 +328,17 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
   const dry = (a: Record<string, unknown>) => a.dryRun === true
   const dryNote = (a: Record<string, unknown>) => (dry(a) ? " (dryRun: checked and rolled back, nothing stored)" : "")
 
+  /**
+   * 1.2.9 row 50 (AC-C01, N9-001; C2(6), C7(b)(c), C13, S9-05): nothing is recorded as the person from a request that
+   * is not attested (Mission Control key on this request, S9-01). Refused before any write, dry runs too. The detail and
+   * the warn line are path-free and carry no session id and no decision or message text.
+   */
+  function refuseUnattested(name: string, s: HostToolSession, mission: string, request?: string): void {
+    if (s.attested === true) return
+    opts.log("warn", `datum-studio-host.mission.${name}`, "SESSION_NOT_ATTESTED", { mission, agent: s.agentId })
+    throw new MissionToolError("SESSION_NOT_ATTESTED", "only the person answers as the person, from Mission Control in the Swarm app (this request is not attested)", { mission, ...(request !== undefined ? { request } : {}), agent: s.agentId })
+  }
+
   return [
     tool(
       "studio_mission_create",
@@ -336,6 +348,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       async (a, s) => {
         defaultProjectDir(a.mission, s.fileRoot)
         const input = a.mission as Parameters<MissionStore["create"]>[1]
+        if ((input.decisions ?? []).some((d) => d?.by === "user")) refuseUnattested("studio_mission_create", s, input.id)
         const r = await write(dry(a), (tx) => M.create(tx, input, writeOptions(a, s)))
         return { text: `mission ${r.id} created as ${r.status}: ${r.rows} rows, ${r.waves.length} waves${dryNote(a)}`, data: { ...r, issues: [], dryRun: dry(a) } }
       },
@@ -489,6 +502,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const o = writeOptions(a, s)
         const patches = (Array.isArray(a.rows) ? a.rows : []) as Array<RowPatch & { checkpoint?: { n: number; m: number; label?: string } }>
         const messages = (Array.isArray(a.messages) ? a.messages : []) as NewMissionMessage[]
+        if (messages.some((m) => m.from === "owner")) refuseUnattested("studio_mission_update_row", s, mission)
         const r = await write(dry(a), (tx) => {
           let out: RowPatchJobResult = { changed: [], results: [], waves: [], ready: [] }
           const stripped = patches.map(({ checkpoint: _c, ...p }) => p)
@@ -518,6 +532,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       false,
       async (a, s) => {
         const decision = decisionWithAutonomous(a)
+        if (decision.by === "user") refuseUnattested("studio_mission_record_decision", s, a.mission as string)
         const r = await write(dry(a), (tx) => M.recordDecision(tx, a.mission as string, decision as never, writeOptions(a, s)))
         return { text: `decision ${r.id} recorded in ${String(a.mission)}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
@@ -612,8 +627,9 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         }
         const missing = ["option", "by", "decisionId"].filter((k) => a[k] === undefined)
         if (missing.length > 0) throw new MissionToolError("SCHEMA_INVALID", "an answer needs option, by and decisionId", { def: "studio_mission_answer_decision input", missing })
-        // 1.2.8 row 45b (SR8-05, N8-461): provenance from the session, never from the arguments. Unattested by: user
-        // answers are recorded (not refused; general refusal is 1.2.9 backlog RN-6) and shown with the N8-462 label.
+        // 1.2.9 row 50 (AC-C01 case a): an unattested by: user answer is refused (1.2.8 recorded it with the N8-462 label).
+        if (a.by === "user") refuseUnattested("studio_mission_answer_decision", s, mission, request)
+        // 1.2.8 row 45b (SR8-05, N8-461): provenance from the session, never from the arguments.
         const answer = { ...pick(a, ["option", "by", "decisionId", "date", "text"]), via: s.agentId, attested: s.attested === true } as never
         const r = await write(dry(a), (tx) => M.answerDecision(tx, mission, request, answer, o))
         return { text: `decision request ${request} answered ${String(a.option)} -> ${r.decision.id}; released ${r.released.join(", ") || "-"}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
@@ -630,7 +646,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const mission = a.mission as string
         const dir = a.projectDir as string
         if (s.attested !== true) {
-          opts.log("warn", "datum-studio-host.mission.studio_mission_place", "SESSION_NOT_ATTESTED", { mission, agent: s.agentId, sessionId: s.sessionId })
+          // 1.2.9 row 50 (S9-01, C36): no session id on this line; on a replay it would be the attested session's id.
+          opts.log("warn", "datum-studio-host.mission.studio_mission_place", "SESSION_NOT_ATTESTED", { mission, agent: s.agentId })
           throw new MissionToolError("SESSION_NOT_ATTESTED", "only Mission Control in the Swarm app places a mission (this MCP session is not attested)", { mission, agent: s.agentId })
         }
         const actor = actorOf(a, s)

@@ -368,6 +368,12 @@ export interface MissionWriteOptions {
    * close of mission `missionId` with `present: false` is refused MEMORY_INDEX_MISSING. `undefined` = not checked.
    */
   memoryIndex?: { missionId: string; present: boolean }
+  /**
+   * 1.2.9 row 50 (AC-C01, S9-06): whether this request came from an attested Mission Control session (the host sets it
+   * per request; never from the arguments). A `by: "user"` decision is stored only when it is `true`; anything else is
+   * refused SESSION_NOT_ATTESTED at the one decision sink (`insertDecision`).
+   */
+  attested?: boolean
 }
 
 export interface RowPatch {
