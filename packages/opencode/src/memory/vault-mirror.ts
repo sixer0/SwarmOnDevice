@@ -458,10 +458,18 @@ export function neutraliseReport(text: string): string {
     .map((line) => {
       const masked = Secrets.scrubText(line)
       // The placeholder itself (`password=[hidden:password]`) is not a secret; what is left around it is checked.
-      return MemoryLearn.looksSecret(masked.replace(PLACEHOLDERS, "")) ? "[hidden]" : masked
+      return breakTemplater(MemoryLearn.looksSecret(masked.replace(PLACEHOLDERS, "")) ? "[hidden]" : masked)
     })
     .join("\n")
 }
+
+/**
+ * N9-058 (1.2.9 row 41, AC-B02): every Templater opener `<%` (`<%*`, `<%+`, `<%_`, `<%-` alike) becomes `<` U+200B `%`,
+ * so Templater, which reads the raw note text, finds no tag in a code span, a fence body or info string, or a generated
+ * frontmatter value. Plain text already has `&lt;`. Applied after masking (the masking sees the original text);
+ * idempotent, since `<\u200b%` holds no `<%`. Closers `%>` are left alone: without an opener there is no tag.
+ */
+const breakTemplater = (text: string) => text.replace(/<%/g, "<\u200b%")
 
 // ---------------------------------------------------------------------------------------------------------------
 // Report reading (01c §3.3 report rule)
@@ -666,7 +674,9 @@ export function render(input: RenderInput): RenderResult {
   const emit = (note: Note | undefined, meta: Omit<Parameters<typeof frontmatter>[0], "hash" | "key">, lines: string[]) => {
     const body = withoutHome(lines.join("\n") + "\n")
     const file = note ? `${note.dir}/${note.name}.md` : "index.md"
-    files.push({ path: file, content: withoutHome(frontmatter({ ...meta, key: input.key, hash: bodyHash(body) })) + body })
+    // S9-09: generated frontmatter values (`aliases` holds the project name) get the same Templater break (N9-058).
+    const top = breakTemplater(withoutHome(frontmatter({ ...meta, key: input.key, hash: bodyHash(body) })))
+    files.push({ path: file, content: top + body })
   }
   const head = (untrusted: boolean | undefined) => [hubLink, "", L.banner, "", ...(untrusted ? [L.untrusted, ""] : [])]
   const section = (title: string, notes: readonly Note[]) => (notes.length ? ["", title, ...notes.map((n) => `- ${link(n)}`)] : [])
