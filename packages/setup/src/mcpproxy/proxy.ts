@@ -28,6 +28,7 @@ import { expandTilde } from "../paths.ts"
 import { sanitise, wrapUntrusted, decodeUtf8Strict } from "./sanitise.ts"
 import { checkUrl } from "./urlpolicy.ts"
 import { appendAudit, type AuditOptions, type AuditRecord } from "./audit.ts"
+import { classificationWord } from "../vault/classified.ts"
 import { ENV_NAMES, MCP_SERVER_NAME, VAULT_INBOX } from "./register.ts"
 
 // --- transport seam -------------------------------------------------------------------
@@ -739,6 +740,9 @@ async function runVault(
     return { text: envelope, isError: false }
   }
   const name = typeof nameRaw === "string" ? nameRaw : ""
+  // S9-04 (1.2.9 row 40): a name that holds a classification word (as given or slugified) never
+  // reaches the audit log; every refusal line for it records `url: null`.
+  const hideName = nameIsClassified(name)
   const resolved = confine(inbox, name)
   if (resolved === null) {
     audit(deps, {
@@ -749,7 +753,7 @@ async function runVault(
       decision: "denied",
       reason: "path_confined",
       query: null,
-      url: `name:${JSON.stringify(name)}`,
+      url: hideName ? null : `name:${JSON.stringify(name)}`,
       host: null,
       latency_ms: deps.now().getTime() - started,
       agent,
@@ -760,7 +764,7 @@ async function runVault(
       isError: true,
     }
   }
-  if (action === "read") return vaultRead(resolved, deps, started, agent, session)
+  if (action === "read") return vaultRead(resolved, hideName, deps, started, agent, session)
   return vaultWrite(
     resolved,
     name,
@@ -775,6 +779,7 @@ async function runVault(
 
 function vaultRead(
   resolvedPath: string,
+  hideName: boolean,
   deps: ProxyDeps,
   started: number,
   agent: string | null,
@@ -790,7 +795,7 @@ function vaultRead(
       decision: "error",
       reason: "not_found",
       query: null,
-      url: `file://${resolvedPath}`,
+      url: hideName ? null : `file://${resolvedPath}`,
       host: null,
       latency_ms: deps.now().getTime() - started,
       nonce: null,
@@ -810,7 +815,7 @@ function vaultRead(
       decision: "error",
       reason: "undecodable",
       query: null,
-      url: `file://${resolvedPath}`,
+      url: hideName ? null : `file://${resolvedPath}`,
       host: null,
       bytes_in: bytes.length,
       latency_ms: deps.now().getTime() - started,
@@ -873,7 +878,7 @@ function vaultWrite(
       decision: "error",
       reason: "content_too_large",
       query: null,
-      url: `file://${intendedPath}`,
+      url: nameIsClassified(nameHint) ? null : `file://${intendedPath}`,
       host: null,
       bytes_in: byteLen(content),
       latency_ms: deps.now().getTime() - started,
@@ -881,6 +886,31 @@ function vaultWrite(
       session,
     })
     return { text: `BLOCKED_BY_POLICY: content exceeds the ${MAX_WRITE_BYTES}-byte note bound.`, isError: true }
+  }
+  // B01 (1.2.9 row 40, S9-03): the name as given, its slug and the content are checked before the
+  // slug is used for any path. The audit line carries no url, no sha256, no content and no word.
+  const word =
+    classificationWord(nameHint) ?? classificationWord(slugify(nameHint)) ?? classificationWord(content)
+  if (word !== undefined) {
+    audit(deps, {
+      ts,
+      component: "swarm-web",
+      tool: "vault_inbox",
+      action: "write",
+      decision: "denied",
+      reason: "classified_content",
+      query: null,
+      url: null,
+      host: null,
+      bytes_in: byteLen(content),
+      latency_ms: deps.now().getTime() - started,
+      agent,
+      session,
+    })
+    return {
+      text: `BLOCKED_BY_POLICY: classified_content: the note holds the classification word ${word}; nothing was written. For classified work write only the mission id, date, status and links, without the word.`,
+      isError: true,
+    }
   }
   // Create-only (§7): filename is GENERATED `<UTC ts>-<slug>.md`; collisions take a numeric
   // suffix; "wx" makes overwrite structurally impossible, and no delete/rename exists here.
@@ -1012,6 +1042,10 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 40)
   return s === "" ? "note" : s
+}
+
+function nameIsClassified(name: string): boolean {
+  return (classificationWord(name) ?? classificationWord(slugify(name))) !== undefined
 }
 
 function byteLen(s: string): number {

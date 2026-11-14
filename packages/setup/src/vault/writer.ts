@@ -27,6 +27,8 @@
 //     symlink_escape       — existing candidate resolves outside the canonical inbox
 //   operation (not confinement):
 //     content_too_large    — > MAX_NOTE_BYTES bound (parity with proxy MAX_WRITE_BYTES, D-r94-5)
+//     classified_content   — name, slug or content holds a classification word (./classified.ts,
+//                            1.2.9 B01); checked after the size bound and before anything else
 //     name_held            — create-only open refused: something already holds the generated
 //                            name (incl. a dangling symlink — O_EXCL makes overwrite
 //                            structurally impossible, §7 "create-only")
@@ -58,6 +60,7 @@ import { MODES } from "../constants.ts"
 import { decodeUtf8Strict } from "../mcpproxy/sanitise.ts" // consume r94's fail-closed decoder
 import { ENV_NAMES, MCP_SERVER_NAME, VAULT_INBOX, VAULT_ROOT } from "../mcpproxy/register.ts"
 import { resolveVault, type VaultPaths } from "./wiring.ts"
+import { classificationWord } from "./classified.ts"
 
 /** Note-size bound: parity with the proxy's MAX_WRITE_BYTES (mcpproxy/proxy.ts:77). */
 export const MAX_NOTE_BYTES = 64 * 1024
@@ -78,6 +81,7 @@ export type ConfinementRefusal =
 
 export type OperationRefusal =
   | "content_too_large"
+  | "classified_content"
   | "name_held"
   | "too_many_collisions"
   | "not_found"
@@ -98,6 +102,7 @@ export const VAULT_REFUSAL_REASONS: readonly VaultRefusal[] = [
   "inbox_symlink_escape",
   "symlink_escape",
   "content_too_large",
+  "classified_content",
   "name_held",
   "too_many_collisions",
   "not_found",
@@ -174,6 +179,13 @@ export function writeInboxNote(
 ): WriteSuccess | Refusal {
   const bytes = byteLen(input.content)
   if (bytes > MAX_NOTE_BYTES) return refuse("content_too_large")
+  // B01 (1.2.9 row 40, S9-03): the name as given, its slug and the content are checked before the
+  // name is validated and before canonicalInbox, so a refusal never creates the inbox folder.
+  if (
+    (classificationWord(input.name) ?? classificationWord(slugify(input.name)) ?? classificationWord(input.content)) !==
+    undefined
+  )
+    return refuse("classified_content")
   const shape = validateNoteName(input.name)
   if (!shape.ok) return shape
   const inbox = canonicalInbox(resolveVault(options.env))
