@@ -25,6 +25,11 @@ export type FolderMissingDeps = {
   t: (key: FolderMissingKey, params?: { path: string }) => string
   /** Choose: open the folder picker (at home). */
   choose: () => void
+  /**
+   * 1.2.9 row 55a (AC-C07b): re-runs the failed load of a path this window saw missing, once it is back (Restore,
+   * Recreate), before `onOpen`. Other paths are not reloaded. Undefined: open only, as before.
+   */
+  reload?: (directory: string) => Promise<unknown> | unknown
 }
 
 export type FolderMissingOpenOptions = {
@@ -54,8 +59,10 @@ export function createFolderMissingNotice(deps: FolderMissingDeps): FolderMissin
   }
 
   async function opened(directory: string, onOpen: () => unknown) {
-    missingFolders.delete(directory)
+    const seenMissing = missingFolders.delete(directory)
     close(directory)
+    // A failed reload must not keep the person from the project: opening still runs, as before.
+    if (seenMissing) await (async () => deps.reload?.(directory))().catch(() => undefined)
     await onOpen()
     return true
   }
