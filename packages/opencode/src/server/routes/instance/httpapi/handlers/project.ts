@@ -11,13 +11,13 @@ import { SessionID } from "@/session/schema"
 import { SessionStatus } from "@/session/status"
 import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { Location } from "@opencode-ai/core/location"
-import { LocationServiceMap } from "@opencode-ai/core/location-services"
+import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/location-services"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { ProjectTrust } from "@opencode-ai/core/project/trust"
 import { Pty } from "@opencode-ai/core/pty"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { InstanceStore } from "@/project/instance-store"
-import { Cause, Effect, Layer, Schema } from "effect"
+import { Cause, Effect, Layer, RcMap, Schema } from "effect"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import { ProjectNotFoundError } from "../errors"
@@ -63,6 +63,52 @@ const REFUSAL_TEXT: Record<Rehome.Code, string> = {
 
 const decodeSessionID = Schema.decodeUnknownOption(SessionID)
 
+const locationRef = (directory: string) => Location.Ref.make({ directory: AbsolutePath.make(directory) })
+
+/** What `runningTerminalCwds` reads, one loaded folder (`dir`, the instance directory) at a time. */
+// 1.2.9 row 53 (N9-069).
+/** @internal test seam */
+export interface TerminalScan {
+  /** Directories of the instances the server has loaded. */
+  loaded(): Promise<readonly string[]>
+  /** Whether the folder is on disk now. */
+  exists(dir: string): Promise<boolean>
+  /** Whether the folder's location services are already built (`RcMap.has`); never builds them. */
+  built(dir: string): Promise<boolean>
+  /** The folder's terminals; `undefined` when they could not be listed. */
+  list(dir: string): Promise<readonly Pick<Pty.Info, "status" | "cwd">[] | undefined>
+}
+
+/**
+ * Start folders of the running terminals of every loaded folder (C05, 01c section 3.5):
+ * - on disk: today's listing; a listing that fails counts as none (1.2.8 behaviour, kept on purpose, OP-15-4);
+ * - missing with built services: its terminals are listed from those services; any failure or defect fails closed
+ *   with REHOME_SESSION_ACTIVE "terminal check unavailable" (N9-009, path-free), never an HTTP 500;
+ * - missing without built services: no services means no terminal, so nothing is listed. Services are never built
+ *   for a missing folder (that build was the 1.2.8 row 68g 500).
+ */
+// 1.2.9 row 53 (N9-069).
+/** @internal test seam */
+export async function runningTerminalCwds(scan: TerminalScan): Promise<string[]> {
+  const cwds: string[] = []
+  for (const dir of await scan.loaded()) {
+    let list: readonly Pick<Pty.Info, "status" | "cwd">[] | undefined
+    if (await scan.exists(dir)) list = (await scan.list(dir)) ?? []
+    else {
+      if (!(await scan.built(dir))) continue
+      list = await scan.list(dir).catch(() => undefined)
+      // Rehome maps this error to the refusal (rehome.ts, terminal check).
+      if (!list)
+        throw Object.assign(new Error("REHOME_SESSION_ACTIVE: terminal check unavailable"), {
+          code: "REHOME_SESSION_ACTIVE" as const,
+          detail: "terminal check unavailable",
+        })
+    }
+    for (const info of list) if (info.status === "running") cwds.push(info.cwd)
+  }
+  return cwds
+}
+
 /**
  * The real ports (row 44 `Rehome.Ports`), built per call so `SWARM_DEFAULT_PROJECT_DIR` is read when the person acts.
  * Busy state and terminals are read only from instances already loaded: a folder no instance has open runs nothing.
@@ -102,22 +148,22 @@ export const rehomePorts = Effect.gen(function* () {
       )
     },
     // OP20-8: the server knows a terminal's start folder only (`Pty.Info.cwd`), never where its shell moved later.
-    // Row 68g: a loaded folder that is no longer on disk (deleted, renamed, or loaded before it existed) cannot hold
-    // the mission folder and has no services to build; skipping it keeps one stale folder from failing every move.
-    async terminals() {
-      const cwds: string[] = []
-      for (const ctx of await loaded()) {
-        if (!(await stat(ctx.directory).then((info) => info.isDirectory(), () => false))) continue
-        const list = await run(
-          Pty.Service.use((service) => service.list()).pipe(
-            Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))),
-            Effect.orElseSucceed(() => [] as Pty.Info[]),
+    // 1.2.9 row 53 (C05): a loaded folder that is no longer on disk is no longer skipped; see runningTerminalCwds.
+    terminals: () =>
+      runningTerminalCwds({
+        loaded: async () => (await loaded()).map((ctx) => ctx.directory),
+        exists: (dir) => stat(dir).then((info) => info.isDirectory(), () => false),
+        // Only looks at the map: never runs the lookup, so it never builds services.
+        built: (dir) => run(RcMap.has(locations.rcMap, locationRef(dir))),
+        // A failure (e.g. services that cannot be built) is `undefined`; a defect rejects.
+        list: (dir) =>
+          run(
+            Pty.Service.use((service) => service.list()).pipe(
+              Effect.provide(locations.get(locationRef(dir))),
+              Effect.orElseSucceed(() => undefined),
+            ),
           ),
-        )
-        for (const info of list) if (info.status === "running") cwds.push(info.cwd)
-      }
-      return cwds
-    },
+      }),
     async publish(event) {
       GlobalBus.emit("event", {
         directory: "global",
@@ -274,4 +320,6 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
       .handle("directories", directories)
       .handle("rehome", rehome)
   }),
-)
+  // 1.2.9 row 53 (C05): the terminal check reads the location services the terminal routes use (pty.ts), where the
+  // app's terminals live; the server's other location map never holds them, so a running terminal was never seen.
+).pipe(Layer.provide(locationServiceMapLayer))

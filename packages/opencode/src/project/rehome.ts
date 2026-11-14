@@ -468,7 +468,14 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
   }
   if (sourceStat && ports.terminals) {
     const realSource = await fs.realpath(source)
-    for (const cwd of await ports.terminals()) {
+    // 1.2.9 row 53 (C05): a port that cannot list the terminals fails closed with its path-free detail (N9-009),
+    // returned as a refusal like the checks above; any other error still propagates as before.
+    const cwds = await ports.terminals().catch((error: unknown) => {
+      const failed = error as { code?: unknown; detail?: unknown } | undefined
+      if (failed?.code !== "REHOME_SESSION_ACTIVE") throw error
+      throw new Refusal("REHOME_SESSION_ACTIVE", typeof failed.detail === "string" ? failed.detail : undefined)
+    })
+    for (const cwd of cwds) {
       const resolved = await fs.realpath(cwd).catch(() => path.resolve(cwd))
       if (isInside(resolved, realSource) || isInside(path.resolve(cwd), source))
         throw new Refusal("REHOME_SESSION_ACTIVE", "terminal inside the mission folder")
