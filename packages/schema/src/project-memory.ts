@@ -77,7 +77,6 @@ export type Limits = typeof LIMITS
  * limit the entry is refused, never cut (U11).
  */
 export const INDEX_LIMITS = { text: 300, body: 2000, entries: 40, triggers: 5 } as const
-export type IndexLimits = typeof INDEX_LIMITS
 
 /**
  * The entry line (N8-005): `YYYY-MM-DD <mission-id> | <outcome> | triggers: k1, k2, k3 | <report path>`. Groups: 1 date,
