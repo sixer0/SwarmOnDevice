@@ -320,6 +320,9 @@ export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   // Swarm 1.2.8 row 58b (C134, G3-08): a label band over an arrowhead, node outline or container rule (row 57c kind,
   // GEOM_LABEL_COLLISION) fails FIGURE_FIT too, not only the preview (10 -> 11).
   "labelCollision",
+  // Swarm 1.2.8 row 68a (C166): a connector past the figure box and a connector end on no node outline (11 -> 13).
+  "edgeOutside",
+  "edgeEndOffNode",
 ])
 
 /**

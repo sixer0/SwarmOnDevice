@@ -184,8 +184,86 @@ function viaPoints(e: DiagramEdge, i: number, sheet: Sheet): Pt[] | undefined {
         { checkId: "P1-via", pointer: `/edges/${i}/via/${j}` },
       );
     }
-    return [v.col * sheet.colMm, v.row * sheet.rowMm] as Pt;
+    return clampIn([v.col * sheet.colMm, v.row * sheet.rowMm], sheet);
   });
+}
+
+/**
+ * Swarm 1.2.8 row 68a (C166 (2); user item 7, Visio minimum: everything inside the figure): least distance (mm) of a via
+ * point, and of a via leg routed round its end node, from the figure edge. A via on the sheet border (col 0, row 0, the
+ * last col or row) drew its connector on the figure edge, half of the line clipped and, with the caption above, in the
+ * caption band; the point moves inside by this much (half a lattice row).
+ */
+export const EDGE_CLEAR_MM = LATTICE_Y / 2;
+
+/** Row 68a: `v` moved inside the sheet box by `EDGE_CLEAR_MM` (an axis too small for the margin is left as it is). */
+function clampIn(v: Pt, sheet: Sheet): Pt {
+  const W = sheet.widthMm;
+  const H = sheet.heightMm;
+  const c = EDGE_CLEAR_MM;
+  const x = Number.isFinite(W) && W > 2 * c ? Math.min(W - c, Math.max(c, v[0])) : v[0];
+  const y = Number.isFinite(H) && H > 2 * c ? Math.min(H - c, Math.max(c, v[1])) : v[1];
+  return [x, y];
+}
+
+/**
+ * Row 68a (C166 (1)): the side of `n` that faces the point `v`: the side `v` lies furthest beyond (left, right, top or
+ * bottom of the node box). Used for a via edge's ends the author did not glue, so the leg to or from the via leaves the
+ * node towards it instead of through it.
+ */
+function facingSide(n: SheetNode, v: Pt): Side {
+  const beyond: Array<[Side, number]> = [
+    ["bottom", v[1] - (n.y + n.h)],
+    ["top", n.y - v[1]],
+    ["right", v[0] - (n.x + n.w)],
+    ["left", n.x - v[0]],
+  ];
+  let best = beyond[0];
+  for (const b of beyond.slice(1)) if (b[1] > best[1] + 1e-9) best = b;
+  return best[0];
+}
+
+/**
+ * Row 68a (C166 (1), (2)): the orthogonal leg from the end `p` on `side` of node `n` to the via point `v`. When `v` lies
+ * at least `STUB_SEGMENT_MIN_MM` beyond the side, the leg runs along the side's normal first and then across (the
+ * row 56b leg, same points). Otherwise it would cross the node or run along its border: it leaves by a stub of one lattice
+ * row along the normal, then goes across to `v`'s line when `v` lies beside the node, or round the nearer end of the
+ * side (one stub clear of the node) when `v` lies behind it, and back to `v`. Bends stay inside the figure
+ * (`EDGE_CLEAR_MM`). For the leg into an end, reverse the result.
+ */
+function legOut(n: SheetNode, side: Side, p: Pt, v: Pt, sheet: Sheet): Pt[] {
+  const N = NORMAL[side];
+  const k = N[0] !== 0 ? 0 : 1; // normal axis
+  const l = 1 - k; // lateral axis
+  const at = (nk: number, lk: number): Pt => (k === 0 ? [nk, lk] : [lk, nk]);
+  if ((v[k] - p[k]) * N[k] >= STUB_SEGMENT_MIN_MM) return [p, at(v[k], p[l]), v];
+  const st = snap(LATTICE_Y, LATTICE_Y);
+  const dims = [sheet.widthMm, sheet.heightMm];
+  const inside = (val: number, axis: number) => {
+    const d = dims[axis];
+    return Number.isFinite(d) && d > 2 * EDGE_CLEAR_MM ? Math.min(d - EDGE_CLEAR_MM, Math.max(EDGE_CLEAR_MM, val)) : val;
+  };
+  const s = inside(p[k] + N[k] * st, k);
+  const lo = l === 0 ? n.x : n.y;
+  const hi = l === 0 ? n.x + n.w : n.y + n.h;
+  const clear = 0.5;
+  if (v[l] <= lo - clear || v[l] >= hi + clear) return [p, at(s, p[l]), at(s, v[l]), v];
+  const c = inside(v[l] - lo <= hi - v[l] ? lo - st : hi + st, l);
+  return [p, at(s, p[l]), at(s, c), at(v[k], c), v];
+}
+
+/**
+ * Row 68a (C166 (1)): the straight leg from the end `p` on `side` of node `n` to the via point `v`. A leg that meets the
+ * side below `STRAIGHT_END_MIN_DEG` (its arrowhead would lie along the border) or runs back through the node gets a
+ * short orthogonal approach: one lattice row along the side's normal, then straight to `v`. Otherwise `[p]` (the row 56b
+ * straight leg). For the leg into an end, reverse the result.
+ */
+function straightLeg(n: SheetNode, side: Side, p: Pt, v: Pt): Pt[] {
+  const N = NORMAL[side];
+  const ahead = (v[0] - p[0]) * N[0] + (v[1] - p[1]) * N[1];
+  if (ahead > 1e-9 && incidenceDeg(v, p, side) >= STRAIGHT_END_MIN_DEG) return [p];
+  const st = snap(LATTICE_Y, LATTICE_Y);
+  return [p, [p[0] + N[0] * st, p[1] + N[1] * st]];
 }
 
 /**
@@ -193,20 +271,31 @@ function viaPoints(e: DiagramEdge, i: number, sheet: Sheet): Pt[] | undefined {
  * Orthogonal joins each pair with one L-leg: the first leg horizontal first when it leaves a left/right side (vertical
  * first otherwise), each next leg turns across the direction the previous one ended in (the via point is the bend), and
  * the last leg ends along the target side's normal (horizontal first into top/bottom), so the arrowhead meets the side.
+ * Swarm 1.2.8 row 68a (C166): the first and the last leg never cross their end node (`legOut`, `straightLeg`), and via
+ * points stay `EDGE_CLEAR_MM` inside the figure (`clampIn`).
  */
-function viaRoute(p: Pt, sa: Side, vias: readonly Pt[], q: Pt, sb: Side, straight: boolean): Pt[] {
-  const pts = [p, ...vias, q];
-  const out: Pt[] = [p];
-  let horizFirst = sa === "left" || sa === "right";
-  for (let k = 1; k < pts.length; k++) {
-    const a = pts[k - 1];
-    const b = pts[k];
-    const hf = k === pts.length - 1 ? sb === "top" || sb === "bottom" : horizFirst;
-    if (!straight && Math.abs(a[0] - b[0]) > 1e-9 && Math.abs(a[1] - b[1]) > 1e-9) out.push(hf ? [b[0], a[1]] : [a[0], b[1]]);
-    horizFirst = Math.abs(out[out.length - 1][0] - b[0]) < 1e-9; // this leg ended vertical: the next one starts across
-    out.push(b);
+function viaRoute(p: Pt, sa: Side, vias: readonly Pt[], q: Pt, sb: Side, straight: boolean, a: SheetNode, b: SheetNode, sheet: Sheet): Pt[] {
+  const dedupe = (out: readonly Pt[]) => out.filter((c, k) => k === 0 || Math.abs(c[0] - out[k - 1][0]) > 1e-9 || Math.abs(c[1] - out[k - 1][1]) > 1e-9);
+  const v0 = vias[0];
+  const vn = vias[vias.length - 1];
+  if (straight) {
+    // Row 68a (C166 (1)): an end leg that would graze its side or run back through its node gets an orthogonal approach.
+    return dedupe([...straightLeg(a, sa, p, v0), ...vias, ...straightLeg(b, sb, q, vn).reverse()]);
   }
-  return out.filter((c, k) => k === 0 || Math.abs(c[0] - out[k - 1][0]) > 1e-9 || Math.abs(c[1] - out[k - 1][1]) > 1e-9);
+  // Row 68a (C166 (1), (2)): the first and the last leg leave / enter their node's side along its normal and never cross
+  // the node (`legOut`); the legs between via points keep the row 56b alternation.
+  const out: Pt[] = dedupe(legOut(a, sa, p, v0, sheet));
+  const lastPiece = (pts: readonly Pt[]) => (pts.length >= 2 ? Math.abs(pts[pts.length - 1][0] - pts[pts.length - 2][0]) < 1e-9 : !(sa === "left" || sa === "right"));
+  let horizFirst = lastPiece(out); // the first leg ended vertical: the next one starts across
+  for (let k = 1; k < vias.length; k++) {
+    const u = vias[k - 1];
+    const w = vias[k];
+    if (Math.abs(u[0] - w[0]) > 1e-9 && Math.abs(u[1] - w[1]) > 1e-9) out.push(horizFirst ? [w[0], u[1]] : [u[0], w[1]]);
+    horizFirst = Math.abs(out[out.length - 1][0] - w[0]) < 1e-9;
+    out.push(w);
+  }
+  out.push(...legOut(b, sb, q, vn, sheet).reverse().slice(1));
+  return dedupe(out);
 }
 
 function sideOf(a: SheetNode, b: SheetNode): Side {
@@ -567,6 +656,42 @@ function blocked(pts: readonly Pt[], ends: readonly [string, string], nodes: rea
     }
   }
   return null;
+}
+
+/**
+ * Row 68a (C166 (4)): the first visible piece of `pts` runs along the normal of `sa` and the last along the normal of
+ * `sb` (repeated points skipped), i.e. the route leaves and enters its sides head-on.
+ */
+function normalEnds(pts: readonly Pt[], sa: Side, sb: Side): boolean {
+  return endNormal(pts, sa, true) && endNormal(pts, sb, false);
+}
+
+/** Row 68a: the first (`atStart`) or the last visible piece of `pts` runs out of `side` along its normal. */
+function endNormal(pts: readonly Pt[], side: Side, atStart: boolean): boolean {
+  const from = atStart ? 0 : pts.length - 1;
+  const step = atStart ? 1 : -1;
+  const p = pts[from];
+  for (let j = from + step; j >= 0 && j < pts.length; j += step) {
+    const d: Pt = [pts[j][0] - p[0], pts[j][1] - p[1]];
+    if (Math.hypot(d[0], d[1]) <= 1e-9) continue;
+    const N = NORMAL[side];
+    return Math.abs(d[0] * N[1] - d[1] * N[0]) < 1e-6 && d[0] * N[0] + d[1] * N[1] > 0;
+  }
+  return false;
+}
+
+/** Row 68a: two consecutive visible pieces of `pts` run in opposite directions on one line (an out-and-back spike). */
+function doublesBack(pts: readonly Pt[]): boolean {
+  const d: Pt[] = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const v: Pt = [pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]];
+    if (Math.hypot(v[0], v[1]) > 1e-9) d.push(v);
+  }
+  for (let i = 0; i + 1 < d.length; i++) {
+    const [a, b] = [d[i], d[i + 1]];
+    if (Math.abs(a[0] * b[1] - a[1] * b[0]) < 1e-6 && a[0] * b[0] + a[1] * b[1] < 0) return true;
+  }
+  return false;
 }
 
 function manhattan(c: readonly Pt[]): number {
@@ -1158,6 +1283,14 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     if (o) return o;
     const a = nodeOf(sheet, e.from);
     const b = nodeOf(sheet, e.to);
+    // Swarm 1.2.8 row 68a (C166 (1)): an unglued end of a via edge takes the side facing its nearest via point, so the leg
+    // to or from the via never starts through the node (a bus keeps its tap side; explicit sides win in `withSides`).
+    const via = viaOf(e);
+    if (via) {
+      const at = (v: { col: number; row: number }): Pt => clampIn([v.col * sheet.colMm, v.row * sheet.rowMm], sheet);
+      const s0 = sideOf(a, b);
+      return [a.spec.shape === "bus" ? s0 : facingSide(a, at(via[0])), b.spec.shape === "bus" ? OPP[s0] : facingSide(b, at(via[via.length - 1]))];
+    }
     if (rankOf) {
       const ra = rankOf.get(e.from);
       const rb = rankOf.get(e.to);
@@ -1327,7 +1460,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
       if (slotB !== undefined) q = slotAnchor(b, sb, slotB);
       const vias = viaPoints(e, ei, sheet);
       if (vias) {
-        pts = viaRoute(p, sa, vias, q, sb, style === "straight");
+        pts = viaRoute(p, sa, vias, q, sb, style === "straight", a, b, sheet);
       } else if (style === "straight") {
         // row 56 (VIS-4): one segment, diagonal allowed; row 56c: its end meets the border steeply (glued ends stay)
         pts = [p, sideField(e, "to") === undefined ? straightEnd(p, b, sb, q) : q];
@@ -1373,7 +1506,25 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
     let routes = edges.map((e, i) => {
       const pts = rawPts[i];
       if (edgeRouteOf(e) || viaOf(e)) return [...pts]; // rows 56/56b: no detour (styled or via); a crossed node is reported by the lint
-      if (!laneFix) return detour(pts, [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);
+      if (!laneFix) {
+        const r = detour(pts, [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);
+        // Swarm 1.2.8 row 68a (C166 (4)): a detour joins the two ends directly, so a route whose ends left and entered their
+        // sides along the normal can come out running along a side (the end lands beside a diamond vertex, on a container
+        // frame, or along the box). Then the detour starts and ends at the stub ends instead (as in the fit, below); kept
+        // when that is clean, keeps both ends on their normals and never turns straight back on itself.
+        const [sa, sb] = sidesOf(e, i);
+        if (pts.length < 4 || !normalEnds(pts, sa, sb) || normalEnds(r, sa, sb)) return r;
+        // only where the end lands off the drawn outline (a shape whose outline is not its box); a box end that runs
+        // along its side stays as it was (reported GEOM_ARROW_TANGENT; legacy flows keep their bytes, row 45 A15)
+        const off = (n: SheetNode, side: Side, atStart: boolean) => !boxLike(n) && !endNormal(r, side, atStart);
+        if (!off(nodeOf(sheet, e.from), sa, true) && !off(nodeOf(sheet, e.to), sb, false)) return r;
+        try {
+          const alt = [pts[0], ...detour(pts.slice(1, -1), [e.from, e.to], nodes, sheet.widthMm, sheet.colMm), pts[pts.length - 1]];
+          return normalEnds(alt, sa, sb) && !doublesBack(alt) ? alt : r;
+        } catch {
+          return r;
+        }
+      }
       // FIG-02b2: detur mulai dari ujung stub agar konektor keluar tegak lurus sisi simpul
       // (bukan menyusuri garis tepi simpul) dan segmen dalamnya dapat dipisah jalurnya.
       const inner = detour(pts.slice(1, -1), [e.from, e.to], nodes, sheet.widthMm, sheet.colMm);

@@ -20,6 +20,9 @@
  * - `labelCollision` (Swarm 1.2.8 row 57c, C71/C86/C101/C102/C116/C119): the knockout band of an edge label covers an
  *   arrowhead, crosses a node outline, or crosses a container rule (lane rule, phase separator, pool border) that no
  *   connector runs along. In `score`, so auto-fit re-places the label.
+ * - Swarm 1.2.8 row 68a (C166): `edgeThroughNode` also counts a connector through the body of its own end node;
+ *   `edgeOutside` (stroke past the figure box) and `edgeEndOffNode` (target end on no node outline, e.g. a zone frame)
+ *   are counted and fail FIGURE_FIT, outside `score` like the T-03 kinds (`connectorEnds`).
  *
  * Murni dan deterministik. Parser hanya memahami keluaran `Sheet`/`core/svg.ts` (atribut
  * ber-kutip ganda, angka mm, tanpa transform) — bukan parser SVG umum. Satu-satunya transform yang
@@ -43,7 +46,7 @@ import {
   unescXml as unesc,
 } from "../../chart/core/svgscan";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure } from "../../chart/core/textfit";
-import { LATTICE_X } from "../core/tokens";
+import { LATTICE_X, LATTICE_Y } from "../core/tokens";
 
 export type { Box } from "../../chart/core/svgscan";
 
@@ -60,7 +63,9 @@ export type DiagramDefectKind =
   | "stubSegment"
   | "arrowTangent"
   | "labelCollision"
-  | "frameOutside";
+  | "frameOutside"
+  | "edgeOutside"
+  | "edgeEndOffNode";
 
 export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "textOverlap",
@@ -76,7 +81,32 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "arrowTangent",
   "labelCollision",
   "frameOutside",
+  "edgeOutside",
+  "edgeEndOffNode",
 ];
+
+/**
+ * Swarm 1.2.8 row 68a (C166 (2); user item 7, Visio minimum: everything inside the figure; kind `edgeOutside`, check id
+ * GEOM_EDGE_OUTSIDE): a connector whose stroke (centre line plus half its width) runs past the figure box by more than
+ * this (mm). A connector drawn on the figure edge (x = 0) has half its line clipped and, with the caption above, lies in
+ * the caption band.
+ */
+export const EDGE_OUTSIDE_MIN_MM = 0.05;
+
+/**
+ * Swarm 1.2.8 row 68a (C166 (4); kind `edgeEndOffNode`, check id GEOM_EDGE_END): a connector end (start or end, with or
+ * without a head) farther than this (mm, beyond the outline's half stroke) from every node outline, and not inside a
+ * node, ends on nothing (a container frame, the paper). The allowance covers the path trimmed under a filled head
+ * (row 57b `headTrimMm`, under 1 mm). An end under the label block of an event (`data-label-pos="below"`) belongs to it.
+ */
+export const EDGE_END_ON_NODE_MM = 1.2;
+
+/**
+ * Swarm 1.2.8 row 68a (C166 (1), (3)): `edgeThroughNode` also counts a connector that runs through the body of its OWN
+ * end node (a via leg entering the node and crossing its label, a straight route from one side across the box) at more
+ * than this distance (mm) from the end that attaches it; the piece next to that end is how the connector meets the node.
+ */
+export const OWN_NODE_END_MM = 1.5;
 
 /**
  * Swarm 1.2.8 row 55c (C133, kind `frameOutside`, check id GEOM_FRAME_OUTSIDE): a container frame (pool or lane box,
@@ -96,8 +126,12 @@ export const FRAME_OUTSIDE_MIN_MM = 0.05;
  *   runs along the border instead of into it (`arrowTangent`).
  */
 export const ENTRY_COLLISION_MM = 1.5;
-/** T-03 kinds: counted and failed by the gate, not part of `score` (see `DiagramGeomLint.score`). */
-const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set(["edgeEntryCollision", "stubSegment", "arrowTangent"]);
+/**
+ * T-03 kinds: counted and failed by the gate, not part of `score` (see `DiagramGeomLint.score`). Swarm 1.2.8 row 68a: the
+ * two connector-end kinds `edgeOutside` and `edgeEndOffNode` join them (auto-fit has no move that fixes a via or a glued
+ * side; the figures it keeps today keep their bytes).
+ */
+const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set(["edgeEntryCollision", "stubSegment", "arrowTangent", "edgeOutside", "edgeEndOffNode"]);
 export const STUB_SEGMENT_MIN_MM = 2.0;
 /** Row 53 (H-TAG): tolerance of the tag-inside-outline check (0.01 mm output grid plus float noise). */
 const TAG_OUTSIDE_MIN_MM = 0.05;
@@ -780,6 +814,105 @@ function outsideRegion(p: Pt, n: NodeShape): number | null {
   return d;
 }
 
+/**
+ * Row 68a (C166): connector checks that read the ends.
+ * - `edgeEndOffNode`: the target end (and a start with a head) farther than `EDGE_END_ON_NODE_MM` from every node
+ *   outline, not inside a node, not under an event's label block and not on a sequence lifeline;
+ * - `edgeThroughNode` (other = the end node): a sample of the connector strictly inside the body of a node it ends on, more
+ *   than `OWN_NODE_END_MM` from that end (other nodes are checked in `lintDiagramGeometry`);
+ * - `edgeOutside`: the stroke past the figure box by more than `EDGE_OUTSIDE_MIN_MM`.
+ */
+function connectorEnds(
+  W: number,
+  H: number,
+  links: ReadonlyArray<ReadonlyArray<Pt>>,
+  linkHalf: readonly number[],
+  linkStart: readonly boolean[],
+  nodes: readonly NodeShape[],
+  texts: readonly TextEl[],
+  frames: readonly Box[],
+): DiagramGeomDefect[] {
+  const out: DiagramGeomDefect[] = [];
+  // a sequence lifeline (unmarked vertical line hanging from a node's bottom) carries the messages that end on it
+  const lifelines = frames.filter(
+    (f) => Math.abs(f[2] - f[0]) < 1e-6 && f[3] > f[1] && nodes.some((n) => n.id !== null && Math.abs(f[1] - n.box[3]) < 0.1 && f[0] > n.box[0] && f[0] < n.box[2]),
+  );
+  const onLifeline = (p: Pt) => lifelines.some((f) => Math.abs(p[0] - f[0]) <= EDGE_END_ON_NODE_MM && p[1] >= f[1] - 1e-6 && p[1] <= f[3] + 1e-6);
+  // an event's label block (texts after its outline in `<g data-label-pos="below">`) extends the node downwards
+  const ext = nodes.map((n): Box => [...n.box] as Box);
+  for (const t of texts) {
+    if (t.belowOf === undefined || !ext[t.belowOf]) continue;
+    const b = ext[t.belowOf];
+    ext[t.belowOf] = [Math.min(b[0], t.box[0]), b[1], Math.max(b[2], t.box[2]), Math.max(b[3], t.box[3])];
+  }
+  const named = nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.id !== null);
+  const deep = (p: Pt, n: NodeShape): boolean => {
+    if (p[0] <= n.box[0] || p[0] >= n.box[2] || p[1] <= n.box[1] || p[1] >= n.box[3]) return false;
+    const o = outsideRegion(p, n);
+    if (o === null) return p[0] > n.box[0] + 0.3 && p[0] < n.box[2] - 0.3 && p[1] > n.box[1] + 0.3 && p[1] < n.box[3] - 0.3;
+    return o === 0 && borderDist(p, n) > n.half + 0.3;
+  };
+  /** Index (in `nodes`) of the node an end attaches to, or -1. */
+  const attach = (p: Pt): number => {
+    const own = attachTo(p, named);
+    // a node part without an id (a bus rail, an inner line) still carries the end
+    return own >= 0 ? own : attachTo(p, nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.id === null));
+  };
+  const attachTo = (p: Pt, cands: ReadonlyArray<{ n: NodeShape; i: number }>): number => {
+    let best = -1;
+    let bd = Infinity;
+    for (const { n, i } of cands) {
+      const e = ext[i];
+      const tol = n.half + EDGE_END_ON_NODE_MM;
+      const below = e[3] > n.box[3] + 1e-6 ? LATTICE_Y : 0;
+      if (p[0] < e[0] - tol || p[0] > e[2] + tol || p[1] < e[1] - tol || p[1] > e[3] + below + tol) continue;
+      let d = borderDist(p, n);
+      if (outsideRegion(p, n) === 0) d = 0;
+      // under the label block of an event / gateway: the end sits on its cell bottom, within one lattice row of the block
+      if (e[3] > n.box[3] + 1e-6 && p[0] >= e[0] - tol && p[0] <= e[2] + tol && p[1] >= n.box[3] && p[1] <= e[3] + LATTICE_Y + tol) d = Math.min(d, 0);
+      if (d <= tol && d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+  links.forEach((P, li) => {
+    if (P.length < 2) return;
+    const name = `konektor ${li}`;
+    const ends: Array<[Pt, number]> = [[P[0], attach(P[0])], [P[P.length - 1], attach(P[P.length - 1])]];
+    // the target end (and a start that carries a head) must sit on a node
+    for (const [p, ni] of linkStart[li] ? ends : ends.slice(1)) {
+      if (ni < 0 && !onLifeline(p)) out.push({ kind: "edgeEndOffNode", text: name, other: `${p[0].toFixed(2)}, ${p[1].toFixed(2)}` });
+    }
+    // through its own end node(s)
+    const own = [...new Set(ends.map(([, ni]) => ni).filter((ni) => ni >= 0))];
+    for (const ni of own) {
+      const n = nodes[ni];
+      const near = ends.filter(([, k]) => k === ni).map(([p]) => p);
+      let hit = false;
+      for (let a = 0; a + 1 < P.length && !hit; a++) {
+        for (let q = 0; q <= 24; q++) {
+          const t = q / 24;
+          const s: Pt = [P[a][0] + (P[a + 1][0] - P[a][0]) * t, P[a][1] + (P[a + 1][1] - P[a][1]) * t];
+          if (near.some((e) => Math.hypot(s[0] - e[0], s[1] - e[1]) <= OWN_NODE_END_MM)) continue;
+          if (deep(s, n)) {
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (hit) out.push({ kind: "edgeThroughNode", text: name, other: n.id ?? "" });
+    }
+    // outside the figure box
+    const hw = linkHalf[li] ?? 0;
+    let over = 0;
+    for (const p of P) over = Math.max(over, -p[0] + hw, p[0] + hw - W, -p[1] + hw, p[1] + hw - H);
+    if (over > EDGE_OUTSIDE_MIN_MM) out.push({ kind: "edgeOutside", text: name, other: `lembar ${W.toFixed(1)} x ${H.toFixed(1)}`, amount: Number(over.toFixed(2)) });
+  });
+  return out;
+}
+
 // ── Row 57c (Swarm 1.2.8, C71/C86/C101/C102/C116/C119): edge label placement ──────────────────────────
 
 /**
@@ -945,6 +1078,8 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
     arrowTangent: 0,
     labelCollision: 0,
     frameOutside: 0,
+    edgeOutside: 0,
+    edgeEndOffNode: 0,
   };
 }
 
@@ -1082,6 +1217,8 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
       defects.push({ kind: "frameOutside", text: "bingkai wadah", other: at, amount: Number(over.toFixed(2)) });
     }
   }
+  // Row 68a (C166): connector ends on their nodes, never through their own node, and inside the figure.
+  for (const d of connectorEnds(W, H, links, linkHalf, linkStart, nodes, texts, frames)) defects.push(d);
   const counts = emptyCounts();
   for (const d of defects) counts[d.kind]++;
   return { widthMm: W, heightMm: H, counts, defects, score: defects.filter((d) => !T03_KINDS.has(d.kind)).length };

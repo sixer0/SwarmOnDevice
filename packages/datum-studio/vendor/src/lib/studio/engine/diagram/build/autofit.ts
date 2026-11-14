@@ -29,6 +29,8 @@ const CHECK: Record<DiagramDefectKind, string> = {
   arrowTangent: "GEOM_ARROW_TANGENT",
   labelCollision: "GEOM_LABEL_COLLISION",
   frameOutside: "GEOM_FRAME_OUTSIDE", // Swarm 1.2.8 row 55c (C133)
+  edgeOutside: "GEOM_EDGE_OUTSIDE", // Swarm 1.2.8 row 68a (C166)
+  edgeEndOffNode: "GEOM_EDGE_END", // Swarm 1.2.8 row 68a (C166)
 };
 
 const WHAT: Record<DiagramDefectKind, string> = {
@@ -45,6 +47,8 @@ const WHAT: Record<DiagramDefectKind, string> = {
   arrowTangent: "kepala panah sejajar sisi simpul, bukan tegak lurus",
   labelCollision: "label tepi menutup kepala panah, garis tepi simpul atau garis wadah",
   frameOutside: "bingkai wadah (kolam, lajur, fase, zona, grup) keluar batas gambar",
+  edgeOutside: "konektor keluar batas gambar",
+  edgeEndOffNode: "ujung konektor tidak pada garis tepi simpul (mis. pada bingkai zona)",
 };
 
 const SUGGEST: Record<DiagramDefectKind, string> = {
@@ -55,7 +59,8 @@ const SUGGEST: Record<DiagramDefectKind, string> = {
   textExceedsNode: "persingkat label simpul (maks ~40 karakter); detail ke `sub`",
   edgeCross: "ubah urutan simpul dalam tingkat/kolom agar konektor tidak bersilang, atau pecah menjadi 2 diagram",
   edgeCollinear: "kurangi konektor yang berbagi jalur atau pecah menjadi 2 diagram (maks ~12 simpul per tingkat 166 mm)",
-  edgeThroughNode: "ubah urutan simpul agar konektor tidak melewati simpul lain",
+  // Swarm 1.2.8 row 68a: also a connector through its own end node (a straight route across the box, a via leg).
+  edgeThroughNode: "ubah urutan simpul agar konektor tidak melewati simpul lain; konektor yang menembus simpulnya sendiri: pakai route orthogonal atau sisi lain",
   edgeEntryCollision: "kurangi konektor yang masuk ke sisi simpul yang sama atau pecah menjadi 2 diagram",
   // Swarm 1.2.8 row 35 (H-NB3, AC-HNB3): the remedy for a stub is a longer run, not a label change.
   stubSegment: "perpanjang potongan pendek: beri jarak lebih antara kedua simpul (kolom atau baris lain) atau pakai sisi simpul lain",
@@ -64,6 +69,9 @@ const SUGGEST: Record<DiagramDefectKind, string> = {
   labelCollision: "persingkat label tepi (maks ~20 karakter) atau beri jarak lebih antara kedua simpul",
   // Swarm 1.2.8 row 55c: the frame needs width, not shorter labels.
   frameOutside: "kurangi lajur atau kolom per kolam, pakai lebar 166 mm atau kolam vertikal, atau pecah menjadi 2 diagram",
+  // Swarm 1.2.8 row 68a: the route, not the labels, needs to change.
+  edgeOutside: "pindahkan titik via ke dalam gambar atau pakai sisi simpul lain (from_side/to_side)",
+  edgeEndOffNode: "hapus from_side/to_side/via konektor itu agar router memilih sisi, atau ubah urutan simpul",
 };
 
 /** Isu REPORT per jenis cacat tersisa, dengan contoh teks dan `suggest`. */
