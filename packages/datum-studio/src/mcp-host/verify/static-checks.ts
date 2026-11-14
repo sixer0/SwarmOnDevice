@@ -326,6 +326,9 @@ export const DIAGRAM_FAIL_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   // Swarm 1.2.9 row 31 (AC-A09, C10(d)): a connector running along another node's outline (GEOM_EDGE_ALONG) fails too;
   // the Q1 sweep over every fixture and example (410 renders) found 0 unintended flips (13 -> 14).
   "edgeAlongOutline",
+  // Swarm 1.2.9 row 32 (AC-A10a, C10(d)): a connector over or at the edge of a pool/lane header text (GEOM_EDGE_HEADER)
+  // fails too; the Q1 sweep over every fixture and example (410 renders) found 0 unintended flips (14 -> 15).
+  "edgeOverHeader",
 ])
 
 /**

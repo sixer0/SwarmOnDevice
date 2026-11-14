@@ -45,6 +45,7 @@ const CHECK: Record<string, string> = {
   edgeOutside: "GEOM_EDGE_OUTSIDE",
   edgeEndOffNode: "GEOM_EDGE_END",
   edgeAlongOutline: "GEOM_EDGE_ALONG", // Swarm 1.2.9 row 31 (AC-A09, INTENT): B1 TIDAK along Data E now fails FIGURE_FIT
+  edgeOverHeader: "GEOM_EDGE_HEADER", // Swarm 1.2.9 row 32 (AC-A10a, INTENT): B1 at 128 mm, the via leg over KOLAM X and LAJUR 2 now fails FIGURE_FIT
 }
 
 // ── the preview a stored block gets ───────────────────────────────────────────────────────────────────────────────

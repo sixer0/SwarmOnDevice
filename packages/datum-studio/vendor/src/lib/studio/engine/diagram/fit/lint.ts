@@ -66,7 +66,8 @@ export type DiagramDefectKind =
   | "frameOutside"
   | "edgeOutside"
   | "edgeEndOffNode"
-  | "edgeAlongOutline";
+  | "edgeAlongOutline"
+  | "edgeOverHeader";
 
 export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "textOverlap",
@@ -85,6 +86,7 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "edgeOutside",
   "edgeEndOffNode",
   "edgeAlongOutline",
+  "edgeOverHeader",
 ];
 
 /**
@@ -104,6 +106,16 @@ export const EDGE_OUTSIDE_MIN_MM = 0.05;
  */
 export const EDGE_ALONG_MIN_MM = 1.0;
 export const EDGE_ALONG_TOL_MM = 0.1;
+
+/**
+ * Swarm 1.2.9 row 32 (AC-A10a, register N9-026, N9-029; C12 D-1: value fixed, no tuning after the Q1 sweep).
+ * `edgeOverHeader`: a connector stroke (centre line plus half its width) within this distance (mm) of the box of a
+ * container header text (pool, lane, phase or group title: the bold tracked `table_header` signature, centre outside
+ * every node). `lineThroughText` samples an inset grid, so a run along the end of a header (1.2.8 B1 at 128 mm: x 48.0
+ * against `KOLAM X` from 47.92) passes between its samples. A header `lineThroughText` already reports is not counted
+ * twice; `lineThroughText` itself is not widened (it is in `score` and auto-fit's ROUTE_KINDS).
+ */
+export const HEADER_CLEAR_MM = 0.3;
 
 /**
  * Swarm 1.2.8 row 68a (C166 (4); kind `edgeEndOffNode`, check id GEOM_EDGE_END): a connector end (start or end, with or
@@ -151,6 +163,8 @@ const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set([
   "edgeEndOffNode",
   // Swarm 1.2.9 row 31 (AC-A09): outside `score` and auto-fit's ROUTE_KINDS, so no figure changes bytes.
   "edgeAlongOutline",
+  // Swarm 1.2.9 row 32 (AC-A10a): same reason.
+  "edgeOverHeader",
 ]);
 export const STUB_SEGMENT_MIN_MM = 2.0;
 /** Row 53 (H-TAG): tolerance of the tag-inside-outline check (0.01 mm output grid plus float noise). */
@@ -1171,6 +1185,39 @@ function edgesAlongOutlines(
   return out;
 }
 
+/**
+ * Swarm 1.2.9 row 32 (AC-A10a, N9-026): connectors over or at the edge of a container header text (see
+ * `HEADER_CLEAR_MM`). A header is a bold tracked one-line text (`tagAt`, the `table_header` signature) without a knockout
+ * band whose box centre lies in no node box (a requirement tag inside a node is not a header). Headers in `skip` (already
+ * reported by `lineThroughText`) are left out. One entry per header and connector.
+ */
+function edgesOverHeaders(
+  texts: readonly TextEl[],
+  links: ReadonlyArray<ReadonlyArray<Pt>>,
+  linkHalf: readonly number[],
+  nodes: readonly NodeShape[],
+  skip: ReadonlySet<number>,
+): Array<{ text: number; link: number }> {
+  const out: Array<{ text: number; link: number }> = [];
+  texts.forEach((t, ti) => {
+    if (!t.tagAt || t.knock || skip.has(ti)) return;
+    const b = t.box;
+    const cx = (b[0] + b[2]) / 2;
+    const cy = (b[1] + b[3]) / 2;
+    if (nodes.some((n) => n.id !== null && cx > n.box[0] && cx < n.box[2] && cy > n.box[1] && cy < n.box[3])) return;
+    links.forEach((pl, li) => {
+      const grow = HEADER_CLEAR_MM + (linkHalf[li] ?? 0);
+      for (let k = 0; k + 1 < pl.length; k++) {
+        if (segInBox(pl[k], pl[k + 1], grow, b)) {
+          out.push({ text: ti, link: li });
+          return;
+        }
+      }
+    });
+  });
+  return out;
+}
+
 function emptyCounts(): Record<DiagramDefectKind, number> {
   return {
     textOverlap: 0,
@@ -1189,6 +1236,7 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
     edgeOutside: 0,
     edgeEndOffNode: 0,
     edgeAlongOutline: 0,
+    edgeOverHeader: 0,
   };
 }
 
@@ -1227,7 +1275,8 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
     if (worst > TAG_OUTSIDE_MIN_MM) defects.push({ kind: "textOutside", text: t.text, other: host.id ?? "", amount: Number(worst.toFixed(2)) });
   }
   // teks x konektor / garis tepi simpul
-  for (const t of texts) {
+  const throughText = new Set<number>(); // Swarm 1.2.9 row 32: texts `lineThroughText` reports
+  for (const [ti, t] of texts.entries()) {
     const b = t.box;
     if (!t.knock) {
       const hit = links.some((pl, li) => {
@@ -1236,7 +1285,10 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
         if (bb[2] + hw < b[0] || bb[0] - hw > b[2] || bb[3] + hw < b[1] || bb[1] - hw > b[3]) return false;
         return t.samples.some((p) => onPolylines(p, [pl], hw));
       });
-      if (hit) defects.push({ kind: "lineThroughText", text: t.text });
+      if (hit) {
+        defects.push({ kind: "lineThroughText", text: t.text });
+        throughText.add(ti);
+      }
     }
     const overNode = nodes.find((n) => {
       if (n.box[2] + n.half < b[0] || n.box[0] - n.half > b[2] || n.box[3] + n.half < b[1] || n.box[1] - n.half > b[3]) return false;
@@ -1331,6 +1383,10 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
   // Swarm 1.2.9 row 31 (AC-A09): a connector running along another node's outline.
   for (const a of edgesAlongOutlines(links, linkHalf, nodes)) {
     defects.push({ kind: "edgeAlongOutline", text: `konektor ${a.link}`, other: nodeName(a.node), amount: Number(a.length.toFixed(2)) });
+  }
+  // Swarm 1.2.9 row 32 (AC-A10a): a connector over or at the edge of a pool, lane, phase or group header text.
+  for (const h of edgesOverHeaders(texts, links, linkHalf, nodes, throughText)) {
+    defects.push({ kind: "edgeOverHeader", text: texts[h.text].text, other: `konektor ${h.link}` });
   }
   const counts = emptyCounts();
   for (const d of defects) counts[d.kind]++;
