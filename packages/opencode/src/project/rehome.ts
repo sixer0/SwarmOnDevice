@@ -47,6 +47,11 @@ export interface Input {
   to: string
   sessions: readonly string[]
   approvalRef: string
+  /**
+   * 1.2.8 row 68b: the mission holding the answered request `approvalRef` (the tidy mission of a tidy list, the mission
+   * itself for a placement). Request ids are per mission (D-1 in many missions), so the approval is this pair.
+   */
+  approvalMission?: string
   dryRun?: boolean
   compensates?: string
   groupKind?: GroupKind
@@ -67,6 +72,8 @@ export interface Journal {
   from: string
   to: string
   approvalRef: string
+  /** Row 68b: see Input.approvalMission; absent in journals of callers that did not name it. */
+  approvalMission?: string
   compensates?: string
   state: JournalState
   steps: JournalStep[]
@@ -390,6 +397,9 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
   // took such a shared session from this root into a group, it stays there: the later moves of that approval leave it
   // out instead of refusing. Every other session that is not at `from` still refuses, and a busy one always refuses.
   // A compensation (§7.4) moves back only the sessions its original move moved.
+  // 1.2.8 row 68b (row 68 FAIL 24b): "the same approval" is the request AND the mission holding it. Request ids are per
+  // mission, so two tidy missions both ask D-1; comparing the id alone let tidy B treat a session tidy A had moved away
+  // as its own and move the mission without it. A caller that does not name the holding mission never matches.
   const toProject = await ports.projectId(toStat ? to : root.real)
   let completed: Journal[] | undefined
   const movedByThisApproval = async (id: string, directory: string) => {
@@ -399,6 +409,8 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
       (j) =>
         !j.compensates &&
         j.approvalRef === input.approvalRef &&
+        input.approvalMission !== undefined &&
+        j.approvalMission === input.approvalMission &&
         j.missionId !== input.missionId &&
         path.resolve(j.from) === path.resolve(from) &&
         path.resolve(j.to) === path.resolve(directory) &&
@@ -735,6 +747,8 @@ export function make(ports: Ports, opts: Options = {}): Rehome {
 async function run(ports: Ports, input: Input, opts: Options): Promise<Result> {
   if (!APPROVAL_REF.test(input.approvalRef) || !MISSION_ID.test(input.missionId))
     return { refused: "REHOME_APPROVAL_MISSING" }
+  if (input.approvalMission !== undefined && (typeof input.approvalMission !== "string" || !MISSION_ID.test(input.approvalMission)))
+    return { refused: "REHOME_APPROVAL_MISSING", detail: "approvalMission" }
   if (!Array.isArray(input.sessions) || input.sessions.some((id) => typeof id !== "string"))
     return { refused: "REHOME_APPROVAL_MISSING", detail: "sessions" }
 
@@ -783,6 +797,7 @@ async function run(ports: Ports, input: Input, opts: Options): Promise<Result> {
       from: input.from,
       to: input.to,
       approvalRef: input.approvalRef,
+      ...(input.approvalMission ? { approvalMission: input.approvalMission } : {}),
       ...(input.compensates ? { compensates: input.compensates } : {}),
       state: "running",
       root: plan.root,

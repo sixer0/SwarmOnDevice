@@ -3148,6 +3148,7 @@ export type ProjectRehomeInput = {
   to: string
   sessions: Array<string>
   approvalRef?: string
+  approvalMission?: string
   dryRun?: boolean
   compensates?: string
   groupKind?: string

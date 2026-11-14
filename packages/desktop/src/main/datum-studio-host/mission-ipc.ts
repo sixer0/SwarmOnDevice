@@ -140,6 +140,8 @@ export type RehomeBody = {
   to: string
   sessions: string[]
   approvalRef: string
+  /** 1.2.8 row 68b: the mission holding approvalRef (request ids are per mission; rehome compares the pair). */
+  approvalMission?: string
   dryRun?: boolean
   compensates?: string
   groupKind?: string
@@ -330,7 +332,7 @@ export async function placeMission(
   if (posix.dirname(to) !== from) return badArg("the group name is not valid")
   const sessions = swarmSessions(data.mission)
   const groupKind = option === "new" && typeof chosen.groupKind === "string" ? { groupKind: chosen.groupKind } : {}
-  const base: RehomeBody = { missionId: mission, from, to, sessions, approvalRef: request, ...groupKind }
+  const base: RehomeBody = { missionId: mission, from, to, sessions, approvalRef: request, approvalMission: mission, ...groupKind }
   const place = () => setProjectDir({ mission, projectDir: to, decision: request })
 
   if (retry) {
@@ -408,6 +410,8 @@ async function tidyMissions(a: {
       to,
       sessions: swarmSessions(listed),
       approvalRef: request,
+      // Row 68b: the tidy mission holds the request; a session another tidy (same D-n) moved away now refuses.
+      approvalMission: mission,
       ...(item.groupKind ? { groupKind: item.groupKind } : {}),
     })
   }

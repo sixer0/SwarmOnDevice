@@ -231,6 +231,7 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
           to: body.to,
           sessions: body.sessions,
           approvalRef: body.approvalRef ?? "",
+          ...(body.approvalMission === undefined ? {} : { approvalMission: body.approvalMission }),
           ...(body.dryRun === undefined ? {} : { dryRun: body.dryRun }),
           ...(body.compensates === undefined ? {} : { compensates: body.compensates }),
           // The module refuses a kind it does not know (REHOME_APPROVAL_MISSING, detail groupKind).

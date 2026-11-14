@@ -429,9 +429,11 @@ describe("Rehome.recover (crash recovery, SR8-18 c)", () => {
 describe("Rehome.run: a session shared by two missions of one tidy list (row 51c, LP-4)", () => {
   const lumen = () => path.join(R, "Lumen")
   const dinas = () => path.join(R, "Dinas Contoh")
-  const first = () => call({ sessions: ["ses_mission"], approvalRef: "D-2" })
+  // Row 68b: the approval is the request D-2 of the tidy mission that holds the list (approvalMission).
+  const TIDY = "2026-09-10_tidy-list"
+  const first = () => call({ sessions: ["ses_mission"], approvalRef: "D-2", approvalMission: TIDY })
   const second = (over: Partial<Rehome.Input> = {}) =>
-    call({ missionId: OTHER, to: dinas(), sessions: ["ses_mission"], approvalRef: "D-2", groupKind: "institution", ...over })
+    call({ missionId: OTHER, to: dinas(), sessions: ["ses_mission"], approvalRef: "D-2", approvalMission: TIDY, groupKind: "institution", ...over })
   const journalFiles = async () => (await fs.readdir(path.join(data, "rehome")).catch(() => [])).filter((n) => n.endsWith(".json"))
 
   test("idle shared session: both dry runs pass, both moves succeed, the session moves once (with the first)", async () => {
@@ -496,5 +498,42 @@ describe("Rehome.run: a session shared by two missions of one tidy list (row 51c
     })
     expect(await treeHash(R)).toBe(tree)
     expect(await fileHash(storeOf(R))).toBe(store)
+  })
+
+  // 1.2.8 row 68b (row 68 FAIL 24b): request ids are per mission, so a second tidy mission's request is often D-1 again.
+  // Live: tidy A (D-1) moved the session to DEMS; tidy B (also D-1) then moved a mission of that session to Kampus and
+  // left it behind (journal sessions: []), because "same approval" compared the request id only. Red at 5ddf892d8b.
+  test("another tidy mission's request with the same id: refuses lives in another folder; dry run predicts it; nothing changes", async () => {
+    const rehome = Rehome.make(ports())
+    const a = await rehome.run(call({ approvalRef: "D-1", approvalMission: "2026-11-14_tidy-a" }))
+    if (!("journalId" in a)) throw new Error(JSON.stringify(a))
+    expect(sessions.get("ses_mission")?.directory).toBe(lumen())
+    const before = [
+      await treeHash(R),
+      await fileHash(storeOf(R)),
+      await fileHash(storeOf(lumen())),
+      await fileHash(storeOf(dinas())),
+      JSON.stringify((await journalFiles()).toSorted()),
+    ]
+    const other = { approvalRef: "D-1", approvalMission: "2026-11-14_tidy-b" }
+    const refusal: Rehome.Result = { refused: "REHOME_SESSION_ACTIVE", detail: "session ses_mission lives in another folder" }
+    expect(await rehome.run(second({ ...other, dryRun: true }))).toEqual(refusal)
+    expect(await rehome.run(second(other))).toEqual(refusal)
+    // A call without the approval's mission cannot prove it is the same approval either.
+    expect(await rehome.run(second({ approvalRef: "D-1", approvalMission: undefined }))).toEqual(refusal)
+    expect([
+      await treeHash(R),
+      await fileHash(storeOf(R)),
+      await fileHash(storeOf(lumen())),
+      await fileHash(storeOf(dinas())),
+      JSON.stringify((await journalFiles()).toSorted()),
+    ]).toEqual(before)
+    expect(sessions.get("ses_mission")?.directory).toBe(lumen())
+    expect((await fs.stat(path.join(R, "docs", OTHER))).isDirectory()).toBe(true)
+    expect(published).toHaveLength(1)
+  })
+
+  test("approvalMission must be a mission id", async () => {
+    expect(await Rehome.make(ports()).run(call({ approvalMission: "../x" }))).toMatchObject({ refused: "REHOME_APPROVAL_MISSING" })
   })
 })

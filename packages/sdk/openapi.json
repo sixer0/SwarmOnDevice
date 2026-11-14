@@ -27883,6 +27883,9 @@
           "approvalRef": {
             "type": "string"
           },
+          "approvalMission": {
+            "type": "string"
+          },
           "dryRun": {
             "type": "boolean"
           },

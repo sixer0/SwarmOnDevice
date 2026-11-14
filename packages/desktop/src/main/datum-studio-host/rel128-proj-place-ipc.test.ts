@@ -116,7 +116,8 @@ describe("1.2.8 row 46 AC-PROJf: mission-control:place in main", () => {
     expect(r.data).toEqual({ decision: "U1", group: "DEMS" })
     expect(w.calls).toEqual(["get", "rehome:dry", "answer", "rehome", "place"])
     const move = w.bodies.find((b) => b.rehome)!.rehome as Record<string, unknown>
-    expect(move).toEqual({ missionId: MISSION, from: ROOT, to: `${ROOT}/DEMS`, sessions: [SESSION], approvalRef: "D-1" })
+    // Row 68b (INTENT): the move names the mission holding the request.
+    expect(move).toEqual({ missionId: MISSION, from: ROOT, to: `${ROOT}/DEMS`, sessions: [SESSION], approvalRef: "D-1", approvalMission: MISSION })
     expect(w.bodies.find((b) => b.place)!.place).toEqual({ mission: MISSION, projectDir: `${ROOT}/DEMS`, decision: "D-1" })
     expect(w.bodies.find((b) => b.answer)!.answer).toEqual({ mission: MISSION, request: "D-1", option: "join" })
   })
@@ -392,8 +393,36 @@ describe("1.2.8 row 46b AC-PROJg: one tidy list, approved once (main)", () => {
     const placeA = w.bodies.find((x) => x.place && (x.place as Record<string, unknown>).mission === a)!.place
     expect(placeA).toEqual({ mission: a, projectDir: `${ROOT}/Lumen`, decision: "D-2", tidyMission: HOLDER })
     const moveC = w.bodies.find((x) => x.move && (x.move as Record<string, unknown>).missionId === c)!.move
-    expect(moveC).toEqual({ missionId: c, from: ROOT, to: `${ROOT}/Dinas Contoh`, sessions: [], approvalRef: "D-2", groupKind: "institution" })
+    // Row 68b (INTENT): each tidy move names the tidy mission that holds the request.
+    expect(moveC).toEqual({ missionId: c, from: ROOT, to: `${ROOT}/Dinas Contoh`, sessions: [], approvalRef: "D-2", approvalMission: HOLDER, groupKind: "institution" })
     expect(w.bodies.find((x) => x.answer)!.answer).toEqual({ mission: HOLDER, request: "D-2", option: "approve" })
+  })
+
+  // 1.2.8 row 68b (row 68 FAIL 24b): the listed mission's only session lives in another group (moved there by an
+  // earlier tidy whose request was also D-n). Every linked session is sent wherever it lives, with the tidy mission
+  // that holds the request, so rehome's dry run refuses "lives in another folder": no answer, nothing moves.
+  test("row 68b: a listed mission whose session lives in another group: all its sessions and the tidy mission go to the dry run; the refusal stops everything", async () => {
+    const [a] = ids(1)
+    const linked = "ses_elsewhere68b"
+    const missions = rootMissions([a!])
+    missions.get(a!)!.sessions = [{ client: "swarm", ref: linked }]
+    const seen: Array<Record<string, unknown>> = []
+    const w = tidyWorld({
+      request: tidyRequest([{ mission: a, group: "Kampus", groupKind: "institution" }]),
+      missions,
+      rehome: async (body) => {
+        seen.push(body)
+        if (body.dryRun) return { ok: false, code: "REHOME_SESSION_ACTIVE", message: `session ${linked} lives in another folder` }
+        throw new Error("no move may run")
+      },
+    })
+    const r = (await w.approve()) as Result & { mission?: string }
+    expect(`${r.ok} ${r.code} ${r.mission} ${r.message}`).toBe(`false REHOME_SESSION_ACTIVE ${a} session ${linked} lives in another folder`)
+    expect(seen.length).toBe(1)
+    expect(seen[0]).toEqual({ missionId: a, from: ROOT, to: `${ROOT}/Kampus`, sessions: [linked], approvalRef: "D-2", approvalMission: HOLDER, groupKind: "institution", dryRun: true })
+    expect(w.calls.includes("answer")).toBe(false)
+    expect(w.calls.some((x) => x.startsWith("place:"))).toBe(false)
+    expect(missions.get(a!)!.dir).toBe(ROOT)
   })
 
   test("one dry-run refusal among 3 items: zero moves, no answer recorded, the refusal names that mission", async () => {
@@ -620,7 +649,7 @@ describe("1.2.8 row 46b C98: retry an answered placement whose move did not fini
     const r = await w.go()
     expect(`${r.ok} ${JSON.stringify(r.data)}`).toBe(`true ${JSON.stringify({ decision: "U1", group: "DEMS" })}`)
     expect(w.calls).toEqual(["get", "rehome", "place"])
-    expect(w.bodies.find((b) => b.rehome)!.rehome).toEqual({ missionId: MISSION, from: ROOT, to: `${ROOT}/DEMS`, sessions: [SESSION], approvalRef: "D-1" })
+    expect(w.bodies.find((b) => b.rehome)!.rehome).toEqual({ missionId: MISSION, from: ROOT, to: `${ROOT}/DEMS`, sessions: [SESSION], approvalRef: "D-1", approvalMission: MISSION })
   })
 
   test("a mission already in its marked group is a no-op (idempotent)", async () => {

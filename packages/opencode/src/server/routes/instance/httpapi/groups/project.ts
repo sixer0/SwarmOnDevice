@@ -33,6 +33,9 @@ export const RehomePayload = Schema.Struct({
   approvalRef: Schema.optional(Schema.String).annotate({
     description: "The answered decision of the mission (D-<n>); required, else 409 REHOME_APPROVAL_MISSING",
   }),
+  approvalMission: Schema.optional(Schema.String).annotate({
+    description: "The mission holding approvalRef (the tidy mission of a tidy list); request ids are per mission",
+  }),
   dryRun: Schema.optional(Schema.Boolean),
   compensates: Schema.optional(Schema.String).annotate({
     description: "The journal id of a completed move this call reverses (from and to swapped)",
