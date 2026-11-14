@@ -67,7 +67,7 @@ export function MissionCommand(props: {
     toast: (text, variant = "success") => (props.toast ? props.toast(text, variant) : showToast({ title: text, variant })),
   })
 
-  const options = createMemo(() => (props.model.decision ? decisionOptions(props.model.decision, t) : []))
+  const options = createMemo(() => (props.model.decision ? decisionOptions(props.model.decision, t, language.plural) : []))
   const placement = () => !!props.model.decision && isPlacement(props.model.decision)
   // 1.2.8 row 46b (01d §5): the tidy list renders in the same card; approve waits like join/new.
   const tidy = () => !!props.model.decision && isTidy(props.model.decision)

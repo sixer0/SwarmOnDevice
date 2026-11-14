@@ -139,7 +139,7 @@ describe("1.2.8 row 46b AC-PROJg: the tidy list in the existing decision card", 
     expect(text.includes(tr("session.mission.tidy.stay"))).toBe(true)
     expect(el.querySelectorAll("[data-mission-tidy-list] [data-mission-group-kind]").length).toBe(2)
     expect(el.querySelectorAll("[data-mission-option]").length).toBe(2)
-    expect(button(el, "approve")?.textContent?.includes(tr("session.mission.tidy.approve", { count: "2" }))).toBe(true)
+    expect(button(el, "approve")?.textContent?.includes(tr("session.mission.tidy.approve.other", { count: "2" }))).toBe(true)
     expect(button(el, "decline")?.textContent?.includes(tr("session.mission.tidy.decline"))).toBe(true)
     for (const crafted of ["crafted", "agent consequence", "(agent text)"]) expect(text.includes(crafted)).toBe(false)
     // the list sits in the existing bounded body; no new panel or dialog

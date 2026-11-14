@@ -159,9 +159,10 @@ const pluralCategories = new Map(
 //     two more for row 24c (C176): the rehome refusal texts `session.mission.placement.rootUnknown`/`.folderMissing`, ending at 327.
 //   - 1.2.9 (row 24 of docs/2026-11-14_swarm_1_2_9_patch, AC-C04, N9-045): the tidy result becomes two plural forms
 //     (`session.mission.tidy.done.one`/`.other`, replacing `session.mission.tidy.done`) and the rehome approval refusal text
-//     `session.mission.move.error.approval` is added (EN and ID only): +2 +1 -1, ending at 329.
+//     `session.mission.move.error.approval` is added (EN and ID only): +2 +1 -1, ending at 329;
+//     1.2.9 row 79b (C112): the tidy approve button `session.mission.tidy.approve` becomes `.one`/`.other` (EN and ID only), +2 -1, ending at 330.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// three-hundred-and-thirtieth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// three-hundred-and-thirty-first entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -452,7 +453,8 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.mission.tidy.description",
   "session.mission.tidy.row",
   "session.mission.tidy.stay",
-  "session.mission.tidy.approve",
+  "session.mission.tidy.approve.one",
+  "session.mission.tidy.approve.other",
   "session.mission.tidy.decline",
   "session.mission.tidy.progress",
   "session.mission.tidy.done.one",

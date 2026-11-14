@@ -35,6 +35,8 @@ type PluralKey =
   | "session.revertDock.summary"
   // 1.2.9 row 24a (N9-043, AC-C04): the tidy result, "1 mission moved" / "2 missions moved".
   | "session.mission.tidy.done"
+  // 1.2.9 row 79b (C112): the tidy approve button, "Approve and move 1 mission" / "2 missions".
+  | "session.mission.tidy.approve"
 type Source = { dict: Record<string, string> }
 
 function cookie(locale: Locale) {

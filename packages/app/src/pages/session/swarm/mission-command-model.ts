@@ -58,7 +58,11 @@ export type Translate = (key: string, params?: Record<string, string | number | 
  * 1.2.9 row 24a (AC-C04, N9-043): the count-aware lookup of the tidy result (`language.plural`). The key literal makes
  * the app typecheck prove that `"session.mission.tidy.done"` is a `PluralKey` where mission-command.tsx passes it.
  */
-type Plural = (key: "session.mission.tidy.done", count: number, params?: Record<string, string | number | boolean>) => string
+type Plural = (
+  key: "session.mission.tidy.done" | "session.mission.tidy.approve",
+  count: number,
+  params?: Record<string, string | number | boolean>,
+) => string
 
 /** Feed "who" label (§5.6): owner = You, controller = Swarm, agent = its name or "Agent"; a row adds " · <row>". */
 export function feedWho(line: MissionFeedLine, t: Translate) {
@@ -135,7 +139,7 @@ type DecisionOptionView = {
  * `group` field, never the agent's label or consequence (a crafted label cannot mislead); an option whose group fails
  * the group-name rule, or an id other than join/new/root, is not shown.
  */
-export function decisionOptions(decision: MissionDecisionVM, t: Translate): DecisionOptionView[] {
+export function decisionOptions(decision: MissionDecisionVM, t: Translate, plural: Plural): DecisionOptionView[] {
   const tag = (recommended: boolean) => (recommended ? t("session.mission.decision.recommended") : undefined)
   if (isTidy(decision)) {
     // 1.2.8 row 46b: approve (N8-163, moves the listed missions in main) and decline (N8-164, the ordinary answer).
@@ -143,7 +147,7 @@ export function decisionOptions(decision: MissionDecisionVM, t: Translate): Deci
     const shown: DecisionOptionView[] = []
     const approve = has("approve")
     if (approve && tidyCount(decision) > 0)
-      shown.push({ id: "approve", label: t("session.mission.tidy.approve", { count: tidyCount(decision) }), consequence: "", tag: tag(approve.recommended), moves: true })
+      shown.push({ id: "approve", label: plural("session.mission.tidy.approve", tidyCount(decision)), consequence: "", tag: tag(approve.recommended), moves: true })
     const decline = has("decline")
     if (decline) shown.push({ id: "decline", label: t("session.mission.tidy.decline"), consequence: "", tag: tag(decline.recommended) })
     return shown

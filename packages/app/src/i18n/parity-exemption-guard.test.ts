@@ -311,7 +311,8 @@ const APPROVED_EXEMPT_KEYS = [
   "session.mission.tidy.description",
   "session.mission.tidy.row",
   "session.mission.tidy.stay",
-  "session.mission.tidy.approve",
+  "session.mission.tidy.approve.one",
+  "session.mission.tidy.approve.other",
   "session.mission.tidy.decline",
   "session.mission.tidy.progress",
   "session.mission.tidy.done.one",
@@ -368,10 +369,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the three-hundred-and-twenty-nine approved keys and nothing else", () => {
+  test("the exemption holds exactly the three-hundred-and-thirty approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(329)
-    expect(new Set(exemptKeys).size).toBe(329)
+    expect(exemptKeys.length).toBe(330)
+    expect(new Set(exemptKeys).size).toBe(330)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {
@@ -694,7 +695,8 @@ describe("i18n parity exemption guard", () => {
           "session.mission.tidy.description",
           "session.mission.tidy.row",
           "session.mission.tidy.stay",
-          "session.mission.tidy.approve",
+          "session.mission.tidy.approve.one",
+          "session.mission.tidy.approve.other",
           "session.mission.tidy.decline",
           "session.mission.tidy.progress",
           "session.mission.tidy.done.one",

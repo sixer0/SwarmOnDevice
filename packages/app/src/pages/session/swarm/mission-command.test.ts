@@ -18,7 +18,7 @@ const t = (key: string, params?: Record<string, string | number | boolean>) =>
   params ? `${key}${JSON.stringify(Object.fromEntries(Object.entries(params).sort()))}` : key
 
 // 1.2.9 row 24b: `plural` is a required input; the fake picks the category the way language.tsx does (one/other).
-const plural = (key: "session.mission.tidy.done", count: number, params?: Record<string, string | number | boolean>) =>
+const plural = (key: "session.mission.tidy.done" | "session.mission.tidy.approve", count: number, params?: Record<string, string | number | boolean>) =>
   t(`${key}.${count === 1 ? "one" : "other"}`, { ...params, count })
 
 const MISSION = "2026-11-07_kasus-07"
@@ -143,7 +143,7 @@ describe("checkInstruction", () => {
 
 describe("view helpers", () => {
   test("Recommended tag only on the recommended option, with consequence", () => {
-    const options = decisionOptions(decision, t)
+    const options = decisionOptions(decision, t, plural)
     expect(options).toEqual([
       { id: "rev-a", label: "Rev A", consequence: "Keeps the manual form", tag: "session.mission.decision.recommended" },
       { id: "rev-b", label: "Rev B", consequence: "Needs a new review", tag: undefined },
