@@ -200,11 +200,20 @@ export function createRehomeCaller(opts: {
       // row 24b (C128): rehome's "session <id> lives in another folder" detail reaches the app, which gives it its own text.
       const elsewhere =
         err.code === "REHOME_SESSION_ACTIVE" && typeof err.detail === "string" && err.detail.endsWith("lives in another folder")
+      // row 68f (C175): a missing folder is named (relative to the Default Project; the route never sends a full path).
+      const missing =
+        err.code === "REHOME_FOLDER_MISSING" && typeof err.detail === "string" && typeof err.message === "string" && err.detail !== ""
       if (response.status === 409 && typeof err.code === "string")
         return {
           ok: false,
           code: err.code,
-          message: elsewhere ? (err.detail as string) : typeof err.message === "string" ? err.message : err.code,
+          message: elsewhere
+            ? (err.detail as string)
+            : missing
+              ? `${(err.message as string).replace(/\.$/, "")}: ${err.detail as string}`
+              : typeof err.message === "string"
+                ? err.message
+                : err.code,
           ...(typeof err.journal === "string" ? { journal: err.journal } : {}),
         }
       if (response.status === 403) return unavailable("the local Swarm server refused the move (desktop check); nothing was moved")

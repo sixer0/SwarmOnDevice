@@ -207,9 +207,10 @@ describe("AC-PROJi person proof", () => {
 })
 
 describe("AC-PROJi refusals: one per code, tree + store hash unchanged, no journal", () => {
-  test("REHOME_OUTSIDE_ROOT: no Default Project root set", async () => {
+  // INTENT (1.2.8 row 68f): an unknown root has its own code; "Groups must be inside the Default Project" was the wrong cause.
+  test("REHOME_ROOT_UNKNOWN: no Default Project root set", async () => {
     delete process.env.SWARM_DEFAULT_PROJECT_DIR
-    await refused(body(), "REHOME_OUTSIDE_ROOT")
+    await refused(body(), "REHOME_ROOT_UNKNOWN")
   })
 
   test("REHOME_OUTSIDE_ROOT: to = R/../x, R/a/b, R itself, R/Docs", async () => {

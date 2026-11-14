@@ -38,6 +38,10 @@ export type Code =
   | "REHOME_ROLLED_BACK"
   | "REHOME_SESSION_ACTIVE"
   | "REHOME_ROLLBACK_FAILED"
+  // 1.2.8 row 68f: no Default Project is known to this server (68f), and a folder the move needs is no longer on disk
+  // (68g; `detail` names it relative to the Default Project, or by its last segment outside it).
+  | "REHOME_ROOT_UNKNOWN"
+  | "REHOME_FOLDER_MISSING"
 
 export type StepName = "backup" | "group" | "marker" | "docs" | "folder" | "memory" | "sessions"
 
@@ -88,7 +92,11 @@ export interface Journal {
 
 /** What the primitive needs from the running server; the route (row 44b) supplies the real ones, tests fake them. */
 export interface Ports {
-  /** `SWARM_DEFAULT_PROJECT_DIR` (N8-443); absent -> every call refuses REHOME_OUTSIDE_ROOT. */
+  /**
+   * `SWARM_DEFAULT_PROJECT_DIR` (N8-443): this launch's Default Project path, whether or not the folder exists yet
+   * (row 68f: onboarding may create it after the server started). Looked at on every call: absent -> refuses
+   * REHOME_ROOT_UNKNOWN; the folder not there (yet) -> REHOME_FOLDER_MISSING.
+   */
   root: string | undefined
   /** `Global.Path.data` unless given: journals go to `<data>/rehome`, stores are `<data>/memory/<key>.json`. */
   dataDir?: string
@@ -292,11 +300,21 @@ type Plan = {
 
 async function realRoot(ports: Ports) {
   const value = ports.root
-  if (!value || !path.isAbsolute(value)) throw new Refusal("REHOME_OUTSIDE_ROOT", "no Default Project root")
+  if (!value || !path.isAbsolute(value)) throw new Refusal("REHOME_ROOT_UNKNOWN", "no Default Project root")
   const real = await fs.realpath(value).catch(() => undefined)
-  const stat = real ? await lstatOrUndefined(real) : undefined
-  if (!real || !stat?.isDirectory()) throw new Refusal("REHOME_OUTSIDE_ROOT", "no Default Project root")
+  // Row 68f: the first launch's onboarding creates the folder after the server started; until then it is missing.
+  if (!real) throw new Refusal("REHOME_FOLDER_MISSING", path.basename(value))
+  const stat = await lstatOrUndefined(real)
+  if (!stat?.isDirectory()) throw new Refusal("REHOME_OUTSIDE_ROOT", "no Default Project root")
   return { real, given: path.resolve(value) }
+}
+
+/** Row 68g: a folder named for the person without its absolute part: relative to R inside it, else its last segment. */
+function shownFolder(folder: string, root: { real: string; given: string }) {
+  const resolved = path.resolve(folder)
+  for (const base of [root.given, root.real])
+    if (resolved !== base && isInside(resolved, base)) return path.relative(base, resolved)
+  return path.basename(resolved)
 }
 
 /** One child level of R, lexically and after realpath of the parent; `to === R` and `R/docs` never. */
@@ -426,6 +444,9 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
     if (session.busy) throw new Refusal("REHOME_SESSION_ACTIVE", `session ${id} busy`)
     if (path.resolve(session.directory) !== path.resolve(from)) {
       if (!compensating && (await movedByThisApproval(id, session.directory))) continue
+      // Row 68g: the session's folder was deleted or renamed while Swarm had it open.
+      if (!(await lstatOrUndefined(session.directory)))
+        throw new Refusal("REHOME_FOLDER_MISSING", shownFolder(session.directory, root))
       throw new Refusal("REHOME_SESSION_ACTIVE", `session ${id} lives in another folder`)
     }
     if (session.projectID !== toProject) throw new Refusal("REHOME_OUTSIDE_ROOT", "project boundary")

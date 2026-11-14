@@ -7,13 +7,33 @@
 // which finds `<XDG_STATE_HOME>/swarm/datum-studio.env` through the XDG_STATE_HOME the sidecar already gets
 // (sidecar.ts prepareSidecarEnv), and the Studio token stays in that 0600 file, never in this environment.
 
+import { statSync } from "node:fs"
 import { isAbsolute } from "node:path"
-import { existingDefaultProjectDir } from "./onboarding-test-root"
+import { defaultProjectDir } from "./onboarding-test-root"
 
 export const RENDER_SOCKET_KEY = "DATUM_RENDER_SOCKET"
-/** N8-443 (AC-PROJa, 1.2.8 row 25): the absolute Default Project root, read by the server's re-home route. Not a secret. */
+/**
+ * N8-443 (AC-PROJa, 1.2.8 row 25): the absolute Default Project root, read by the server's re-home route on every call.
+ * Not a secret. Row 68f: set also before the folder exists (first launch), see launchDefaultProjectDir.
+ */
 export const DEFAULT_PROJECT_DIR_KEY = "SWARM_DEFAULT_PROJECT_DIR"
 export const RENDER_TOKEN_KEY = "DATUM_RENDER_TOKEN"
+
+/**
+ * 1.2.8 row 68f (C175): this launch's Default Project path for the sidecar, also while the folder does not exist yet.
+ * On a first launch the sidecar starts before onboarding creates the folder; the server's re-home route looks at the
+ * folder when the person acts (missing -> REHOME_FOLDER_MISSING), so a folder made later works without a restart.
+ * Only a non-folder at that path (a file, a link to a file) is not passed on.
+ */
+export function launchDefaultProjectDir() {
+  const dir = defaultProjectDir()
+  if (!dir || !isAbsolute(dir)) return undefined
+  try {
+    return statSync(dir).isDirectory() ? dir : undefined
+  } catch (error) {
+    return (error as { code?: unknown }).code === "ENOENT" ? dir : undefined
+  }
+}
 
 export type RenderEnv = { DATUM_RENDER_SOCKET: string; DATUM_RENDER_TOKEN: string }
 
@@ -31,9 +51,9 @@ export function createSidecarEnv(
   base: NodeJS.ProcessEnv,
   render?: RenderEnv,
   platform: NodeJS.Platform = process.platform,
-  // undefined: this launch's Default Project when it exists as a folder (the test root's under test onboarding,
-  // R-7); null: none. An explicit path is passed through.
-  defaultProject: string | null | undefined = existingDefaultProjectDir(),
+  // undefined: this launch's Default Project, existing or still to be created by onboarding (the test root's under
+  // test onboarding, R-7; row 68f); null: none. An explicit path is passed through.
+  defaultProject: string | null | undefined = launchDefaultProjectDir(),
 ): Record<string, string> {
   const env = Object.fromEntries(
     Object.entries(base).flatMap(([key, value]) => (value === undefined ? [] : [[key, String(value)]])),

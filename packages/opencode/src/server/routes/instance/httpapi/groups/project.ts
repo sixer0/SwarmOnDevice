@@ -70,6 +70,8 @@ export const RehomeCodes = [
   "REHOME_ROLLED_BACK",
   "REHOME_SESSION_ACTIVE",
   "REHOME_ROLLBACK_FAILED",
+  "REHOME_ROOT_UNKNOWN",
+  "REHOME_FOLDER_MISSING",
 ] as const
 
 /** A refusal: nothing moved (REHOME_ROLLED_BACK: the move was undone). `data.code` is the register code (N8-135..141). */

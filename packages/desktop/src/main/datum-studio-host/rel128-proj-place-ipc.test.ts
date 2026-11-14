@@ -232,6 +232,21 @@ describe("1.2.8 row 46: the rehome caller (nonce header, local server only)", ()
     if (!busy.ok) expect(`${busy.code} ${busy.message}`).toBe("REHOME_SESSION_ACTIVE A session or terminal of this mission is still running.")
     expect(busy.ok).toBe(false)
   })
+
+  test("row 68f (C175): a missing-folder refusal names the folder; an unknown Default Project keeps the route text", async () => {
+    const refuse = (data: Record<string, unknown>) => async () =>
+      new Response(JSON.stringify({ name: "RehomeRefusedError", data }), { status: 409 })
+    const call = (data: Record<string, unknown>) =>
+      ipc.createRehomeCaller({ server, nonce: () => "n".repeat(43), fetch: refuse(data) })(body)
+    const missing = await call({ code: "REHOME_FOLDER_MISSING", message: "A folder this move needs is no longer on disk.", detail: "Kampus" })
+    expect(`${missing.ok} ${missing.ok ? "" : `${missing.code} ${missing.message}`}`).toBe(
+      "false REHOME_FOLDER_MISSING A folder this move needs is no longer on disk: Kampus",
+    )
+    const unknown = await call({ code: "REHOME_ROOT_UNKNOWN", message: "Swarm does not know where your Default Project folder is." })
+    expect(`${unknown.ok} ${unknown.ok ? "" : `${unknown.code} ${unknown.message}`}`).toBe(
+      "false REHOME_ROOT_UNKNOWN Swarm does not know where your Default Project folder is.",
+    )
+  })
 })
 
 describe("1.2.8 row 46 AC-SEC05 main half: place goes through the attested client", () => {

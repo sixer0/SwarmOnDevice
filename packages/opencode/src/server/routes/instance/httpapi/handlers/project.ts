@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises"
 import * as InstanceState from "@/effect/instance-state"
 import { InstanceRef } from "@/effect/instance-ref"
 import { GlobalBus } from "@/bus/global"
@@ -55,6 +56,9 @@ const REFUSAL_TEXT: Record<Rehome.Code, string> = {
   REHOME_ROLLED_BACK: "The move failed and was undone. Nothing changed.",
   REHOME_SESSION_ACTIVE: "A session or terminal of this mission is still running.",
   REHOME_ROLLBACK_FAILED: "An earlier move of this mission could not be undone; resolve it before moving it again.",
+  // Row 68f: said apart from REHOME_OUTSIDE_ROOT, whose "Groups must be ..." was shown for both on a first launch.
+  REHOME_ROOT_UNKNOWN: "Swarm does not know where your Default Project folder is, so missions cannot be moved into groups.",
+  REHOME_FOLDER_MISSING: "A folder this move needs is no longer on disk.",
 }
 
 const decodeSessionID = Schema.decodeUnknownOption(SessionID)
@@ -98,9 +102,12 @@ export const rehomePorts = Effect.gen(function* () {
       )
     },
     // OP20-8: the server knows a terminal's start folder only (`Pty.Info.cwd`), never where its shell moved later.
+    // Row 68g: a loaded folder that is no longer on disk (deleted, renamed, or loaded before it existed) cannot hold
+    // the mission folder and has no services to build; skipping it keeps one stale folder from failing every move.
     async terminals() {
       const cwds: string[] = []
       for (const ctx of await loaded()) {
+        if (!(await stat(ctx.directory).then((info) => info.isDirectory(), () => false))) continue
         const list = await run(
           Pty.Service.use((service) => service.list()).pipe(
             Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))),

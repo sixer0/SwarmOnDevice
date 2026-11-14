@@ -330,8 +330,9 @@ describe("Rehome.run (AC-PROJc, N8-364)", () => {
     terminals = [path.join(R, "docs", MISSION, "report")]
     expect(await rehome.run(call())).toMatchObject({ refused: "REHOME_SESSION_ACTIVE" })
     terminals = []
+    // INTENT (1.2.8 row 68f): an unknown root has its own code.
     expect(await Rehome.make({ ...ports(), root: undefined }).run(call())).toMatchObject({
-      refused: "REHOME_OUTSIDE_ROOT",
+      refused: "REHOME_ROOT_UNKNOWN",
     })
     expect(await rehome.run(call({ approvalRef: "yes" }))).toMatchObject({ refused: "REHOME_APPROVAL_MISSING" })
     expect(await treeHash(R)).toBe(tree)

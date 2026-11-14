@@ -117,13 +117,27 @@ describe("sidecar env (AC-PROJa)", () => {
     expect(inside(env[KEY]!, fixed)).toBe(true)
   })
 
-  test("an inherited value is deleted when the Default Project folder is absent", () => {
+  // INTENT (1.2.8 row 68f, C175): on a first launch the sidecar starts before onboarding creates the folder. It is now
+  // told this launch's path anyway (the server looks at the folder when the person acts), so moves work once
+  // onboarding has made it, without a restart. An inherited value is still replaced.
+  test("first launch: the folder is absent at sidecar start, this launch's path is passed and an inherited one replaced", async () => {
     const fixed = testRoot()
     prepareOnboardingTestRoot({ OPENCODE_TEST_ONBOARDING: "1", OPENCODE_TEST_ONBOARDING_ROOT: fixed })
+    const expected = join(fixed, "Documents", "Default Project")
+    expect(existsSync(expected)).toBe(false)
 
     const env = createSidecarEnv({ PATH: "/bin", [KEY]: "/elsewhere/Default Project" }, undefined, "darwin")
-    expect(KEY in env).toBe(false)
+    expect(env[KEY]).toBe(expected)
     expect(env.PATH).toBe("/bin")
+    expect(existsSync(expected)).toBe(false)
+    // Onboarding then creates exactly the folder the sidecar was told.
+    expect(await onboarding.finishFirstLaunchOnboarding(true)).toBe(env[KEY])
+  })
+
+  test("outside test mode, first launch: the real Documents' Default Project path is passed before it exists", () => {
+    prepareOnboardingTestRoot({})
+    expect(existsSync(join(realDocuments, "Default Project"))).toBe(false)
+    expect(createSidecarEnv({ PATH: "/bin" }, undefined, "darwin")[KEY]).toBe(join(realDocuments, "Default Project"))
   })
 
   test("a file where the folder should be is not passed on", () => {
