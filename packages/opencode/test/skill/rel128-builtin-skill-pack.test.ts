@@ -491,7 +491,7 @@ describe("swarm-whats-new", () => {
     files: [],
     missionTypes: [],
   }
-  const VERSIONS = ["1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
+  const VERSIONS = ["1.2.9", "1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
 
   it.live("listed as a built-in with its description and English and Indonesian triggers", () =>
     provideTmpdirInstance(() =>
@@ -543,13 +543,14 @@ describe("swarm-whats-new", () => {
   })
 
   test("U5: learn, remember, ask before testing, test only after a yes, record; the checklist is its own section", () => {
-    const flow = text.slice(text.indexOf("## Use it in this order"), text.indexOf("\n## 1.2.8"))
+    // 1.2.9 row 65 (N9-127, INTENT): the flow ends at the first version heading, whichever build is newest.
+    const flow = text.slice(text.indexOf("## Use it in this order"), text.search(/\n## \d+\.\d+\.\d+/))
     const steps = ["1. Learn:", "2. Remember", "3. Ask", "4. Test only after a yes", "5. Record"].map((step) => flow.indexOf(step))
     for (const position of steps) expect(position).toBeGreaterThan(0)
     expect(steps).toEqual([...steps].sort((a, b) => a - b))
     expect(flow).toContain('"Apakah Anda mau saya uji semua update barunya?"')
     expect(flow).toContain("Never start the self-test without a yes.")
-    expect(text.indexOf("## Use it in this order")).toBeLessThan(text.indexOf("\n## 1.2.8"))
+    expect(text.indexOf("## Use it in this order")).toBeLessThan(text.search(/\n## \d+\.\d+\.\d+/))
     const checklist = text.slice(text.indexOf("## Self-test checklist (only after the person's yes)"))
     expect(checklist.length).toBeGreaterThan(200)
     expect(checklist.replace(/\s+/g, " ")).toContain(
@@ -561,7 +562,7 @@ describe("swarm-whats-new", () => {
   // Row 58d (C184): the delta security findings S-22, S-23 and S-24 on this text.
   test("S-22: the self-test runs only in a dedicated scratch project and never tells the agent to write into a skills folder", () => {
     const flat = (part: string) => part.replace(/\s+/g, " ")
-    const flow = flat(text.slice(text.indexOf("## Use it in this order"), text.indexOf("\n## 1.2.8")))
+    const flow = flat(text.slice(text.indexOf("## Use it in this order"), text.search(/\n## \d+\.\d+\.\d+/)))
     expect(flow).toContain("4. Test only after a yes, only in a dedicated scratch project:")
     const checklist = flat(text.slice(text.indexOf("## Self-test checklist (only after the person's yes)")))
     expect(checklist).toContain(
@@ -594,6 +595,38 @@ describe("swarm-whats-new", () => {
       "The vault: only inbox notes with `swarm-web_vault_inbox`; never write vault files with any other tool.",
     )
     expect(flat).not.toContain("never write the vault yourself")
+  })
+
+  // 1.2.9 row 65 (AC-B10, N9-127): S-34 and S-35 restore lost wording; the 1.2.9 brief states the shipped codes.
+  test("B9-B10: S-34 and S-35 wording, 1.2.9 brief", () => {
+    const flat = (part: string) => part.replace(/\s+/g, " ")
+    const slice = (from: string, to: string) => flat(text.slice(text.indexOf(`\n## ${from}`), text.indexOf(`\n## ${to}`)))
+    const v127 = slice("1.2.7", "1.2.6")
+    expect(v127).toContain("adding or connecting MCP servers")
+    expect(v127).toContain("recognised tests and builds")
+    expect(slice("1.2.8", "1.2.7")).toContain("With curl/httpie/xh, only the registered options.")
+    const checklist = flat(text.slice(text.indexOf("## Self-test checklist (only after the person's yes)")))
+    expect(checklist).toContain("create the scratch project outside the Default Project, or in a folder the person names")
+    expect(flat(text)).not.toContain("code does not check inbox notes for classification words")
+    expect(text.indexOf("\n## 1.2.9")).toBeGreaterThan(0)
+    const v129 = slice("1.2.9", "1.2.8")
+    for (const code of [
+      "BLOCKED_BY_POLICY",
+      "SESSION_NOT_ATTESTED",
+      "SESSION_REF_IGNORED",
+      "REHOME_APPROVAL_MISSING",
+      "REHOME_SYMLINK",
+      "GEOM_EDGE_ALONG",
+      "GEOM_EDGE_HEADER",
+      "GEOM_EDGE_DOUBLE_BACK",
+    ])
+      expect(v129.includes(code) ? code : `1.2.9 brief does not name ${code}`).toBe(code)
+    // S9-02: an unattested by: user answer is refused; the brief never tells the agent to answer for the person.
+    expect(v129).toContain("ask the person and wait (in autonomous mode record your own C<n> decision)")
+    expect(v129).not.toContain("answer as yourself")
+    expect(v129).not.toContain("by: controller")
+    // R-1: the reason is written in words; a snake_case reason would read as a tool name.
+    expect(text).not.toContain("classified_content")
   })
 
   test("names only registered tools and real built-in skills", () => {
