@@ -250,10 +250,24 @@ export const SettingsSkills: Component<{ v2?: boolean; directory?: Accessor<stri
     })
 
   // SR8-08: a draft that runs commands is approved only from its second confirm, which alone sets acceptCommands.
+  // 1.2.9 AC-B08 (N9-011, C8): refuse first, without asking. The first click sends approve WITHOUT acceptCommands,
+  // which the server refuses with no write: SKILL_SHELL_UNTRUSTED (untrusted project) shows its text and no confirm;
+  // only SKILL_SHELL_UNCONFIRMED opens the second confirm.
   const approve = (draft: SkillDraftRow, confirmed: boolean) => {
     if (draft.runsCommands && !confirmed) {
-      setState({ error: undefined, confirm: { kind: "commands", key: keyOf(draft.scope, draft.name) } })
-      return
+      setState({ confirm: undefined })
+      return run(async () => {
+        const result = await client().skill.draftApprove({ name: draft.name, scope: draft.scope }, await headers())
+        if (result.error && skillErrorCode(result.error) === "SKILL_SHELL_UNCONFIRMED") {
+          setState({ confirm: { kind: "commands", key: keyOf(draft.scope, draft.name) } })
+          return {}
+        }
+        if (!result.error) {
+          saved(result.data)
+          reload()
+        }
+        return result
+      })
     }
     return run(async () => {
       const result = await client().skill.draftApprove(
