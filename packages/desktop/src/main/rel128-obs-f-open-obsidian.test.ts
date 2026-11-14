@@ -165,7 +165,7 @@ describe("staged Obsidian fallback (row 42d)", () => {
   const binaryBytes = "#!/bin/sh\n# synthetic staged obsidian\n"
   const sha = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex")
 
-  function stage(options: { digest?: string; version?: string; symlinkApp?: boolean } = {}) {
+  function stage(options: { digest?: string; version?: string; symlinkApp?: boolean; pointerTeam?: string } = {}) {
     const home = mkdtempSync(join(tmpdir(), "obsd-"))
     const root = join(home, ".swarm", "tools", "obsidian")
     const version = options.version ?? "v1.14.4"
@@ -186,17 +186,22 @@ describe("staged Obsidian fallback (row 42d)", () => {
       JSON.stringify({
         version,
         appBinarySha256: options.digest ?? sha(binaryBytes),
-        observedTeamIdentifier: "TEAMID0000",
+        observedTeamIdentifier: options.pointerTeam ?? "6JSW4SJWN9",
         installedAt: "2026-11-09T00:00:00.000Z",
       }),
     )
     return { home, app: join(root, version, "Obsidian.app") }
   }
 
-  function setup(home: string, options: { launchFails?: boolean } = {}) {
+  // Row 42e (S-14, C157): codesign is stubbed too. team = what `codesign -dvv` prints; verifyFails / detailFails make
+  // that codesign call reject.
+  type Sig = { team?: string; verifyFails?: boolean; detailFails?: boolean }
+  function setup(home: string, options: { launchFails?: boolean; sig?: Sig } = {}) {
     const handlers = new Map<string, Handler>()
     const opened: string[] = []
     const launched: { file: string; args: string[] }[] = []
+    const signed: { file: string; args: string[] }[] = []
+    const sig = options.sig ?? {}
     const logs: { message: string; context: Record<string, unknown> }[] = []
     const frame = { url: "oc://renderer/index.html" }
     const sender = { mainFrame: frame }
@@ -211,11 +216,29 @@ describe("staged Obsidian fallback (row 42d)", () => {
       log: (message: string, context: Record<string, unknown>) => logs.push({ message, context }),
       setupHome: () => home,
       execFile: async (file: string, args: string[]) => {
+        if (file === "/usr/bin/codesign") {
+          signed.push({ file, args })
+          if (args[0] === "--verify") {
+            if (sig.verifyFails) throw new Error("codesign: invalid signature")
+            return { stdout: "", stderr: "" }
+          }
+          if (sig.detailFails) throw new Error("codesign: not signed")
+          const team = sig.team ?? "6JSW4SJWN9"
+          return { stdout: "", stderr: `Executable=x\nAuthority=Developer ID Application\nTeamIdentifier=${team}\n` }
+        }
         launched.push({ file, args })
         if (options.launchFails) throw new Error("open failed")
+        return { stdout: "", stderr: "" }
       },
     })
-    return { handler: handlers.get("open-obsidian-note")!, own: { sender, senderFrame: frame }, opened, launched, logs }
+    return {
+      handler: handlers.get("open-obsidian-note")!,
+      own: { sender, senderFrame: frame },
+      opened,
+      launched,
+      signed,
+      logs,
+    }
   }
 
   const homes: string[] = []
@@ -279,9 +302,139 @@ describe("staged Obsidian fallback (row 42d)", () => {
   test("ipc.ts wires the setup home and execFile without a shell", () => {
     const ipc = source("ipc.ts")
     expect(ipc.includes("setupHome: () => resolveSetupHome(process.env, userInfo().homedir)")).toBe(true)
-    expect(ipc.includes("execFile(file, args, (err) => (err ? reject(err) : resolve()))")).toBe(true)
+    expect(ipc.includes("execFile(file, args, { timeout: 30_000 }, (err, stdout, stderr) =>")).toBe(true)
     const handlerSrc = source("external-url.ts")
     expect(handlerSrc.includes('deps.execFile("/usr/bin/open", ["-a", staged.app, resolved.url])')).toBe(true)
     expect(/shell:\s*true/.test(ipc + handlerSrc)).toBe(false)
+  })
+})
+
+// 1.2.8 row 42e (S-14 Low, C157): the digest check guards corruption only (its expected value sits in the same
+// user-writable current.json). Before launch the staged app must also pass `codesign --verify --deep --strict` and
+// `codesign -dvv` must print TeamIdentifier = the pin shipped in external-url.ts (6JSW4SJWN9, observed at install;
+// tools.lock.json team_id is still null), and current.json's observedTeamIdentifier must equal the same pin.
+// codesign and open are stubbed: nothing real is run or launched; mkdtemp HOME only.
+describe("staged Obsidian signature gate (row 42e, S-14)", () => {
+  type Handler = (event: unknown, ...args: unknown[]) => Promise<unknown>
+  const binaryBytes = "#!/bin/sh\n# synthetic staged obsidian\n"
+  const sha = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex")
+  const homes: string[] = []
+  afterAll(() => homes.forEach((h) => rmSync(h, { recursive: true, force: true })))
+
+  const ABSENT = Symbol("absent")
+  function stage(pointerTeam: unknown = "6JSW4SJWN9") {
+    const home = mkdtempSync(join(tmpdir(), "obse-"))
+    homes.push(home)
+    const root = join(home, ".swarm", "tools", "obsidian")
+    const macos = join(root, "v1.14.4", "Obsidian.app", "Contents", "MacOS")
+    mkdirSync(macos, { recursive: true })
+    writeFileSync(join(macos, "Obsidian"), binaryBytes)
+    const pointer: Record<string, unknown> = { version: "v1.14.4", appBinarySha256: sha(binaryBytes) }
+    if (pointerTeam !== ABSENT) pointer.observedTeamIdentifier = pointerTeam
+    writeFileSync(join(root, "current.json"), JSON.stringify(pointer))
+    return { home, app: realpathSync(join(root, "v1.14.4", "Obsidian.app")) }
+  }
+
+  function setup(home: string, sig: { team?: string; verifyFails?: boolean; detailFails?: boolean } = {}) {
+    const handlers = new Map<string, Handler>()
+    const calls: { file: string; args: string[] }[] = []
+    const logs: { message: string; context: Record<string, unknown> }[] = []
+    const frame = { url: "oc://renderer/index.html" }
+    const sender = { mainFrame: frame }
+    const win = { isDestroyed: () => false, webContents: sender }
+    ext.registerOpenObsidianNoteHandler({
+      ipcMain: { handle: (channel: string, fn: Handler) => handlers.set(channel, fn) },
+      windowOf: (s: unknown) => (s === sender ? win : null),
+      isRendererUrl: (url: string | undefined) => url === frame.url,
+      vaultRoot: () => vault,
+      protocolApp: () => "",
+      openExternal: async () => undefined,
+      log: (message: string, context: Record<string, unknown>) => logs.push({ message, context }),
+      setupHome: () => home,
+      execFile: async (file: string, args: string[]) => {
+        calls.push({ file, args })
+        if (file === "/usr/bin/codesign" && args[0] === "--verify" && sig.verifyFails) throw new Error("invalid")
+        if (file === "/usr/bin/codesign" && args[0] === "-dvv") {
+          if (sig.detailFails) throw new Error("not signed")
+          return { stdout: "", stderr: `Identifier=md.obsidian\nTeamIdentifier=${sig.team ?? "6JSW4SJWN9"}\n` }
+        }
+        return { stdout: "", stderr: "" }
+      },
+    })
+    const launched = () => calls.filter((c) => c.file !== "/usr/bin/codesign")
+    return { handler: handlers.get("open-obsidian-note")!, own: { sender, senderFrame: frame }, calls, launched, logs }
+  }
+
+  test("valid signature + pinned team -> codesign verify, codesign -dvv, then open -a; opened", async () => {
+    const st = stage()
+    const s = setup(st.home)
+    expect(await s.handler(s.own, hub)).toBe("opened")
+    expect(s.calls).toEqual([
+      { file: "/usr/bin/codesign", args: ["--verify", "--deep", "--strict", st.app] },
+      { file: "/usr/bin/codesign", args: ["-dvv", st.app] },
+      { file: "/usr/bin/open", args: ["-a", st.app, "obsidian://open?path=" + encodeURIComponent(realpathSync(hub))] },
+    ])
+    expect(s.logs.length).toBe(0)
+  })
+
+  test("wrong TeamIdentifier from codesign -> failed staged-signature, nothing launched, no path logged", async () => {
+    const st = stage()
+    const s = setup(st.home, { team: "ABCDE12345" })
+    expect(await s.handler(s.own, hub)).toBe("failed")
+    expect(s.launched().length).toBe(0)
+    expect(s.logs.map((l) => l.context.reason)).toEqual(["staged-signature"])
+    expect(JSON.stringify(s.logs).includes(st.home)).toBe(false)
+    expect(s.logs.every((l) => Object.keys(l.context).join() === "reason")).toBe(true)
+  })
+
+  test("codesign --verify or -dvv erroring -> failed staged-signature, nothing launched", async () => {
+    for (const sig of [{ verifyFails: true }, { detailFails: true }]) {
+      const st = stage()
+      const s = setup(st.home, sig)
+      expect(await s.handler(s.own, hub)).toBe("failed")
+      expect(s.launched().length).toBe(0)
+      expect(s.logs.map((l) => l.context.reason)).toEqual(["staged-signature"])
+    }
+  })
+
+  test("no TeamIdentifier printed -> failed staged-signature", async () => {
+    const st = stage()
+    const s = setup(st.home, { team: "" })
+    expect(await s.handler(s.own, hub)).toBe("failed")
+    expect(s.launched().length).toBe(0)
+  })
+
+  test("current.json observedTeamIdentifier absent or not the pin -> failed staged-signature, nothing launched", async () => {
+    for (const team of ["ABCDE12345", ABSENT, null, "6jsw4sjwn9"]) {
+      const st = stage(team)
+      const s = setup(st.home)
+      expect(await s.handler(s.own, hub)).toBe("failed")
+      expect(s.launched().length).toBe(0)
+      expect(s.logs.map((l) => l.context.reason)).toEqual(["staged-signature"])
+    }
+  })
+
+  test("digest mismatch still fails first (staged-digest), before any codesign call", async () => {
+    const home = mkdtempSync(join(tmpdir(), "obse-"))
+    homes.push(home)
+    const root = join(home, ".swarm", "tools", "obsidian")
+    mkdirSync(join(root, "v1.14.4", "Obsidian.app", "Contents", "MacOS"), { recursive: true })
+    writeFileSync(join(root, "v1.14.4", "Obsidian.app", "Contents", "MacOS", "Obsidian"), binaryBytes)
+    writeFileSync(
+      join(root, "current.json"),
+      JSON.stringify({ version: "v1.14.4", appBinarySha256: "0".repeat(64), observedTeamIdentifier: "6JSW4SJWN9" }),
+    )
+    const s = setup(home)
+    expect(await s.handler(s.own, hub)).toBe("failed")
+    expect(s.calls.length).toBe(0)
+    expect(s.logs.map((l) => l.context.reason)).toEqual(["staged-digest"])
+  })
+
+  test("the pin is a shipped constant in main, codesign is run by absolute path without a shell", () => {
+    const handlerSrc = source("external-url.ts")
+    expect(handlerSrc.includes('export const OBSIDIAN_TEAM_ID = "6JSW4SJWN9"')).toBe(true)
+    expect(ext.OBSIDIAN_TEAM_ID).toBe("6JSW4SJWN9")
+    expect(handlerSrc.includes('"/usr/bin/codesign"')).toBe(true)
+    expect(/shell:\s*true/.test(handlerSrc + source("ipc.ts"))).toBe(false)
   })
 })

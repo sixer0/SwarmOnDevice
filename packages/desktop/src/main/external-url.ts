@@ -85,10 +85,19 @@ const POINTER_MAX_BYTES = 64 * 1024
 const SAFE_VERSION = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 const SHA256_HEX = /^[0-9a-f]{64}$/
 
+// 1.2.8 row 42e (S-14 Low, C157): the digest above guards against corruption only — its expected value sits in the
+// same user-writable current.json and only Contents/MacOS/Obsidian is hashed. So before launch the staged app must
+// also pass `codesign --verify --deep --strict` and `codesign -dvv` must print this TeamIdentifier. The pin ships in
+// the app (not only in current.json): tools.lock.json obsidian.team_id is still null, and 6JSW4SJWN9 is the value
+// setup's macSignatureCheck observed on the mounted v1.14.4 app and recorded as current.json observedTeamIdentifier
+// (packages/setup/src/steps/obsidian/index.ts). current.json's observedTeamIdentifier must equal it as well.
+export const OBSIDIAN_TEAM_ID = "6JSW4SJWN9"
+const CODESIGN = "/usr/bin/codesign"
+
 export type StagedObsidianApp =
   | { app: string }
   | { reason: "absent" }
-  | { reason: "staged-invalid" | "staged-escape" | "staged-digest" }
+  | { reason: "staged-invalid" | "staged-escape" | "staged-digest" | "staged-signature" }
 
 async function sha256File(file: string) {
   const hash = createHash("sha256")
@@ -111,7 +120,7 @@ export async function resolveStagedObsidianApp(home: string): Promise<StagedObsi
     .then((text) => JSON.parse(text) as unknown)
     .catch(() => undefined)
   if (!pointer || typeof pointer !== "object" || Array.isArray(pointer)) return { reason: "staged-invalid" }
-  const { version, appBinarySha256 } = pointer as Record<string, unknown>
+  const { version, appBinarySha256, observedTeamIdentifier } = pointer as Record<string, unknown>
   if (typeof version !== "string" || !SAFE_VERSION.test(version) || version.includes(".."))
     return { reason: "staged-invalid" }
   if (typeof appBinarySha256 !== "string" || !SHA256_HEX.test(appBinarySha256)) return { reason: "staged-invalid" }
@@ -129,7 +138,30 @@ export async function resolveStagedObsidianApp(home: string): Promise<StagedObsi
   if (!realBinary || !realBinary.startsWith(realApp + sep)) return { reason: "staged-escape" }
   const digest = await sha256File(realBinary).catch(() => undefined)
   if (digest !== appBinarySha256) return { reason: "staged-digest" }
+  if (observedTeamIdentifier !== OBSIDIAN_TEAM_ID) return { reason: "staged-signature" }
   return { app: realApp }
+}
+
+/** Row 42e: execFile's output; codesign -dvv prints its identity on stderr. */
+export type ExecFileOutput = { stdout: string; stderr: string }
+
+/**
+ * Row 42e (S-14): `codesign --verify --deep --strict <app>` succeeds and `codesign -dvv <app>` prints
+ * TeamIdentifier=OBSIDIAN_TEAM_ID. Any rejection, missing output or other team -> false. execFile, no shell.
+ */
+export async function verifyStagedObsidianSignature(
+  app: string,
+  execFile: (file: string, args: string[]) => Promise<ExecFileOutput | void>,
+): Promise<boolean> {
+  try {
+    await execFile(CODESIGN, ["--verify", "--deep", "--strict", app])
+    const detail = await execFile(CODESIGN, ["-dvv", app])
+    if (!detail) return false
+    const team = /^TeamIdentifier=(\S+)$/m.exec(`${detail.stdout ?? ""}\n${detail.stderr ?? ""}`)?.[1]
+    return team === OBSIDIAN_TEAM_ID
+  } catch {
+    return false
+  }
 }
 
 export type ObsidianNoteIpcDeps = {
@@ -145,8 +177,9 @@ export type ObsidianNoteIpcDeps = {
   log: (message: string, context: { reason: string }) => void
   /** Row 42d: the setup home (setup-runner resolveSetupHome) holding .swarm/tools/obsidian; absent = no fallback. */
   setupHome?: () => string
-  /** Row 42d: child_process.execFile (no shell); called only as ("/usr/bin/open", ["-a", app, url]). */
-  execFile?: (file: string, args: string[]) => Promise<void>
+  /** Row 42d/42e: child_process.execFile (no shell); called only as ("/usr/bin/codesign", [...]) and
+   *  ("/usr/bin/open", ["-a", app, url]). Resolves with stdout/stderr. */
+  execFile?: (file: string, args: string[]) => Promise<ExecFileOutput | void>
 }
 
 // SR8-15: the mission-ipc.ts / desktop-nonce.ts sender rule: the main frame of a live window main created, on the
@@ -177,6 +210,8 @@ export function registerOpenObsidianNoteHandler(deps: ObsidianNoteIpcDeps) {
       if (!deps.setupHome || !deps.execFile) return refuse("no-app", "no-app")
       const staged = await resolveStagedObsidianApp(deps.setupHome()).catch(() => ({ reason: "staged-invalid" as const }))
       if ("reason" in staged) return staged.reason === "absent" ? refuse("no-app", "no-app") : refuse(staged.reason, "failed")
+      // Row 42e (S-14): signature + pinned team before launch.
+      if (!(await verifyStagedObsidianSignature(staged.app, deps.execFile))) return refuse("staged-signature", "failed")
       return deps.execFile("/usr/bin/open", ["-a", staged.app, resolved.url]).then(
         () => "opened" as const,
         () => refuse("staged-launch", "failed"),

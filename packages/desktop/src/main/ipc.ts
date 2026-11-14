@@ -359,9 +359,14 @@ export function registerIpcHandlers(deps: Deps) {
     openExternal: (url) => shell.openExternal(url),
     log: (message, context) => writeLog("window", message, context, "warn"),
     // Row 42d (U3): the Install-tools staged app when obsidian:// has no registered handler; no shell.
+    // Row 42e (S-14): also runs /usr/bin/codesign on it first, so the output is returned (stderr holds the identity).
     setupHome: () => resolveSetupHome(process.env, userInfo().homedir),
     execFile: (file, args) =>
-      new Promise<void>((resolve, reject) => execFile(file, args, (err) => (err ? reject(err) : resolve()))),
+      new Promise((resolve, reject) =>
+        execFile(file, args, { timeout: 30_000 }, (err, stdout, stderr) =>
+          err ? reject(err) : resolve({ stdout: String(stdout), stderr: String(stderr) }),
+        ),
+      ),
   })
 
   // 1.2.7 row 25 (U-2, SR7-11): only a path inside this window's roots and outside Swarm's and the credential places;
