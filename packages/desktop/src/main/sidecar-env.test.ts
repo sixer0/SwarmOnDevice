@@ -1,11 +1,27 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { join } from "node:path"
+import { prepareOnboardingTestRoot, registerRealDocuments } from "./onboarding-test-root"
 import { createRenderEnvGate, createSidecarEnv, isRenderEnv, type RenderEnv } from "./sidecar-env"
 
 // Row 33: the sidecar gets this launch's render bridge pair, never an inherited one, and never the Studio token.
 
 const TOKEN = "ab".repeat(32)
 const render: RenderEnv = { DATUM_RENDER_SOCKET: "/private/tmp/claude-501/row33/swarm-datum-x/render.sock", DATUM_RENDER_TOKEN: TOKEN }
+
+// onboarding-test-root keeps the last registered Documents resolver for the whole bun process, so another file's
+// resolver (r18c, r7) can leak in and add SWARM_DEFAULT_PROJECT_DIR. These cases expect no Default Project: register
+// a resolver that yields none (a throw reads as undefined) and clear any test-root state, then restore afterwards.
+beforeEach(() => {
+  prepareOnboardingTestRoot({})
+  registerRealDocuments(() => {
+    throw new Error("no Documents folder in this test")
+  })
+})
+afterEach(() => {
+  registerRealDocuments(() => {
+    throw new Error("no Documents folder")
+  })
+})
 
 describe("createSidecarEnv", () => {
   test("keeps the parent env, drops DEBUG, adds this launch's render pair", () => {

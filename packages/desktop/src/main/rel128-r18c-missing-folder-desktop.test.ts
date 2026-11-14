@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -42,6 +42,13 @@ beforeEach(() => {
   testRoot.prepareOnboardingTestRoot({})
   documents = join(scratch, `home-${++n}`, "Documents")
   testRoot.registerRealDocuments?.(() => documents)
+})
+
+// Leave no resolver pointing at the deleted scratch folder for the next file in this process.
+afterEach(() => {
+  testRoot.registerRealDocuments?.(() => {
+    throw new Error("no Documents folder")
+  })
 })
 
 afterAll(() => {
