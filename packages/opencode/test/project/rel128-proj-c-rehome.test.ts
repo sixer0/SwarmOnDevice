@@ -335,6 +335,46 @@ describe("Rehome.run (AC-PROJc, N8-364)", () => {
     })
   })
 
+  // 1.2.8 row 44h (S-15): the old->new id map must not read Object.prototype.
+  test("prototype-named note ids move intact (constructor, __proto__)", async () => {
+    const to = path.join(R, "Lumen")
+    const extra = ["constructor", "__proto__"].map((id, i) => ({
+      id,
+      text: `Odd id note ${id}`,
+      source: "user",
+      deviceOnly: false,
+      time: 5 + i,
+      refs: [{ path: REPORT }],
+    }))
+    await writeStore(R, [...notes(), ...extra])
+    const result = await Rehome.make(ports()).run(call())
+    if (!("journalId" in result)) throw new Error(JSON.stringify(result))
+    const target = await readItems(to)
+    for (const item of extra) {
+      const got = target.find((t) => t.text === item.text)
+      expect(got).toBeDefined()
+      expect(Object.hasOwn(got!, "id")).toBe(true)
+      expect(got!.id).toBe(item.id)
+    }
+    expect(result.moved.renamed).toBeUndefined()
+    expect(await readItems(R)).toEqual([notes()[2]])
+  })
+
+  // 1.2.8 row 44h (S-16): the temp file is created exclusively under a random name; a symlink at the old predictable
+  // name is never followed.
+  test("a symlink at the old predictable temp path is not followed", async () => {
+    const to = path.join(R, "Lumen")
+    const outside = path.join(home, `outside-${case_}.txt`)
+    await fs.writeFile(outside, "untouched\n")
+    const links = [storeOf(R), storeOf(to)].map((file) => `${file}.${process.pid}.rehome.tmp`)
+    await fs.mkdir(path.dirname(storeOf(to)), { recursive: true })
+    for (const link of links) await fs.symlink(outside, link)
+    const result = await Rehome.make(ports()).run(call())
+    if (!("journalId" in result)) throw new Error(JSON.stringify(result))
+    expect(await fs.readFile(outside, "utf8")).toBe("untouched\n")
+    expect(await readItems(R)).toEqual([notes()[2]])
+  })
+
   test("faultAt sessions: the moved notes and folder come back too", async () => {
     const tree = await treeHash(R)
     const store = await fileHash(storeOf(R))

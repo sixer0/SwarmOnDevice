@@ -175,7 +175,16 @@ async function writeJournal(ports: Ports, journal: Journal) {
 
 /** Temp file (0600) + fsync + rename: the one durable writer for the journal and the memory stores (R-10, row 44g). */
 async function writeSynced(temporary: string, target: string, body: string | Uint8Array) {
-  const handle = await fs.open(temporary, "w", 0o600)
+  // S-16 (row 44h): exclusive create (O_EXCL) under a random suffix, so a pre-placed file or symlink is never opened.
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+  let name = temporary
+  for (let attempt = 0; !handle; attempt++) {
+    name = `${temporary}.${randomBytes(6).toString("hex")}`
+    handle = await fs.open(name, "wx", 0o600).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "EEXIST" && attempt < 16) return undefined
+      throw error
+    })
+  }
   try {
     await handle.chmod(0o600)
     await handle.writeFile(body)
@@ -183,7 +192,12 @@ async function writeSynced(temporary: string, target: string, body: string | Uin
   } finally {
     await handle.close()
   }
-  await fs.rename(temporary, target)
+  try {
+    await fs.rename(name, target)
+  } catch (error) {
+    await fs.rm(name, { force: true }).catch(() => undefined)
+    throw error
+  }
 }
 
 async function readJournals(ports: Ports): Promise<{ file: string; journal: Journal }[]> {
@@ -534,9 +548,9 @@ async function doStep(ports: Ports, journal: Journal, step: JournalStep, plan: P
           // R-02 (row 44g): a picked note whose id the target store already uses gets a fresh id there; text, refs and
           // every other field stay. Ids are reserved for the whole pick first, so a fresh id never takes a later note's id.
           for (const item of pick) used.add(String(item.id))
-          const renamed: Record<string, string> = {}
+          const renamed = new Map<string, string>()
           const taken = new Set(target.items.map((item) => String(item.id)))
-          for (const item of pick) if (taken.has(String(item.id))) renamed[String(item.id)] = fresh()
+          for (const item of pick) if (taken.has(String(item.id))) renamed.set(String(item.id), fresh())
           let items = [...target.items]
           const written = new Set<Record<string, unknown>>()
           for (const item of pick) {
@@ -550,8 +564,8 @@ async function doStep(ports: Ports, journal: Journal, step: JournalStep, plan: P
               if ("refused" in rolled) throw new Error("target index full")
               items = rolled.items as unknown as Record<string, unknown>[]
             }
-            const id = renamed[String(item.id)]
-            const into = typeof item.rolledInto === "string" ? renamed[item.rolledInto] : undefined
+            const id = renamed.get(String(item.id))
+            const into = typeof item.rolledInto === "string" ? renamed.get(item.rolledInto) : undefined
             items.push(
               rewriteRefs(
                 { ...item, ...(id ? { id } : {}), ...(into ? { rolledInto: into } : {}) },
@@ -561,7 +575,8 @@ async function doStep(ports: Ports, journal: Journal, step: JournalStep, plan: P
             )
             written.add(item)
           }
-          if (Object.keys(renamed).length) data.renamed = renamed
+          // Same JSON shape as before; fromEntries defines own properties, so a key like __proto__ stays data.
+          if (renamed.size) data.renamed = Object.fromEntries(renamed)
           await writeRaw(targetFile, { ...target, items })
           if (options(journal).faultAt === "memory") throw new Error("fault injected at memory")
           // Only the notes actually written to the target leave the source (by object, not by id: ids may repeat).
