@@ -27956,6 +27956,12 @@
                     "enum": ["Infinity", "-Infinity", "NaN"]
                   }
                 ]
+              },
+              "renamed": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             },
             "required": ["folder", "notes", "sessions"],

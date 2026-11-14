@@ -47,7 +47,15 @@ export const RehomePayload = Schema.Struct({
 
 const RehomeMoved = Schema.Struct({
   journalId: Schema.String,
-  moved: Schema.Struct({ folder: Schema.Boolean, notes: Schema.Number, sessions: Schema.Number }),
+  moved: Schema.Struct({
+    folder: Schema.Boolean,
+    notes: Schema.Number,
+    sessions: Schema.Number,
+    // 1.2.9 row 43 (AC-B04, N9-065): rehome.ts reports it; undeclared, the encoder dropped it from the answer.
+    renamed: Schema.optional(Schema.Record(Schema.String, Schema.String)).annotate({
+      description: "old note id -> new id, only when ids collided",
+    }),
+  }),
   replayed: Schema.optional(Schema.Boolean),
 }).annotate({ identifier: "ProjectRehomeMoved" })
 
