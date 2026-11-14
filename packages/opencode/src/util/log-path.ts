@@ -33,11 +33,13 @@ export function withoutPaths(text: string, roots: readonly { path: string; label
  * 1.2.9 rows 45a/67d (C61, C79): the one home-folder replacer, shared by `withoutPaths` and the vault mirror's
  * `withoutHome`. `home` is replaced only at a path boundary: not followed by a character that continues a path
  * segment (`[\w.@+~-]`), so `/Users/xy`, `/Users/x.old` or `/Users/x@b` (a sibling) is not the home `/Users/x`.
+ * Row 67i (C85): a `.` followed by whitespace or the end of the text ends a sentence, not a segment, so
+ * `… in /Users/x.` becomes `… in ~.` while `/Users/x.y` is still left as is.
  * `escaped` is for Markdown-escaped text (`escapeText`), where that character may carry a backslash in front.
  * A home of `""` or `"/"` is ignored.
  */
 export function replaceHome(text: string, home: string, label: string, escaped = false): string {
   if (home.length <= 1) return text
-  const tail = escaped ? "(?!\\\\?[\\w.@+~-])" : "(?![\\w.@+~-])"
+  const tail = escaped ? "(?!\\\\?[\\w@+~-]|\\\\?\\.(?!\\s|$))" : "(?![\\w@+~-]|\\.(?!\\s|$))"
   return text.replace(new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + tail, "g"), () => label)
 }

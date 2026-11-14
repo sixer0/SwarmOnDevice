@@ -38,8 +38,9 @@ type DesktopNonceHeaders = { readonly [DesktopNonce.HEADER]?: string | undefined
 
 /**
  * G2-02 (row 43f): what a failed re-home logs. fs errors carry absolute paths (home folder, user name), so the line
- * keeps the error code and the message with every absolute path replaced by `<path>` (1.2.9 row 45: the shared
- * `withoutPaths`, home folder as `~`).
+ * keeps the error code and the message with every absolute path replaced by `<path>` (1.2.9 rows 45/67b: the shared
+ * `withoutPaths`; the home folder is shown as `~` only in what the path rules leave, a path glued to the previous
+ * character).
  */
 function logSafe(error: unknown) {
   const code = (error as { code?: unknown } | undefined)?.code

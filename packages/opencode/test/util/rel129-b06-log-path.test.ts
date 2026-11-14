@@ -94,9 +94,14 @@ const HOME_ROWS: [string, string, Roots | undefined, string][] = [
   ["67d-dot", "a -/Users/x.old/z", undefined, "a -/Users/x.old/z"],
   ["67d-at", "a -/Users/x@syn/z", undefined, "a -/Users/x@syn/z"],
   ["67d-plus", "a -/Users/x+syn/z", undefined, "a -/Users/x+syn/z"],
+  // 67i (C85 ruling 4): a '.' followed by whitespace or the end of the text ends a sentence, so the home folder before
+  // it is replaced; a '.' followed by a letter continues a sibling name (`/Users/x.y`).
+  ["67i-end", "a -/Users/x.", undefined, "a -~."],
+  ["67i-space", "a -/Users/x. next", undefined, "a -~. next"],
+  ["67i-letter", "a -/Users/x.y", undefined, "a -/Users/x.y"],
 ]
 // rows whose input holds a sibling of the home folder, not the home folder itself
-const SIBLING = new Set(["45a-sibling", "67d-dot", "67d-at", "67d-plus"])
+const SIBLING = new Set(["45a-sibling", "67d-dot", "67d-at", "67d-plus", "67i-letter"])
 
 describe("AT-B06 behaviour table (home folder not a prefix of the input)", () => {
   for (const [id, input, roots, expected] of TABLE) {
@@ -187,6 +192,22 @@ describe("one implementation: both callers use util/log-path", () => {
     expect(replaceHome("a /Users/x/z and /Users/x", "/Users/x", "~")).toBe("a ~/z and ~")
     expect(replaceHome(escapeText("a /Users/x/z."), escapeText("/Users/x"), escapeText("~"), true)).toBe(escapeText("a ~/z."))
     expect(replaceHome("a /Users/x/z", "/", "~")).toBe("a /Users/x/z")
+  })
+
+  test("67i: replaceHome, raw and Markdown-escaped, treats a '.' before whitespace or the end of the text as a boundary", async () => {
+    const { replaceHome } = await import("../../src/util/log-path")
+    const { escapeText } = await import("../../src/memory/vault-mirror")
+    const cases: [string, string][] = [
+      ["in /Users/x.", "in ~."],
+      ["in /Users/x. Next", "in ~. Next"],
+      ["in /Users/x.\nnext", "in ~.\nnext"],
+      ["in /Users/x.y", "in /Users/x.y"],
+      ["in /Users/x.y.", "in /Users/x.y."],
+    ]
+    for (const [input, expected] of cases) {
+      expect(replaceHome(input, "/Users/x", "~")).toBe(expected)
+      expect(replaceHome(escapeText(input), escapeText("/Users/x"), escapeText("~"), true)).toBe(escapeText(expected))
+    }
   })
 
   test("handlers/project.ts imports withoutPaths and has no local bare-path regexp", async () => {
