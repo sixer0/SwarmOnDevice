@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10271693
+  "bytes": 10273884
  },
  "files": [
   {
@@ -1759,9 +1759,10 @@
   {
    "path": "src/lib/studio/engine/chart/family-g/flowchart.ts",
    "status": "patched",
-   "bytes": 25823,
+   "bytes": 28014,
    "source_sha256": "d34ed3f70e6f4cc782edbd7ed6972db55e3a5eb5ab7caf364629329984eab563",
-   "sha256": "5f463062013b2b89e876c580063e60400d5fba4d28089f3c3809d9bda3e64603",
+   "sha256": "72d10748f522d3e769ae97f4977896509a066d0bbf9b1650d07594802ff126d3",
+   "patch_row129-35": {"id": "129-35-a11b-bpmn-layout", "row": "35", "decision": "1.2.9 AC-A11b (B9-A11; N9-077, N9-112, N9-155; C10(f), C42, 01a AT-A11b)", "summary": "G-04: a chart whose spec holds a label-below BPMN shape and no direction gets direction TB before validation, placement and routing, so layoutFlow uses the engine's ranked layout along the edges instead of the legacy list (renders byte-equal to the direction TB spec); an event that routePlaced marks labelled beside (row 57c) gets its label beside the circle, start-anchored and vertically centred, when it fits up to the next node or the drawing edge, else below as before; specs with direction and charts without such a shape unchanged (g04 and the 92 chart parity renders byte-identical)", "diff_base": "sha256 before this row", "before_sha256": "5f463062013b2b89e876c580063e60400d5fba4d28089f3c3809d9bda3e64603", "after_sha256": "72d10748f522d3e769ae97f4977896509a066d0bbf9b1650d07594802ff126d3", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/35_row35_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "100995d6d96a385ab253455cd6c08453004dad3c76d40153e029d8aee12c895a"},
    "patch_row129-34": {"id": "129-34-a11a-bpmn-events", "row": "34", "decision": "1.2.9 AC-A11a (B9-A11; N9-077, N9-111, N9-155; C10(f), 01a AT-A11a)", "summary": "G-04: a chart whose spec holds a label-below BPMN shape (isLabelBelow: events, gateways) maps the diagram sheet with one uniform scale sx = sy = min(sx, sy), centred, so event outlines are circles (rx = ry) and the connector ends routePlaced glued onto them stay on their rims; charts without such a shape keep the two-axis scale (g04 and the 92 chart parity renders byte-identical); ellipseD comment updated", "diff_base": "sha256 before this row", "before_sha256": "e13d30f35a704e136e49f4cfc72a24590c317be5f30b1979c9466113524e0764", "after_sha256": "5f463062013b2b89e876c580063e60400d5fba4d28089f3c3809d9bda3e64603", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/34_row34_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "293bd649fafc01a57930566f5a538b4c3bba02c32b9b9ed12668a59e030aace2"},
    "patch_row54b": {"id": "128-54b-vis3b", "row": "54b", "decision": "1.2.8 row 54b (AC-VIS3b BPMN task, sub-process, gateways, data object, annotation; C86 gateway exits spread)", "summary": "G-04: gateways are decisions (exit labels as diamonds); task/subprocess rounded (+[+]), data_object folded, annotation bracket, events and gateways drawn at the diagram outline mapped to the chart scale with markers and the label below; ISO 5807 REPORT unchanged", "diff_base": "sha256 before this row", "before_sha256": "5836527b8152a247e09406e9d8295761fc70bf8bc891b8fb477ea030c9014aa2", "after_sha256": "e13d30f35a704e136e49f4cfc72a24590c317be5f30b1979c9466113524e0764", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/54b_row54b_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "212c42a1b3d665affab02530d94ff653462ef83dc9117bc6bc7e77859869838e"},
    "patch_row53": {"id": "128-53-vis1b", "row": "53", "decision": "1.2.8 row 53 (AC-VIS1b; 01f 1.1)", "summary": "G-04 drawNode draws predefined (rect + two 0.2 mm side bars), document (16-piece wave path) and offpage (pentagon); textRoom cases; text centred above the wave / in the top 0.7 h", "diff_base": "sha256 before this row", "before_sha256": "5d525b2202dd0e03c7261f51fa2b6cf18b6a4b6430d7eb88a69b575ef23965bc", "after_sha256": "5836527b8152a247e09406e9d8295761fc70bf8bc891b8fb477ea030c9014aa2", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/53_row53_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "0c92bf92fa16824645bf2925c61a519d05aae2e332330176e73f9db45a239aa2"},
@@ -6418,6 +6419,7 @@
   "129-25-a01-route-split",
   "129-39-a13-render-desc",
   "129-31-a09-edge-along",
-  "129-26-a02-zero-length"
+  "129-26-a02-zero-length",
+  "129-35-a11b-bpmn-layout"
  ]
 }
