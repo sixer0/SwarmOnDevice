@@ -261,8 +261,8 @@ export function createCommandController(input: {
   /** a normal prompt to the open session's root (§2); rejects on failure */
   prompt: (text: string) => Promise<unknown>
   t: Translate
-  /** 1.2.9 row 24a: `language.plural` for the tidy result; absent = the `.other` form (language.tsx's own fallback) */
-  plural?: Plural
+  /** 1.2.9 rows 24a/24b: `language.plural` for the tidy result (required: product code never builds plural-category keys) */
+  plural: Plural
   onState: (state: MissionCommandState) => void
   now?: () => string
   /** 1.2.8 row 46: the success toast of a placement (N8-168); 1.2.8 row 46b: "error" for a stopped tidy (N8-167) */
@@ -277,8 +277,7 @@ export function createCommandController(input: {
   }
   const keyOf = (mission: string, request: string) => `${mission}/${request}`
   // 1.2.9 row 24a (AC-C04): one mission reads "1 mission moved" (N9-040), more read N9-041.
-  const tidyDone = (count: number) =>
-    input.plural ? input.plural("session.mission.tidy.done", count) : input.t("session.mission.tidy.done.other", { count })
+  const tidyDone = (count: number) => input.plural("session.mission.tidy.done", count)
 
   /** Local lines and errors belong to one mission (§2: gone on the next mission switch). */
   const forMission = (mission: string) => {

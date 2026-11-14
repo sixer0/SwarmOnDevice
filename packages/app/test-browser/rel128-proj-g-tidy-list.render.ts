@@ -32,9 +32,12 @@ mock.module("@opencode-ai/session-ui/message-part", () => ({ getToolInfo: () => 
 const real = await import("@/context/language")
 const tr = (key: string, params?: Record<string, string>) =>
   (dict as Record<string, string>)[key] === undefined ? String(key) : resolveTemplate((dict as Record<string, string>)[key]!, params ?? {})
+// 1.2.9 row 24b: the model requires `plural`; the mock picks the category like language.tsx (one/other).
+const plural = (key: string, count: number, params?: Record<string, string>) =>
+  tr(`${key}.${count === 1 ? "one" : "other"}`, { ...params, count: String(count) })
 mock.module("@/context/language", () => ({
   ...real,
-  useLanguage: () => ({ t: tr, locale: () => "en", intl: () => "en" }),
+  useLanguage: () => ({ t: tr, plural, locale: () => "en", intl: () => "en" }),
 }))
 
 const { MissionCommand } = await import(new URL("../src/pages/session/swarm/mission-command.tsx", import.meta.url).pathname)

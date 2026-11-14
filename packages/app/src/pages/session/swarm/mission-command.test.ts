@@ -17,6 +17,10 @@ import {
 const t = (key: string, params?: Record<string, string | number | boolean>) =>
   params ? `${key}${JSON.stringify(Object.fromEntries(Object.entries(params).sort()))}` : key
 
+// 1.2.9 row 24b: `plural` is a required input; the fake picks the category the way language.tsx does (one/other).
+const plural = (key: "session.mission.tidy.done", count: number, params?: Record<string, string | number | boolean>) =>
+  t(`${key}.${count === 1 ? "one" : "other"}`, { ...params, count })
+
 const MISSION = "2026-11-07_kasus-07"
 
 const decision: MissionDecisionVM = {
@@ -104,6 +108,7 @@ function harness(writer: Partial<MissionWriter> = {}, prompt: (text: string) => 
       return prompt(text)
     },
     t,
+    plural,
     onState: (state) => states.push(state),
     now: () => "2026-11-07T12:00:00.000Z",
   })
