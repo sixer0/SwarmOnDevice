@@ -36,8 +36,21 @@ plugin({
 const DIR = "/syn129-79a/Default Project"
 const SID = "ses_syn129_79a"
 
-type Toast = { id: number; title?: string; actions?: { label: string; onClick: unknown }[] }
+type Toast = {
+  id: number
+  title?: string
+  actions?: { label: string; onClick: unknown }[]
+  onDismiss?: () => void
+}
 const world = { file: true, toasts: [] as Toast[], reads: 0, reloads: 0, opened: 0 }
+
+// As the toast libraries do (row 79a2): a dismissal removes the toast and calls its `onDismiss` once, whatever closed
+// it (its X, an action button, `dismissToast`).
+const removeToast = (id: number) => {
+  const toast = world.toasts.find((item) => item.id === id)
+  world.toasts = world.toasts.filter((item) => item.id !== id)
+  toast?.onDismiss?.()
+}
 
 let toastSeq = 0
 const real = await import("@/utils/toast")
@@ -48,15 +61,17 @@ mock.module("@/utils/toast", () => ({
     world.toasts.push({ ...options, id })
     return id
   },
-  dismissToast: (id: number) => {
-    world.toasts = world.toasts.filter((item) => item.id !== id)
-  },
+  dismissToast: removeToast,
 }))
 
 const folderMissing = await import(new URL("../src/pages/layout/folder-missing.ts", import.meta.url).pathname)
 const { createSessionLineage } = await import(new URL("../src/pages/session/session-lineage.ts", import.meta.url).pathname)
 
-type BoundaryProps = { fallback: (error: unknown, reset: () => void) => JSX.Element; children: JSX.Element }
+type BoundaryProps = {
+  fallback: (error: unknown, reset: () => void) => JSX.Element
+  children: JSX.Element
+  directory?: string
+}
 // BASE has no FolderNoticeBoundary: the live boundaries were Solid's ErrorBoundary.
 const Boundary: (props: BoundaryProps) => JSX.Element =
   folderMissing.FolderNoticeBoundary ?? ((props: BoundaryProps) => createComponent(ErrorBoundary, props))
@@ -126,18 +141,27 @@ const click = async (label: string) => {
     .at(-1)
     ?.actions?.find((item) => item.label === label)
   if (!action || typeof action.onClick !== "function") throw new Error(`no "${label}" action`)
+  const id = notices().at(-1)!.id
   action.onClick()
+  // The toast's action button dismisses its toast right after the handler (ui toast.tsx, toast-v2.tsx).
+  removeToast(id)
+  await tick()
+}
+// The toast's own X: the toast library dismisses it, no action runs.
+const closeX = async () => {
+  removeToast(notices().at(-1)!.id)
   await tick()
 }
 
 let dispose = () => {}
-const mount = (fallback: BoundaryProps["fallback"] = errorPage) => {
+const mount = (fallback: BoundaryProps["fallback"] = errorPage, directory?: string) => {
   const root = document.createElement("div")
   document.body.appendChild(root)
   dispose = render(
     () =>
       createComponent(Boundary, {
         fallback,
+        directory,
         get children() {
           return createComponent(ProjectView, {})
         },
@@ -256,6 +280,130 @@ describe("79a a 400 LOCATION_NOT_FOLDER at launch", () => {
     )
     await tick()
     expect(count("[data-error-page]")).toBe(1)
+  })
+})
+
+// 1.2.9 row 79a2 (S9E-01, C116). The open-notice count only dropped in the notice's own close(): the toast's X and its
+// Choose button closed the notice without it, so a later LOCATION_NOT_FOLDER rendered an empty panel until Restore,
+// Recreate or a reload; and the count was window-wide, so a notice for one path hid the error page for another.
+// Red at 3ff8bc9af7 (79a): after X or Choose the error page count is 0; a notice for A hides the error for B.
+describe("79a2 open notices per path, dropped on every dismissal", () => {
+  const OTHER = "/syn129-79a2/Other Project"
+
+  test("after the notice's X, a later LOCATION_NOT_FOLDER shows the error page", async () => {
+    const helper = notice()
+    await helper.notice(DIR, onOpen)
+    await closeX()
+    expect(notices().length).toBe(0)
+    mount()
+    await tick()
+    expect(world.reads).toBe(1)
+    expect(count("[data-error-page]")).toBe(1)
+  })
+
+  test("after Choose, a later LOCATION_NOT_FOLDER shows the error page", async () => {
+    const helper = notice()
+    await helper.notice(DIR, onOpen)
+    await click(dict["toast.project.folderMissing.choose"])
+    expect(notices().length).toBe(0)
+    mount()
+    await tick()
+    expect(count("[data-error-page]")).toBe(1)
+  })
+
+  test("after X, an error page already hidden behind the notice comes back", async () => {
+    const helper = notice()
+    await helper.notice(DIR, onOpen)
+    mount()
+    await tick()
+    expect(count("[data-error-page]")).toBe(0)
+    await closeX()
+    expect(count("[data-error-page]")).toBe(1)
+  })
+
+  test("a notice for path A does not hide the error of a boundary for path B", async () => {
+    const helper = notice()
+    await helper.notice(OTHER, onOpen)
+    mount(errorPage, DIR)
+    await tick()
+    expect(notices().length).toBe(1)
+    expect(count("[data-error-page]")).toBe(1)
+  })
+
+  test("a notice for path A does not hide an error that names path B", async () => {
+    const helper = notice()
+    await helper.notice(OTHER, onOpen)
+    const root = document.createElement("div")
+    document.body.appendChild(root)
+    dispose = render(
+      () =>
+        createComponent(Boundary, {
+          fallback: errorPage,
+          get children() {
+            return createComponent(() => {
+              const error = notFolder()
+              ;((error.cause as { body: { data: Record<string, unknown> } }).body.data).directory = DIR
+              throw error
+            }, {})
+          },
+        }),
+      root,
+    )
+    await tick()
+    expect(count("[data-error-page]")).toBe(1)
+  })
+
+  test("CHAR: a notice for the boundary's own path still hides its error; Restore still resets it", async () => {
+    const helper = notice()
+    await helper.notice(DIR, onOpen)
+    mount(errorPage, DIR)
+    await tick()
+    expect(count("[data-error-page]")).toBe(0)
+    world.file = false
+    await click(dict["toast.project.folderMissing.restore"])
+    expect(notices().length).toBe(0)
+    expect(count("[data-error-page]")).toBe(0)
+    expect(count("[data-project-view]")).toBe(1)
+  })
+
+  test("the real toasts (legacy and v2) call onDismiss once, on X and on dismiss", async () => {
+    // Imported from ui directly: `@/utils/toast` is mocked in this file.
+    const legacy = await import("@opencode-ai/ui/toast")
+    const v2 = await import("@opencode-ai/ui/v2/toast-v2")
+    const calls = { x: 0, dismiss: 0, v2: 0 }
+    const root = document.createElement("div")
+    document.body.appendChild(root)
+    dispose = render(() => createComponent(legacy.Toast.Region, {}), root)
+    legacy.showToast({ title: "syn129 x", persistent: true, onDismiss: () => calls.x++ })
+    await tick(50)
+    const close = document.querySelector<HTMLElement>('[data-slot="toast-close-button"]')
+    expect(close === null).toBe(false)
+    close?.click()
+    await tick(50)
+    // The X closes the toast and waits for its exit animation (solid-presence), which happy-dom never runs: end it.
+    const ended = Object.assign(new Event("animationend"), { animationName: "" })
+    document.querySelector('[data-component="toast"]')?.dispatchEvent(ended)
+    await tick(400)
+    const id = legacy.showToast({ title: "syn129 dismiss", persistent: true, onDismiss: () => calls.dismiss++ })
+    await tick(50)
+    legacy.toaster.dismiss(id)
+    await tick(400)
+    const v2id = v2.showToastV2({ title: "syn129 v2", persistent: true, onDismiss: () => calls.v2++ })
+    v2.toasterV2.dismiss(v2id)
+    v2.toasterV2.dismiss(v2id)
+    await tick(50)
+    expect(calls).toEqual({ x: 1, dismiss: 1, v2: 1 })
+  })
+
+  test("CHAR: two notices, X on one: the other still hides a path-free error", async () => {
+    const helper = notice()
+    await helper.notice(OTHER, onOpen)
+    await helper.notice(DIR, onOpen)
+    await closeX()
+    expect(notices().length).toBe(1)
+    mount()
+    await tick()
+    expect(count("[data-error-page]")).toBe(0)
   })
 })
 
