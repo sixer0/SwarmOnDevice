@@ -314,9 +314,9 @@ interface Attach {
  */
 const DIAGRAM_FENCE_INFOS = ["diagram", "json"] as const;
 /** N8-208: pagar yang tampak diagram tetapi ditolak validator v2; tetap `monoBlock`. */
-const DIAGRAM_FENCE_INVALID ="DIAGRAM_FENCE_INVALID";
+const DIAGRAM_FENCE_INVALID = "DIAGRAM_FENCE_INVALID";
 /** N8-209: pagar `json` dengan `type` selain `diagram`; tetap kode dan disebut di ringkasan. */
-const FENCE_KEPT_AS_CODE ="FENCE_KEPT_AS_CODE";
+const FENCE_KEPT_AS_CODE = "FENCE_KEPT_AS_CODE";
 const FENCE_TYPE_TOKEN_RE = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
 const DIAGRAM_FENCE_MAX_MESSAGES = 5;
 

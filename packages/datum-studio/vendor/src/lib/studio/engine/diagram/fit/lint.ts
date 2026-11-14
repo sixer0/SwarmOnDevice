@@ -120,7 +120,7 @@ export const EDGE_ALONG_TOL_MM = 0.1;
  * twice; `lineThroughText` itself is not widened (it is in `score` and auto-fit's ROUTE_KINDS).
  */
 /** @internal test seam */
-export const HEADER_CLEAR_MM =0.3;
+export const HEADER_CLEAR_MM = 0.3;
 
 /**
  * Swarm 1.2.8 row 68a (C166 (4); kind `edgeEndOffNode`, check id GEOM_EDGE_END): a connector end (start or end, with or
@@ -128,14 +128,14 @@ export const HEADER_CLEAR_MM =0.3;
  * node, ends on nothing (a container frame, the paper). The allowance covers the path trimmed under a filled head
  * (row 57b `headTrimMm`, under 1 mm). An end under the label block of an event (`data-label-pos="below"`) belongs to it.
  */
-const EDGE_END_ON_NODE_MM =1.2;
+const EDGE_END_ON_NODE_MM = 1.2;
 
 /**
  * Swarm 1.2.8 row 68a (C166 (1), (3)): `edgeThroughNode` also counts a connector that runs through the body of its OWN
  * end node (a via leg entering the node and crossing its label, a straight route from one side across the box) at more
  * than this distance (mm) from the end that attaches it; the piece next to that end is how the connector meets the node.
  */
-const OWN_NODE_END_MM =1.5;
+const OWN_NODE_END_MM = 1.5;
 
 /**
  * Swarm 1.2.8 row 55c (C133, kind `frameOutside`, check id GEOM_FRAME_OUTSIDE): a container frame (pool or lane box,
@@ -144,7 +144,7 @@ const OWN_NODE_END_MM =1.5;
  * drawn edge to edge (x 0..W) is inside.
  */
 /** @internal test seam */
-export const FRAME_OUTSIDE_MIN_MM =0.05;
+export const FRAME_OUTSIDE_MIN_MM = 0.05;
 
 /**
  * Swarm 1.2.6 T-03 (register N-008..N-010). Thresholds of the three connector-end checks:
@@ -969,7 +969,7 @@ export function decorationOf(parts: readonly string[], widthMm: number): { rules
 }
 
 /** Row 57c: a band edge closer than this to an obstacle is not counted (0.01 mm output grid plus float noise). */
-const LABEL_COLLISION_EPS_MM =0.05;
+const LABEL_COLLISION_EPS_MM = 0.05;
 
 /**
  * Row 57c: the region an arrowhead covers: a quadrilateral from just past the tip back `L` along the last piece, `W` wide

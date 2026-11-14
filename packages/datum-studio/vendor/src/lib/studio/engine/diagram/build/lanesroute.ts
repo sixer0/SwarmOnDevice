@@ -207,9 +207,9 @@ interface RouteRule {
 }
 
 /** Row 56d: least distance (mm) between a connector run and a parallel container rule it lies along. */
-const RULE_CLEAR_MM =1.0;
+const RULE_CLEAR_MM = 1.0;
 /** Row 56d: a run found on a rule moves this far off it (the rule stays visible beside the line). */
-const RULE_OFFSET_MM =1.5;
+const RULE_OFFSET_MM = 1.5;
 /** Row 56d: least visible line kept before the arrowhead when a run moves (the default head 3.2 mm + 1 mm, as 57c). */
 const RULE_HEAD_RUN_MM = 4.2;
 

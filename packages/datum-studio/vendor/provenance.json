@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10295268
+  "bytes": 10295283
  },
  "files": [
   {
@@ -2414,9 +2414,10 @@
   {
    "path": "src/lib/studio/engine/diagram/build/lanesroute.ts",
    "status": "patched",
-   "bytes": 16261,
+   "bytes": 16263,
    "source_sha256": "2e41b2636751072f6e3ac890f2facdc6f5d42131dcca89d463af52b8226a9b48",
-   "sha256": "c5815deeb0e70b48c3d3811a06c70a3afccd88b279e1c60395eda2f04f875339",
+   "sha256": "3ba6c01e7957020707c773318ffc36b8cc5dd9e5e696d731e2b7bfb8add52353",
+   "patch_row129-66q": {"id": "129-66q-whitespace", "row": "66q", "decision": "1.2.9 gate 66p F1, C98 (follow-up of AC-A03.61; row 61 slip)", "summary": "A03 follow-up: the space after `=` that row 61 dropped on this file's declaration lines is restored (`NAME =value` to `NAME = value`); whitespace only, no value, body, signature or export change", "diff_base": "sha256 before this row", "before_sha256": "c5815deeb0e70b48c3d3811a06c70a3afccd88b279e1c60395eda2f04f875339", "after_sha256": "3ba6c01e7957020707c773318ffc36b8cc5dd9e5e696d731e2b7bfb8add52353", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/66q_row66q_diffs/engine_diagram_build_lanesroute.ts.diff", "diff_sha256": "03dd47528b6ffb76b48bfb5176be0c4f12f648b0c032c89bccf98f6bfd4ed7a3"},
    "patch_row129-61": {"id": "129-61-a03", "row": "61", "decision": "1.2.9 AC-A03.61 (N9-102 block .61; C91 markers; 60_a03_list.md)", "summary": "A03: the names of this file with no reader outside it lose `export` (declaration, body and values unchanged); test-only exports in this file carry `/** @internal test seam */` (comment only). No behaviour change", "diff_base": "sha256 before this row", "before_sha256": "3b028263b0cd6b18ed1a34ea9e52125b2e327c9b1682b654e5830dae17bcfdcd", "after_sha256": "c5815deeb0e70b48c3d3811a06c70a3afccd88b279e1c60395eda2f04f875339", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/61_row61_diffs/engine_diagram_build_lanesroute.ts.diff", "diff_sha256": "68eda1a7a4a88e9dc4042d9a1d031c3c47ea17f0dae5e40a7aab3fe902dedf7f"},
    "patch_row56d": {"id": "128-56d-jogs-rules", "row": "56d", "decision": "C134, C137 (1.2.8 row 56d; M3 gate G3-06, G3-07, G3-09)", "summary": "G3-07 NEW RouteRule, RULE_CLEAR_MM 1.0, RULE_OFFSET_MM 1.5, setRouteRules (frame -> rules as build/svg.ts draws them, WeakMap per sheet), routeRulesOf, offRules: an inner connector run within 1 mm of a parallel lane/phase/pool rule (overlap > 1 mm) moves 1.5 mm off it where the route stays valid (direction kept, source run >= min(own, 2 mm), head run >= min(own, 4.2 mm), no node crossed, no rule within 1 mm, conflicts not rising); no rules = input returned unchanged", "diff_base": "sha256 before this row", "before_sha256": "2e41b2636751072f6e3ac890f2facdc6f5d42131dcca89d463af52b8226a9b48", "after_sha256": "3b028263b0cd6b18ed1a34ea9e52125b2e327c9b1682b654e5830dae17bcfdcd", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/56d_row56d_diffs/engine_diagram_build_lanesroute.ts.diff", "diff_sha256": "f952881bae382b3ea4bbe28642c8974576cd1719f9ee37d580c5a98e879cfca5"}
   },
@@ -2718,9 +2719,10 @@
   {
    "path": "src/lib/studio/engine/diagram/core/tokens.ts",
    "status": "patched",
-   "bytes": 18200,
+   "bytes": 18206,
    "source_sha256": "be6c723d7870cfd8cf359b3c66c9e0e148b1ab2b006c94a2a5fe6037ddfdc3a6",
-   "sha256": "2dad3d0c64686e98816f55dd435acba9efd0c872960624e93302546e8d373647",
+   "sha256": "72f7c2ac0657496f4655b9bcb51a49bd8e5ae641070b8b3f169a17a342667142",
+   "patch_row129-66q": {"id": "129-66q-whitespace", "row": "66q", "decision": "1.2.9 gate 66p F1, C98 (follow-up of AC-A03.61; row 61 slip)", "summary": "A03 follow-up: the space after `=` that row 61 dropped on this file's declaration lines is restored (`NAME =value` to `NAME = value`); whitespace only, no value, body, signature or export change", "diff_base": "sha256 before this row", "before_sha256": "2dad3d0c64686e98816f55dd435acba9efd0c872960624e93302546e8d373647", "after_sha256": "72f7c2ac0657496f4655b9bcb51a49bd8e5ae641070b8b3f169a17a342667142", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/66q_row66q_diffs/engine_diagram_core_tokens.ts.diff", "diff_sha256": "da79d16d51e2aa640b0a82639eaeb5d460730edaf142f265e3019e6977ed5f5e"},
    "patch_row129-61": {"id": "129-61-a03", "row": "61", "decision": "1.2.9 AC-A03.61 (N9-102 block .61; C91 markers; 60_a03_list.md)", "summary": "A03: the names of this file with no reader outside it lose `export` (declaration, body and values unchanged); test-only exports in this file carry `/** @internal test seam */` (comment only). No behaviour change", "diff_base": "sha256 before this row", "before_sha256": "724463fd848e111e10dec7f0c7713b6a8d7f0bb70491516cb424c5ed7a9dbb1f", "after_sha256": "2dad3d0c64686e98816f55dd435acba9efd0c872960624e93302546e8d373647", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/61_row61_diffs/engine_diagram_core_tokens.ts.diff", "diff_sha256": "02c541431c97f5a1dfbdc4603006bda62211ef1337676831d68f1ec5c5a41a24"},
    "patch_row57b": {"id": "128-57b-vis8-vis9", "row": "57b", "decision": "1.2.8 row 57b (AC-VIS8, AC-VIS9; 01f 3.1-3.5; C78, C86, C101, C111; N8-212, N8-262..266, N8-468, N8-471, N8-477..479)", "summary": "label-below names of row 54 (LABEL_BELOW_SHAPES, LABEL_BELOW_GAP_MM, BPMN_EVENT_DIAMETER_MM, BPMN_GATEWAY_SIZE_MM with LIMITS keys label_below_gap_mm, bpmn_event_diameter_mm, bpmn_gateway_size_mm) and row 54b's SUBPROCESS_GLYPH_CLEAR_MM, ANNOTATION_BRACKET_MM moved here from fit/text.ts (C86, C101); values unchanged", "diff_base": "sha256 before this row", "before_sha256": "9a392681928bfe1c8763762aa2a8aa6e9094269d8957b52388ceb7c6138e4f9b", "after_sha256": "724463fd848e111e10dec7f0c7713b6a8d7f0bb70491516cb424c5ed7a9dbb1f", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57b_row57b_diffs/engine_diagram_core_tokens.ts.diff", "diff_sha256": "af5c402c803a88e49072bf4c41c56b34a49392994b2a7d597e44fa9d2ca169f4"},
    "patch_row57": {"id": "128-57-harw", "row": "57", "decision": "1.2.8 row 57 (AC-HARW, AC-VIS7; 01f 5.2, 5.3, 7 (a); C10 OP13-5, C12 OP-18-2, C56, C101)", "summary": "ARROW_HEAD_MIN_MM 2.5 (N8-216)", "diff_base": "sha256 before this row", "before_sha256": "25cc84aca5606f5e44c197a06394b8344b3733ed91f440fd20fdfdc5826183f9", "after_sha256": "9a392681928bfe1c8763762aa2a8aa6e9094269d8957b52388ceb7c6138e4f9b", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/57_row57_diffs/engine_diagram_core_tokens.ts.diff", "diff_sha256": "95e55ca588873045e4d1158cc256136c03fabb1bcf770107adc592ac286113fd"},
@@ -2800,9 +2802,10 @@
   {
    "path": "src/lib/studio/engine/diagram/fit/lint.ts",
    "status": "patched",
-   "bytes": 67323,
+   "bytes": 67328,
    "source_sha256": "2b169e21faaa4064307ab8fdcec45c0b7a0d4f9d2982ebc56094d3a704ebc3d8",
-   "sha256": "97a580960e9452c042368d2eaad6e4439b79a379b74568550d191731dd118e74",
+   "sha256": "2b5e85cb72c592e5133740fac189b4412a3644efebc2042fcc277ebebc9897d9",
+   "patch_row129-66q": {"id": "129-66q-whitespace", "row": "66q", "decision": "1.2.9 gate 66p F1, C98 (follow-up of AC-A03.61; row 61 slip)", "summary": "A03 follow-up: the space after `=` that row 61 dropped on this file's declaration lines is restored (`NAME =value` to `NAME = value`); whitespace only, no value, body, signature or export change", "diff_base": "sha256 before this row", "before_sha256": "97a580960e9452c042368d2eaad6e4439b79a379b74568550d191731dd118e74", "after_sha256": "2b5e85cb72c592e5133740fac189b4412a3644efebc2042fcc277ebebc9897d9", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/66q_row66q_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "def835860f97c44a0b802400d6236c060abf0fb3749d5e6bac25054b81fc2dd5"},
    "patch_row129-61": {"id": "129-61-a03", "row": "61", "decision": "1.2.9 AC-A03.61 (N9-102 block .61; C91 markers; 60_a03_list.md)", "summary": "A03: the names of this file with no reader outside it lose `export` (declaration, body and values unchanged); test-only exports in this file carry `/** @internal test seam */` (comment only). No behaviour change", "diff_base": "sha256 before this row", "before_sha256": "0a1d844205f77bdda6f268734c1eb43c74e14e66cbbd538a32a015b288860324", "after_sha256": "97a580960e9452c042368d2eaad6e4439b79a379b74568550d191731dd118e74", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/61_row61_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "fa3e133d436a7950b0fcc1948410286722bfbbe12eab5ce7210294bd57419383"},
    "patch_row129-33": {"id": "129-33-a10b-double-back", "row": "33", "decision": "1.2.9 AC-A10b (B9-A10; N9-031; C2 ruling 1, C10(d), C12 D-1: no threshold registered for this kind)", "summary": "NEW kind edgeDoublesBack (T03_KINDS member: counted, outside score, so no figure changes bytes): after repeated vertices are removed, two consecutive collinear segments of a connector with opposite direction, of any length (an SVG-side predicate; the router's doublesBack is not imported); one defect per connector at its first reversal, with the turning point and the shorter leg", "diff_base": "sha256 before this row", "before_sha256": "0e7c3184c5f5a818bbeb52c8e4e5508fa832b15d1a24cd1813bd973c46ca2859", "after_sha256": "0a1d844205f77bdda6f268734c1eb43c74e14e66cbbd538a32a015b288860324", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/33_row33_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "3bc3719bf96684b55f5f7b110ea2e142cb7b34c3b98a1de3689e1e575f03fe2f"},
    "patch_row129-32": {"id": "129-32-a10a-header-text", "row": "32", "decision": "1.2.9 AC-A10a (B9-A10; N9-026, N9-029; C2 ruling 1, C10(d), C12 D-1)", "summary": "NEW kind edgeOverHeader (T03_KINDS member: counted, outside score, so no figure changes bytes): a connector stroke within HEADER_CLEAR_MM (NEW 0.3) of the box of a container header text (bold tracked one-line table_header text, no knockout band, centre in no node box: pool, lane, phase, group title); a header lineThroughText already reports is not counted twice; lineThroughText not widened; one defect per header and connector", "diff_base": "sha256 before this row", "before_sha256": "14a217926f8f1c8aa7c6180db9739df091e3d24fcc6330c17f6632bf38ec750f", "after_sha256": "0e7c3184c5f5a818bbeb52c8e4e5508fa832b15d1a24cd1813bd973c46ca2859", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/32_row32_diffs/engine_diagram_fit_lint.ts.diff", "diff_sha256": "e93008616c9636f0ec2102f42e24bcc286e7d57505430e8687e3d5f6acf8d6d9"},
@@ -5087,9 +5090,10 @@
   {
    "path": "src/lib/studio/services/import/markdown.ts",
    "status": "patched",
-   "bytes": 38464,
+   "bytes": 38466,
    "source_sha256": "46f3732bdcf0c3ea2c45f6bbcf94336378d6b9e25356bf9478b35372c68e0925",
-   "sha256": "446f780aee0c1be1ec48f6e16c2839072157431a970b0ae0a2517ec25406be26",
+   "sha256": "a3a5d470f880c28515896e0ff61d0b45e2f2399e3255a46a05fc2b39fd6a2aed",
+   "patch_row129-66q": {"id": "129-66q-whitespace", "row": "66q", "decision": "1.2.9 gate 66p F1, C98 (follow-up of AC-A03.61; row 61 slip)", "summary": "A03 follow-up: the space after `=` that row 61 dropped on this file's declaration lines is restored (`NAME =value` to `NAME = value`); whitespace only, no value, body, signature or export change", "diff_base": "sha256 before this row", "before_sha256": "446f780aee0c1be1ec48f6e16c2839072157431a970b0ae0a2517ec25406be26", "after_sha256": "a3a5d470f880c28515896e0ff61d0b45e2f2399e3255a46a05fc2b39fd6a2aed", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/66q_row66q_diffs/services_import_markdown.ts.diff", "diff_sha256": "72a09b64d91dc219663248bfe6468bc86795d6599133671e5b204d4177553ff0"},
    "patch_row129-61": {"id": "129-61-a03", "row": "61", "decision": "1.2.9 AC-A03.61 (N9-102 block .61; C91 markers; 60_a03_list.md)", "summary": "A03: the names of this file with no reader outside it lose `export` (declaration, body and values unchanged); test-only exports in this file carry `/** @internal test seam */` (comment only). No behaviour change", "diff_base": "sha256 before this row", "before_sha256": "a0a0de5b0bb0a41f373ddafc8c18f6234e0dedfd10526f60cdb97cd9402b8e65", "after_sha256": "446f780aee0c1be1ec48f6e16c2839072157431a970b0ae0a2517ec25406be26", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/61_row61_diffs/services_import_markdown.ts.diff", "diff_sha256": "6d5859e12c5beacf20ea6ae3f62b145720167f28f20aa7fa810a002522bca3cf"},
    "patch_row32": {"id": "128-32-hn13", "row": "32", "decision": "1.2.8 row 32 (AC-HN13, H-N13; N8-207, N8-208, N8-209)", "summary": "NEW DIAGRAM_FENCE_INFOS ['diagram','json']: a diagram fence (spec or {type:'diagram'} block) and a json fence whose top object has type 'diagram' become a DiagramV2 block, caption/source from the adjacent Gambar:/Sumber: lines when the JSON has none; the shared v2 validator runs on the block (CAPTION_TOKEN_DUPLICATE left to the chapter validation, as chapter_submit); refused -> monoBlock + DIAGRAM_FENCE_INVALID with up to 5 validator messages and the taken lines re-emitted as paragraphs; json fence with another type -> monoBlock + FENCE_KEPT_AS_CODE. Other fences unchanged (MONOBLOCK_LABEL_DEFAULTED). Copied -> patched", "before_sha256": "46f3732bdcf0c3ea2c45f6bbcf94336378d6b9e25356bf9478b35372c68e0925", "after_sha256": "a0a0de5b0bb0a41f373ddafc8c18f6234e0dedfd10526f60cdb97cd9402b8e65", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/32_row32_diffs/src_lib_studio_services_import_markdown.ts.diff", "diff_sha256": "4ca45fc13cc72b9afe9f9324f7c499f4f2c1102ca3142145310b2d6baf88df9a"}
   },
@@ -6444,6 +6448,7 @@
   "129-37-a12a-preview-backup",
   "129-25-a01-route-split",
   "129-39-a13-render-desc",
+  "129-34-a11a-bpmn-events",
   "129-31-a09-edge-along",
   "129-26-a02-zero-length",
   "129-35-a11b-bpmn-layout",
@@ -6455,6 +6460,7 @@
   "129-29-a06-zone-clearance",
   "129-66b-bpmn-arrowheads",
   "129-66a-a05-mark-off-axis",
-  "129-61-a03"
+  "129-61-a03",
+  "129-66q-whitespace"
  ]
 }
