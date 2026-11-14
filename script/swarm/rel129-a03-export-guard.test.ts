@@ -398,7 +398,9 @@ describe("AC-A03.64", () => {
   // OP-60-3), by a baseline entry, or by living in the generated SDK (C10(g)). Shrink-only (01a AT-A03.64):
   // (1) a stale entry fails; (2) the entry count is pinned below; (3) every entry was exported at 1.2.9 BASE, so a new
   // 1.2.9 export can never be parked in the baseline. Raising BASELINE_MAX needs a C-decision.
-  const BASELINE_MAX = 4433
+  // Row 74a (C104, review F1): browser harnesses (test-browser/, *.render.*, *.fixture.*) now read as tests, which
+  // admits 21 older names exported at BASE and drops 2 stale fixture entries: 4433 - 2 + 21 = 4452.
+  const BASELINE_MAX = 4452
   const BASE = "d4282fcfd8"
   // Row 25 split route.ts (C31): names exported by the two new files were exported by route.ts at BASE.
   const route = "packages/datum-studio/vendor/src/lib/studio/engine/diagram/build"
@@ -524,5 +526,36 @@ describe("AC-A03.64", () => {
     }
     // The working tree was never edited.
     expect(readFileSync(path.join(repo, mutFile), "utf8")).toBe(original)
+  }, 120_000)
+
+  test("mutation (row 74a, F1): a reader in a browser render harness does not explain an export; the marker does", async () => {
+    // missionFilesScroll (1.2.9 row 57) is read outside its file only by a test-browser *.render.ts harness.
+    const file = "packages/app/src/pages/session/swarm/mission-control.tsx"
+    const name = "missionFilesScroll"
+    const outside = [...new Set(trackedWordHits(name).map((h) => h.split(":")[0]))].filter((f) => f !== file)
+    expect(outside.length).toBeGreaterThan(0)
+    expect(outside.filter((f) => !/(^|\/)test-browser\/|\.render\.[a-z]+$/.test(f))).toEqual([])
+    const g = await guard()
+    const baseline = g.loadBaseline(repo)
+    const original = readFileSync(path.join(repo, file), "utf8")
+    const dir = mkdtempSync(path.join(os.tmpdir(), "a03-74a-"))
+    try {
+      // Copy without any N9-071 marker line (either form): the render harness alone must leave the export unexplained.
+      const copy = path.join(dir, "mission-control.tsx")
+      const bare = original
+        .split("\n")
+        .filter((l) => l.trim() !== `* ${MARKER}` && l.trim() !== `/** ${MARKER} */`)
+        .join("\n")
+      writeFileSync(copy, bare)
+      const red = g.checkExports({ repo, baseline, replace: { [file]: copy } })
+      const hit = red.unexplained.filter((u) => u.name === name)
+      expect(hit.map((u) => `${u.file} ${u.name}`)).toEqual([`${file} ${name}`])
+      expect(hit[0].testReaders).toBeGreaterThan(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    // At HEAD the export carries the marker, and the working tree was never edited.
+    expect(carriesMarker(file, declLine(file, name))).toBe(true)
+    expect(readFileSync(path.join(repo, file), "utf8")).toBe(original)
   }, 120_000)
 })

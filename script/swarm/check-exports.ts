@@ -32,10 +32,12 @@ const BASELINE_FILE = "script/swarm/check-exports.baseline.json"
 
 // Named so it shares no identifier with a baselined export (this file is scanned too: a shared name would read as a
 // production reader of that export and make its baseline entry stale).
+// Row 74a (C104, review F1): browser harnesses are tests too: `test-browser/`, `*.render.*` (the render half of an app
+// browser test) and `*.fixture.*` (their data). Before, a reader there made a test-only export look production-read.
 function readsAsTest(file: string): boolean {
   return (
-    /(^|\/)(test|tests|__tests__|e2e|test-fixtures|fixtures)\//.test(file) ||
-    /\.(test|spec)\.[a-z]+$/.test(file) ||
+    /(^|\/)(test|tests|__tests__|e2e|test-fixtures|fixtures|test-browser)\//.test(file) ||
+    /\.(test|spec|render|fixture)\.[a-z]+$/.test(file) ||
     /\/(test-utils?|testing)\.[a-z]+$/.test(file)
   )
 }

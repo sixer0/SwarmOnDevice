@@ -65,6 +65,7 @@ export function missionStageWidth(sectionWidth: number) {
  * 1024x640, where no click could reach them. Then the panel scrolls toward the deliverables only as far as keeps the
  * options' top edge inside it: `scrollTop = clamp(target, 0, actionsTop)`. Without one, the deliverables come into view
  * as before. Self-contained (DOM globals only), so the Chromium half of N9-138 runs this same function.
+ * @internal test seam
  */
 export function missionFilesScroll(aside: HTMLElement, deliverables: HTMLElement) {
   const actions = aside.querySelector<HTMLElement>("[data-mission-decision-actions]")
