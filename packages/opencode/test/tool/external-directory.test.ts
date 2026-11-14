@@ -31,6 +31,7 @@ import { GlobTool } from "../../src/tool/glob"
 import { GrepTool } from "../../src/tool/grep"
 import { LspTool } from "../../src/tool/lsp"
 import { ReadTool } from "../../src/tool/read"
+import { Secrets } from "../../src/tool/secrets"
 import { ShellTool } from "../../src/tool/shell"
 import { Truncate } from "@/tool/truncate"
 import { WriteTool } from "../../src/tool/write"
@@ -47,6 +48,8 @@ mock.module(path.join(import.meta.dir, "../../src/skill/library-root.ts"), () =>
 }))
 afterAll(() => {
   status = undefined
+  // AC-B09: the `.env` value a read here taught `Secrets.learn` is forgotten before the next file in this process runs.
+  Secrets.resetForTests()
 })
 
 const it = testEffect(LayerNode.compile(CrossSpawnSpawner.node))

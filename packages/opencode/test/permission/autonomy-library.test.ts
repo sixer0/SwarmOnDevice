@@ -45,6 +45,7 @@ import { GrepTool } from "../../src/tool/grep"
 import { LspTool } from "../../src/tool/lsp"
 import { LIBRARY_SOURCE, ReadTool } from "../../src/tool/read"
 import { ToolRegistry } from "../../src/tool/registry"
+import { Secrets } from "../../src/tool/secrets"
 import { ShellTool } from "../../src/tool/shell"
 import type { Tool } from "../../src/tool/tool"
 import { Truncate } from "../../src/tool/truncate"
@@ -129,11 +130,13 @@ afterEach(() => {
 })
 afterAll(() => {
   status = undefined
+  // AC-B09: what the reads here taught `Secrets.learn` is forgotten before the next file in this process runs.
+  Secrets.resetForTests()
 })
 
-// `Secrets.learn` keeps what a read taught it for the whole process and has no reset. A value shared with other files
-// (the bare word "synthetic") would make `remember` refuse ordinary lines in a test that runs after this one, so this
-// one is private to this file.
+// `Secrets.learn` keeps what a read taught it for the whole process; `afterAll` above forgets it (AC-B09). The value
+// stays private to this file anyway (C74): a value shared with other files (the bare word "synthetic") would make
+// `remember` refuse ordinary lines in a test that runs in this file after the read.
 const TAUGHT = "synthetic-library-q7x3k9m2"
 
 // Never the edition: everything here is written by this file, and the words are only there to be ignored.

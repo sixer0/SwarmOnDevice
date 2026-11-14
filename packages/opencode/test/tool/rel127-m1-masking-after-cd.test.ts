@@ -75,6 +75,8 @@ afterAll(() => {
   rmSync(home, { recursive: true, force: true })
   rmSync(path.join(config(), "swarm.jsonc"), { force: true })
   rmSync(path.join(state(), "app-server.env"), { force: true })
+  // AC-B09: the fresh tokens the reads here taught `Secrets.learn` are forgotten before the next file in this process.
+  Secrets.resetForTests()
 })
 
 const it = testEffect(
