@@ -829,7 +829,7 @@ async function paragraphsView(a: Args, ctx: ToolContext, id: string): Promise<To
 const renderTool: ToolDef = {
   name: "studio_render",
   description:
-    "Render (R17), bisa sampai 540 s. Penuh hanya bila COMPLETE (409 DOCUMENT_INCOMPLETE); chapter/slot = draf. Tanpa formats: laporan -> HTML; klien beri mis. [docx, html]; pdf dapat 503 PDF_ENGINE_UNAVAILABLE. Tiap outputs[].id: studio_file_verify -> FILE_VERIFIED(sha256). Waktu habis: studio_document_status lalu studio_file_verify; jangan render ulang buta.",
+    "Render (R17), bisa sampai 540 s; penuh hanya bila COMPLETE (409 DOCUMENT_INCOMPLETE). Tiap outputs[].id: studio_file_verify -> FILE_VERIFIED(sha256). Waktu habis: studio_document_status lalu studio_file_verify; jangan render ulang buta.",
   inputSchema: obj(
     {
       documentId: S.documentId,

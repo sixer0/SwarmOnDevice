@@ -343,7 +343,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_get",
       "Read a mission",
-      "Read one mission: the stored MissionDoc plus derived {phases (only the mission type's phases, U20), waves, ready, counts, progress, checkpoints, drift (rows added after approval with the decision id that justified each: {count, rows: [{row, timeCreated, decision}], dropped: [{row, timeDropped, decision}]}; empty when none)}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with the current revision's outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
+      "Read one mission: the MissionDoc plus derived {phases (U20), waves, ready, counts, progress, checkpoints, drift (rows added or dropped after approval, each with its decision id)}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with current outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
       true,
       async (a) => {
         const id = a.mission as string
@@ -447,7 +447,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_set_status",
       "Change mission status",
-      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests. Setting the current status again returns unchanged: true and writes nothing. done returns the decision register decisions {count, ids} (the store holds them; studio_mission_export renders decisions.md); closing is not refused for a missing export. A Swarm close is refused MEMORY_INDEX_MISSING until the project memory holds the mission's index entry; other callers get warning MEMORY_INDEX_UNCHECKED.",
+      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision). done and cancelled are terminal; closing releases locks and withdraws open requests. done returns the decision register decisions {count, ids}; closing is not refused for a missing export. A Swarm close is refused MEMORY_INDEX_MISSING until the project memory holds the mission's index entry; other callers get warning MEMORY_INDEX_UNCHECKED.",
       false,
       async (a, s) => {
         const r = await write(dry(a), (tx) => {
@@ -482,7 +482,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_update_row",
       "Update mission rows",
-      `Row patches in order in one job (1-200): {id, add?, set?, status?, note?, decision?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). Status: ${ROW_RUNNING_DONE_RULE} (SCHEMA_INVALID field note otherwise); blocked and dropped need a note; done still passes the output gate (OUTPUT_UNVERIFIED). Each patch applies on its own: valid patches apply, a refused patch is rolled back alone and reported in results [{id, ok, code?, message?, noteSaved?}]; if no patch applies the call fails with the first code. A status refused for DEP_NOT_DONE still stores the patch's note (noteSaved: true). retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, results, waves, ready.`,
+      `Row patches in one job: {id, add?, set?, status?, note?, decision?, acquire?, release?, retire?, checkpoint?}. Status: ${ROW_RUNNING_DONE_RULE}; blocked and dropped need a note; done still passes the output gate (OUTPUT_UNVERIFIED). Each patch applies or is refused on its own (results[]). An owner instruction in messages[] {from: owner, to: controller, kind: instruction} is never executed.`,
       false,
       async (a, s) => {
         const mission = a.mission as string

@@ -250,7 +250,7 @@ export function reportWrappers(store: MissionHostStore, opts: { log: MissionLog 
   const check = wrapper(
     "studio_report_check",
     "Periksa laporan kerja",
-    "juga menjalankan cek misi §6.2 (MISSION_REQUIRED, MISSION_NOT_FOUND, MISSION_NOT_APPROVED, MISSION_CLOSED, ROW_UNKNOWN, ROW_CLOSED, DOC_KEY_MISMATCH, TaskRef = baris, DEP_NOT_DONE, MISSION_PAUSED, DECISION_PENDING, REPORT_NOT_IN_MISSION) sebagai isu (valid: false); tidak menyimpan apa pun.",
+    "cek misi §6.2 (MISSION_REQUIRED, MISSION_NOT_FOUND, MISSION_NOT_APPROVED, MISSION_CLOSED, ROW_UNKNOWN, ROW_CLOSED, DOC_KEY_MISMATCH, TaskRef = baris, DEP_NOT_DONE, MISSION_PAUSED, DECISION_PENDING, REPORT_NOT_IN_MISSION) jadi isu (valid: false).",
     async (a, s, next) => {
       const row = checkRowArg("studio_report_check", a.row)
       const vend = strip(a, ["row"])
@@ -291,7 +291,7 @@ export function reportWrappers(store: MissionHostStore, opts: { log: MissionLog 
   const submit = wrapper(
     "studio_report_submit",
     "Kirim laporan kerja",
-    "mission wajib (argumen atau baris mission:, MISSION_REQUIRED); misi approved/running/paused; row -> docKey row-<row> (harus cocok); TaskRef = id baris; tabel maks 20 kolom, 20 sel per baris; dokumen, tautan mission_report dan efek baris (§5.1) satu job antrean tulis; ditolak = tak ada yang tersimpan.",
+    "mission: argumen atau baris (MISSION_REQUIRED); tabel maks 20 kolom, 20 sel per baris; ditolak = tak ada yang tersimpan.",
     async (a, s, next) => {
       const row = checkRowArg("studio_report_submit", a.row)
       const session = sessionOf(a, s)
@@ -332,7 +332,7 @@ export function reportWrappers(store: MissionHostStore, opts: { log: MissionLog 
   const update = wrapper(
     "studio_report_update",
     "Perbarui laporan kerja",
-    "misi diambil dari tautan mission_report dokumen (tanpa tautan -> REPORT_NOT_IN_MISSION); misi done/cancelled -> MISSION_CLOSED; efek baris sama dengan submit, dalam satu job antrean tulis.",
+    "misi dari tautan mission_report dokumen (tanpa tautan -> REPORT_NOT_IN_MISSION); misi done/cancelled -> MISSION_CLOSED; efek baris sama dengan submit, satu job antrean tulis.",
     async (a, s, next) => {
       const session = sessionOf(a, s)
       const actor = actorOf(a, s)
