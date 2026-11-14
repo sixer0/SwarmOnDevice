@@ -33,7 +33,7 @@ export const MISSION_CONTROL_TOOLS = [
 export type MissionControlTool = (typeof MISSION_CONTROL_TOOLS)[number]
 
 export const MISSION_CONTROL_AGENT = "swarm"
-/** N8-459 (1.2.8 SR8-05): header carrying the per-launch Mission Control key, sent on the initialize request only. */
+/** N8-459 (1.2.8 SR8-05): header carrying the per-launch Mission Control key; 1.2.9 S9-01: sent on every request. */
 export const MISSION_CONTROL_KEY_HEADER = "x-swarm-mission-control-key"
 export const MISSION_CONTROL_ACTOR = "mission-control"
 export const MISSION_CALL_TIMEOUT_MS = 5_000
@@ -149,8 +149,9 @@ export type MissionControlClientOptions = {
   url: string
   token: string
   /**
-   * 1.2.8 SR8-05 (row 45c): the per-launch Mission Control key from lifecycle.ts. Sent as MISSION_CONTROL_KEY_HEADER on
-   * each initialize request (so a re-initialise is attested too), never on other requests; scrubbed like the token.
+   * 1.2.8 SR8-05 (row 45c): the per-launch Mission Control key from lifecycle.ts. Sent as MISSION_CONTROL_KEY_HEADER;
+   * 1.2.9 S9-01 (row 50a): on every request, not only initialize, because the host checks it per request. Scrubbed like
+   * the token; never in a body, a result or a log line.
    */
   missionControlKey?: string
   /** The folder main owns and sends as X-Studio-Caller-Cwd (created 0700 on first use, never a renderer path). */
@@ -245,8 +246,9 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
   }
 
   async function post(body: Json, signal: AbortSignal): Promise<Response> {
-    // SR8-05: the key rides only on initialize, the request whose session the host attests.
-    const extra: Record<string, string> = body.method === "initialize" && missionKey ? { [MISSION_CONTROL_KEY_HEADER]: missionKey } : {}
+    // 1.2.9 S9-01 (row 50a): attestation is bound to each request, not to the session id, so the key rides on every
+    // request (initialize, notifications/initialized, tools/call); a replayed session id without it is unattested.
+    const extra: Record<string, string> = missionKey ? { [MISSION_CONTROL_KEY_HEADER]: missionKey } : {}
     try {
       return await doFetch(url!, { method: "POST", headers: headers(extra), body: JSON.stringify(body), signal, redirect: "error" })
     } catch (error) {
