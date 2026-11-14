@@ -188,10 +188,19 @@ const CODE_RUNNER =
  * (`File`, `IO`, `FileUtils`), plus anything that runs another program (`system`, `subprocess`, `child_process`, `exec`,
  * `spawn`, AppleScript's `do shell script`). Stricter only: when unsure, a call counts as a write. Printing to the
  * standard streams is no write.
+ * 1.2.8 row 64e (S-11, C157): also `fopen`/`sysopen`/`os.open`/`openSync` with a numeric flag other than 0, or with a mode
+ * that is not a literal (`chr(119)`, `String.fromCharCode`, a variable, `os.O_*`); PHP `fwrite`/`fputs`/
+ * `file_put_contents`; `pwrite*`, `sendfile`, `ftruncate*`, `copyfile`, Ruby `IO.for_fd`; printing to a handle
+ * (Python `file=`, Perl `print F`/`print {$fh}`/`print $fh "…"`, a method `.print`/`.puts`, awk `print > "file"`).
  */
 const CODE_WRITE = new RegExp(
   [
-    String.raw`\bopen(?:Sync)?\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*?,\s*(?:mode\s*=\s*)?['"][rbtU]*[wax+]`,
+    String.raw`\b(?:f|sys)?open(?:Sync)?\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*?,\s*(?:(?:mode|flags)\s*=\s*)?(?:['"][rbtU]*[waxc+]|(?:0[xXoObB])?0*[1-9]|(?!(?:encoding|errors|newline|buffering|closefd)\b)[A-Za-z_$(])`,
+    String.raw`\b(?:fwrite|fputs|fputcsv|pwrite\w*|file_put_contents|sendfile|ftruncate\w*|copyfile|for_fd)\b`,
+    String.raw`\bfile\s*=\s*(?!sys\.std(?:out|err)\b)[\w(]`,
+    String.raw`\bprintf?\s+(?:\{|(?!STD(?:OUT|ERR)\b)[A-Z][A-Z0-9_]*\s+["'$]|\$\w+\s+["'$])`,
+    String.raw`(?<!(?:\$?std(?:out|err)|STD(?:OUT|ERR)|console))\.(?:print|puts|printf)\s*\(`,
+    String.raw`\bprintf?\b[^;}|\n]{0,200}?>{1,2}\s*["$]`,
     String.raw`\.open\s*\(\s*(?:mode\s*=\s*)?['"][rbt]*[wax+]`,
     String.raw`\bmode\s*=\s*['"][rbt]*[wax+]`,
     String.raw`\bO_(?:WRONLY|RDWR|CREAT|APPEND|TRUNC)\b`,
@@ -210,6 +219,108 @@ const CODE_HOME =
   /(?:^|[^\w])~(?=\/|['"]|$)|\$\{?HOME\b|\bhomedir\s*\(|\bexpanduser\s*\(|\bPath\.home\s*\(|\bDir\.home\b|\bgetenv\s*\(\s*['"]HOME|\benv(?:iron)?\s*(?:\.\s*HOME\b|\[\s*['"]HOME|\.get\s*\(\s*['"]HOME|\{\s*HOME\b)|\bENV\s*\[\s*['"]HOME/
 
 /**
+ * 1.2.8 row 64e (S-11, C157): when the inline code of a call may change a file. 64a's rule (a runner plus a `CODE_WRITE`
+ * call), or vim/nvim/ex/view given commands (`-c`, `--cmd`, `-s`/`-S`, `-e`/`-es`, `+cmd`: `writefile`, `:w`, … can all
+ * write), or (C157 general rule) a runner given code inline (`CODE_INLINE`) whose code holds any call that is not on the
+ * short read-only list (`codeReadsOnly`). Stricter only; the names it yields still have to land in a skill folder or the
+ * vault mirror before anything is refused, so a read-only one-liner keeps its verdict.
+ */
+function codeMayWrite(command: string) {
+  if (VIM_CODE.test(command)) return true
+  if (!CODE_RUNNER.test(command)) return false
+  return CODE_WRITE.test(command) || (CODE_INLINE.test(command) && !codeReadsOnly(command))
+}
+
+/** 1.2.8 row 64e: a vi-family editor run with commands or a script (bounded look-ahead, no backtracking blow-up). */
+const VIM_CODE =
+  /(?:^|[\s;&|(`'"/=])(?:[gnr]?vim|vi|ex|view|rview|gview|evim)(?=$|[\s'"`;|&)<])(?=[^;|&\n]{0,200}?(?:\s(?:-[A-Za-z]*[cSseE]|--cmd)(?=$|[\s'"])|\s\+\S))/
+/** 1.2.8 row 64e: a runner given code as text: `-c`/`-e`/`-E`/`-r`/`-n`/`-p`/`-x` (and combined flags), `--eval`, `eval`, a `-` stdin script or a heredoc. */
+const CODE_INLINE =
+  /(?:^|[\s;&|(`'"/=])(?:python[0-9.]*|pypy[0-9.]*|node(?:js)?|bun|deno|tsx|ts-node|perl[0-9.]*|ruby|irb|php|lua(?:jit)?|Rscript|osascript)(?=$|[\s'"`;|&)<])(?=[^;|&\n]{0,80}?(?:\s-[A-Za-z]*[ceErnpx][A-Za-z]*(?=$|[\s'"])|\s--(?:eval|print|command)\b|\seval\b|\s-(?=$|[\s'"])|<<))/
+/**
+ * 1.2.8 row 64e: a name followed by `(` (a call), with a leading `.` kept when it is a method on an unnamed value
+ * (`open(p).read(`). A match starts only at the head of a dotted name, so `a.b.c…` is scanned once (linear).
+ */
+const CODE_CALL = /(?<![\w$.])(\.?)([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g
+/**
+ * 1.2.8 row 64e (C157): the short read-only list. Reads (`read*`, `readFile*`, `file_get_contents`), looks (`stat`,
+ * `exists`, `is*`, `listdir`/`readdir`/`scandir`/`glob`/`iterdir`/`walk`), building a name (`join`, `expanduser`,
+ * `homedir`, `Path`, `resolve`, …), loading a module, plain value helpers, language keywords that take `(`, and printing
+ * without a handle. Any other call counts as a possible write.
+ */
+const READ_CALLS: ReadonlySet<string> = new Set([
+  ...["read", "readFile", "readFileSync", "readlines", "readline", "read_text", "read_bytes", "file_get_contents"],
+  ...["stat", "statSync", "lstat", "lstatSync", "exists", "existsSync", "file_exists", "isfile", "isdir", "is_file"],
+  ...["is_dir", "isFile", "isDirectory", "listdir", "readdir", "readdirSync", "scandir", "glob", "iglob", "globSync"],
+  ...["iterdir", "walk", "entries", "children", "join", "expanduser", "homedir", "home", "Path", "resolve", "abspath"],
+  ...["realpath", "dirname", "basename", "getenv", "get", "require", "import", "__import__", "len", "str", "sorted"],
+  ...["list", "decode", "strip", "split", "splitlines", "toString", "parse", "loads", "load", "dumps", "stringify"],
+  ...["keys", "values", "items", "if", "for", "while", "elif", "return", "in", "not", "and", "or", "with", "catch"],
+  ...["switch", "function", "typeof", "assert"],
+])
+/** Printing: read-only without a handle (`print(…)`) or on a standard stream (`sys.stdout.write`, `console.log`). */
+const PRINT_CALLS: ReadonlySet<string> = new Set(["print", "printf", "puts", "println", "echo", "say"])
+const STREAM_CALL =
+  /^(?:(?:sys\.|process\.|\$)?std(?:out|err)\.(?:write|print|printf|puts)|STD(?:OUT|ERR)\.\w+|console\.(?:log|info|warn|error|dir))$/
+
+/**
+ * 1.2.8 row 64e (C157): every call in the text is on the read-only list; an `open`/`fopen`/`openSync` reads only when
+ * each argument after the first is a literal read mode (`'r'`, `'rb'`, `'<'`, …), a literal name, or an
+ * `encoding`/`errors`/`newline` keyword. Undecidable (an unclosed `(` within 1000 characters) is a write.
+ */
+function codeReadsOnly(text: string) {
+  for (const match of text.matchAll(CODE_CALL)) {
+    const name = match[2]!
+    const last = name.slice(name.lastIndexOf(".") + 1)
+    if (last === "open" || last === "openSync" || last === "fopen") {
+      if (!openReads(text, match.index! + match[0].length)) return false
+      continue
+    }
+    if (READ_CALLS.has(last)) continue
+    if (PRINT_CALLS.has(name) && match[1] === "") continue
+    if (STREAM_CALL.test(name) && match[1] === "") continue
+    return false
+  }
+  return true
+}
+
+/** 1.2.8 row 64e: the arguments of the `open` call starting at `start` (just after its `(`) only read. */
+function openReads(text: string, start: number) {
+  const args: string[] = []
+  const end = Math.min(text.length, start + 1000)
+  let depth = 0
+  let quote = ""
+  let from = start
+  for (let at = start; at < end; at++) {
+    const char = text[at]!
+    if (quote) {
+      if (char === quote) quote = ""
+      continue
+    }
+    if (char === "'" || char === '"' || char === "`") quote = char
+    else if (char === "(" || char === "[" || char === "{") depth++
+    else if ((char === ")" || char === "]" || char === "}") && depth > 0) depth--
+    else if (char === "," && depth === 0) {
+      args.push(text.slice(from, at).trim())
+      from = at + 1
+    } else if (char === ")") {
+      args.push(text.slice(from, at).trim())
+      return args.slice(1).every(readArgument)
+    }
+  }
+  return false
+}
+
+function readArgument(arg: string) {
+  if (/^(?:encoding|errors|newline)\s*=/.test(arg)) return true
+  // A quote escaped for an outer shell (`bash -c "… open(\"p\") …"`) is the same literal.
+  const literal = /^(['"])(.*)\1$/s.exec(arg.replace(/\\(['"])/g, "$1"))?.[2]
+  if (literal === undefined) return false
+  if (/^[rbtU]{0,3}$/.test(literal) || /^<(?::[\w()-]+)?$/.test(literal)) return true
+  return (literal.length > 4 || /[/.]/.test(literal)) && !/^\s*[+>|]/.test(literal) && !/\|\s*$/.test(literal)
+}
+
+/**
  * 1.2.8 row 64a (S-01, C149): the places an interpreter's inline code may write, as names a skill-folder or vault-mirror
  * check can judge. Empty unless the call runs one of `CODE_RUNNER` and its text holds a `CODE_WRITE` call; then every
  * path-like word of the whole text (quoted or not; `~`, `$HOME`, `${HOME}` expanded; a `>`/`+<` mode prefix dropped), in
@@ -221,7 +332,7 @@ const CODE_HOME =
  */
 function interpreterWriteNames(input: Input): string[] {
   const command = input.metadata.command
-  if (typeof command !== "string" || !CODE_RUNNER.test(command) || !CODE_WRITE.test(command)) return []
+  if (typeof command !== "string" || !codeMayWrite(command)) return []
   // Only now: the shell reading of a long list is not cheap, and most calls run no interpreter.
   const cwds = shellCwds(input)
   const home = homedir()

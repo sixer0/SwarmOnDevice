@@ -168,6 +168,64 @@ describe("S-01: interpreter inline code writing into <vault>/swarm-memory is X v
     }
 })
 
+/**
+ * 1.2.8 row 64e (S-11, C157): spellings the 64a write list did not know, each with a literal path. `${t}` is the target.
+ * PHP file calls, numeric / O_* / computed open modes with pwrite/sendfile/ftruncate/print-to-handle, vim/nvim/ex
+ * `-c`/`-es` commands, and (C157 general rule) any call in inline code that is not on the short read-only list.
+ */
+const S11_FORMS: ((t: string) => string)[] = [
+  (t) => `php -r "file_put_contents('${t}','x');"`,
+  (t) => `php -r "\$f=fopen('${t}','w'); fputs(\$f,'x');"`,
+  (t) => `php -r "\$f=fopen('${t}','a'); fwrite(\$f,'x');"`,
+  (t) => `php -r "\$f=fopen('${t}','c+');"`,
+  (t) => `php -r "copy('a.md','${t}');"`,
+  (t) => `php -r "rename('a.md','${t}');"`,
+  (t) => `php -r "unlink('${t}');"`,
+  (t) => `php -r "touch('${t}');"`,
+  (t) => `python3 -c "import os; os.pwrite(os.open('${t}',577),b'x',0)"`,
+  (t) => `python3 -c "import os; os.write(os.open('${t}', os.O_WRONLY | os.O_CREAT), b'x')"`,
+  (t) => `python3 -c "print('x', file=open('${t}', chr(119)))"`,
+  (t) => `python3 -c "m='w'; open('${t}', m)"`,
+  (t) => `python3 -c "import os; os.sendfile(os.open('${t}',577), os.open('a.md',0), 0, 10)"`,
+  (t) => `perl -e 'sysopen(F,"${t}",0101); print F "x"'`,
+  (t) => `ruby -e 'IO.for_fd(IO.sysopen("${t}", 0101)).print("x")'`,
+  (t) => `node -e "const fs=require('fs');const fd=fs.openSync('${t}',0o1101);fs.ftruncateSync(fd,0)"`,
+  (t) => `node -e "require('fs').openSync('${t}', String.fromCharCode(119))"`,
+  (t) => `vim -es -c "call writefile(['x'], '${t}')" -c q`,
+  (t) => `nvim --headless -c "call writefile(['x'], '${t}')" -c q`,
+  (t) => `ex -s -c "call writefile(['x'], '${t}')" -c q`,
+  (t) => `vim -es -c 'normal ix' -c ':w ${t}' -c q a.md`,
+  // C157 general rule: a call not on the read-only list.
+  (t) => `python3 -c "import io; io.FileIO('${t}', 'w')"`,
+  (t) => `perl -e 'use File::Copy; mv("a.md", "${t}")'`,
+]
+
+describe("S-11: more write spellings in inline code are refused (row 64e)", () => {
+  for (const mode of MODES)
+    for (const caller of CALLERS) {
+      test(`mode ${mode}, ${caller}: every S-11 form x every skill target is X skill_folder`, async () => {
+        const wrong: string[] = []
+        for (const target of SKILL_TARGETS())
+          for (const form of S11_FORMS) {
+            const command = form(target)
+            const got = await verdict(command, mode, caller)
+            if (got.class !== "X" || got.category !== "skill_folder") wrong.push(`${got.class} ${got.category} | ${command}`)
+          }
+        expect(wrong).toEqual([])
+      })
+      test(`mode ${mode}, ${caller}: every S-11 form x the mirror is X vault_mirror`, async () => {
+        const wrong: string[] = []
+        for (const target of VAULT_TARGETS())
+          for (const form of S11_FORMS) {
+            const command = form(target)
+            const got = await verdict(command, mode, caller)
+            if (got.class !== "X" || got.category !== "vault_mirror") wrong.push(`${got.class} ${got.category} | ${command}`)
+          }
+        expect(wrong).toEqual([])
+      })
+    }
+})
+
 describe("S-01: what stays as it was", () => {
   const UNCHANGED = [
     // Reads of the folders: no write-ish call in the code.
@@ -182,6 +240,13 @@ describe("S-01: what stays as it was", () => {
     `python3 -c "import os; open(os.path.expanduser('~/.swarm/vault/inbox/n.md'),'w')"`,
     // A mention outside any interpreter.
     `git commit -m "docs: write .swarm/skills notes with node"`,
+    // 1.2.8 row 64e: read-only calls on the short list keep their verdict.
+    `python3 -c "print(open('.swarm/skills/x/SKILL.md', 'rb').read())"`,
+    `python3 -c "import os; print(os.stat('.swarm/skills/x/SKILL.md').st_size)"`,
+    `python3 -c "import glob; print(glob.glob('.swarm/skills/*/SKILL.md'))"`,
+    `node -e "console.log(require('fs').readdirSync('.swarm/skills'))"`,
+    `php -r "echo file_get_contents('.swarm/skills/x/SKILL.md');"`,
+    `ruby -e 'puts File.read(".swarm/skills/x/SKILL.md")'`,
   ]
   for (const mode of MODES)
     for (const caller of CALLERS)
