@@ -264,6 +264,21 @@ export interface DecisionOption {
   label: string
   /** one line: what choosing this option leads to */
   consequence: string
+  /** 1.2.8 row 45 (N8-454): `project-placement` join/new only: the group folder name (01d §4) */
+  group?: string
+  /** 1.2.8 row 45 (N8-149): `project-placement` join/new only */
+  groupKind?: GroupKind
+}
+
+/** 1.2.8 row 45 (N8-146, N8-147): a decision request about where missions live (01d §3.3). */
+export type DecisionTopic = "project-placement" | "project-tidy"
+/** 1.2.8 row 45 (N8-149): product, institution or research theme (U1). */
+export type GroupKind = "product" | "institution" | "theme"
+/** 1.2.8 row 45 (N8-148): one tidy proposal line; `group: null` = the mission stays at the root. */
+export interface TidyProposalItem {
+  mission: string
+  group: string | null
+  groupKind?: GroupKind
 }
 
 export interface NewDecisionRequest {
@@ -276,6 +291,10 @@ export interface NewDecisionRequest {
   recommended?: string
   /** rows that may not start while the request is open */
   blockingRows?: string[]
+  /** 1.2.8 row 45 (N8-146): absent = an ordinary decision */
+  topic?: DecisionTopic
+  /** 1.2.8 row 45 (N8-148): `project-tidy` only, 1-200 items */
+  proposal?: TidyProposalItem[]
 }
 
 export interface DecisionRequest extends NewDecisionRequest {
@@ -283,7 +302,11 @@ export interface DecisionRequest extends NewDecisionRequest {
   requestedBy: string
   createdAt: string
   closedAt?: string
-  answer?: { option: string; by: "user" | "controller"; decision: string }
+  /**
+   * 1.2.8 row 45b (SR8-05, N8-461): `via` = the answering MCP session's agent id; `attested` = that session presented the
+   * per-launch Mission Control key. Both absent for answers recorded before 1.2.8 or by store code without a session.
+   */
+  answer?: { option: string; by: "user" | "controller"; decision: string; via?: string; attested?: boolean }
 }
 
 export interface DecisionAnswer {
@@ -295,6 +318,10 @@ export interface DecisionAnswer {
   date?: string
   /** default: "<question> -> <option label> (<request id>)" */
   text?: string
+  /** 1.2.8 row 45b (SR8-05, N8-461): set by the host from the calling MCP session, never from tool arguments. */
+  via?: string
+  /** 1.2.8 row 45b: true only for a session attested with the per-launch Mission Control key (N8-459). */
+  attested?: boolean
 }
 
 export type MessageParty = "controller" | "agent" | "owner"
@@ -336,6 +363,11 @@ export interface MissionWriteOptions {
    * (AUTONOMOUS_MODE_OFF). `undefined` = the caller is trusted code (store tests, migrations), not checked here.
    */
   autonomousMode?: boolean
+  /**
+   * 1.2.8 row 39 (MEM-e, N8-467): Swarm's lookup of the mission index entry (`_meta["studio/memoryIndex"]`). A `done`
+   * close of mission `missionId` with `present: false` is refused MEMORY_INDEX_MISSING. `undefined` = not checked.
+   */
+  memoryIndex?: { missionId: string; present: boolean }
 }
 
 export interface RowPatch {

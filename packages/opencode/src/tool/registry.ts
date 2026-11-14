@@ -14,6 +14,7 @@ import { TaskTool } from "./task"
 import { Database } from "@opencode-ai/core/database/database"
 import { TodoWriteTool } from "./todo"
 import { RememberTool } from "./remember"
+import { SkillDraftTool } from "./skill_draft"
 import { Memory } from "@/memory/memory"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
@@ -108,6 +109,7 @@ const layer = Layer.effect(
     const question = yield* QuestionTool
     const todo = yield* TodoWriteTool
     const remember = yield* RememberTool
+    const skillDraft = yield* SkillDraftTool
     const memory = yield* Memory.Service
     const lsptool = yield* LspTool
     const plan = yield* PlanExitTool
@@ -228,6 +230,7 @@ const layer = Layer.effect(
           search: Tool.init(websearch),
           skill: Tool.init(skilltool),
           remember: Tool.init(remember),
+          skillDraft: Tool.init(skillDraft),
           patch: Tool.init(patchtool),
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
@@ -253,6 +256,7 @@ const layer = Layer.effect(
             tool.remember,
             tool.search,
             tool.skill,
+            tool.skillDraft,
             tool.patch,
             ...(tool.execute ? [tool.execute] : []),
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
@@ -304,6 +308,11 @@ const layer = Layer.effect(
       const filtered = (yield* all()).filter((tool) => {
         // Primary agents only: a subagent is where raw pages and files get read, and notes outlive the session.
         if (tool.id === RememberTool.id) return remembering && input.agent.mode !== "subagent"
+        // 01b section 6.2: an agent that may not load skills does not draft them either.
+        if (tool.id === SkillDraftTool.id)
+          return !Permission.disabled(["skill"], Permission.merge(input.agent.permission, input.permission ?? [])).has(
+            "skill",
+          )
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })
         }

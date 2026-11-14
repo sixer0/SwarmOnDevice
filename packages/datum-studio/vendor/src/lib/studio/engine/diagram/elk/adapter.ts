@@ -106,7 +106,29 @@ export interface ElkPlanOptions {
  * flow (`flow` with `direction` "TB"/"LR") is eligible beside ELK_FAMILIES; a flow without
  * `direction` keeps the family refusal.
  */
+/**
+ * Swarm 1.2.8 row 56 (VIS-4, 01f §3.2.5): an edge that sets its own geometry (a route other than orthogonal, a side
+ * other than auto, a slot, or bend points) makes the figure ELK-ineligible: ELK routes orthogonally and owns the ports
+ * (`elkGraphFor` below). Explicit defaults count as absent, so every spec without these fields keeps its decision.
+ */
+export const ELK_EDGE_GEOMETRY_REASON = "edge geometry fields";
+
+export function elkEdgeGeometry(s: StudioDiagramV1): boolean {
+  return (s.edges ?? []).some((e) => {
+    const g = e as { route?: unknown; from_side?: unknown; to_side?: unknown; from_slot?: unknown; to_slot?: unknown; via?: unknown };
+    return (
+      (g.route !== undefined && g.route !== "orthogonal") ||
+      (g.from_side !== undefined && g.from_side !== "auto") ||
+      (g.to_side !== undefined && g.to_side !== "auto") ||
+      g.from_slot !== undefined ||
+      g.to_slot !== undefined ||
+      (Array.isArray(g.via) && g.via.length > 0)
+    );
+  });
+}
+
 export function elkRefusal(s: StudioDiagramV1): string | null {
+  if (elkEdgeGeometry(s)) return ELK_EDGE_GEOMETRY_REASON;
   if (!ELK_FAMILIES.has(String(s.family)) && !flowDirectionOf(s)) return `family '${String(s.family)}' is not laid out by ELK`;
   const n = (s.nodes ?? []).length;
   const e = (s.edges ?? []).length;

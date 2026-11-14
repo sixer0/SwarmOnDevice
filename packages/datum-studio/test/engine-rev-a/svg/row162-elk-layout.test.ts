@@ -182,7 +182,7 @@ describe("selection rule R1/R2: existing outputs do not churn", () => {
   test("without an active plan the synchronous build is the original layout (layered.ts hook inert)", () => {
     const s = clone(LARGE);
     expect(plans.elkPlanFor(s, 166)).toBeUndefined();
-    expect(routeDefects(build.buildDiagramSvg(s, { release: false }).svg)).toBe(6); // the old router's result, unchanged (1.2.6 row 26 INTENT, N-166: 4 legacy + 2 T-03 route defects)
+    expect(routeDefects(build.buildDiagramSvg(s, { release: false }).svg)).toBe(3); // the old router's result (1.2.6 row 26 INTENT, N-166: 4 legacy + 2 T-03 route defects; 1.2.8 row 57c INTENT: 3, the labels no longer leave stubs and the old layout keeps 2 crossings + 1 collinear run)
   });
 });
 
@@ -192,20 +192,21 @@ describe("R3/R4: large layered figure", () => {
   const oldG = geom.lintDiagramGeometry(old.svg);
 
   test("the old layout has route defects (2 crossings, 2 collinear runs)", () => {
-    expect({ cross: oldG.counts.edgeCross, collinear: oldG.counts.edgeCollinear, through: oldG.counts.edgeThroughNode }).toEqual({ cross: 2, collinear: 2, through: 0 });
+    // row 57c (INTENT): one collinear run fewer (a label band no longer splits the run it sits on)
+    expect({ cross: oldG.counts.edgeCross, collinear: oldG.counts.edgeCollinear, through: oldG.counts.edgeThroughNode }).toEqual({ cross: 2, collinear: 1, through: 0 });
   });
 
   test("with ELK: no crossing, no collinear run, no connector through a box; geometry score 0; ELK reported", async () => {
     const { r, decision } = await auto(clone(LARGE));
     expect(decision.used).toBe(true);
-    expect(decision.before).toEqual({ routeDefects: 6, score: 4 }); // 1.2.6 row 26 INTENT (N-166): T-03 kinds count as route defects
+    expect(decision.before).toEqual({ routeDefects: 3, score: 3 }); // 1.2.6 row 26 INTENT (N-166): T-03 kinds count as route defects; 1.2.8 row 57c INTENT: 3 / 3
     expect(decision.after).toEqual({ routeDefects: 0, score: 0 });
     const g = geom.lintDiagramGeometry(r.svg);
     expect(g.score).toBe(0);
     expect(throughBoxes(r.svg)).toEqual([]);
     const note = (r.report.geometry ?? []).find((i: any) => i.checkId === "ELK_LAYOUT");
     expect(note?.status).toBe("REPORT");
-    expect(note?.detail).toMatch(/^ELK layout used: R3\/R4: route defects 6 -> 0/);
+    expect(note?.detail).toMatch(/^ELK layout used: R3\/R4: route defects 3 -> 0/); // row 57c INTENT (was 6)
     expect(r.report.issues.filter((i: any) => i.status === "FAIL")).toEqual([]);
   });
 

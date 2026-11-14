@@ -827,7 +827,7 @@ it.instance("specialist descriptions", () =>
     const expected: Record<string, string> = {
       coder: `Implements code and config changes: a specified build row, a bug fix, a refactor, or tests to write and make pass. Edits files, runs the project's checks, and reports the files changed and the check results. No web tools. Use when the work changes code. Also the role called coder-execution, database-specialist, git-specialist or docker-specialist in workflow texts.`,
       planner: `Plans and analyses without changing code: states the intent, writes a blueprint or spec, or analyses collected findings and recommends. Reads the project and may write Markdown documents only. Shell for inspection commands only (read-only shell: ls, head, git log ...); no web tools. Use for intent, blueprint, analysis and spec steps. Also the role called request-translator, task-architect, data-analyst, pm-analyst or pm-planner in workflow texts.`,
-      verifier: `Checks finished work against its criteria and reports pass or fail with evidence: runs tests and checks, reviews a diff, a test report or the security of a change. Does not use edit tools; its shell commands still ask. No web tools. Use after implementation and before a gate or a report. Reads images (vision): it can check a rendered page, a figure or a screenshot by eye. Can act as a blind judge: it compares two sides given without project context and without knowing which side is the candidate. Also the role called verifier, senior-code-reviewer, security-review or pm-verifier, and test-expert when tests are run rather than written.`,
+      verifier: `Checks finished work against its criteria and reports pass or fail with evidence: runs tests and checks, reviews a diff, a test report or the security of a change. Never edits code; it may write Markdown files (its report) after asking, and its shell commands still ask. No web tools. Use after implementation and before a gate or a report. Reads images (vision): it can check a rendered page, a figure or a screenshot by eye. Can act as a blind judge: it compares two sides given without project context and without knowing which side is the candidate. Also the role called verifier, senior-code-reviewer, security-review or pm-verifier, and test-expert when tests are run rather than written.`,
       "data-collector": `Reads and digests material the person already has: project files, notes, PDF, DOCX and XLSX documents, earlier reports. Returns facts with their source paths and may write a Markdown collection file. Shell for inspection commands only (read-only shell: ls, head, pdftotext file -, git log ...); no web tools. Use for read-and-summarise jobs, inventories and extractions. Also the role called data-collector or document-reader. For code search use explore; for the public web use researcher.`,
       "document-writer": `Produces finished documents for a reader in the GSP house style: DOCX, PDF, HTML, XLSX and PPTX, through the datum-house-style skill and the datum-studio tools, and runs the house-style checks before it reports. No web tools. Use when the deliverable is a document rather than code. Also the role called document-writer, pm-writer, document-converter or document-translator.`,
     }
@@ -837,7 +837,7 @@ it.instance("specialist descriptions", () =>
       expect(description).toContain("Use ")
       expect(description?.toLowerCase()).toContain("no web tools") // decision L21 (S163-05)
     }
-    expect((yield* load((svc) => svc.get("verifier")))?.description).toContain("Does not use edit tools") // L21 (S163-06)
+    expect((yield* load((svc) => svc.get("verifier")))?.description).toContain("Never edits code; it may write Markdown files") // L21 (S163-06), 1.2.8 row 28d
     const general = (yield* load((svc) => svc.get("general")))?.description
     expect(general).toBe(
       "Fallback agent for multi-step work that no other agent in this list fits. Prefer the agent whose description matches the work. Use general to run several unrelated units of work in parallel.",
@@ -897,8 +897,10 @@ it.instance("specialist permissions bind over the baseline", () =>
     const get = (name: string) => load((svc) => svc.get(name))
     const verifier = yield* get("verifier")
     expect(at(verifier, "edit", "src/a.ts")).toBe("deny")
+    // 1.2.8 AC-HN17 (INTENT, D-H3 a): the verifier writes Markdown with an ask, so its edit tools are no longer hidden.
+    expect(at(verifier, "edit", "docs/x.md")).toBe("ask")
     const hidden = Permission.disabled(["edit", "write", "apply_patch", "bash", "read"], verifier!.permission)
-    expect([...hidden].sort()).toEqual(["apply_patch", "edit", "write"])
+    expect([...hidden].sort()).toEqual([])
     for (const name of ["planner", "data-collector"]) {
       const agent = yield* get(name)
       expect(at(agent, "edit", "src/a.ts")).toBe("deny")

@@ -1345,6 +1345,8 @@ const layer = Layer.effect(
               Effect.provideService(MCP.Service, mcp),
               Effect.provideService(Truncate.Service, truncate),
               Effect.provideService(RuntimeFlags.Service, flags),
+              // SK-g: the mission-type suggestion line on `studio_mission_create` (N8-048) reads the agent's skills.
+              Effect.provideService(Skill.Service, skill),
             )
 
             if (lastUser.format?.type === "json_schema") {
@@ -1367,14 +1369,17 @@ const layer = Layer.effect(
             // turn: a note remembered or an AGENTS.md edited mid-run takes effect at the person's next message.
             const systemKey = `${lastUser.id}:${agent.name}:${model.providerID}/${model.id}`
             if (frozenSystem?.key !== systemKey) {
+              // The session's first message, fixed for the session (prompt cache, P-05): memory ranks on its text and
+              // `<suggested_skills>` matches its text and file parts (SK-g, R20-C08).
+              const firstParts = msgs.find((msg) => msg.info.role === "user")?.parts ?? []
               const [skills, env, instructions, remembered, mcpInstructions, delegation] = yield* Effect.all([
-                sys.skills(agent),
+                sys.skills(agent, SystemPrompt.skillFocus(firstParts)),
                 sys.environment(model),
                 instruction.system().pipe(Effect.orDie),
                 // Ranked on the session's first message and folder, fixed for the session (prompt cache, P-05).
                 memory.prompt(model, {
                   sessionID,
-                  query: (msgs.find((msg) => msg.info.role === "user")?.parts ?? [])
+                  query: firstParts
                     .flatMap((part) => (part.type === "text" && !part.synthetic ? [part.text] : []))
                     .join("\n"),
                   directory: session.directory,

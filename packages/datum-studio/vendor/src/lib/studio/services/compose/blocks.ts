@@ -284,6 +284,13 @@ export function diagramSpec(spec: DiagramSpecV2, title: string, sourceText: stri
   if (spec.per_row !== undefined) out.per_row = spec.per_row;
   // Swarm 1.2.6 row 45 (T-11): allow-list copy, otherwise the field is dropped silently before the v1 build.
   if (spec.direction !== undefined) out.direction = spec.direction;
+  // Swarm 1.2.8 row 58 (H-NA on the block path, 01f §2.1/§3.1): the four spec-level F-VISIO fields of DiagramSpecV2
+  // (C30). Without the copy a block's phases/pools reached the build as unknown ids (P1-containers) and
+  // lane_orientation/jumps were ignored; absent stays absent, so older blocks build byte-identical.
+  if (spec.lane_orientation !== undefined) out.lane_orientation = spec.lane_orientation;
+  if (spec.phases !== undefined) out.phases = spec.phases;
+  if (spec.pools !== undefined) out.pools = spec.pools;
+  if (spec.jumps !== undefined) out.jumps = spec.jumps;
   return out;
 }
 

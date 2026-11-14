@@ -160,11 +160,22 @@ describe("files a person has to be asked about", () => {
 })
 
 describe("edits with nobody asked are for ordinary source", () => {
-  for (const relative of ["tui.json", "composer.json", "CONTEXT.md", ".gitignore", ".agents/skills/x/SKILL.md", "scripts/x.sh", "tsconfig.json", "data.json", "src/tui.json"]) {
+  for (const relative of ["tui.json", "composer.json", "CONTEXT.md", ".gitignore", "scripts/x.sh", "tsconfig.json", "data.json", "src/tui.json"]) {
     it.live(`write asks: ${relative}`, () =>
       runTool("write", write(relative)).pipe(Effect.map((run) => expect(run.prompted.map((item) => item.permission)).toEqual(["edit"]))),
     )
   }
+  // INTENT (C110): rows 40e/40h refuse an agent write into a skill folder with the N8-058 text before any prompt, so
+  // the old "asks: .agents/skills/x/SKILL.md" expectation is replaced: refused, nothing asked, nothing written.
+  it.live("write is refused, not asked: .agents/skills/x/SKILL.md", () =>
+    runTool("write", write(".agents/skills/x/SKILL.md")).pipe(
+      Effect.map((run) => {
+        expect(run.error).toContain("skills are saved only from Settings > Skills")
+        expect(run.prompted).toEqual([])
+        expect(fs.existsSync(path.join(run.dir, ".agents/skills/x/SKILL.md"))).toBe(false)
+      }),
+    ),
+  )
   for (const relative of ["src/new.ts", "README.md", "src/i18n/en.json"]) {
     it.live(`write does not: ${relative}`, () =>
       runTool("write", write(relative)).pipe(Effect.map((run) => expect(run.prompted).toEqual([]))),

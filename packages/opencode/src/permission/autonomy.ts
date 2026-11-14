@@ -190,6 +190,8 @@ const DecisionCategory = Schema.Literals([
   "file-op",
   "git-local",
   "edit-not-ordinary",
+  // 1.2.8 row 28 (H-U10, N8-386): the table's own read of Swarm's own server under consent (`OwnApiReadCategory`).
+  "own_api_read",
   ...PermissionV1.DeferredCategory.literals,
   ...PermissionV1.AllowedCategory.literals,
 ])

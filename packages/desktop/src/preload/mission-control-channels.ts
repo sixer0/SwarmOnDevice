@@ -6,4 +6,7 @@ export const MISSION_CONTROL_IPC = {
   get: "mission-control:get",
   answer: "mission-control:answer",
   instruct: "mission-control:instruct",
+  // 1.2.8 row 46 (N8-144, 01d §7): the person's join/new click on an open placement request; main answers, moves and
+  // places in one sequence (mission-ipc.ts placeMission).
+  place: "mission-control:place",
 } as const

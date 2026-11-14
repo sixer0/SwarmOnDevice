@@ -694,6 +694,23 @@ export function stepX(step: Step, input: Pick<AutonomyTable.Input, "instance" | 
 }
 
 /**
+ * 1.2.8 row 28e (C68, AC-R17): one step leaves the machine as the consented screen reads it: the step's `outward` line of
+ * `stepScreen` (a network program, an address with a scheme, a publish, deploy or push form, git's outward sub-commands),
+ * on its own, whatever other trigger the step has. A send the consent lets out (`stepSends`: a local host, a host the
+ * person named) is no outward step, as on the call itself. A step that runs a shell text or code is not read here: its
+ * text's own steps are (`deepSteps`).
+ */
+export function stepOutward(step: Step, input: Pick<AutonomyTable.Input, "instance"> & Partial<SendContext>): boolean {
+  if (step.code !== undefined) return false
+  const found = unwrap(step.argv)
+  if (found.kind !== "program" || dynamic(found.spelled)) return false
+  const { name, args } = found
+  if (stepSends(step, input)) return false
+  if (name === "git") return gitScreen(args).d === "outward"
+  return OUTWARD.has(name) || step.argv.some(addressesOut) || outwardForm(name, args)
+}
+
+/**
  * 1.1.3 (T9 G1): the text a step hands to a shell to run: a shell's `-c` text, the words of an `eval`, or a launcher's
  * code (`watch`, `npx -c`). undefined: the step runs a program, a script file or stdin.
  */

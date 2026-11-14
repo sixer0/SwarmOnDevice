@@ -273,7 +273,7 @@ const layer = Layer.effect(
             native: true,
           },
           // Spec 161 (1.2.2): specialist subagents. Descriptions per spec section 5, with the row 163 wording
-          // (decision L21): "no web tools", and the verifier "does not use edit tools" (its shell still asks).
+          // (decision L21): "no web tools", and the verifier never edits code (Markdown only, with an ask; its shell still asks).
           coder: {
             name: "coder",
             description: `Implements code and config changes: a specified build row, a bug fix, a refactor, or tests to write and make pass. Edits files, runs the project's checks, and reports the files changed and the check results. No web tools. Use when the work changes code. Also the role called coder-execution, database-specialist, git-specialist or docker-specialist in workflow texts.`,
@@ -294,9 +294,11 @@ const layer = Layer.effect(
           },
           verifier: {
             name: "verifier",
-            description: `Checks finished work against its criteria and reports pass or fail with evidence: runs tests and checks, reviews a diff, a test report or the security of a change. Does not use edit tools; its shell commands still ask. No web tools. Use after implementation and before a gate or a report. Reads images (vision): it can check a rendered page, a figure or a screenshot by eye. Can act as a blind judge: it compares two sides given without project context and without knowing which side is the candidate. Also the role called verifier, senior-code-reviewer, security-review or pm-verifier, and test-expert when tests are run rather than written.`,
+            description: `Checks finished work against its criteria and reports pass or fail with evidence: runs tests and checks, reviews a diff, a test report or the security of a change. Never edits code; it may write Markdown files (its report) after asking, and its shell commands still ask. No web tools. Use after implementation and before a gate or a report. Reads images (vision): it can check a rendered page, a figure or a screenshot by eye. Can act as a blind judge: it compares two sides given without project context and without knowing which side is the candidate. Also the role called verifier, senior-code-reviewer, security-review or pm-verifier, and test-expert when tests are run rather than written.`,
             prompt: PROMPT_VERIFIER,
-            permission: Permission.merge(defaults, user, specialist({ edit: "deny" })),
+            // 1.2.8 AC-HN17 (D-H3 a, N8-393): it may write Markdown (its report) with an ask, as planner and data-collector
+            // do; every other file stays its own deny. Not editing the artefact it verifies stays guidance in its prompt.
+            permission: Permission.merge(defaults, user, specialist(markdownOnly)),
             options: {},
             mode: "subagent",
             native: true,

@@ -1,0 +1,704 @@
+{
+  "$comment": "Swarm 1.2.8 row 54b (AC-VIS3b, AT-V3-task/-subprocess/-gateway_*/-data_object/-annotation, register N8-373, N8-475). Synthetic labels only. `gallery`: swimlane, 2 lanes: exclusive and parallel gateways, task, sub-process. `shapes`: flow LR, task, sub-process, data object and annotation on sync associations. `gateways`: graph, the four gateways and a task. `split` / `merge`: flow LR, an exclusive gateway with two exits on its right side, a parallel gateway with two entries on its left side (C86 spread). `split_tb`: flow TB, gateway exits to the nodes beside it leave by its side vertices. `process`: graph LR at 166 mm only (five columns), start -> task -> exclusive gateway -> two tasks -> end, data object and annotation (eye check figure). `gateways_tagged`: tags and subs (N8-371 gateway case), a hatched gateway. `gateway_no_exit`: P3-diamond-exits. `iso_chart`: ISO 5807 shapes for the chart flowchart REPORT. Built at 128 and 166 mm unless the test says otherwise. Not part of the 52b CHAR corpus (new shape tokens). Row 57c (C111): the two annotation associations (`shapes` p -> a, `process` a -> t3) draw `arrow_end: \"none\"` (BPMN association, no head).",
+  "gallery": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "swimlane",
+    "id": "9.7",
+    "title": "Gambar sintetis galeri bentuk BPMN.",
+    "nodes": [
+      {
+        "id": "gx",
+        "label": "Cek A",
+        "shape": "gateway_exclusive",
+        "class": {
+          "lane": "Lajur 1"
+        }
+      },
+      {
+        "id": "t",
+        "label": "Tugas B",
+        "shape": "task",
+        "class": {
+          "lane": "Lajur 1"
+        }
+      },
+      {
+        "id": "gp",
+        "label": "Bagi C",
+        "shape": "gateway_parallel",
+        "class": {
+          "lane": "Lajur 2"
+        }
+      },
+      {
+        "id": "p",
+        "label": "Sub D",
+        "shape": "subprocess",
+        "class": {
+          "lane": "Lajur 2"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "gx",
+        "to": "t",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "t",
+        "to": "p",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "gp",
+        "to": "p",
+        "kind": "data",
+        "label": "ke"
+      }
+    ]
+  },
+  "shapes": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.9",
+    "title": "Gambar sintetis bentuk BPMN.",
+    "nodes": [
+      {
+        "id": "t",
+        "label": "Tugas A",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "p",
+        "label": "Sub B",
+        "shape": "subprocess",
+        "class": {}
+      },
+      {
+        "id": "d",
+        "label": "Data C",
+        "shape": "data_object",
+        "class": {}
+      },
+      {
+        "id": "a",
+        "label": "Catatan D",
+        "shape": "annotation",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "t",
+        "to": "p",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "p",
+        "to": "d",
+        "kind": "sync",
+        "label": "isi"
+      },
+      {
+        "from": "p",
+        "to": "a",
+        "kind": "sync",
+        "label": "cat",
+        "arrow_end": "none"
+      }
+    ]
+  },
+  "gateways": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.13",
+    "title": "Gambar sintetis gerbang BPMN.",
+    "nodes": [
+      {
+        "id": "gx",
+        "label": "Cek A",
+        "shape": "gateway_exclusive",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "gp",
+        "label": "Bagi B",
+        "shape": "gateway_parallel",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "gi",
+        "label": "Pilih C",
+        "shape": "gateway_inclusive",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "gc",
+        "label": "Gabung D",
+        "shape": "gateway_complex",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "t",
+        "label": "Tugas E",
+        "shape": "task",
+        "class": {
+          "col": 2,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "gx",
+        "to": "gp",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "gp",
+        "to": "gi",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "gi",
+        "to": "gc",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "gc",
+        "to": "t",
+        "kind": "data",
+        "label": "ke"
+      }
+    ]
+  },
+  "split": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.15",
+    "title": "Gambar sintetis cabang.",
+    "nodes": [
+      {
+        "id": "t0",
+        "label": "Tugas A",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "g",
+        "label": "Cek B",
+        "shape": "gateway_exclusive",
+        "class": {}
+      },
+      {
+        "id": "t1",
+        "label": "Tugas C",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "t2",
+        "label": "Tugas D",
+        "shape": "task",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "t0",
+        "to": "g",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "g",
+        "to": "t1",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "g",
+        "to": "t2",
+        "kind": "data",
+        "label": "tidak"
+      }
+    ]
+  },
+  "merge": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.17",
+    "title": "Gambar sintetis gabung.",
+    "nodes": [
+      {
+        "id": "t1",
+        "label": "Tugas A",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "t2",
+        "label": "Tugas B",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "j",
+        "label": "Gabung C",
+        "shape": "gateway_parallel",
+        "class": {}
+      },
+      {
+        "id": "t3",
+        "label": "Tugas D",
+        "shape": "task",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "t1",
+        "to": "j",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "t2",
+        "to": "j",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "j",
+        "to": "t3",
+        "kind": "data",
+        "label": "ke"
+      }
+    ]
+  },
+  "split_tb": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "TB",
+    "id": "9.16",
+    "title": "Gambar sintetis cabang tegak.",
+    "nodes": [
+      {
+        "id": "t0",
+        "label": "Tugas A",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "g",
+        "label": "Cek B",
+        "shape": "gateway_exclusive",
+        "class": {}
+      },
+      {
+        "id": "t1",
+        "label": "Tugas C",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "t2",
+        "label": "Tugas D",
+        "shape": "task",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "t0",
+        "to": "g",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "g",
+        "to": "t1",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "g",
+        "to": "t2",
+        "kind": "data",
+        "label": "tidak"
+      }
+    ]
+  },
+  "process": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.8",
+    "title": "Gambar sintetis proses BPMN kecil.",
+    "nodes": [
+      {
+        "id": "s",
+        "label": "Awal A",
+        "shape": "event_start",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "t1",
+        "label": "Tugas B",
+        "shape": "task",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "g",
+        "label": "Cek C",
+        "shape": "gateway_exclusive",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "t2",
+        "label": "Tugas D",
+        "shape": "task",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "t3",
+        "label": "Tugas E",
+        "shape": "task",
+        "class": {
+          "col": 3,
+          "row": 1
+        }
+      },
+      {
+        "id": "e",
+        "label": "Akhir F",
+        "shape": "event_end",
+        "class": {
+          "col": 4,
+          "row": 0
+        }
+      },
+      {
+        "id": "d",
+        "label": "Data G",
+        "shape": "data_object",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "a",
+        "label": "Catatan H",
+        "shape": "annotation",
+        "class": {
+          "col": 4,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "s",
+        "to": "t1",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "t1",
+        "to": "g",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "g",
+        "to": "t2",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "g",
+        "to": "t3",
+        "kind": "data",
+        "label": "tidak"
+      },
+      {
+        "from": "t2",
+        "to": "e",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "t3",
+        "to": "e",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "t1",
+        "to": "d",
+        "kind": "sync",
+        "label": "isi"
+      },
+      {
+        "from": "a",
+        "to": "t3",
+        "kind": "sync",
+        "label": "cat",
+        "arrow_end": "none"
+      }
+    ]
+  },
+  "gateways_tagged": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.10",
+    "title": "Gambar sintetis tag BPMN.",
+    "nodes": [
+      {
+        "id": "g1",
+        "label": "Cek A",
+        "shape": "gateway_exclusive",
+        "class": {},
+        "tag": "T1",
+        "sub": "anak A"
+      },
+      {
+        "id": "g2",
+        "label": "Bagi B",
+        "shape": "gateway_parallel",
+        "class": {
+          "accent": true
+        },
+        "tag": "T2"
+      },
+      {
+        "id": "g3",
+        "label": "Pilih C",
+        "shape": "gateway_inclusive",
+        "class": {},
+        "tag": "T3"
+      },
+      {
+        "id": "t",
+        "label": "Tugas D",
+        "shape": "task",
+        "class": {},
+        "tag": "T4"
+      }
+    ],
+    "edges": [
+      {
+        "from": "g1",
+        "to": "g2",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "g1",
+        "to": "g3",
+        "kind": "data",
+        "label": "tidak"
+      },
+      {
+        "from": "g2",
+        "to": "t",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "g3",
+        "to": "t",
+        "kind": "data",
+        "label": "ke"
+      }
+    ]
+  },
+  "gateway_no_exit": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.11",
+    "title": "Gambar sintetis gerbang tanpa keluaran.",
+    "nodes": [
+      {
+        "id": "t",
+        "label": "Tugas A",
+        "shape": "task",
+        "class": {}
+      },
+      {
+        "id": "g",
+        "label": "Cek B",
+        "shape": "gateway_parallel",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "t",
+        "to": "g",
+        "kind": "data",
+        "label": "ke"
+      }
+    ]
+  },
+  "iso_chart": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "flow",
+    "direction": "LR",
+    "id": "9.12",
+    "title": "Gambar sintetis bentuk ISO.",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Mulai A",
+        "shape": "stadium",
+        "class": {}
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "shape": "box",
+        "class": {}
+      },
+      {
+        "id": "c",
+        "label": "Cek C",
+        "shape": "diamond",
+        "class": {}
+      },
+      {
+        "id": "d",
+        "label": "Proses D",
+        "shape": "predefined",
+        "class": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "data",
+        "label": "cek"
+      },
+      {
+        "from": "c",
+        "to": "d",
+        "kind": "data",
+        "label": "ya"
+      }
+    ]
+  }
+}

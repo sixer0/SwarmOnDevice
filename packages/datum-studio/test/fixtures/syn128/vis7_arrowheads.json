@@ -1,0 +1,681 @@
+{
+  "$comment": "Swarm 1.2.8 row 57 (AC-VIS7, AT-V7-arrowheads, register N8-379 / N8-468 / N8-475). Synthetic labels only. `size_s`, `size_m`, `size_l`: graph 4 columns x 2 rows (a over b, one empty row between), one vertical `data` edge per head type with the same head at both ends at that size (DATUM-25L: one line style). `ends`: start-only head, `arrow_end: \"none\"` (no head), a `control` edge whose end is its kind head with a start head, and the explicit default. `refused`: a size without its head (P1-edge-style, start and end). `bpmn_process`: the row 54b process figure (vis3_bpmn_gallery.json `process`, 166 mm) with the BPMN association (annotation -> task) drawn with `arrow_end: \"none\"` (C101).",
+  "size_s": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.10",
+    "title": "Gambar sintetis kepala panah ukuran s.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "segitiga",
+        "arrow_start": "triangle",
+        "arrow_end": "triangle",
+        "arrow_start_size": "s",
+        "arrow_end_size": "s"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "buka",
+        "arrow_start": "open",
+        "arrow_end": "open",
+        "arrow_start_size": "s",
+        "arrow_end_size": "s"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "data",
+        "label": "wajik",
+        "arrow_start": "diamond",
+        "arrow_end": "diamond",
+        "arrow_start_size": "s",
+        "arrow_end_size": "s"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "data",
+        "label": "bulat",
+        "arrow_start": "circle",
+        "arrow_end": "circle",
+        "arrow_start_size": "s",
+        "arrow_end_size": "s"
+      }
+    ]
+  },
+  "size_m": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.11",
+    "title": "Gambar sintetis kepala panah ukuran m.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "segitiga",
+        "arrow_start": "triangle",
+        "arrow_end": "triangle",
+        "arrow_start_size": "m",
+        "arrow_end_size": "m"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "buka",
+        "arrow_start": "open",
+        "arrow_end": "open",
+        "arrow_start_size": "m",
+        "arrow_end_size": "m"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "data",
+        "label": "wajik",
+        "arrow_start": "diamond",
+        "arrow_end": "diamond",
+        "arrow_start_size": "m",
+        "arrow_end_size": "m"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "data",
+        "label": "bulat",
+        "arrow_start": "circle",
+        "arrow_end": "circle",
+        "arrow_start_size": "m",
+        "arrow_end_size": "m"
+      }
+    ]
+  },
+  "size_l": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.12",
+    "title": "Gambar sintetis kepala panah ukuran l.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "segitiga",
+        "arrow_start": "triangle",
+        "arrow_end": "triangle",
+        "arrow_start_size": "l",
+        "arrow_end_size": "l"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "buka",
+        "arrow_start": "open",
+        "arrow_end": "open",
+        "arrow_start_size": "l",
+        "arrow_end_size": "l"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "data",
+        "label": "wajik",
+        "arrow_start": "diamond",
+        "arrow_end": "diamond",
+        "arrow_start_size": "l",
+        "arrow_end_size": "l"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "data",
+        "label": "bulat",
+        "arrow_start": "circle",
+        "arrow_end": "circle",
+        "arrow_start_size": "l",
+        "arrow_end_size": "l"
+      }
+    ]
+  },
+  "ends": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.13",
+    "title": "Gambar sintetis ujung konektor.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "awal",
+        "arrow_start": "triangle",
+        "arrow_end": "none"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "sync",
+        "label": "asosiasi",
+        "arrow_end": "none"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "control",
+        "label": "pesan",
+        "arrow_start": "circle",
+        "arrow_end": "open"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "data",
+        "label": "biasa",
+        "arrow_start": "none",
+        "arrow_end": "triangle",
+        "arrow_end_size": "m"
+      }
+    ]
+  },
+  "refused": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.14",
+    "title": "Gambar sintetis ukuran tanpa kepala.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "satu",
+        "arrow_start_size": "l"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "dua",
+        "arrow_end": "none",
+        "arrow_end_size": "s"
+      }
+    ]
+  },
+  "bpmn_process": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.8",
+    "title": "Gambar sintetis proses BPMN kecil.",
+    "nodes": [
+      {
+        "id": "s",
+        "label": "Awal A",
+        "shape": "event_start",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "t1",
+        "label": "Tugas B",
+        "shape": "task",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "g",
+        "label": "Cek C",
+        "shape": "gateway_exclusive",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "t2",
+        "label": "Tugas D",
+        "shape": "task",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "t3",
+        "label": "Tugas E",
+        "shape": "task",
+        "class": {
+          "col": 3,
+          "row": 1
+        }
+      },
+      {
+        "id": "e",
+        "label": "Akhir F",
+        "shape": "event_end",
+        "class": {
+          "col": 4,
+          "row": 0
+        }
+      },
+      {
+        "id": "d",
+        "label": "Data G",
+        "shape": "data_object",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      },
+      {
+        "id": "a",
+        "label": "Catatan H",
+        "shape": "annotation",
+        "class": {
+          "col": 4,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "s",
+        "to": "t1",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "t1",
+        "to": "g",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "g",
+        "to": "t2",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "g",
+        "to": "t3",
+        "kind": "data",
+        "label": "tidak"
+      },
+      {
+        "from": "t2",
+        "to": "e",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "t3",
+        "to": "e",
+        "kind": "data",
+        "label": "ke"
+      },
+      {
+        "from": "t1",
+        "to": "d",
+        "kind": "sync",
+        "label": "isi"
+      },
+      {
+        "from": "a",
+        "to": "t3",
+        "kind": "sync",
+        "label": "cat",
+        "arrow_end": "none"
+      }
+    ]
+  }
+}

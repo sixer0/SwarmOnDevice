@@ -1,0 +1,928 @@
+{
+  "$comment": "Swarm 1.2.8 row 57b (AC-VIS8, AT-V8-dash-weight, register N8-262..N8-264, N8-380). Synthetic labels only. Graph 4 columns x 2 rows (a over b), one vertical edge per column. `dashes_a`/`dashes_b`: every dash pattern on a data edge (4 + 1 styles; DATUM-25L <= 4). `weights`: thin, normal (absent), thick on data, plus a thick control edge (open head follows the weight). `accent_absent` / `accent_normal`: an accent edge without weight (0.72 mm) and with weight normal (0.45 mm, its own style and head id), beside a data edge. `explicit_defaults` = `absent` with dash = kind pattern and weight normal written out (byte-identical). `refused_mark`: 4 distinct (kind, dash, weight) styles of one kind and a node mark (> 3 -> DATUM-25L); `refused_five`: 5 styles without a mark (> 4 -> DATUM-25L); `four_ok`: 4 styles without a mark pass.",
+  "dashes_a": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.20",
+    "title": "Gambar sintetis pola garis a.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "utuh",
+        "dash": "solid"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "putus",
+        "dash": "dashed"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "data",
+        "label": "titik",
+        "dash": "dotted"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "data",
+        "label": "panjang",
+        "dash": "longdash"
+      }
+    ]
+  },
+  "dashes_b": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.21",
+    "title": "Gambar sintetis pola garis b.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "titik garis",
+        "dash": "dashdot"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "control",
+        "label": "kendali utuh",
+        "dash": "solid"
+      }
+    ]
+  },
+  "weights": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.22",
+    "title": "Gambar sintetis tebal garis.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "tipis",
+        "weight": "thin"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "biasa"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "data",
+        "label": "tebal",
+        "weight": "thick"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "control",
+        "label": "kendali tebal",
+        "weight": "thick"
+      }
+    ]
+  },
+  "accent_normal": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.23",
+    "title": "Gambar sintetis aksen.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "accent",
+        "label": "aksen biasa",
+        "weight": "normal"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "data"
+      }
+    ]
+  },
+  "absent": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.24",
+    "title": "Gambar sintetis bawaan.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "data"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "control",
+        "label": "kendali"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "sync",
+        "label": "salin"
+      }
+    ]
+  },
+  "explicit_defaults": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.24",
+    "title": "Gambar sintetis bawaan.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "data",
+        "dash": "solid",
+        "weight": "normal"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "control",
+        "label": "kendali",
+        "dash": "dashed",
+        "weight": "normal"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "sync",
+        "label": "salin",
+        "dash": "dotted",
+        "weight": "normal"
+      }
+    ]
+  },
+  "refused_mark": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.25",
+    "title": "Gambar sintetis gaya berlebih dengan glif.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        },
+        "mark": "TERUKUR"
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "a"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "b",
+        "dash": "dashed"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "data",
+        "label": "c",
+        "weight": "thick"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "data",
+        "label": "d",
+        "dash": "dotted",
+        "weight": "thin"
+      }
+    ],
+    "legend": [
+      "■ TERUKUR = diukur langsung"
+    ]
+  },
+  "refused_five": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.26",
+    "title": "Gambar sintetis lima gaya.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "a4",
+        "label": "Langkah A5",
+        "class": {
+          "col": 4,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      },
+      {
+        "id": "b4",
+        "label": "Langkah B5",
+        "class": {
+          "col": 4,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "a"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "b",
+        "dash": "dashed"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "data",
+        "label": "c",
+        "weight": "thick"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "control",
+        "label": "d"
+      },
+      {
+        "from": "a4",
+        "to": "b4",
+        "kind": "control",
+        "label": "e",
+        "weight": "thin"
+      }
+    ]
+  },
+  "four_ok": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.27",
+    "title": "Gambar sintetis empat gaya.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "a2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "a3",
+        "label": "Langkah A4",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      },
+      {
+        "id": "b2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      },
+      {
+        "id": "b3",
+        "label": "Langkah B4",
+        "class": {
+          "col": 3,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "data",
+        "label": "a"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "b",
+        "dash": "dashed"
+      },
+      {
+        "from": "a2",
+        "to": "b2",
+        "kind": "data",
+        "label": "c",
+        "weight": "thick"
+      },
+      {
+        "from": "a3",
+        "to": "b3",
+        "kind": "control",
+        "label": "d"
+      }
+    ]
+  },
+  "accent_absent": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.28",
+    "title": "Gambar sintetis aksen bawaan.",
+    "nodes": [
+      {
+        "id": "a0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "a1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "b0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "b1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a0",
+        "to": "b0",
+        "kind": "accent",
+        "label": "aksen"
+      },
+      {
+        "from": "a1",
+        "to": "b1",
+        "kind": "data",
+        "label": "data"
+      }
+    ]
+  }
+}

@@ -167,6 +167,8 @@ const layer = Layer.effect(
 
       for (const item of yield* skill.all()) {
         if (commands[item.name] || item.name === Skill.KNOWLEDGE_LIBRARY_SKILL_NAME) continue
+        // AC-SKc: a skill the person turned off (global `skills.disabled`) is not offered as a slash command.
+        if (item.disabled) continue
         const dir = item.location === "<built-in>" ? undefined : path.dirname(item.location)
         commands[item.name] = {
           name: item.name,

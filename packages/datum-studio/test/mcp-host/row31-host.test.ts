@@ -84,6 +84,7 @@ const MISSION_TOOLS = [
   "studio_mission_export",
   "studio_mission_request_decision",
   "studio_mission_answer_decision",
+  "studio_mission_place", // 1.2.8 row 45 (PROJ-b, INTENT 40 -> 41)
 ]
 // Row 50c (1.2.6, W-13 N-106, INTENT 39 -> 40): mcp-server.ts adds the host built-in studio_asset_put after the extensions.
 const ASSET_TOOLS = ["studio_asset_put"]
@@ -261,12 +262,12 @@ describe("row 31: per-session file root (spec §9.4)", () => {
 })
 
 describe("row 31: tool list = studio spec §5 as amended by U19", () => {
-  test("exactly the 40 names (23 kept + 5 template + 11 mission + studio_asset_put), in order; studio_draft_check absent and not callable", async () => {
+  test("exactly the 41 names (23 kept + 5 template + 12 mission + studio_asset_put), in order; studio_draft_check absent and not callable", async () => {
     const c = await client(PROJECT)
     try {
       const names = (await c.listTools()).tools.map((t) => t.name)
       expect(names).toEqual(HOST_TOOLS)
-      expect(names.length).toBe(40)
+      expect(names.length).toBe(41) // 1.2.8 row 45: + studio_mission_place
       expect([...mod.HOST_KEPT_TOOLS] as string[]).toEqual(EXPECTED_TOOLS)
       expect(names).not.toContain("studio_draft_check")
       await expect(c.callTool({ name: "studio_draft_check", arguments: { markdown: "x" } })).rejects.toThrow()

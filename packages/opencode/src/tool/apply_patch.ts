@@ -8,7 +8,7 @@ import { Patch } from "../patch"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Reach } from "./reach"
-import { checkpointBefore, lock, trimDiff } from "./edit"
+import { checkpointBefore, linkedLabels, lock, trimDiff } from "./edit"
 import { ActionCheckpoint } from "./checkpoint"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
@@ -103,6 +103,11 @@ export const ApplyPatchTool = Tool.define(
         path.resolve(instance.directory, hunk.path),
         ...(hunk.type === "update" && hunk.move_path ? [path.resolve(instance.directory, hunk.move_path)] : []),
       ])
+      // 1.2.8 row 40h (SK-e, C82): a skill folder is refused before any outside-folder prompt; nothing is asked or written
+      // (Reach.editTrust checks again with the service's newest list).
+      if (targets.some((file) => Reach.skillFolder(file, instance))) return yield* Effect.fail(new Reach.SkillFolderRefused())
+      // 1.2.8 row 40f (AC-SEC11): the vault mirror folder likewise, before any prompt, mode on and off.
+      if (targets.some((file) => Reach.vaultMirror(file, instance))) return yield* Effect.fail(new Reach.VaultMirrorRefused())
       const outside: Parameters<Tool.Context["ask"]>[0][] = []
       const scout: Tool.Context = { ...ctx, ask: (request) => Effect.sync(() => void outside.push(request)) }
       for (const target of targets) yield* assertExternalDirectoryEffect(scout, target)
@@ -271,7 +276,7 @@ export const ApplyPatchTool = Tool.define(
       const trust = yield* Reach.editTrust(ctx, instance, touched)
       yield* ctx.ask({
         permission: "edit",
-        patterns: relativePaths,
+        patterns: [...relativePaths, ...linkedLabels(instance.worktree, touched)],
         always: trust.risk ? [] : ["*"],
         metadata: {
           filepath: relativePaths.join(", "),

@@ -1,0 +1,663 @@
+{
+  "version": 2,
+  "enabled": true,
+  "items": [
+    {
+      "id": "b00000",
+      "text": "2026-01-01 2026-01-01_syn128-misi-01 | hasil sintetis misi 1 alfa delta selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, alfa, foxtrot, uji, sintetis | docs/2026-01-01_syn128-misi-01/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767225600000,
+      "kind": "index",
+      "missionId": "2026-01-01_syn128-misi-01",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-01_syn128-misi-01/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00001",
+      "text": "2026-01-04 2026-01-04_syn128-misi-02 | hasil sintetis misi 2 bravo echo selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, bravo, golf, uji, sintetis | docs/2026-01-04_syn128-misi-02/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767484800000,
+      "kind": "index",
+      "missionId": "2026-01-04_syn128-misi-02",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-04_syn128-misi-02/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00002",
+      "text": "2026-01-07 2026-01-07_syn128-misi-03 | hasil sintetis misi 3 charlie foxtrot selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, charlie, hotel, uji, sintetis | docs/2026-01-07_syn128-misi-03/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767744000000,
+      "kind": "index",
+      "missionId": "2026-01-07_syn128-misi-03",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-07_syn128-misi-03/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00003",
+      "text": "2026-01-10 2026-01-10_syn128-misi-04 | hasil sintetis misi 4 delta golf selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, delta, india, uji, sintetis | docs/2026-01-10_syn128-misi-04/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1768003200000,
+      "kind": "index",
+      "missionId": "2026-01-10_syn128-misi-04",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-10_syn128-misi-04/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00004",
+      "text": "2026-01-13 2026-01-13_syn128-misi-05 | hasil sintetis misi 5 echo hotel selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, echo, juliett, uji, sintetis | docs/2026-01-13_syn128-misi-05/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1768262400000,
+      "kind": "index",
+      "missionId": "2026-01-13_syn128-misi-05",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-13_syn128-misi-05/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00005",
+      "text": "2026-01-16 2026-01-16_syn128-misi-06 | hasil sintetis misi 6 foxtrot india selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, foxtrot, kilo, uji, sintetis | docs/2026-01-16_syn128-misi-06/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1768521600000,
+      "kind": "index",
+      "missionId": "2026-01-16_syn128-misi-06",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-16_syn128-misi-06/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00006",
+      "text": "2026-01-19 2026-01-19_syn128-misi-07 | hasil sintetis misi 7 golf juliett selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, golf, lima, uji, sintetis | docs/2026-01-19_syn128-misi-07/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1768780800000,
+      "kind": "index",
+      "missionId": "2026-01-19_syn128-misi-07",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-19_syn128-misi-07/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00007",
+      "text": "2026-01-22 2026-01-22_syn128-misi-08 | hasil sintetis misi 8 hotel kilo selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, hotel, mike, uji, sintetis | docs/2026-01-22_syn128-misi-08/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1769040000000,
+      "kind": "index",
+      "missionId": "2026-01-22_syn128-misi-08",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-22_syn128-misi-08/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00008",
+      "text": "2026-01-25 2026-01-25_syn128-misi-09 | hasil sintetis misi 9 india lima selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, india, november, uji, sintetis | docs/2026-01-25_syn128-misi-09/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1769299200000,
+      "kind": "index",
+      "missionId": "2026-01-25_syn128-misi-09",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-25_syn128-misi-09/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00009",
+      "text": "2026-01-28 2026-01-28_syn128-misi-10 | hasil sintetis misi 10 juliett mike selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, juliett, oscar, uji, sintetis | docs/2026-01-28_syn128-misi-10/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1769558400000,
+      "kind": "index",
+      "missionId": "2026-01-28_syn128-misi-10",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-28_syn128-misi-10/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0000a",
+      "text": "2026-01-31 2026-01-31_syn128-misi-11 | hasil sintetis misi 11 kilo november selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, kilo, papa, uji, sintetis | docs/2026-01-31_syn128-misi-11/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1769817600000,
+      "kind": "index",
+      "missionId": "2026-01-31_syn128-misi-11",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-01-31_syn128-misi-11/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0000b",
+      "text": "2026-02-03 2026-02-03_syn128-misi-12 | hasil sintetis misi 12 lima oscar selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, lima, quebec, uji, sintetis | docs/2026-02-03_syn128-misi-12/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1770076800000,
+      "kind": "index",
+      "missionId": "2026-02-03_syn128-misi-12",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-03_syn128-misi-12/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0000c",
+      "text": "2026-02-06 2026-02-06_syn128-misi-13 | hasil sintetis misi 13 mike papa selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, mike, romeo, uji, sintetis | docs/2026-02-06_syn128-misi-13/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1770336000000,
+      "kind": "index",
+      "missionId": "2026-02-06_syn128-misi-13",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-06_syn128-misi-13/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0000d",
+      "text": "2026-02-09 2026-02-09_syn128-misi-14 | hasil sintetis misi 14 november quebec selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, november, sierra, uji, sintetis | docs/2026-02-09_syn128-misi-14/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1770595200000,
+      "kind": "index",
+      "missionId": "2026-02-09_syn128-misi-14",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-09_syn128-misi-14/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0000e",
+      "text": "2026-02-12 2026-02-12_syn128-misi-15 | hasil sintetis misi 15 oscar romeo selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, oscar, tango, uji, sintetis | docs/2026-02-12_syn128-misi-15/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1770854400000,
+      "kind": "index",
+      "missionId": "2026-02-12_syn128-misi-15",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-12_syn128-misi-15/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0000f",
+      "text": "2026-02-15 2026-02-15_syn128-misi-16 | hasil sintetis misi 16 papa sierra selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, papa, alfa, uji, sintetis | docs/2026-02-15_syn128-misi-16/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1771113600000,
+      "kind": "index",
+      "missionId": "2026-02-15_syn128-misi-16",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-15_syn128-misi-16/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00010",
+      "text": "2026-02-18 2026-02-18_syn128-misi-17 | hasil sintetis misi 17 quebec tango selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, quebec, bravo, uji, sintetis | docs/2026-02-18_syn128-misi-17/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1771372800000,
+      "kind": "index",
+      "missionId": "2026-02-18_syn128-misi-17",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-18_syn128-misi-17/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00011",
+      "text": "2026-02-21 2026-02-21_syn128-misi-18 | hasil sintetis misi 18 romeo alfa selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, romeo, charlie, uji, sintetis | docs/2026-02-21_syn128-misi-18/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1771632000000,
+      "kind": "index",
+      "missionId": "2026-02-21_syn128-misi-18",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-21_syn128-misi-18/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00012",
+      "text": "2026-02-24 2026-02-24_syn128-misi-19 | hasil sintetis misi 19 sierra bravo selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, sierra, delta, uji, sintetis | docs/2026-02-24_syn128-misi-19/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1771891200000,
+      "kind": "index",
+      "missionId": "2026-02-24_syn128-misi-19",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-24_syn128-misi-19/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00013",
+      "text": "2026-02-27 2026-02-27_syn128-misi-20 | hasil sintetis misi 20 tango charlie selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, tango, echo, uji, sintetis | docs/2026-02-27_syn128-misi-20/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1772150400000,
+      "kind": "index",
+      "missionId": "2026-02-27_syn128-misi-20",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-02-27_syn128-misi-20/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00014",
+      "text": "2026-03-02 2026-03-02_syn128-misi-21 | hasil sintetis misi 21 alfa delta selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, alfa, foxtrot, uji, sintetis | docs/2026-03-02_syn128-misi-21/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1772409600000,
+      "kind": "index",
+      "missionId": "2026-03-02_syn128-misi-21",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-02_syn128-misi-21/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00015",
+      "text": "2026-03-05 2026-03-05_syn128-misi-22 | hasil sintetis misi 22 bravo echo selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, bravo, golf, uji, sintetis | docs/2026-03-05_syn128-misi-22/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1772668800000,
+      "kind": "index",
+      "missionId": "2026-03-05_syn128-misi-22",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-05_syn128-misi-22/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00016",
+      "text": "2026-03-08 2026-03-08_syn128-misi-23 | hasil sintetis misi 23 charlie foxtrot selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, charlie, hotel, uji, sintetis | docs/2026-03-08_syn128-misi-23/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1772928000000,
+      "kind": "index",
+      "missionId": "2026-03-08_syn128-misi-23",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-08_syn128-misi-23/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00017",
+      "text": "2026-03-11 2026-03-11_syn128-misi-24 | hasil sintetis misi 24 delta golf selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, delta, india, uji, sintetis | docs/2026-03-11_syn128-misi-24/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1773187200000,
+      "kind": "index",
+      "missionId": "2026-03-11_syn128-misi-24",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-11_syn128-misi-24/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00018",
+      "text": "2026-03-14 2026-03-14_syn128-misi-25 | hasil sintetis misi 25 echo hotel selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, echo, juliett, uji, sintetis | docs/2026-03-14_syn128-misi-25/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1773446400000,
+      "kind": "index",
+      "missionId": "2026-03-14_syn128-misi-25",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-14_syn128-misi-25/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00019",
+      "text": "2026-03-17 2026-03-17_syn128-misi-26 | hasil sintetis misi 26 foxtrot india selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, foxtrot, kilo, uji, sintetis | docs/2026-03-17_syn128-misi-26/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1773705600000,
+      "kind": "index",
+      "missionId": "2026-03-17_syn128-misi-26",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-17_syn128-misi-26/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0001a",
+      "text": "2026-03-20 2026-03-20_syn128-misi-27 | hasil sintetis misi 27 golf juliett selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, golf, lima, uji, sintetis | docs/2026-03-20_syn128-misi-27/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1773964800000,
+      "kind": "index",
+      "missionId": "2026-03-20_syn128-misi-27",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-20_syn128-misi-27/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0001b",
+      "text": "2026-03-23 2026-03-23_syn128-misi-28 | hasil sintetis misi 28 hotel kilo selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, hotel, mike, uji, sintetis | docs/2026-03-23_syn128-misi-28/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1774224000000,
+      "kind": "index",
+      "missionId": "2026-03-23_syn128-misi-28",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-23_syn128-misi-28/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0001c",
+      "text": "2026-03-26 2026-03-26_syn128-misi-29 | hasil sintetis misi 29 india lima selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, india, november, uji, sintetis | docs/2026-03-26_syn128-misi-29/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1774483200000,
+      "kind": "index",
+      "missionId": "2026-03-26_syn128-misi-29",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-26_syn128-misi-29/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0001d",
+      "text": "2026-03-29 2026-03-29_syn128-misi-30 | hasil sintetis misi 30 juliett mike selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, juliett, oscar, uji, sintetis | docs/2026-03-29_syn128-misi-30/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1774742400000,
+      "kind": "index",
+      "missionId": "2026-03-29_syn128-misi-30",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-03-29_syn128-misi-30/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0001e",
+      "text": "2026-04-01 2026-04-01_syn128-misi-31 | hasil sintetis misi 31 kilo november selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, kilo, papa, uji, sintetis | docs/2026-04-01_syn128-misi-31/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1775001600000,
+      "kind": "index",
+      "missionId": "2026-04-01_syn128-misi-31",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-01_syn128-misi-31/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b0001f",
+      "text": "2026-04-04 2026-04-04_syn128-misi-32 | hasil sintetis misi 32 lima oscar selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, lima, quebec, uji, sintetis | docs/2026-04-04_syn128-misi-32/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1775260800000,
+      "kind": "index",
+      "missionId": "2026-04-04_syn128-misi-32",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-04_syn128-misi-32/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00020",
+      "text": "2026-04-07 2026-04-07_syn128-misi-33 | hasil sintetis misi 33 mike papa selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, mike, romeo, uji, sintetis | docs/2026-04-07_syn128-misi-33/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1775520000000,
+      "kind": "index",
+      "missionId": "2026-04-07_syn128-misi-33",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-07_syn128-misi-33/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00021",
+      "text": "2026-04-10 2026-04-10_syn128-misi-34 | hasil sintetis misi 34 november quebec selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, november, sierra, uji, sintetis | docs/2026-04-10_syn128-misi-34/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1775779200000,
+      "kind": "index",
+      "missionId": "2026-04-10_syn128-misi-34",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-10_syn128-misi-34/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00022",
+      "text": "2026-04-13 2026-04-13_syn128-misi-35 | hasil sintetis misi 35 oscar romeo selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, oscar, tango, uji, sintetis | docs/2026-04-13_syn128-misi-35/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1776038400000,
+      "kind": "index",
+      "missionId": "2026-04-13_syn128-misi-35",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-13_syn128-misi-35/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00023",
+      "text": "2026-04-16 2026-04-16_syn128-misi-36 | hasil sintetis misi 36 papa sierra selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, papa, alfa, uji, sintetis | docs/2026-04-16_syn128-misi-36/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1776297600000,
+      "kind": "index",
+      "missionId": "2026-04-16_syn128-misi-36",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-16_syn128-misi-36/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00024",
+      "text": "2026-04-19 2026-04-19_syn128-misi-37 | hasil sintetis misi 37 quebec tango selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: lumen, quebec, bravo, uji, sintetis | docs/2026-04-19_syn128-misi-37/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1776556800000,
+      "kind": "index",
+      "missionId": "2026-04-19_syn128-misi-37",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-19_syn128-misi-37/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00025",
+      "text": "2026-04-22 2026-04-22_syn128-misi-38 | hasil sintetis misi 38 romeo alfa selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: dinas, romeo, charlie, uji, sintetis | docs/2026-04-22_syn128-misi-38/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1776816000000,
+      "kind": "index",
+      "missionId": "2026-04-22_syn128-misi-38",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-22_syn128-misi-38/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "b00026",
+      "text": "2026-04-25 2026-04-25_syn128-misi-39 | hasil sintetis misi 39 sierra bravo selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji selesai diuji | triggers: pasang, sierra, delta, uji, sintetis | docs/2026-04-25_syn128-misi-39/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1777075200000,
+      "kind": "index",
+      "missionId": "2026-04-25_syn128-misi-39",
+      "untrusted": true,
+      "refs": [
+        {
+          "path": "docs/2026-04-25_syn128-misi-39/report/report.md"
+        }
+      ]
+    },
+    {
+      "id": "a00000",
+      "text": "catatan sintetis nomor 1: alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november al.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767225600000
+    },
+    {
+      "id": "a00001",
+      "text": "catatan sintetis nomor 2: bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar br.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767229200000,
+      "sessionID": "ses_syn128note001"
+    },
+    {
+      "id": "a00002",
+      "text": "catatan sintetis nomor 3: charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa ch.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767232800000
+    },
+    {
+      "id": "a00003",
+      "text": "catatan sintetis nomor 4: delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec de.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767236400000
+    },
+    {
+      "id": "a00004",
+      "text": "catatan sintetis nomor 5: echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo ec.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767240000000
+    },
+    {
+      "id": "a00005",
+      "text": "catatan sintetis nomor 6: foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra fo.",
+      "source": "user",
+      "deviceOnly": false,
+      "time": 1767243600000
+    },
+    {
+      "id": "a00006",
+      "text": "catatan sintetis nomor 7: golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango go.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767247200000,
+      "sessionID": "ses_syn128note006"
+    },
+    {
+      "id": "a00007",
+      "text": "catatan sintetis nomor 8: hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa ho.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767250800000
+    },
+    {
+      "id": "a00008",
+      "text": "catatan sintetis nomor 9: india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo in.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1767254400000
+    },
+    {
+      "id": "a00009",
+      "text": "catatan sintetis nomor 10: juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie juliett quebec delta kilo romeo echo lima sierra foxtrot mike tango golf november alfa hotel oscar bravo india papa charlie j.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1767258000000
+    }
+  ]
+}

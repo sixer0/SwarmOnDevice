@@ -565,6 +565,44 @@ export function removePersisted(
   }
 }
 
+// 1.2.8 row 44c (AC-PROJd): move one persisted value to another target (a re-homed session's keys). Every layer
+// the value can live in is handled like removePersisted: the desktop draft store (`draft` targets) and the regular
+// storage. The new key is written only when it is empty (idempotent across windows); the old key is removed only
+// after that, so a failed copy loses nothing. Returns true when an old value was found.
+export async function movePersisted(
+  from: { draft?: boolean; storage?: string; key: string },
+  to: { draft?: boolean; storage?: string; key: string },
+  platform?: Platform,
+) {
+  type Store = {
+    getItem(key: string): string | null | Promise<string | null>
+    setItem(key: string, value: string): unknown
+    removeItem(key: string): unknown
+  }
+  const move = async (src: Store | undefined, srcKey: string, dst: Store | undefined, dstKey: string) => {
+    if (!src || !dst || (src === dst && srcKey === dstKey)) return false
+    const value = await src.getItem(srcKey)
+    if (value === null || value === undefined) return false
+    if ((await dst.getItem(dstKey)) === null) await dst.setItem(dstKey, value)
+    await src.removeItem(srcKey)
+    return true
+  }
+  const regular = (storage?: string): Store | undefined => {
+    if (platform?.platform === "desktop" && platform.storage) return platform.storage(storage)
+    if (!storage) return localStorageDirect()
+    return localStorageWithPrefix(storage)
+  }
+
+  let found = false
+  if (from.draft && platform?.draftStore) {
+    const draft = platform.draftStore
+    const name = (target: { storage?: string; key: string }) => `${target.storage ?? "default"}:${target.key}`
+    if (await move(draft, name(from), draft, name(to))) found = true
+  }
+  if (await move(regular(from.storage), from.key, regular(to.storage), to.key)) found = true
+  return found
+}
+
 export function persisted<T>(
   target: string | PersistTarget,
   store: [Store<T>, SetStoreFunction<T>],

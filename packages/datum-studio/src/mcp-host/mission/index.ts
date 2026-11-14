@@ -17,6 +17,7 @@ import { guardWriteWrappers } from "./guard-writes.ts"
 import type { MissionLog } from "./tool-result.ts"
 import { missionDocsExporter } from "./export/index.ts"
 import { renderVerifyWrapper, type RenderVerifyStore } from "../verify/render-wrapper.ts"
+import { figureQuotaWrappers } from "../figure-quota.ts"
 
 export { MISSION_TOOL_NAMES } from "./schemas.ts"
 export { missionDocsExporter } from "./export/index.ts"
@@ -44,5 +45,6 @@ export function missionHostExtension(store: object, opts: MissionExtensionOption
   // Row 119c: + the studio_document_create / studio_write wrappers when the store's missionGuard is on (wrappers keep their slot).
   // Row 154: + the studio_render wrapper (output verification report + records, spec 01_specs_output_verification.md §6).
   // Row 119d: + the create-path wrappers of studio_chapter_import_markdown / studio_chapter_submit / studio_slot_fill (same flag).
-  return [...missionTools(installed, { log, ...(exporter ? { exporter } : {}) }), ...reportWrappers(installed, { log }), ...guardWriteWrappers(installed, { log }), renderVerifyWrapper(installed as unknown as RenderVerifyStore, { log })]
+  // 1.2.8 row 34c (AC-HT18, D-H4): + the studio_document_get / studio_figure_preview wrappers (quota line N8-211).
+  return [...missionTools(installed, { log, ...(exporter ? { exporter } : {}) }), ...reportWrappers(installed, { log }), ...guardWriteWrappers(installed, { log }), renderVerifyWrapper(installed as unknown as RenderVerifyStore, { log }), ...figureQuotaWrappers({ log })]
 }

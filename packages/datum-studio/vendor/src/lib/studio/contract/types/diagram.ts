@@ -3,7 +3,23 @@
  * Garis A (research/03:232) dengan `class{}` pada simpul. Nama medan snake_case
  * dipertahankan apa adanya demi paritas. Spec Mermaid ditolak 422 `DATUM-31`.
  */
-import type { DiagramEdgeKind, DiagramFamily, DiagramShape, ProvenanceMark } from "../enums";
+import type {
+  DiagramArrowSize,
+  DiagramArrowType,
+  DiagramEdgeDash,
+  DiagramEdgeKind,
+  DiagramEdgeRoute,
+  DiagramEdgeSide,
+  DiagramEdgeWeight,
+  DiagramEventType,
+  DiagramFamily,
+  DiagramJumps,
+  DiagramLabelAt,
+  DiagramLaneOrientation,
+  DiagramShape,
+  DiagramZoneStyle,
+  ProvenanceMark,
+} from "../enums";
 
 export interface DiagramNodeClass {
   tier?: number;
@@ -13,6 +29,10 @@ export interface DiagramNodeClass {
   accent?: boolean;
   secondary?: boolean;
   external?: boolean;
+  /** Swarm 1.2.8 row 52 (VIS-0a, N8-248): id of a `phases[]` entry (swimlane family). */
+  phase?: string;
+  /** Swarm 1.2.8 row 52 (VIS-0a, N8-251): id of a `pools[]` entry (swimlane family). */
+  pool?: string;
 }
 
 export interface DiagramNode {
@@ -32,6 +52,8 @@ export interface DiagramNode {
    */
   symbol?: string;
   class: DiagramNodeClass;
+  /** Swarm 1.2.8 row 52 (VIS-0a, N8-236): BPMN event trigger on event_start/_intermediate/_end; absent = "none". */
+  event_type?: DiagramEventType;
 }
 
 export interface DiagramEdge {
@@ -39,12 +61,46 @@ export interface DiagramEdge {
   to: string;
   kind: DiagramEdgeKind;
   label: string;
+  /**
+   * Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §3.1, N8-254..N8-265): connector style. Absent = today's drawing
+   * (orthogonal route, sides and slots chosen by the router, end head and dash from `kind`, normal weight, computed
+   * label place); an explicit default is drawn exactly like the absent field.
+   */
+  route?: DiagramEdgeRoute;
+  from_side?: DiagramEdgeSide;
+  to_side?: DiagramEdgeSide;
+  /** Glue point along the side, 0 < v < 1; needs an explicit side. */
+  from_slot?: number;
+  to_slot?: number;
+  /** Bend points on the layout lattice, in order. */
+  via?: DiagramViaPoint[];
+  arrow_start?: DiagramArrowType;
+  arrow_end?: DiagramArrowType;
+  arrow_start_size?: DiagramArrowSize;
+  arrow_end_size?: DiagramArrowSize;
+  dash?: DiagramEdgeDash;
+  weight?: DiagramEdgeWeight;
+  label_at?: DiagramLabelAt;
+}
+
+/** Swarm 1.2.8 row 52 (VIS-0a, N8-258): one bend point in lattice units (figure.lattice of the preview). */
+export interface DiagramViaPoint {
+  col: number;
+  row: number;
+}
+
+/** Swarm 1.2.8 row 52 (VIS-0a, N8-247, N8-250): a swimlane phase or pool band. */
+export interface DiagramContainer {
+  id: string;
+  label: string;
 }
 
 export interface DiagramZone {
   id: string;
   label: string;
   members: string[];
+  /** Swarm 1.2.8 row 52 (VIS-0a, N8-252): "group" = BPMN group; absent = "zone". */
+  style?: DiagramZoneStyle;
 }
 
 /**
@@ -84,6 +140,14 @@ export interface StudioDiagramV1 {
   direction?: "TB" | "LR";
   /** Delta S03-d2 (D-89): opsi keluarga sld; diabaikan keluarga lain. */
   sld?: DiagramSldOptions;
+  /** Swarm 1.2.8 row 52 (VIS-0a, N8-249): swimlane lanes as horizontal bands (absent) or vertical columns. */
+  lane_orientation?: DiagramLaneOrientation;
+  /** Swarm 1.2.8 row 52 (VIS-0a, N8-247): swimlane phase bands, in order. */
+  phases?: DiagramContainer[];
+  /** Swarm 1.2.8 row 52 (VIS-0a, N8-250): swimlane pools, in order. */
+  pools?: DiagramContainer[];
+  /** Swarm 1.2.8 row 52 (VIS-0a, N8-266): line jumps at crossings; absent = "on". */
+  jumps?: DiagramJumps;
   /**
    * INTERNAL compose (D-288): sinyal bahwa halaman mencetak baris KUNCI figur ini,
    * jadi mesin tidak menggambar baris KEY di dalam SVG. Diisi `services/compose/blocks.ts`

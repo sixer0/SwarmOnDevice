@@ -31,8 +31,14 @@ function composed() {
 const textsOf = (svg: string) => (svg.match(/<text\b[^>]*>[\s\S]*?<\/text>/g) ?? []).map((x) => x.replace(/<[^>]+>/g, ""))
 const sha = (s: string) => createHash("sha256").update(s, "utf8").digest("hex")
 
-/** sha256 of the non-standalone fixture SVG at 04067a9d02 (CHAR: unchanged by row 36b). */
-const PAGE_SVG_SHA_BASE = "697ef5aeb49ef04f92eab9ecd34cd3bf42c9e57db8d61be49b9539d3ec8faa9f"
+/**
+ * sha256 of the non-standalone fixture SVG at 04067a9d02 (CHAR: unchanged by row 36b).
+ * Swarm 1.2.8 row 57 (AC-HARW INTENT, C10 OP13-5 / C12 OP-18-2): the arrowhead markers are drawn in mm; only the
+ * <marker> elements changed (sha256 without markers 453c4e3964b3f222... before and after). Before: 697ef5aeb49ef04f...
+ */
+// Swarm 1.2.8 row 57c (C71, INTENT): the edge labels of this figure move off the arrowheads and node outlines (beside
+// their vertical runs). Before: 55cefcc94e4abc2c...
+const PAGE_SVG_SHA_BASE = "ce532a45ee5b2516c035d633e7db8c84f5c2ac71932c4c007a09adbde379b8b0"
 
 describe("T-12 route: standalone.furniture from DiagramBuildReport.furniture (N7-068, N7-138)", () => {
   test("standalone:true reports keyLines >= 1, sourceLines 2, heightMm > 0, matching the SVG", async () => {

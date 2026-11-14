@@ -532,7 +532,7 @@
                       {
                         "from": "s2",
                         "to": "swb",
-                        "kind": "alert",
+                        "kind": "data",
                         "label": "alarm suhu"
                       }
                     ],
@@ -549,7 +549,6 @@
                     "legend": [
                       "solid data",
                       "dotted replikasi",
-                      "longdash alarm",
                       "aksen jalur utama",
                       "TERUKUR"
                     ],

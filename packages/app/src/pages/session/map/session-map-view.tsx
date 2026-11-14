@@ -423,8 +423,14 @@ export function DecisionRow(props: {
   }
   return (
     <div data-decision={props.entry.id} class="flex min-w-0 flex-col gap-1 rounded-[6px] px-2 py-1.5 leading-[18px]">
-      {/* 1.2.7 U-5 (C6, D-11): the summary and Details scroll in a bounded body; the buttons stay below it. */}
-      <div data-map-decision-body class="flex max-h-[min(50vh,320px)] min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain">
+      {/* 1.2.7 U-5 (C6, D-11): the summary and Details scroll in a bounded body; the buttons stay below it.
+          1.2.8 R-8: only an open body contains the wheel. A collapsed one has nothing to scroll, and with
+          overscroll-contain Chromium stopped the wheel there instead of scrolling the list. */}
+      <div
+        data-map-decision-body
+        class="flex max-h-[min(50vh,320px)] min-h-0 flex-col gap-1 overflow-y-auto"
+        classList={{ "overscroll-contain": open() }}
+      >
         <span data-decision-summary class="min-w-0 break-words text-v2-text-text-base [font-weight:440]">
           <span data-decision-what>
             {language.t(whatOf(props.entry.permission))}

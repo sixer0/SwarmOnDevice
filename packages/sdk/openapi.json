@@ -621,7 +621,16 @@
       "patch": {
         "tags": ["global"],
         "operationId": "global.config.update",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successfully updated global config",
@@ -649,9 +658,19 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "ConfigPersonOnlyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPersonOnlyError"
+                }
+              }
+            }
           }
         },
-        "description": "Update global Swarm configuration settings and preferences.",
+        "description": "Update global Swarm configuration settings and preferences. While the server holds the desktop app's per-launch nonce, the request needs the matching x-swarm-desktop-nonce header, else 403 CONFIG_PERSON_ONLY; a server started without the app takes it as before.",
         "summary": "Update global configuration",
         "requestBody": {
           "content": {
@@ -1728,6 +1747,14 @@
         "operationId": "config.update",
         "parameters": [
           {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
             "name": "directory",
             "in": "query",
             "schema": {
@@ -1771,9 +1798,19 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "ConfigPersonOnlyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigPersonOnlyError"
+                }
+              }
+            }
           }
         },
-        "description": "Update Swarm configuration settings and preferences.",
+        "description": "Update Swarm configuration settings and preferences. While the server holds the desktop app's per-launch nonce, the request needs the matching x-swarm-desktop-nonce header, else 403 CONFIG_PERSON_ONLY; a server started without the app takes it as before.",
         "summary": "Update configuration",
         "requestBody": {
           "content": {
@@ -4105,6 +4142,44 @@
                       },
                       "content": {
                         "type": "string"
+                      },
+                      "triggers": {
+                        "type": "object",
+                        "properties": {
+                          "keywords": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "files": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "missionTypes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": ["keywords", "files", "missionTypes"],
+                        "additionalProperties": false
+                      },
+                      "disabled": {
+                        "type": "boolean"
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "scope": {
+                        "type": "string",
+                        "enum": ["builtin", "global", "project", "other"]
+                      },
+                      "hash": {
+                        "type": "string"
                       }
                     },
                     "required": ["name", "location", "content"],
@@ -4132,6 +4207,290 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.app.skills({\n  ...\n})"
+          }
+        ]
+      },
+      "put": {
+        "tags": ["skill"],
+        "operationId": "skill.save",
+        "parameters": [
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where the skill was saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillSaved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SkillForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SkillChangedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillChangedError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "SkillTooLargeError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTooLargeError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "InternalServerError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_InternalServerError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Write <scope root>/skills/<name>/SKILL.md atomically after the shared checks, record the approval and keep one memory note for the skill. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "summary": "Save a skill",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": ["global", "project"]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "baseHash": {
+                    "type": "string"
+                  }
+                },
+                "required": ["scope", "name", "content"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.save({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["skill"],
+        "operationId": "skill.delete",
+        "parameters": [
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["global", "project"]
+            },
+            "required": true
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The archive entry, relative to the scope root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDeleted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SkillForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SkillChangedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillChangedError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "SkillTooLargeError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTooLargeError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "InternalServerError | SkillArchiveError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_InternalServerError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SkillArchiveError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Move the skill's folder to the archive (never deleted outright) and remove its memory note. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "summary": "Delete a skill",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.delete({\n  ...\n})"
           }
         ]
       }
@@ -5086,6 +5445,93 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.memory.settings({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/memory/vault": {
+      "get": {
+        "tags": ["memory"],
+        "operationId": "memory.vault",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["en", "id"]
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where this project's notes are mirrored in the Swarm vault",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "folder": {
+                      "type": "string",
+                      "description": "The project's folder name under <vault>/swarm-memory/"
+                    },
+                    "hubPath": {
+                      "type": "string",
+                      "description": "Absolute path of the project's index note in the vault"
+                    },
+                    "exists": {
+                      "type": "boolean",
+                      "description": "The index note is present, a regular file, and still generated by Swarm for this project"
+                    }
+                  },
+                  "required": ["folder", "hubPath", "exists"],
+                  "additionalProperties": false,
+                  "description": "Where this project's notes are mirrored in the Swarm vault"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the project's folder under the vault's swarm-memory folder, the path of its index note, and whether that note exists and is still Swarm's own. Writes nothing. A language, when given, is remembered for the next mirror run, which then re-renders the generated labels once in that language.",
+        "summary": "Get the vault mirror of project memory",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.memory.vault({\n  ...\n})"
           }
         ]
       }
@@ -6072,6 +6518,115 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.project.update({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/project/rehome": {
+      "post": {
+        "tags": ["project"],
+        "operationId": "project.rehome",
+        "parameters": [
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The move, or with dryRun the plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProjectRehomeMoved"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProjectRehomePlanned"
+                    }
+                  ],
+                  "description": "The move, or with dryRun the plan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RehomeForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehomeForbiddenError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RehomeRefusedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehomeRefusedError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "InternalServerError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_InternalServerError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Move docs/<missionId> from the Default Project root into a one-level group folder, with the mission's memory notes and sessions, under a write-ahead journal that undoes every step on a failure. Any refusal leaves the disk unchanged. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 (also on a server holding no nonce).",
+        "summary": "Move a mission into a group",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectRehomeInput"
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.project.rehome({\n  ...\n})"
           }
         ]
       }
@@ -10278,6 +10833,405 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.part.update({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/source": {
+      "get": {
+        "tags": ["skill"],
+        "operationId": "skill.source",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["global", "project"]
+            },
+            "required": true
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The SKILL.md text and its sha256",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillSource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          }
+        },
+        "description": "The raw SKILL.md (frontmatter included) of a global or project skill Swarm saved, with the hash PUT /skill takes as baseHash. Show it as plain text.",
+        "summary": "Read a skill's source",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.source({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/drafts": {
+      "get": {
+        "tags": ["skill"],
+        "operationId": "skill.drafts",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Drafts waiting for the person",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SkillDraft"
+                  },
+                  "description": "Drafts waiting for the person"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Skills an agent drafted, global and project. A draft is never loaded until the person approves it. Show the content as plain text.",
+        "summary": "List skill drafts",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.drafts({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/drafts/{name}/approve": {
+      "post": {
+        "tags": ["skill"],
+        "operationId": "skill.draftApprove",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where the skill was saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillSaved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SkillForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SkillChangedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillChangedError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "SkillTooLargeError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTooLargeError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "InternalServerError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_InternalServerError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "summary": "Approve a skill draft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": ["global", "project"]
+                  },
+                  "acceptCommands": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["scope"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.draftApprove({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/drafts/{name}": {
+      "delete": {
+        "tags": ["skill"],
+        "operationId": "skill.draftDiscard",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "x-swarm-desktop-nonce",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["global", "project"]
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The draft was removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDraftRemoved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SkillInvalidError | InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SkillInvalidError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SkillForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SkillMissingError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillMissingError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove one draft, named by scope and name. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "summary": "Discard a skill draft",
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.draftDiscard({\n  ...\n})"
           }
         ]
       }
@@ -17722,6 +18676,9 @@
             "$ref": "#/components/schemas/EventProjectUpdated"
           },
           {
+            "$ref": "#/components/schemas/EventProjectRehomed"
+          },
+          {
             "$ref": "#/components/schemas/EventSessionStatus"
           },
           {
@@ -20429,6 +21386,15 @@
           },
           "untrusted": {
             "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "missionId": {
+            "type": "string"
+          },
+          "rolledInto": {
+            "type": "string"
           }
         },
         "required": ["id", "text", "source", "deviceOnly", "time"],
@@ -23216,6 +24182,46 @@
                   },
                   "type": {
                     "type": "string",
+                    "enum": ["project.rehomed"]
+                  },
+                  "properties": {
+                    "type": "object",
+                    "properties": {
+                      "missionId": {
+                        "type": "string"
+                      },
+                      "from": {
+                        "type": "string"
+                      },
+                      "to": {
+                        "type": "string"
+                      },
+                      "sessions": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "journalId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["missionId", "from", "to", "sessions", "journalId"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["id", "type", "properties"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^evt_"
+                  },
+                  "type": {
+                    "type": "string",
                     "enum": ["session.status"]
                   },
                   "properties": {
@@ -24404,6 +25410,12 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "disabled": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": false
@@ -24810,6 +25822,31 @@
         },
         "additionalProperties": false
       },
+      "ConfigPersonOnlyError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["ConfigPersonOnlyError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["CONFIG_PERSON_ONLY"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
       "AutonomyMode": {
         "type": "object",
         "properties": {
@@ -24941,6 +25978,7 @@
                   "file-op",
                   "git-local",
                   "edit-not-ordinary",
+                  "own_api_read",
                   "outside_folder",
                   "outward",
                   "not_reversible",
@@ -24971,6 +26009,8 @@
                   "admin_rights",
                   "checkpoint_failed",
                   "own_api",
+                  "skill_folder",
+                  "vault_mirror",
                   "outside_read",
                   "outside_copy",
                   "outside_edit",
@@ -24990,6 +26030,7 @@
                   "file-op",
                   "git-local",
                   "edit-not-ordinary",
+                  "own_api_read",
                   "outside_folder",
                   "outward",
                   "not_reversible",
@@ -25020,6 +26061,8 @@
                   "admin_rights",
                   "checkpoint_failed",
                   "own_api",
+                  "skill_folder",
+                  "vault_mirror",
                   "outside_read",
                   "outside_copy",
                   "outside_edit",
@@ -26620,7 +27663,18 @@
       },
       "MemoryRefusal": {
         "type": "string",
-        "enum": ["empty", "long", "secret", "full", "body_long", "too_many_refs"]
+        "enum": [
+          "empty",
+          "long",
+          "secret",
+          "full",
+          "body_long",
+          "too_many_refs",
+          "index_long",
+          "index_body_long",
+          "index_format",
+          "index_full"
+        ]
       },
       "MemoryResult": {
         "type": "object",
@@ -26804,6 +27858,247 @@
           }
         },
         "required": ["_tag", "projectID", "message"],
+        "additionalProperties": false
+      },
+      "ProjectRehomeInput": {
+        "type": "object",
+        "properties": {
+          "missionId": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "description": "The Default Project root (absolute)"
+          },
+          "to": {
+            "type": "string",
+            "description": "The group folder, one level below the root (absolute)"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "approvalRef": {
+            "type": "string"
+          },
+          "approvalMission": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "compensates": {
+            "type": "string"
+          },
+          "groupKind": {
+            "type": "string"
+          }
+        },
+        "required": ["missionId", "from", "to", "sessions"],
+        "additionalProperties": false
+      },
+      "ProjectRehomeMoved": {
+        "type": "object",
+        "properties": {
+          "journalId": {
+            "type": "string"
+          },
+          "moved": {
+            "type": "object",
+            "properties": {
+              "folder": {
+                "type": "boolean"
+              },
+              "notes": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              "sessions": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              }
+            },
+            "required": ["folder", "notes", "sessions"],
+            "additionalProperties": false
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": ["journalId", "moved"],
+        "additionalProperties": false
+      },
+      "ProjectRehomePlanned": {
+        "type": "object",
+        "properties": {
+          "planned": {
+            "type": "object",
+            "properties": {
+              "folder": {
+                "type": "boolean"
+              },
+              "notes": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              "sessions": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              "createsGroup": {
+                "type": "boolean"
+              }
+            },
+            "required": ["folder", "notes", "sessions", "createsGroup"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["planned"],
+        "additionalProperties": false
+      },
+      "RehomeForbiddenError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["RehomeForbiddenError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "RehomeRefusedError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["RehomeRefusedError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "REHOME_SOURCE_MISSING",
+                  "REHOME_TARGET_EXISTS",
+                  "REHOME_OUTSIDE_ROOT",
+                  "REHOME_SYMLINK",
+                  "REHOME_APPROVAL_MISSING",
+                  "REHOME_BUSY",
+                  "REHOME_ROLLED_BACK",
+                  "REHOME_SESSION_ACTIVE",
+                  "REHOME_ROLLBACK_FAILED",
+                  "REHOME_ROOT_UNKNOWN",
+                  "REHOME_FOLDER_MISSING"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "step": {
+                "type": "string"
+              },
+              "journal": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
         "additionalProperties": false
       },
       "PtyNotFoundError": {
@@ -27194,6 +28489,274 @@
           }
         },
         "required": ["_tag", "sessionID", "message"],
+        "additionalProperties": false
+      },
+      "SkillSource": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["global", "project"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          }
+        },
+        "required": ["location", "scope", "content", "hash"],
+        "additionalProperties": false
+      },
+      "SkillInvalidError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillInvalidError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "SKILL_NAME_INVALID",
+                  "SKILL_NAME_RESERVED",
+                  "SKILL_FRONTMATTER_INVALID",
+                  "SKILL_TRIGGERS_INVALID",
+                  "SKILL_PATH_UNSAFE",
+                  "SKILL_SHELL_UNCONFIRMED"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillMissingError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillMissingError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_NOT_FOUND", "SKILL_DRAFT_MISSING"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillSaved": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "enum": ["added", "updated", "skipped"],
+            "description": "The skill's memory note: skipped when memory is off or refused it; the skill is saved either way"
+          }
+        },
+        "required": ["location", "hash", "note"],
+        "additionalProperties": false
+      },
+      "SkillForbiddenError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillForbiddenError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_PERSON_ONLY", "SKILL_SHELL_UNTRUSTED"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillChangedError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillChangedError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_CHANGED"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillTooLargeError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillTooLargeError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_TOO_LARGE"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillDeleted": {
+        "type": "object",
+        "properties": {
+          "archive": {
+            "type": "string"
+          }
+        },
+        "required": ["archive"],
+        "additionalProperties": false
+      },
+      "SkillArchiveError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["SkillArchiveError"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SKILL_ARCHIVE_FAILED"]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["name", "data"],
+        "additionalProperties": false
+      },
+      "SkillDraft": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["global", "project"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["NaN"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["-Infinity"]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "untrusted": {
+            "type": "boolean"
+          },
+          "runsCommands": {
+            "type": "boolean"
+          },
+          "replaces": {
+            "type": "boolean"
+          }
+        },
+        "required": ["name", "scope", "content", "time", "untrusted", "runsCommands", "replaces"],
+        "additionalProperties": false
+      },
+      "SkillDraftRemoved": {
+        "type": "object",
+        "properties": {
+          "removed": {
+            "type": "boolean",
+            "enum": [true]
+          }
+        },
+        "required": ["removed"],
         "additionalProperties": false
       },
       "EventTuiPromptAppend": {
@@ -27846,6 +29409,15 @@
           },
           "untrusted": {
             "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "missionId": {
+            "type": "string"
+          },
+          "rolledInto": {
+            "type": "string"
           }
         },
         "required": ["id", "text", "source", "deviceOnly", "time"],
@@ -28247,6 +29819,9 @@
           },
           {
             "$ref": "#/components/schemas/ProjectUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectRehomed"
           },
           {
             "$ref": "#/components/schemas/session.status"
@@ -37397,6 +38972,68 @@
         "required": ["id", "type", "data"],
         "additionalProperties": false
       },
+      "ProjectRehomed": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["project.rehomed"]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": ["aggregateID", "seq", "version"],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationRef"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "missionId": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "sessions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "journalId": {
+                "type": "string"
+              }
+            },
+            "required": ["missionId", "from", "to", "sessions", "journalId"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "data"],
+        "additionalProperties": false
+      },
       "SessionIdle": {
         "type": "object",
         "properties": {
@@ -40644,6 +42281,46 @@
         "required": ["id", "type", "properties"],
         "additionalProperties": false
       },
+      "EventProjectRehomed": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^evt_"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["project.rehomed"]
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "missionId": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "sessions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "journalId": {
+                "type": "string"
+              }
+            },
+            "required": ["missionId", "from", "to", "sessions", "journalId"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "properties"],
+        "additionalProperties": false
+      },
       "EventSessionStatus": {
         "type": "object",
         "properties": {
@@ -41220,6 +42897,10 @@
     {
       "name": "session",
       "description": "Experimental HttpApi session routes."
+    },
+    {
+      "name": "skill",
+      "description": "Person-managed skill routes."
     },
     {
       "name": "sync",

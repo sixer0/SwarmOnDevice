@@ -90,7 +90,17 @@ describe("T-04 edge labels on the longest segment (L path, default on the short 
     // the whole long leg is under one wide node: no on-path spot exists
     const nodes: Box[] = [A, B, [33, 5, 128, 21]];
     const plan = placeEdgeLabels([edge(L_PATH, ORIG)], { ...ctx, nodeBoxes: nodes });
-    expect(["leader", "numbered"]).toContain(plan.placed[0].mode);
+    // Swarm 1.2.8 row 57c (INTENT): before a leader the label is tried beside its line (below the long leg here, off the
+    // line, no knock-out over it); a leader stays the fallback when no spot beside the line is free either.
+    const p = plan.placed[0];
+    expect(["moved", "leader", "numbered"]).toContain(p.mode);
+    if (p.mode === "moved") {
+      const box = knockBox(p.x, p.y, p.kw);
+      expect(box[1]).toBeGreaterThan(23); // beside: below the long leg
+      for (const n of nodes) expect(inter(box, grow(n, 0.3))).toBe(0);
+    }
+    const none: Box[] = [A, B, [33, 5, 128, 21], [0, 23.3, 166, 60]]; // the band of free room under the leg filled too
+    expect(["leader", "numbered"]).toContain(placeEdgeLabels([edge(L_PATH, ORIG)], { ...ctx, nodeBoxes: none }).placed[0].mode);
   });
 
   it("deterministic: two runs give identical placements", () => {

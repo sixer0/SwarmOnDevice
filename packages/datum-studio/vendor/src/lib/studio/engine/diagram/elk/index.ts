@@ -26,10 +26,11 @@ import type { StudioDiagramV1 } from "../../../contract";
 import { buildDiagramSvgRaw, withCaptionAbove, type DiagramBuildOptions, type DiagramSvgResult } from "../build";
 import type { DiagramGeometryIssue } from "../build/autofit";
 import { lintDiagramGeometry, type DiagramGeomLint } from "../fit/lint";
-import { ELK_FAMILIES, ElkUnavailable, elkLayoutPlan, elkRefusal } from "./adapter";
+import { ELK_EDGE_GEOMETRY_REASON, ELK_FAMILIES, ElkUnavailable, elkEdgeGeometry, elkLayoutPlan, elkRefusal } from "./adapter";
 import { withElkPlan, type ElkPlan } from "./plan";
 import { flowDirectionOf } from "../layout-a/flow";
 
+export { ELK_EDGE_GEOMETRY_REASON, elkEdgeGeometry } from "./adapter";
 export { ELK_FAMILIES, ELK_TIME_BUDGET_MS, ElkUnavailable, elkLayoutPlan, elkPlanWidth, elkRefusal } from "./adapter";
 export { activeElkRoutes, elkRoutesOnSheet } from "./routes";
 export { elkPlanFor, elkPlanKey, withElkPlan, type ElkPlan, type ElkRoute } from "./plan";
@@ -111,6 +112,11 @@ async function buildDiagramSvgAutoRaw(
     onDecision?.(d);
     return d;
   };
+  // Swarm 1.2.8 row 56 (VIS-4, 01f §3.2.5): edges with their own geometry keep Studio's router (R1).
+  if (elkEdgeGeometry(s)) {
+    decide({ used: false, reason: `R1: ${ELK_EDGE_GEOMETRY_REASON}` });
+    return build(s, opts);
+  }
   // Swarm 1.2.6 row 47 (T-11, 01e §4.5): a ranked flow (flow + direction) also goes through R2-R4.
   if (!ELK_FAMILIES.has(String(s.family)) && !flowDirectionOf(s)) {
     decide({ used: false, reason: `R1: family ${String(s.family)}` });

@@ -1,0 +1,154 @@
+{
+  "$comment": "Swarm 1.2.8 row 53 (AC-VIS1b, AT-V1-predefined/-document/-offpage, register N8-372). Synthetic labels only. `gallery`: all 10 Basic Flowchart rows of 01f §1.1 (stadium, parallelogram, hexagon, box, diamond, predefined, document, cylinder, offpage, circle) in a flow, one connector into and out of each new shape. Built at 128 and 166 mm. Not part of the 52b CHAR corpus (uses the new shape tokens).",
+  "gallery": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.5",
+    "title": "Gambar sintetis bentuk Basic Flowchart.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Mulai",
+        "shape": "stadium",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Data D",
+        "shape": "parallelogram",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Siapkan C",
+        "shape": "hexagon",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah A",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "e",
+        "label": "Cek B",
+        "shape": "diamond",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "f",
+        "label": "Sub proses",
+        "shape": "predefined",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "g",
+        "label": "Dokumen D",
+        "shape": "document",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "h",
+        "label": "Arsip D",
+        "shape": "cylinder",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "i",
+        "label": "Ke hal. 2",
+        "shape": "offpage",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "j",
+        "label": "A",
+        "shape": "circle",
+        "class": {
+          "tier": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "e",
+        "kind": "data",
+        "label": "1"
+      },
+      {
+        "from": "e",
+        "to": "b",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "e",
+        "to": "g",
+        "kind": "data",
+        "label": "tidak"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "data",
+        "label": "2"
+      },
+      {
+        "from": "c",
+        "to": "d",
+        "kind": "data",
+        "label": "3"
+      },
+      {
+        "from": "d",
+        "to": "f",
+        "kind": "data",
+        "label": "4"
+      },
+      {
+        "from": "g",
+        "to": "h",
+        "kind": "data",
+        "label": "5"
+      },
+      {
+        "from": "h",
+        "to": "i",
+        "kind": "data",
+        "label": "6"
+      },
+      {
+        "from": "i",
+        "to": "j",
+        "kind": "data",
+        "label": "7"
+      }
+    ],
+    "direction": "TB"
+  }
+}

@@ -366,6 +366,22 @@ const scenarios: Scenario[] = [
     .mutating()
     .at((ctx) => ({ path: "/project/trust", headers: ctx.headers(), body: { decision: "later" } }))
     .json(200, object, "status"),
+  // 1.2.8 row 44b (AC-PROJi): the runner holds no desktop nonce, so a move is refused person-only before anything is read.
+  http.protected
+    .post("/project/rehome", "project.rehome")
+    .at((ctx) => ({
+      path: "/project/rehome",
+      headers: ctx.headers(),
+      body: { missionId: "m", from: "/nowhere", to: "/nowhere/g", sessions: [], approvalRef: "D-1" },
+    }))
+    .json(
+      403,
+      (value) => {
+        object(value)
+        check(value.name === "RehomeForbiddenError", "a re-home without the desktop nonce is refused")
+      },
+      "status",
+    ),
   http.protected
     .post("/project/git/init", "project.initGit")
     .mutating()
@@ -709,6 +725,7 @@ const scenarios: Scenario[] = [
       "status",
     ),
   http.protected.get("/memory", "memory.get").json(200, object),
+  http.protected.get("/memory/vault", "memory.vault").json(200, object),
   http.protected
     .post("/memory", "memory.add")
     .at((ctx) => ({ path: "/memory", headers: ctx.headers(), body: { text: "the password: hunter22" } }))
@@ -729,6 +746,31 @@ const scenarios: Scenario[] = [
     .delete("/memory/{id}", "memory.remove")
     .at((ctx) => ({ path: route("/memory/{id}", { id: "missing" }), headers: ctx.headers() }))
     .json(200, boolean),
+  // 1.2.8 row 40c (AC-SKd): the skill routes. The runner holds no desktop nonce, so every write is refused person-only.
+  http.protected
+    .get("/skill/source", "skill.source")
+    .at((ctx) => ({ path: "/skill/source?scope=project&name=missing-skill", headers: ctx.headers() }))
+    .json(404, object, "status"),
+  http.protected.get("/skill/drafts", "skill.drafts").json(200, array),
+  ...(
+    [
+      ["put", "/skill", "skill.save", "/skill", { scope: "project", name: "x", content: "x" }],
+      ["delete", "/skill", "skill.delete", "/skill?scope=project&name=x", undefined],
+      ["post", "/skill/drafts/{name}/approve", "skill.draftApprove", "/skill/drafts/x/approve", { scope: "project" }],
+      ["delete", "/skill/drafts/{name}", "skill.draftDiscard", "/skill/drafts/x?scope=project", undefined],
+    ] as const
+  ).map(([method, template, name, url, body]) =>
+    http.protected[method](template, name)
+      .at((ctx) => ({ path: url, headers: ctx.headers(), ...(body ? { body } : {}) }))
+      .json(
+        403,
+        (value) => {
+          object(value)
+          check(value.name === "SkillForbiddenError", "a skill write without the desktop nonce is refused")
+        },
+        "status",
+      ),
+  ),
   http.protected.get("/saved-command", "savedCommand.list").json(200, array),
   http.protected
     .post("/saved-command", "savedCommand.save")

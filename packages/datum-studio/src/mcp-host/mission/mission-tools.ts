@@ -14,12 +14,12 @@ import { createHash } from "node:crypto"
 import path from "node:path"
 import { BACKUP_DIR_NAME, prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
 import { StoreError, type MissionStore, type StoreTx } from "../../store/index.ts"
-import type { MissionDoc, MissionWriteOptions, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
+import type { MissionDoc, MissionWriteOptions, NewDecisionRequest, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
 import { ROW_RUNNING_DONE_RULE, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
-import { checkMissionSchema, describeAjvError } from "../../store/mission/validate.ts"
+import { checkMissionSchema, describeAjvError, groupNameOk } from "../../store/mission/validate.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
 import { readActivityAt, readDeliverables, readMessagesTail, type OutputVerificationSource } from "./deliverables.ts"
 import { EXPORT_PATHS, LEGACY_EXPORT_PATHS, type ExportFileKey } from "./export/render.ts"
@@ -163,7 +163,17 @@ export function sessionOf(args: Record<string, unknown>, s: HostToolSession): Se
   const client = raw.client ?? s.agentId
   if (client !== s.agentId) throw new MissionToolError("AGENT_ID_LOCKED", `session.client is locked to this MCP session's agent "${s.agentId}"`, { client: raw.client, agent: s.agentId })
   const role = raw.role ? { role: raw.role } : {}
-  if (validSessionRef(client, raw.ref)) return { client: client as SessionLink["client"], ref: raw.ref, ...role }
+  if (validSessionRef(client, raw.ref)) {
+    // 1.2.8 row 31 (H-N12): a well-formed ref is linked only when it is the calling session. Another ref is replaced by
+    // the calling session (N8-203 SESSION_REF_IGNORED, both refs named); with no calling session known it is refused
+    // (N8-202 SESSION_UNKNOWN): the host cannot tell an invented id from a real one.
+    if (known === raw.ref) return { client: client as SessionLink["client"], ref: raw.ref, ...role }
+    if (known) {
+      note(args, `SESSION_REF_IGNORED: session.ref ${raw.ref} is not the calling session; linked the calling session ${known} instead (omit session; Swarm links the calling session itself)`)
+      return { client: client as SessionLink["client"], ref: known, ...role }
+    }
+    throw new MissionToolError("SESSION_UNKNOWN", `session.ref ${raw.ref} cannot be linked: the calling session is unknown, so the host cannot tell it from an invented id`, { given: raw.ref, client })
+  }
   if (known) {
     note(args, `session.ref is not a ${client} session id; linked the calling session ${known} instead (omit session; Swarm fills it)`)
     return { client: client as SessionLink["client"], ref: known, ...role }
@@ -213,7 +223,35 @@ export function autonomousModeOf(s: HostToolSession): boolean {
 export function writeOptions(args: Record<string, unknown>, s: HostToolSession): MissionWriteOptions {
   const actor = actorOf(args, s)
   const session = sessionOf(args, s)
-  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s) }
+  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s), ...(s.memoryIndex ? { memoryIndex: s.memoryIndex } : {}) }
+}
+
+/** 1.2.8 row 39 (N8-014): text of the warning on a done close Swarm's memory did not check. */
+export const MEMORY_INDEX_UNCHECKED_TEXT = "no Swarm memory check on this call; if the mission has a final report, add its index entry"
+
+/** 1.2.8 row 45 (01d §2.1 rules 1-4): `dir` is a real folder directly in its parent (no link) holding a valid `.swarm/group.json`. */
+export function groupMarkerOk(dir: string, nfs: NodeFs): boolean {
+  const file = path.join(dir, ".swarm", "group.json")
+  try {
+    if (nfs.lstat && [dir, path.dirname(file), file].some((p) => nfs.lstat!(p).isSymbolicLink)) return false
+    if (!nfs.exists(file) || !nfs.stat(file).isFile || path.dirname(nfs.realpath(dir)) !== nfs.realpath(path.dirname(dir))) return false
+    const m = JSON.parse(nfs.readFile(file).toString("utf8")) as Record<string, unknown> | null
+    return m?.version === 1 && m.name === path.basename(dir) && ["product", "institution", "theme"].includes(m.kind as string) && typeof m.created === "number"
+  } catch {
+    return false
+  }
+}
+
+/** 1.2.8 row 45 (01d §4): a placement's join names a marked group of the mission's folder; new names a folder that does not exist. */
+function placementGroupIssues(request: NewDecisionRequest, projectDir: string, nfs: NodeFs): Array<{ pointer: string; keyword: string; message: string }> {
+  if (request?.topic !== "project-placement" || !Array.isArray(request.options)) return []
+  return request.options.flatMap((o, i) => {
+    if (typeof o?.group !== "string" || !groupNameOk(o.group)) return []
+    const dir = path.join(projectDir, o.group)
+    if (o.id === "join" && !groupMarkerOk(dir, nfs)) return [{ pointer: `/request/options/${i}/group`, keyword: "c57", message: "join must name a marked group (<group>/.swarm/group.json) of the mission's folder" }]
+    if (o.id === "new" && nfs.exists(dir)) return [{ pointer: `/request/options/${i}/group`, keyword: "c57", message: "new must name a folder that does not exist yet" }]
+    return []
+  })
 }
 
 function str(a: Record<string, unknown>, k: string): string | undefined {
@@ -331,13 +369,16 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         if (include?.includes("messages")) extra.messages = M.listMessages(id)
         // Row 126 (spec mission control §8 G1, G3).
         const tail = typeof a.messagesTail === "number" ? a.messagesTail : undefined
-        if (tail !== undefined || include?.includes("deliverables")) {
-          const rowIds = new Set((got.mission.rows ?? []).map((r) => r.id))
-          await read(async (q) => {
-            if (tail !== undefined) extra.messages = readMessagesTail(q, M, id, tail)
-            if (include?.includes("deliverables")) extra.deliverables = readDeliverables(q, id, rowIds) // row 136b: sync, the store's one rule
-          })
-        }
+        // 1.2.8 row 31 (H-MC08): the deliverables are read for every get, so the text prints their full sha256; the
+        // data key stays opt-in (include: deliverables), as before.
+        const rowIds = new Set((got.mission.rows ?? []).map((r) => r.id))
+        let deliverables: ReturnType<typeof readDeliverables> = []
+        await read(async (q) => {
+          if (tail !== undefined) extra.messages = readMessagesTail(q, M, id, tail)
+          deliverables = readDeliverables(q, id, rowIds) // row 136b: sync, the store's one rule
+        })
+        if (include?.includes("deliverables")) extra.deliverables = deliverables
+        const detail = a.detail === true
         const d = got.derived
         const text = [
           `mission ${id} (${got.mission.type} v${got.mission.typeVersion}): ${got.mission.status}${got.mission.supersededBy ? `, superseded by ${got.mission.supersededBy}` : ""}`,
@@ -350,6 +391,15 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
                   (d.drift.dropped.length > 0 ? `; dropped: ${d.drift.dropped.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ")}` : ""),
               ]
             : []),
+          // 1.2.8 row 31 (H-N14, N8-204): detail: true lists every row with its reports.
+          ...(detail
+            ? (got.mission.rows ?? []).flatMap((r) => [
+                `  row ${r.id} [${r.phase}/${r.kind}] ${r.status}: ${r.title}`,
+                ...(r.reports ?? []).map((p) => `    report ${p.kind} ${p.documentId} rev ${p.revisionNo}${p.status ? ` ${p.status}` : ""}`),
+              ])
+            : []),
+          // 1.2.8 row 31 (H-MC08): one line per deliverable output, full sha256, no truncation.
+          ...deliverables.flatMap((dl) => dl.outputs.map((o) => `  deliverable ${o.finalFileName ?? o.fileName ?? o.fileId} sha256 ${o.sha256}${o.verified ? "" : " (unverified)"}`)),
         ].join("\n")
         return { text, data: { mission, derived: d, ...extra } }
       },
@@ -397,7 +447,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_set_status",
       "Change mission status",
-      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests. Setting the current status again returns unchanged: true and writes nothing. done returns the decision register decisions {count, ids} (the store holds them; studio_mission_export renders decisions.md); closing is not refused for a missing export.",
+      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests. Setting the current status again returns unchanged: true and writes nothing. done returns the decision register decisions {count, ids} (the store holds them; studio_mission_export renders decisions.md); closing is not refused for a missing export. A Swarm close is refused MEMORY_INDEX_MISSING until the project memory holds the mission's index entry; other callers get warning MEMORY_INDEX_UNCHECKED.",
       false,
       async (a, s) => {
         const r = await write(dry(a), (tx) => {
@@ -420,6 +470,11 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           const dropped = (["note", "decision", "supersededBy"] as const).filter((k) => str(a, k))
           const lost = dropped.length > 0 ? `; ${dropped.join(", ")} not recorded (use studio_mission_update_row note or studio_mission_record_decision)` : ""
           return { text: `mission ${r.id}: already ${r.to}, unchanged (no event, no snapshot)${lost}${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+        }
+        // 1.2.8 row 39 (MEM-e, D-M2): a done close without a usable Swarm memory lookup for this mission succeeds with a warning.
+        if (r.to === "done" && s.memoryIndex?.missionId !== r.id) {
+          const warning = { code: "MEMORY_INDEX_UNCHECKED", message: MEMORY_INDEX_UNCHECKED_TEXT }
+          return { text: `mission ${r.id}: ${r.from} -> ${r.to}${reg}; warning MEMORY_INDEX_UNCHECKED: ${MEMORY_INDEX_UNCHECKED_TEXT}${dryNote(a)}`, data: { ...r, dryRun: dry(a), warning } }
         }
         return { text: `mission ${r.id}: ${r.from} -> ${r.to}${reg}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
@@ -532,6 +587,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       "C57 (a): open a decision request {id D-<n>, question, context? (one line), options 2-8 {id, label, consequence}, recommended?, blockingRows?}. Blocking rows cannot go running while it is open (DECISION_PENDING); their status is not changed.",
       false,
       async (a, s) => {
+        const issues = placementGroupIssues(a.request as NewDecisionRequest, requireMission(a.mission as string).mission.project.dir, nfs)
+        if (issues.length > 0) throw new MissionToolError("SCHEMA_INVALID", "the placement groups do not match the mission's folder", { def: "studio_mission_request_decision input", issues })
         const r = await write(dry(a), (tx) => M.requestDecision(tx, a.mission as string, a.request as never, writeOptions(a, s)))
         return { text: `decision request ${r.id} open: ${r.question} (blocks ${(r.blockingRows ?? []).join(", ") || "-"})${dryNote(a)}`, data: { request: r, dryRun: dry(a) } }
       },
@@ -553,9 +610,34 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         }
         const missing = ["option", "by", "decisionId"].filter((k) => a[k] === undefined)
         if (missing.length > 0) throw new MissionToolError("SCHEMA_INVALID", "an answer needs option, by and decisionId", { def: "studio_mission_answer_decision input", missing })
-        const answer = pick(a, ["option", "by", "decisionId", "date", "text"]) as never
+        // 1.2.8 row 45b (SR8-05, N8-461): provenance from the session, never from the arguments. Unattested by: user
+        // answers are recorded (not refused; general refusal is 1.2.9 backlog RN-6) and shown with the N8-462 label.
+        const answer = { ...pick(a, ["option", "by", "decisionId", "date", "text"]), via: s.agentId, attested: s.attested === true } as never
         const r = await write(dry(a), (tx) => M.answerDecision(tx, mission, request, answer, o))
         return { text: `decision request ${request} answered ${String(a.option)} -> ${r.decision.id}; released ${r.released.join(", ") || "-"}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+      },
+    ),
+    // 1.2.8 row 45 (PROJ-b, N8-142/N8-143). Row 45b (SR8-05): only an attested Mission Control session places a
+    // mission; any other session is refused SESSION_NOT_ATTESTED (N8-460) before the store is read.
+    tool(
+      "studio_mission_place",
+      "Place a mission",
+      "Mission Control only: set the mission's project dir to projectDir, a marked group folder one level down, named by the answered project-placement (join/new) or project-tidy (approve; tidyMission holds it) request decision. Else PLACE_DECISION_UNANSWERED.",
+      false,
+      async (a, s) => {
+        const mission = a.mission as string
+        const dir = a.projectDir as string
+        if (s.attested !== true) {
+          opts.log("warn", "datum-studio-host.mission.studio_mission_place", "SESSION_NOT_ATTESTED", { mission, agent: s.agentId, sessionId: s.sessionId })
+          throw new MissionToolError("SESSION_NOT_ATTESTED", "only Mission Control in the Swarm app places a mission (this MCP session is not attested)", { mission, agent: s.agentId })
+        }
+        const actor = actorOf(a, s)
+        const r = await write(false, (tx) => {
+          const out = M.setProjectDir(tx, mission, dir, { request: a.decision as string, ...(str(a, "tidyMission") ? { tidyMission: str(a, "tidyMission") } : {}) }, actor ? { actor } : {})
+          if (!groupMarkerOk(dir, nfs)) throw new StoreError("PLACE_DECISION_UNANSWERED", `${dir} is not a marked group folder (.swarm/group.json)`, { mission, projectDir: dir, reason: "marker" })
+          return out
+        })
+        return { text: `mission ${mission}: project dir ${r.unchanged ? `already ${r.to}, unchanged` : `${r.from} -> ${r.to}`}`, data: r }
       },
     ),
   ]

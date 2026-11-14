@@ -8,6 +8,7 @@ import { MIGRATION_0004_ID, MIGRATION_0004_SQL } from "./0004_datum_output_verif
 import { MIGRATION_0005_ID, MIGRATION_0005_SQL } from "./0005_datum_mission_gsp_tiers.ts"
 import { MIGRATION_0006_ID, MIGRATION_0006_SQL } from "./0006_datum_mission_autonomous_decision.ts"
 import { MIGRATION_0007_ID, MIGRATION_0007_SQL } from "./0007_datum_mission_document_link.ts"
+import { MIGRATION_0008_ID, MIGRATION_0008_SQL } from "./0008_datum_decision_provenance.ts"
 
 /**
  * Store migrations (spec §3.1: own runner, journal table shaped like core's
@@ -35,6 +36,8 @@ export const MIGRATIONS: readonly Migration[] = [
   { seq: 6, id: MIGRATION_0006_ID, sql: MIGRATION_0006_SQL },
   // 1.2.6 row 86 (MC-08, N-065): mission_document links a revision to the mission that produced it (owner or not), additive only
   { seq: 7, id: MIGRATION_0007_ID, sql: MIGRATION_0007_SQL },
+  // 1.2.8 row 45b (SR8-05, N8-461; C14): decision answer provenance (answered_via, answered_attested) and request topic/proposal columns, additive only
+  { seq: 8, id: MIGRATION_0008_ID, sql: MIGRATION_0008_SQL },
 ]
 
 /**
@@ -45,6 +48,7 @@ export const MIGRATIONS: readonly Migration[] = [
  * 0005: taken by row 166 (`20261108000000_datum_mission_gsp_tiers`, see MIGRATIONS).
  * 0006: taken by row 188 (`20261108120000_datum_mission_autonomous_decision`, see MIGRATIONS).
  * 0007: taken by 1.2.6 row 86 (`20261112000000_datum_mission_document_link`, see MIGRATIONS).
+ * 0008: taken by 1.2.8 row 45b (`20261114000000_datum_decision_provenance`, see MIGRATIONS).
  * Nothing is reserved now.
  */
 export const RESERVED_MIGRATIONS: Readonly<Record<number, string>> = {}

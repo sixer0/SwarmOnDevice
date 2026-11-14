@@ -270,7 +270,7 @@ const registryTool: ToolDef = {
     kind: { type: "string", enum: [...REGISTRY_KINDS], default: "contracts" },
     includeTemplate: { type: "boolean", default: false },
     includeExamples: { type: "boolean", default: false },
-    detail: { ...S.detail, description: "kind=contracts." },
+    detail: { ...S.detail, description: "Semua kind; tanpa efek bila butir tanpa alias/label." },
     schemaId: { type: "string", maxLength: 80, description: "kind=schema, mis. studio.slot/v2." },
     sectionType: { type: "string", maxLength: 80 },
     class: { type: "string", maxLength: 80 },
@@ -286,9 +286,10 @@ const registryTool: ToolDef = {
     const reply = await http(ctx, "GET", `${studioRoutePath("R03")}${query([["kind", kind], ...extra])}`, "GET /api/studio/registry");
     const body = isRecord(reply.body) ? reply.body : {};
     const rawItems = Array.isArray(body.items) ? body.items : [];
-    // MCP-D1: ringkas bawaan = tanpa examples (includeExamples), aliases dan labels (detail); medan lain utuh.
-    const drop = new Set([...(bool(a, "includeExamples") ? [] : ["examples"]), ...(bool(a, "detail") ? [] : ["aliases", "labels"])]);
-    const items = kind === "contracts" ? rawItems.map((it) => (isRecord(it) ? Object.fromEntries(Object.entries(it).filter(([k]) => !drop.has(k))) : it)) : rawItems;
+    // MCP-D1: ringkas bawaan = tanpa examples (includeExamples, kind=contracts), aliases dan labels (detail); medan lain utuh.
+    // 1.2.8 row 31 (H-N14, 128-31-hn14): detail berlaku untuk setiap kind, bukan hanya contracts.
+    const drop = new Set([...(kind !== "contracts" || bool(a, "includeExamples") ? [] : ["examples"]), ...(bool(a, "detail") ? [] : ["aliases", "labels"])]);
+    const items = drop.size > 0 ? rawItems.map((it) => (isRecord(it) ? Object.fromEntries(Object.entries(it).filter(([k]) => !drop.has(k))) : it)) : rawItems;
     const template = kind === "contracts" && bool(a, "includeTemplate") ? templateText(null, null) : undefined;
     const lines = [`registri ${kind}: ${String(body.count ?? rawItems.length)} butir`];
     if (kind === "contracts") {

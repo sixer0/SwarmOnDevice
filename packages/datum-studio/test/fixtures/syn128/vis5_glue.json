@@ -1,0 +1,315 @@
+{
+  "$comment": "Swarm 1.2.8 row 56b (AC-VIS5, AT-V5-glue, register N8-376). Synthetic labels only. Flow without direction, per_row 2 (a b / c d; nodes on whole lattice cells). `spec`: four glued edges (bottom/top slots, a straight vertical slot pair, a top-to-top bridge, a right-to-right loop). `side_only`: sides without slots (fan fraction). `slot_no_side`: slot without its side (P1-edge-style). `bus`: explicit side on an edge to a bus node (P1-edge-style). `collide`: two arrivals at the same slot of c's top (GEOM_ENTRY_COLLISION reported, not moved). Slot fractions are measured on the layout cell (figure.lattice); a box on the sheet edge is drawn inset by half its stroke.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.5",
+    "title": "Gambar sintetis sambungan sisi.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "per_row": 2,
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "control",
+        "label": "satu",
+        "from_side": "bottom",
+        "from_slot": 0.25,
+        "to_side": "top",
+        "to_slot": 0.75
+      },
+      {
+        "from": "b",
+        "to": "d",
+        "kind": "control",
+        "label": "dua",
+        "from_side": "bottom",
+        "from_slot": 0.25,
+        "to_side": "top",
+        "to_slot": 0.25
+      },
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "tiga",
+        "from_side": "top",
+        "from_slot": 0.75,
+        "to_side": "top",
+        "to_slot": 0.25
+      },
+      {
+        "from": "d",
+        "to": "b",
+        "kind": "control",
+        "label": "empat",
+        "from_side": "right",
+        "from_slot": 0.5,
+        "to_side": "right",
+        "to_slot": 0.5
+      }
+    ]
+  },
+  "side_only": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.5",
+    "title": "Gambar sintetis sisi saja.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "per_row": 2,
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "satu",
+        "from_side": "bottom",
+        "to_side": "bottom"
+      }
+    ]
+  },
+  "slot_no_side": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.5",
+    "title": "Gambar sintetis slot tanpa sisi.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "per_row": 2,
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "control",
+        "label": "satu",
+        "from_slot": 0.5
+      }
+    ]
+  },
+  "bus": {
+    "$schema": "studio.diagram/v1",
+    "family": "topology",
+    "id": "9.5",
+    "title": "Gambar sintetis rel.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Simpul A",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "r",
+        "label": "Rel R",
+        "shape": "bus",
+        "class": {
+          "tier": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "r",
+        "kind": "data",
+        "label": "satu",
+        "from_side": "bottom"
+      }
+    ]
+  },
+  "collide": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.5",
+    "title": "Gambar sintetis tabrakan slot.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "per_row": 2,
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "col": 1,
+          "row": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "control",
+        "label": "satu",
+        "from_side": "bottom",
+        "to_side": "top",
+        "to_slot": 0.5
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "control",
+        "label": "dua",
+        "from_side": "bottom",
+        "to_side": "top",
+        "to_slot": 0.5
+      }
+    ]
+  }
+}

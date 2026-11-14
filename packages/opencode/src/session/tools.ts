@@ -1,6 +1,6 @@
 import { Agent } from "@/agent/agent"
 import type { Config } from "@/config/config"
-import { KNOWLEDGE_LIBRARY_SKILL_NAME } from "@/skill"
+import { KNOWLEDGE_LIBRARY_SKILL_NAME, Skill } from "@/skill"
 import { LibraryRoot } from "@/skill/library-root"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
@@ -20,7 +20,7 @@ import { Truncate } from "@/tool/truncate"
 import { Plugin } from "@/plugin"
 import type { TaskPromptOps } from "@/tool/task"
 import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema } from "ai"
-import { Effect, Option } from "effect"
+import { Cause, Effect, Option } from "effect"
 import { MessageV2 } from "./message-v2"
 import { Session } from "./session"
 import { SessionProcessor } from "./processor"
@@ -32,6 +32,10 @@ import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceState } from "@/effect/instance-state"
 import { Secrets } from "@/tool/secrets"
+import { Reach } from "@/tool/reach"
+import { missionTypeSuggestion } from "./system"
+import { Memory } from "@/memory/memory"
+import { VaultMirror } from "@/memory/vault-mirror"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -39,6 +43,8 @@ const MCP_RESOURCE_TOOLS = {
   read: "read_mcp_resource",
 } as const
 const MAX_MCP_RESOURCE_BLOB_BYTES = 10 * 1024 * 1024
+/** The swarm-web vault inbox tool (setup mcpproxy wiring); the close nudge is added only when the session has it. */
+const VAULT_INBOX_TOOL = "swarm-web_vault_inbox"
 const SUPPORTED_MCP_RESOURCE_ATTACHMENT_MIMES = new Set([
   "application/pdf",
   "image/gif",
@@ -117,6 +123,18 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   // Row 197 (S194-01): optional, as in tool.ts, so a resolve without them (unit tests) reads the mode as off.
   const autonomy = Option.getOrUndefined(yield* Effect.serviceOption(Autonomy.Service))
   const sessions = Option.getOrUndefined(yield* Effect.serviceOption(Session.Service))
+  // SK-g (N8-048): optional too; without it no mission-type line is added.
+  const skills = Option.getOrUndefined(yield* Effect.serviceOption(Skill.Service))
+  // 1.2.8 row 40h (SK-e, C82): the Skill service's folder list (skills.paths, URL-cache folders) is recorded now, so the
+  // edit tools' skill-folder check and the autonomy table hold those folders from the first call, not only after an
+  // edit tool asked the service. A failed lookup leaves the fixed roots, which hold without it.
+  if (skills)
+    yield* Effect.gen(function* () {
+      const instance = yield* InstanceState.context
+      Reach.rememberSkillFolders(instance, yield* skills.folders())
+    }).pipe(Effect.catchCause(() => Effect.void))
+  // MEM-e (01e §4.2): optional too; without it the done close carries no memory check and the host warns.
+  const memory = Option.getOrUndefined(yield* Effect.serviceOption(Memory.Service))
 
   const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => ({
     sessionID: input.session.id,
@@ -490,6 +508,50 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     return yield* autonomy.isOn({ root: root.id, directory })
   }).pipe(Effect.catchCause(() => Effect.succeed(false)))
 
+  // MEM-e (01e §4.2, N8-012): on `studio_mission_set_status {to: "done"}` only, whether this project's memory holds the
+  // mission's index entry (archived counts). The key is left out, so the host warns MEMORY_INDEX_UNCHECKED instead of
+  // refusing, when memory is off (SWARM_DISABLE_MEMORY or the store disabled), when this agent may not `remember`, or
+  // when the lookup fails: a close is never refused for a step the agent cannot take. The model cannot set `_meta`.
+  const memoryIndexMeta = (name: string, args: Record<string, unknown>): Effect.Effect<Record<string, unknown>> => {
+    if (name !== "studio_mission_set_status" || args.to !== "done" || typeof args.mission !== "string")
+      return Effect.succeed({})
+    const missionId = args.mission
+    return Effect.gen(function* () {
+      if (!memory || process.env.SWARM_DISABLE_MEMORY) return {}
+      const ruleset = Permission.merge(input.agent.permission, input.session.permission ?? [])
+      if (Permission.evaluate("remember", "*", ruleset).action === "deny") return {}
+      const store = yield* memory.get()
+      if (!store.enabled) return {}
+      const present = store.items.some((item) => item.kind === "index" && item.missionId === missionId)
+      return { [McpCatalog.MEMORY_INDEX_META]: { missionId, present } }
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logError("mission index lookup failed", {
+          source: "SessionTools.memoryIndexMeta",
+          sessionID: input.session.id,
+          cause: Cause.pretty(cause),
+        }).pipe(Effect.as({})),
+      ),
+    )
+  }
+
+  // N8-437: whether the closed mission has an index entry in this project's memory, so the close nudge can name its
+  // vault notes. Memory off, a disabled store or a failed lookup give the nudge without links (logged).
+  const missionIndexed = (missionId: string): Effect.Effect<boolean> =>
+    Effect.gen(function* () {
+      if (!memory || process.env.SWARM_DISABLE_MEMORY) return false
+      const store = yield* memory.get()
+      return store.enabled && store.items.some((item) => item.kind === "index" && item.missionId === missionId)
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logError("mission index lookup failed", {
+          source: "SessionTools.missionIndexed",
+          sessionID: input.session.id,
+          cause: Cause.pretty(cause),
+        }).pipe(Effect.as(false)),
+      ),
+    )
+
   for (const [key, entry] of Object.entries(yield* mcp.tools())) {
     // L51: the built-in datum-studio server (global origin only, never a project's look-alike entry) gets the calling
     // session in _meta, so a mission it writes links to this session without the agent inventing an id.
@@ -497,9 +559,10 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     // (the person turns it on). Only then may the agent self-approve a mission; the model cannot set `_meta`.
     const studio: McpCatalog.CallMeta | undefined =
       entry.source?.server === DatumStudioMcp.DATUM_STUDIO_MCP && entry.source.origin === "global"
-        ? async () => ({
+        ? async (args) => ({
             ...McpCatalog.callerSessionMeta(input.session.id),
             ...((await run.promise(autonomousOn)) ? { [McpCatalog.AUTONOMOUS_META]: true } : {}),
+            ...(await run.promise(memoryIndexMeta(entry.def.name, args))),
           })
         : undefined
     const item = McpCatalog.convertTool(entry.def, entry.client, entry.timeout, studio)
@@ -585,6 +648,36 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
                 })
               }
             }
+          }
+
+          // OBS-d T3 and the OBS-g close nudge (01c §5, §8.3, N8-437): a successful close (done or cancelled) refreshes
+          // the vault mirror now and, when this session can write to the vault inbox, names the notes to link. A recorded
+          // decision refreshes it too (debounced). Neither waits for the run, and neither can fail or change the close.
+          if (studio && memory && !result.isError) {
+            const call = toRecord(args)
+            if (entry.def.name === "studio_mission_set_status" && (call.to === "done" || call.to === "cancelled")) {
+              yield* memory.mirror({ immediate: true })
+              if (VAULT_INBOX_TOOL in tools && typeof call.mission === "string")
+                textParts.push(VaultMirror.closeNudge(call.mission, yield* missionIndexed(call.mission)))
+            }
+            if (entry.def.name === "studio_mission_record_decision") yield* memory.mirror()
+          }
+
+          // SK-g (N8-048): a created mission's type suggests skills; a line in the result, never a load, and never in
+          // the cached system prompt. The tool's input is {mission: MissionDoc} (additionalProperties: false, so there is
+          // no flat `type`); the type is mission.type (row 51b, LS-11).
+          if (
+            studio &&
+            skills &&
+            entry.def.name === "studio_mission_create" &&
+            !result.isError &&
+            !Permission.disabled(["skill"], input.agent.permission).has("skill")
+          ) {
+            const line = missionTypeSuggestion(
+              yield* skills.available(input.agent),
+              toRecord(toRecord(args).mission).type,
+            )
+            if (line) textParts.push(line)
           }
 
           const truncated = yield* truncate.output(

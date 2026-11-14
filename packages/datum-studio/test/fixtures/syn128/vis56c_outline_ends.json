@@ -1,0 +1,181 @@
+{
+  "$comment": "Swarm 1.2.8 row 56c (C51, C71, C75, C101; user item 7, Visio minimum for connector ends). Synthetic labels only. `merge_lr`: left-to-right flow, three sources into one decision diamond (three entries on its left side) then one step. `tb_db`: top-to-bottom flowchart with a decision (YA down, TIDAK beside) and a database (cylinder) entered from above by two connectors. Used by test/diagram-visio/rel128-vis-56c-outline-ends.test.ts and the eye check test/eye/56c/.",
+  "merge_lr": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.7",
+    "title": "Gambar sintetis gabung keputusan.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "direction": "LR",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Sumber A",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Sumber B",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "g",
+        "label": "Sumber G",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "d",
+        "label": "Cek D",
+        "shape": "diamond",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "tier": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "d",
+        "kind": "data",
+        "label": "1"
+      },
+      {
+        "from": "b",
+        "to": "d",
+        "kind": "data",
+        "label": "2"
+      },
+      {
+        "from": "g",
+        "to": "d",
+        "kind": "data",
+        "label": "3"
+      },
+      {
+        "from": "d",
+        "to": "c",
+        "kind": "data",
+        "label": "4"
+      }
+    ]
+  },
+  "tb_db": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.8",
+    "title": "Gambar sintetis keputusan dan basis data.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "direction": "TB",
+    "nodes": [
+      {
+        "id": "s",
+        "label": "Mulai",
+        "shape": "stadium",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "q",
+        "label": "Cek A",
+        "shape": "diamond",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "y",
+        "label": "Proses B",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "n",
+        "label": "Tolak C",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "db",
+        "label": "Simpan D",
+        "shape": "cylinder",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "e",
+        "label": "Selesai",
+        "shape": "stadium",
+        "class": {
+          "tier": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "s",
+        "to": "q",
+        "kind": "data",
+        "label": "1"
+      },
+      {
+        "from": "q",
+        "to": "y",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "q",
+        "to": "n",
+        "kind": "data",
+        "label": "tidak"
+      },
+      {
+        "from": "y",
+        "to": "db",
+        "kind": "data",
+        "label": "2"
+      },
+      {
+        "from": "n",
+        "to": "db",
+        "kind": "data",
+        "label": "3"
+      },
+      {
+        "from": "db",
+        "to": "e",
+        "kind": "data",
+        "label": "4"
+      }
+    ]
+  }
+}

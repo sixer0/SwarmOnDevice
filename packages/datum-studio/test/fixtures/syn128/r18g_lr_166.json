@@ -1,0 +1,92 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-R18g, row 68 EYE): flow LR at 166 mm, 4 ranks with one control branch. MEASURED (engine = BASE): first render score 1, AUTO_FIT -> sisa 0; final buildDiagramSvg and buildDiagramSvgAuto lint score 0, no defect, width 166 mm. The EYE verdict and PNG sha256 belong to row 68.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.1",
+    "title": "Gambar sintetis uji.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "direction": "LR",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Terima berkas",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Periksa kelengkapan",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "c",
+        "label": "Verifikasi isi",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "d",
+        "label": "Minta perbaikan",
+        "class": {
+          "col": 2,
+          "row": 1
+        }
+      },
+      {
+        "id": "e",
+        "label": "Arsipkan",
+        "class": {
+          "col": 3,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "data",
+        "label": "isi"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "data",
+        "label": "lengkap"
+      },
+      {
+        "from": "b",
+        "to": "d",
+        "kind": "control",
+        "label": "kurang"
+      },
+      {
+        "from": "c",
+        "to": "e",
+        "kind": "data",
+        "label": "sah"
+      }
+    ]
+  },
+  "buildOptions": {
+    "release": false
+  },
+  "expected": {
+    "widthMm": 166,
+    "finalScore": 0
+  }
+}

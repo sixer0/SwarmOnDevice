@@ -53,11 +53,14 @@ describe("N-6 contract: GEOM_T03_CODES (N7-069)", () => {
     const t = diagramGuideText()
     for (const n of NAMES) expect(t).toContain(n)
     expect(t).toContain("at least 1.5 mm")
-    expect(t).toContain("hand-drawn or imported SVG")
+    // INTENT (1.2.8 row 35f, AC-HN6): row 56b made the engine report it for glued ends on one slot; the old wording is false.
+    expect(t).toContain("glued ends share a slot")
+    expect(t).not.toContain("hand-drawn or imported SVG")
   })
 
   test("(d) the agent guide carries the scope sentence", () => {
     expect(GUIDE).toContain("Cakupan: GEOM_ENTRY_COLLISION")
+    expect(GUIDE).not.toContain("muncul pada SVG gambar tangan atau impor;")
   })
 })
 

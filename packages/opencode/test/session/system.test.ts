@@ -92,6 +92,7 @@ const it = testEffect(
           all: () => Effect.succeed(skills),
           dirs: () => Effect.succeed([]),
           available: () => Effect.succeed(skills),
+          folders: () => Effect.succeed([]),
         }),
       ),
     ],
@@ -292,7 +293,7 @@ describe("session.system", () => {
       head,
       "- planner: intent, blueprint, analysis or spec; no code changes.",
       "- coder: implement, fix or refactor code and make its checks pass.",
-      "- verifier: check finished work against its criteria, review, run tests; never edits.",
+      "- verifier: check finished work against its criteria, review, run tests; edits no code, writes only Markdown after asking.",
       "- data-collector: read and digest the person's own files and documents.",
       "- document-writer: DOCX, PDF, XLSX or PPTX deliverables in the house style.",
       "- explore: find files and code in this codebase.",
@@ -489,7 +490,9 @@ describe("session.system", () => {
       rtk: "rtk: prefix commands with long output with `rtk` (for example `rtk bun test`, `rtk git log`).",
       searxng: "web search: use the swarm-web `search` tool (local SearXNG) as the default web search.",
       firecrawl: "crawl: use swarm-web `fetch` with mode=crawl (local Firecrawl); mode=page for a single page.",
-      obsidian: "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store.",
+      // 1.2.8 row 41: N8-122 as corrected (R20-C26), the OBS-g vault rule.
+      obsidian:
+        "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
     } satisfies Record<InstalledTools.ComponentId, string>
 
     const stateFile = () => InstalledTools.stateFilePath()

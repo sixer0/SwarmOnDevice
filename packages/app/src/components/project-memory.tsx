@@ -11,6 +11,7 @@ import type { MemoryItem, MemoryRef, MemoryRefusal, MemoryResult } from "@openco
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
+import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
 import { showToast } from "@/utils/toast"
 
@@ -21,11 +22,52 @@ const MAX_RETRIES = 3
  * Memory.MAX_TEXT, MAX_BODY and MAX_REFS read. The refusal texts take their number from here.
  */
 const MEMORY_LIMITS = ProjectMemory.LIMITS
+const INDEX_LIMITS = ProjectMemory.INDEX_LIMITS
+
+/**
+ * 1.2.8 MEM-g (01e §7): an item as the schema defines it. The generated SDK type gains `kind`, `missionId` and
+ * `rolledInto` at the next regeneration; reading them from the schema keeps the view correct before and after.
+ */
+type Item = MemoryItem & Pick<ProjectMemory.Item, "kind" | "missionId" | "rolledInto">
+
+const isIndex = (item: Item) => item.kind === "index" || item.kind === "index_rollup"
+
+/** `YYYY-Qn roll-up | <n> missions | ...` or `YYYY roll-up part <p> | ...` (N8-010): period and mission count. */
+const ROLLUP_LINE = /^(\d{4}(?:-Q[1-4])?) roll-up(?: part \d+)? \| (\d+) missions \|/
+
+/** Newest first by the date the line carries: an entry's own date, a roll-up's period end. Write time breaks ties. */
+function indexDate(item: Item) {
+  const rollup = item.kind === "index_rollup" ? ROLLUP_LINE.exec(item.text)?.[1] : undefined
+  if (!rollup) return item.text.slice(0, 10)
+  const quarter = rollup.length > 4 ? Number(rollup.slice(6)) : 4
+  return `${rollup.slice(0, 4)}-${String(quarter * 3).padStart(2, "0")}-31`
+}
+
+/** The groups the memory view shows: live index entries first, then ordinary notes; archived entries apart. */
+function memoryGroups(items: readonly Item[]) {
+  const live = items.filter((item) => !item.rolledInto)
+  return {
+    index: live
+      .filter(isIndex)
+      .sort((a, b) => indexDate(b).localeCompare(indexDate(a)) || Number(b.time) - Number(a.time)),
+    // Today's order (reversed store order); an unknown future kind reads as an ordinary note (01e §2.1).
+    notes: live.filter((item) => !isIndex(item)).reverse(),
+    archived: items.filter((item) => item.rolledInto),
+  }
+}
 
 /** A reference as the user reads it: `path:line`, `path`, `symbol` or `symbol (path)`. Never the file's content. */
 function memoryRefLabel(ref: MemoryRef) {
   if ("symbol" in ref) return ref.path ? `${ref.symbol} (${ref.path})` : ref.symbol
   return ref.line ? `${ref.path}:${ref.line}` : ref.path
+}
+
+function optionalPlatform() {
+  try {
+    return usePlatform()
+  } catch {
+    return undefined
+  }
 }
 
 function createProjectMemory() {
@@ -96,14 +138,20 @@ export function DialogProjectMemory() {
   const [retries, setRetries] = createSignal(0)
   const [cooldown, setCooldown] = createSignal(0)
 
-  const refused: Record<MemoryRefusal, string> = {
+  // Typed against the schema's refusal list, so a refusal without a text here fails the build (01e §7).
+  const refused: Record<MemoryRefusal | ProjectMemory.Refusal, string> = {
     empty: "",
     secret: language.t("memory.refused.secret"),
     long: language.t("memory.refused.long", { max: MEMORY_LIMITS.text }),
     full: language.t("memory.refused.full"),
     body_long: language.t("memory.refused.bodyLong", { max: MEMORY_LIMITS.body }),
     too_many_refs: language.t("memory.refused.tooManyRefs", { max: MEMORY_LIMITS.refs }),
+    index_long: language.t("memory.refused.indexLong", { max: INDEX_LIMITS.text }),
+    index_body_long: language.t("memory.refused.indexBodyLong", { max: INDEX_LIMITS.body }),
+    index_format: language.t("memory.refused.indexFormat"),
+    index_full: language.t("memory.refused.indexFull"),
   }
+  const groups = () => memoryGroups((memory.current()?.items ?? []) as Item[])
 
   /** Runs a change and reports why it did not take, in place. Returns whether it did. */
   const save = async (change: () => Promise<{ data?: MemoryResult | boolean | unknown }>) => {
@@ -123,6 +171,35 @@ export function DialogProjectMemory() {
   }
 
   const client = () => memory.sdk().client.memory
+
+  // 1.2.8 OBS-f (01c §7.1, N8-114..N8-121): ask the server where the hub note is, then hand only that path to the
+  // desktop, which checks it and opens Obsidian. No hub yet -> say so and never call the desktop.
+  // Without a platform provider (the view's own render tests) there is simply no Obsidian action.
+  const platform = optionalPlatform()
+  const [opening, setOpening] = createSignal(false)
+  const obsidianText = {
+    missing: "memory.obsidian.notYet",
+    "no-app": "memory.obsidian.noApp",
+    outside: "memory.obsidian.failed",
+    failed: "memory.obsidian.failed",
+  } as const
+  const openObsidian = async () => {
+    const open = platform?.openObsidianNote
+    if (!open || opening()) return
+    setOpening(true)
+    const result = await client()
+      .vault({ language: language.locale() === "id" ? "id" : "en" })
+      .then((response) => {
+        const vault = response.data
+        if (!vault) return "failed" as const
+        if (!vault.exists) return "missing" as const
+        return open(vault.hubPath)
+      })
+      .catch(() => "failed" as const)
+      .finally(() => setOpening(false))
+    if (result === "opened") return
+    showToast({ variant: "error", title: language.t(obsidianText[result]) })
+  }
 
   const add = async (event: SubmitEvent) => {
     event.preventDefault()
@@ -186,8 +263,40 @@ export function DialogProjectMemory() {
               </p>
             }
           >
+            {/* 1.2.8 MEM-g: mission index entries are their own group in this same list, first; no new panel. */}
+            <Show when={groups().index.length || groups().archived.length}>
+              <section data-memory-index class="flex flex-col gap-1">
+                <h3 class="text-[12px] font-medium leading-[18px] text-v2-text-text-faint">
+                  {language.t("memory.kind.index")}
+                </h3>
+                <ul class="flex flex-col">
+                  <For each={groups().index}>
+                    {(item) => (
+                      <MemoryRow
+                        item={item}
+                        members={
+                          item.kind === "index_rollup"
+                            ? groups().archived.filter((member) => member.rolledInto === item.id)
+                            : undefined
+                        }
+                        onDelete={() => save(() => client().remove({ id: item.id }))}
+                        onText={(text) => save(() => client().update({ id: item.id, text }))}
+                        onScope={() => save(() => client().update({ id: item.id, deviceOnly: !item.deviceOnly }))}
+                      />
+                    )}
+                  </For>
+                </ul>
+                <Show when={groups().archived.length}>
+                  {(count) => (
+                    <p data-memory-index-hidden class="text-[12px] leading-[18px] text-v2-text-text-faint">
+                      {language.t("memory.index.hidden", { count: count() })}
+                    </p>
+                  )}
+                </Show>
+              </section>
+            </Show>
             <ul class="flex flex-col">
-              <For each={[...(memory.current()?.items ?? [])].reverse()}>
+              <For each={groups().notes}>
                 {(item) => (
                   <MemoryRow
                     item={item}
@@ -212,6 +321,20 @@ export function DialogProjectMemory() {
               <p class="text-[12px] leading-[18px] text-v2-text-text-faint">
                 {info().enabled ? language.t("memory.privacy") : language.t("memory.off")}
               </p>
+              {/* 1.2.8 OBS-f (01c §7.1): the one Obsidian action; desktop only, no new panel. */}
+              <Show when={platform?.openObsidianNote}>
+                <ButtonV2
+                  type="button"
+                  data-action="open-obsidian"
+                  variant="neutral"
+                  class="self-start"
+                  title={language.t("memory.obsidian.hint")}
+                  disabled={opening()}
+                  onClick={() => void openObsidian()}
+                >
+                  {language.t("memory.obsidian.open")}
+                </ButtonV2>
+              </Show>
             </div>
           </>
         )}
@@ -220,54 +343,81 @@ export function DialogProjectMemory() {
   )
 }
 
+/** Body and refs are what a model may receive on recall: shown read-only. */
+function MemoryDetail(props: { item: Item }) {
+  return (
+    <>
+      <Show when={props.item.body}>
+        {(body) => (
+          <p data-memory-body class="whitespace-pre-wrap break-words">
+            {body()}
+          </p>
+        )}
+      </Show>
+      <For each={props.item.refs ?? []}>
+        {(ref) => (
+          <code data-memory-ref class="break-all font-mono">
+            {memoryRefLabel(ref)}
+          </code>
+        )}
+      </For>
+    </>
+  )
+}
+
 function MemoryRow(props: {
-  item: MemoryItem
+  item: Item
+  /** A roll-up's archived members (01e §7): listed read-only inside its detail, never editable. */
+  members?: Item[]
   onDelete: () => void
   onText: (text: string) => Promise<boolean>
   onScope: () => void
 }) {
   const language = useLanguage()
   const [editing, setEditing] = createSignal(false)
+  const rollup = () => props.item.kind === "index_rollup"
   const finish = async (text: string) => {
     if (text.trim() === props.item.text) return setEditing(false)
     if (await props.onText(text)) setEditing(false)
   }
-  const hook = () => (
-    <For each={props.item.text.split("`")}>
-      {(piece, index) => (index() % 2 ? <code class="font-mono text-[12px]">{piece}</code> : piece)}
-    </For>
-  )
+  const hook = () => {
+    const line = rollup() ? ROLLUP_LINE.exec(props.item.text) : null
+    if (line) return language.t("memory.index.rollup", { count: Number(line[2]), period: line[1] })
+    return (
+      <For each={props.item.text.split("`")}>
+        {(piece, index) => (index() % 2 ? <code class="font-mono text-[12px]">{piece}</code> : piece)}
+      </For>
+    )
+  }
   return (
     <li
       data-memory-item={props.item.id}
+      data-memory-kind={props.item.kind}
       class="group flex items-start gap-2 border-t border-v2-border-border-muted py-2.5 first:border-t-0"
     >
       <div class="flex min-w-0 flex-1 flex-col gap-1">
         <Show
-          when={editing()}
+          when={editing() && !rollup()}
           fallback={
             <Show
-              when={props.item.body || props.item.refs?.length}
+              when={rollup() || props.item.body || props.item.refs?.length}
               fallback={<div class="break-words text-[13px] leading-5 text-v2-text-text-base">{hook()}</div>}
             >
-              {/* Body and refs are what a model may receive on recall: shown read-only, collapsed under the hook. */}
               <details class="min-w-0 text-[13px] leading-5 text-v2-text-text-base">
                 <summary class="cursor-pointer break-words">{hook()}</summary>
                 <div class="mt-1 flex flex-col gap-1 text-[12px] leading-[18px] text-v2-text-text-faint">
-                  <Show when={props.item.body}>
-                    {(body) => (
-                      <p data-memory-body class="whitespace-pre-wrap break-words">
-                        {body()}
-                      </p>
-                    )}
+                  <Show when={props.members?.length} fallback={<MemoryDetail item={props.item} />}>
+                    <ul class="flex flex-col gap-1.5">
+                      <For each={props.members}>
+                        {(member) => (
+                          <li data-memory-archived={member.id} class="flex flex-col gap-0.5">
+                            <span class="break-words text-v2-text-text-base">{member.text}</span>
+                            <MemoryDetail item={member} />
+                          </li>
+                        )}
+                      </For>
+                    </ul>
                   </Show>
-                  <For each={props.item.refs ?? []}>
-                    {(ref) => (
-                      <code data-memory-ref class="break-all font-mono">
-                        {memoryRefLabel(ref)}
-                      </code>
-                    )}
-                  </For>
                 </div>
               </details>
             </Show>
@@ -287,6 +437,10 @@ function MemoryRow(props: {
           />
         </Show>
         <div class="flex flex-wrap items-center gap-x-1.5 text-[12px] leading-[18px] text-v2-text-text-faint">
+          <Show when={isIndex(props.item)}>
+            <span data-memory-kind-label>{language.t("memory.kind.index")}</span>
+            <span aria-hidden="true">·</span>
+          </Show>
           <span>{language.t(`memory.source.${props.item.source}`)}</span>
           <span aria-hidden="true">·</span>
           <button
@@ -301,15 +455,19 @@ function MemoryRow(props: {
         </div>
       </div>
       <div class="flex shrink-0 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
-        <IconButtonV2
-          type="button"
-          variant="ghost-muted"
-          size="small"
-          aria-label={language.t("common.edit")}
-          title={language.t("common.edit")}
-          icon={<Icon name="edit" />}
-          onClick={() => setEditing((value) => !value)}
-        />
+        {/* A roll-up's line is written by the store and stays as written (01e §2.3): no edit, delete stays. */}
+        <Show when={!rollup()}>
+          <IconButtonV2
+            type="button"
+            data-memory-edit-button
+            variant="ghost-muted"
+            size="small"
+            aria-label={language.t("common.edit")}
+            title={language.t("common.edit")}
+            icon={<Icon name="edit" />}
+            onClick={() => setEditing((value) => !value)}
+          />
+        </Show>
         <IconButtonV2
           type="button"
           data-memory-delete

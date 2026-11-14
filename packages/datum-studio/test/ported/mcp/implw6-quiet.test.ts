@@ -35,7 +35,8 @@ describe('IMPL-W6: peringatan informasional senyap di hasil ringkas', () => {
   it('kelas informasional berisi dua kode ITEM_KEY_* (+ ARGS_UNWRAPPED, META_LIFTED_FROM_EDITS); quietWarnings tidak menyentuh peringatan lain', () => {
     // IMPL-W8: ARGS_UNWRAPPED + META_LIFTED_FROM_EDITS ikut kelas informasional. IMPL-W10 L16-2: ROWS_COALESCED_TO_TABLE
     // (IMPL-W7), SECTION_CREATED dan VERDICT_NORMALIZED (IMPL-W9) dikeluarkan karena mengubah isi tersimpan.
-    expect([...INFORMATIONAL_WARNING_CODES].sort()).toEqual([...INFO, 'ARGS_UNWRAPPED', 'META_LIFTED_FROM_EDITS'].sort());
+    // Swarm 1.2.8 row 33 (AC-HNA, N8-205, INTENT): ARGS_PARSED (submission teks JSON diurai sekali) ikut kelas ini.
+    expect([...INFORMATIONAL_WARNING_CODES].sort()).toEqual([...INFO, 'ARGS_UNWRAPPED', 'META_LIFTED_FROM_EDITS', 'ARGS_PARSED'].sort());
     const all = [{ code: 'ITEM_KEY_GENERATED', message: 'a' }, { code: 'HEADING_MAPPED', message: 'b' }, { code: 'ITEM_KEY_COLUMN_ADDED', message: 'c' }];
     expect(quietWarnings(all, false).map((w) => w.code)).toEqual(['HEADING_MAPPED']);
     expect(quietWarnings(all, true)).toEqual(all);

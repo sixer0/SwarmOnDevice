@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process"
 import { stat } from "node:fs/promises"
+import { userInfo } from "node:os"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
@@ -26,11 +27,12 @@ import type { UpdaterController } from "./updater-controller"
 import { createUpdaterSubscriptions } from "./updater-subscriptions"
 import { createDesktopDraftStore } from "./draft-store"
 import { nativeT } from "./native-translations"
-import { getLogger } from "./logging"
+import { getLogger, write as writeLog } from "./logging"
+import { obsidianVaultRoot, registerOpenObsidianNoteHandler } from "./external-url"
 import { isSetupToolsOfferPending, markSetupToolsOffered } from "./onboarding"
-import { createSetupRunner, setupDir, type SetupRunner } from "./setup-runner"
+import { createSetupRunner, resolveSetupHome, setupDir, type SetupRunner } from "./setup-runner"
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
-import { registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
+import { createRehomeCaller, registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
 import { registerDesktopNonceHandler } from "./desktop-nonce"
 import { revealInFolder } from "./reveal-path"
 import { registerMissingDirectoryHandlers } from "./missing-directory"
@@ -159,6 +161,8 @@ export function registerIpcHandlers(deps: Deps) {
     windowOf: (sender) => BrowserWindow.fromWebContents(sender),
     isRendererUrl,
     client: () => deps.missionControl?.(),
+    // 1.2.8 row 46 (01d §7): the placement's move on the local sidecar with this launch's desktop nonce.
+    rehome: createRehomeCaller({ server: () => deps.awaitInitialization(), nonce: () => deps.desktopNonce?.() }),
     log: (level, message, context) => getLogger()[level](message, { source: "mission-control", ...context }),
   })
   // Row 38b (SEC-06): the app's renderer reads the nonce for the revert and archive-empty calls; other senders get null.
@@ -342,6 +346,27 @@ export function registerIpcHandlers(deps: Deps) {
         process.platform === "darwin" ? (["open", ["-a", app, path]] as const) : ([app, [path]] as const)
       execFile(cmd, args, (err) => (err ? reject(err) : resolve()))
     })
+  })
+
+  // 1.2.8 row 42c (AC-OBSf, D-O2, SR8-15): the memory view's "Open graph in Obsidian". Only the app's own window;
+  // only a note in <vault>/swarm-memory/; the URL is built here. Refusals log the reason, never the path (as C55).
+  registerOpenObsidianNoteHandler({
+    ipcMain,
+    windowOf: (sender) => BrowserWindow.fromWebContents(sender),
+    isRendererUrl,
+    vaultRoot: () => obsidianVaultRoot(process.env, app.getPath("home")),
+    protocolApp: (url) => app.getApplicationNameForProtocol(url),
+    openExternal: (url) => shell.openExternal(url),
+    log: (message, context) => writeLog("window", message, context, "warn"),
+    // Row 42d (U3): the Install-tools staged app when obsidian:// has no registered handler; no shell.
+    // Row 42e (S-14): also runs /usr/bin/codesign on it first, so the output is returned (stderr holds the identity).
+    setupHome: () => resolveSetupHome(process.env, userInfo().homedir),
+    execFile: (file, args) =>
+      new Promise((resolve, reject) =>
+        execFile(file, args, { timeout: 30_000 }, (err, stdout, stderr) =>
+          err ? reject(err) : resolve({ stdout: String(stdout), stderr: String(stderr) }),
+        ),
+      ),
   })
 
   // 1.2.7 row 25 (U-2, SR7-11): only a path inside this window's roots and outside Swarm's and the credential places;

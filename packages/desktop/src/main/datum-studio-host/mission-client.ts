@@ -4,7 +4,7 @@
 //
 // - The Bearer token lives only in this closure (built in lifecycle.ts where the token is created). It is never part of
 //   a result, an error message or a log line; host text is scrubbed of it anyway.
-// - Allow-list: exactly four tools. Any other name throws TOOL_NOT_ALLOWED before a request is made. There is no
+// - Allow-list: exactly five tools (1.2.8 row 46 adds studio_mission_place). Any other name throws TOOL_NOT_ALLOWED before a request is made. There is no
 //   generic "call tool" channel; each public method builds its tool arguments itself (the renderer adds none).
 // - Every argument is validated here (§3.3) before any host call: BAD_ARGUMENT, no request.
 // - Dependency-free JSON-RPC over streamable HTTP, as the row 34 bridge (desktop/scripts/datum-studio-bridge.ts):
@@ -26,10 +26,15 @@ export const MISSION_CONTROL_TOOLS = [
   "studio_mission_get",
   "studio_mission_answer_decision",
   "studio_mission_update_row",
+  // 1.2.8 row 46 (AC-PROJf, 01d §7.2 step 6, N8-143): the place step after a person's click; the host refuses it from a
+  // session that is not attested with the Mission Control key (SR8-05, N8-460).
+  "studio_mission_place",
 ] as const
 export type MissionControlTool = (typeof MISSION_CONTROL_TOOLS)[number]
 
 export const MISSION_CONTROL_AGENT = "swarm"
+/** N8-459 (1.2.8 SR8-05): header carrying the per-launch Mission Control key, sent on the initialize request only. */
+export const MISSION_CONTROL_KEY_HEADER = "x-swarm-mission-control-key"
 export const MISSION_CONTROL_ACTOR = "mission-control"
 export const MISSION_CALL_TIMEOUT_MS = 5_000
 export const MISSION_LIST_STATUSES = ["draft", "approved", "running", "paused", "done"] as const
@@ -143,6 +148,11 @@ export type MissionControlClientOptions = {
   /** `http://127.0.0.1:<port>/mcp` from the host's ready message. */
   url: string
   token: string
+  /**
+   * 1.2.8 SR8-05 (row 45c): the per-launch Mission Control key from lifecycle.ts. Sent as MISSION_CONTROL_KEY_HEADER on
+   * each initialize request (so a re-initialise is attested too), never on other requests; scrubbed like the token.
+   */
+  missionControlKey?: string
   /** The folder main owns and sends as X-Studio-Caller-Cwd (created 0700 on first use, never a renderer path). */
   callerCwd: string
   /** False once the host stopped or exited: calls answer HOST_UNAVAILABLE without a request. */
@@ -153,6 +163,13 @@ export type MissionControlClientOptions = {
 }
 
 export type MissionControlClient = MissionControlPlatform & {
+  /**
+   * 1.2.8 row 46 (01d §7.2 step 6): `studio_mission_place` for a mission whose placement request was answered with join or
+   * new. Called by mission-ipc.ts `place` only, after the move; never a renderer channel of its own.
+   * 1.2.8 row 46b (01d §7.3): `tidyMission` = the mission holding the answered project-tidy request (`decision`) whose
+   * proposal lists this mission.
+   */
+  setProjectDir(input: { mission: string; projectDir: string; decision: string; tidyMission?: string }): Promise<MissionControlResult<Record<string, unknown>>>
   /** Low level, allow-listed. Exported for the tests of the allow-list; ipc never calls it. */
   callTool(name: string, args: Record<string, unknown>): Promise<MissionControlResult<Record<string, unknown>>>
 }
@@ -184,7 +201,12 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
   let nextId = 1
   let cwdReady: Promise<void> | undefined
 
-  const scrub = (text: string) => (token ? text.split(token).join("[token]") : text)
+  const missionKey = opts.missionControlKey
+  const scrub = (text: string) => {
+    let out = token ? text.split(token).join("[token]") : text
+    if (missionKey) out = out.split(missionKey).join("[key]")
+    return out
+  }
 
   function headers(extra: Record<string, string> = {}) {
     const h: Record<string, string> = {
@@ -223,8 +245,10 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
   }
 
   async function post(body: Json, signal: AbortSignal): Promise<Response> {
+    // SR8-05: the key rides only on initialize, the request whose session the host attests.
+    const extra: Record<string, string> = body.method === "initialize" && missionKey ? { [MISSION_CONTROL_KEY_HEADER]: missionKey } : {}
     try {
-      return await doFetch(url!, { method: "POST", headers: headers(), body: JSON.stringify(body), signal, redirect: "error" })
+      return await doFetch(url!, { method: "POST", headers: headers(extra), body: JSON.stringify(body), signal, redirect: "error" })
     } catch (error) {
       if (signal.aborted) throw new MissionControlError("TIMEOUT", `DATUM Studio did not answer within ${timeoutMs} ms`)
       throw new MissionControlError("HOST_UNAVAILABLE", `DATUM Studio is not reachable (${error instanceof Error ? error.name : "error"})`)
@@ -454,5 +478,20 @@ export function createMissionControlClient(opts: MissionControlClientOptions): M
     return { ok: true, data: { seq } }
   }
 
-  return { list, get, answer, instruct, callTool }
+  async function setProjectDir(input: { mission: string; projectDir: string; decision: string; tidyMission?: string }) {
+    const r = plain(input, ["mission", "projectDir", "decision"], ["tidyMission"])
+    if (!r) return bad("place takes {mission, projectDir, decision, tidyMission?}")
+    const mission = missionOf(r)
+    if (!mission) return bad("mission id is not valid")
+    if (!isString(r.decision) || !REQUEST_ID_RE.test(r.decision)) return bad("request id is not valid")
+    const dir = r.projectDir
+    if (!isString(dir) || dir.length < 1 || dir.length > DIRECTORY_MAX_CHARS || CONTROL_RE.test(dir) || !isAbsolute(dir))
+      return bad("projectDir must be an absolute folder")
+    if (r.tidyMission === undefined) return callTool("studio_mission_place", { mission, projectDir: dir, decision: r.decision })
+    const tidyMission = missionOf({ mission: r.tidyMission })
+    if (!tidyMission) return bad("tidy mission id is not valid")
+    return callTool("studio_mission_place", { mission, projectDir: dir, decision: r.decision, tidyMission })
+  }
+
+  return { list, get, answer, instruct, setProjectDir, callTool }
 }

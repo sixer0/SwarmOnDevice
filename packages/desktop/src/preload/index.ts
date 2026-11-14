@@ -92,6 +92,13 @@ const api: ElectronAPI = {
         text: input?.text,
         ...(input?.row === undefined ? {} : { row: input.row }),
       }),
+    // 1.2.8 row 46 (N8-144): the person's join/new click on an open placement request.
+    place: (input) =>
+      ipcRenderer.invoke(MISSION_CONTROL_IPC.place, {
+        mission: input?.mission,
+        request: input?.request,
+        option: input?.option,
+      }),
   },
   consumeInitialDeepLinks: () => ipcRenderer.invoke("consume-initial-deep-links"),
   getDefaultServerUrl: () => ipcRenderer.invoke("get-default-server-url"),
@@ -141,6 +148,8 @@ const api: ElectronAPI = {
   openLocalFile: (url) => ipcRenderer.send("open-local-file", url),
   openPath: (path, app) => ipcRenderer.invoke("open-path", path, app),
   revealPath: (path) => ipcRenderer.invoke("reveal-path", path),
+  // 1.2.8 row 42c (AC-OBSf, N8-115/N8-116): a path in, main builds the obsidian:// URL itself
+  openObsidianNote: (hubPath) => ipcRenderer.invoke("open-obsidian-note", hubPath),
   readClipboardImage: () => ipcRenderer.invoke("read-clipboard-image"),
   getWindowFocused: () => ipcRenderer.invoke("get-window-focused"),
   getWindowFullscreen: () => ipcRenderer.invoke("get-window-fullscreen"),

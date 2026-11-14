@@ -36,13 +36,19 @@ export type DecisionRequestWire = {
   id: string
   question: string
   context?: string
-  options: Array<{ id: string; label: string; consequence: string }>
+  /** 1.2.8 row 46: `group`/`groupKind` on project-placement join/new options (N8-454, N8-149). */
+  options: Array<{ id: string; label: string; consequence: string; group?: string; groupKind?: string }>
   recommended?: string
   blockingRows?: string[]
+  /** 1.2.8 row 46 (N8-146): absent = an ordinary decision. */
+  topic?: string
+  /** 1.2.8 row 46b (N8-148): `project-tidy` only; `group: null` = the mission stays at the root. */
+  proposal?: Array<{ mission: string; group: string | null; groupKind?: string }>
   status: "open" | "answered" | "withdrawn"
   createdAt: string
   closedAt?: string
-  answer?: { option: string; by: "user" | "controller"; decision: string }
+  /** 1.2.8 row 46 (SR8-05, N8-461): `attested` absent for answers recorded before 1.2.8. */
+  answer?: { option: string; by: "user" | "controller"; decision: string; via?: string; attested?: boolean }
 }
 
 export type MissionMessageWire = {
@@ -97,7 +103,17 @@ export type MissionDerivedWire = {
 }
 
 export type MissionGetWire = {
-  mission: { id: string; title: string; type: string; status: MissionStatus; rows: MissionRowWire[] }
+  mission: {
+    id: string
+    title: string
+    type: string
+    status: MissionStatus
+    rows: MissionRowWire[]
+    /** 1.2.8 row 46: the linked sessions (host SessionLink); absent from tests and older callers. */
+    sessions?: Array<{ client: string; ref: string }>
+    /** 1.2.8 row 46b: the mission's project folder (host `project.dir`); absent from tests and older callers. */
+    project?: { dir?: string }
+  }
   derived: MissionDerivedWire
   requests?: DecisionRequestWire[]
   messages?: MissionMessageWire[]
@@ -143,9 +159,12 @@ export type MissionDecisionVM = {
   id: string
   question: string
   context?: string
-  options: Array<{ id: string; label: string; consequence: string; recommended: boolean }>
+  options: Array<{ id: string; label: string; consequence: string; recommended: boolean; group?: string; groupKind?: string }>
+  /** 1.2.8 row 46: "project-placement" renders the placement card (01d §4). */
+  topic?: string
+  /** 1.2.8 row 46b: the tidy list lines of a "project-tidy" request (01d §5). */
+  proposal?: Array<{ mission: string; group: string | null; groupKind?: string }>
 }
-export type MissionAnsweredVM = { id: string; question: string; optionLabel: string; decision: string }
 export type MissionFeedLine = {
   key: string
   from: "owner" | "controller" | "agent"
@@ -155,6 +174,8 @@ export type MissionFeedLine = {
   text: string
   at: string
   local?: true
+  /** 1.2.8 row 46 (SR8-05, N8-462): a by-user answer the host recorded from a session that is not attested. */
+  unattested?: true
 }
 export type MissionDeliverableVM = {
   documentId: string
@@ -187,7 +208,13 @@ export type MissionVM = {
   waves: MissionWaveVM[]
   decision: MissionDecisionVM | null
   openDecisions: number
-  answered: MissionAnsweredVM | null
+  /** 1.2.8 row 46: Swarm sessions linked to the mission (join/new wait while one of them is busy, 01d §4). */
+  sessions?: string[]
+  /**
+   * 1.2.8 row 46b (C98): the person chose join/new for a placement in Mission Control (by user, attested) but the
+   * mission is not in that group: the move did not finish and can be retried from the card.
+   */
+  unplaced?: { id: string; option: string; group: string; groupKind?: string }
   feed: MissionFeedLine[]
   deliverables: MissionDeliverableVM[]
   finalCount: number
@@ -501,19 +528,39 @@ export function buildMission(
           label: opt.label,
           consequence: opt.consequence,
           recommended: opt.id === oldestOpen.recommended,
+          ...(opt.group === undefined ? {} : { group: opt.group }),
+          ...(opt.groupKind === undefined ? {} : { groupKind: opt.groupKind }),
         })),
+        ...(oldestOpen.topic === undefined ? {} : { topic: oldestOpen.topic }),
+        ...(Array.isArray(oldestOpen.proposal) ? { proposal: oldestOpen.proposal } : {}),
       }
     : null
+
+  // 1.2.8 row 46b (C98): the latest person-answered placement whose group is not the mission's folder (yet).
+  const projectDir = typeof mission.project?.dir === "string" ? mission.project.dir : undefined
+  const lastPlacement = requests
+    .filter((req) => req.status === "answered" && req.topic === "project-placement" && req.answer)
+    .sort((a, b) => timeOf(b.closedAt) - timeOf(a.closedAt))[0]
+  const placedOption =
+    lastPlacement?.answer?.by === "user" && lastPlacement.answer.attested === true && ["join", "new"].includes(lastPlacement.answer.option)
+      ? lastPlacement.options.find((opt) => opt.id === lastPlacement.answer?.option)
+      : undefined
+  const unplaced =
+    lastPlacement && placedOption && typeof placedOption.group === "string" && projectDir !== undefined &&
+    projectDir.split("/").pop() !== placedOption.group
+      ? {
+          id: lastPlacement.id,
+          option: placedOption.id,
+          group: placedOption.group,
+          ...(placedOption.groupKind === undefined ? {} : { groupKind: placedOption.groupKind }),
+        }
+      : undefined
 
   const answeredReqs = requests
     .filter((req) => req.status === "answered" && req.answer)
     .sort((a, b) => timeOf(a.closedAt) - timeOf(b.closedAt))
   const labelOf = (req: DecisionRequestWire) =>
     req.options.find((opt) => opt.id === req.answer?.option)?.label ?? req.answer?.option ?? ""
-  const latest = answeredReqs.at(-1)
-  const answered: MissionAnsweredVM | null = latest
-    ? { id: latest.id, question: latest.question, optionLabel: labelOf(latest), decision: latest.answer!.decision }
-    : null
 
   // Messages in write order (seq) first, so the stable time sort below keeps "written last shows first" when several
   // messages share one time (one store job, 1.2.7 row 58a F-1) whatever order the wire sent them in.
@@ -533,6 +580,8 @@ export function buildMission(
       to: "controller" as const,
       text: `${req.id}: ${labelOf(req)}`,
       at: req.closedAt ?? req.createdAt,
+      // C67: the label only when the host says explicitly that the session was not attested.
+      ...(req.answer?.by === "user" && req.answer.attested === false ? { unattested: true as const } : {}),
     })),
   ]
     .sort((a, b) => timeOf(a.at) - timeOf(b.at))
@@ -555,7 +604,8 @@ export function buildMission(
     waves,
     decision,
     openDecisions: open.length,
-    answered,
+    sessions: (mission.sessions ?? []).filter((link) => link?.client === "swarm" && typeof link.ref === "string").map((link) => link.ref),
+    ...(unplaced ? { unplaced } : {}),
     feed,
     deliverables,
     finalCount: deliverables.filter((d) => d.status === "final").length,

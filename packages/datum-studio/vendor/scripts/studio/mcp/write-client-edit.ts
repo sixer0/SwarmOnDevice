@@ -8,7 +8,7 @@
 import { McpToolError } from "./safety";
 import { tok, type ToolWarning } from "./tool-kit";
 import { cellOf, chapterOf, chartBlock, type ClientBlock, type ClientChart } from "./write-client";
-import type { Cell } from "./write-content";
+import { warnTableOverflow, type Cell } from "./write-content";
 import { parseInline } from "../../../src/lib/studio/services/import/inline";
 import { normalize } from "./write-edit";
 import { findCell, findSection, findText, fold, notAppliedOf, spliceSpans, type MatchUnit, type NotApplied } from "./write-match";
@@ -381,6 +381,8 @@ export function applyClientEdits(content: Rec, edits: readonly ClientEditOp[], w
       const bad = e.addRow.findIndex((r) => r.length !== header.length);
       if (bad >= 0) throw new McpToolError("EDIT_INVALID", `${label}: baris ${bad + 1} berisi ${e.addRow[bad].length} sel, tabel ${header.length} kolom; tidak ada yang ditulis. Judul kolom ada di blok rincian`, { untrusted: true, details: { edit: label, expectedHeader: header } });
       (tb.rows as Rec[]).push(...e.addRow.map((r) => ({ kind: "body", cells: r.map(cellOf) })));
+      // Swarm 1.2.8 row 34 (H-N15): tabel sesudah baris baru -> TABLE_OVERFLOW_LIKELY (isi tetap ditulis).
+      warnTableOverflow(tb as never, warn, label, isObj(tb.caption) ? inlineText(tb.caption) : header.join(" | "));
       touch({ kind: "chapter", key: String(t.ch.key) });
       return;
     }

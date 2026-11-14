@@ -56,9 +56,12 @@ describe("T-06 DATUM-25 detail: counted values, sources, remainder", () => {
   test("one value drawn by both a line kind and a glyph names both sources (rev 178/193 shape)", () => {
     // Case 04 carries glyphs TERUKUR, DITURUNKAN, PEMASOK; add an accent line (signal, same hex as the
     // DITURUNKAN glyph), an alert line and an ASUMSI glyph (alert), and a verify line (verd).
+    // Since 1.2.8 row 35c the line-style budget (DATUM-25L, max 3 kinds when a node has a mark) is checked
+    // first, so the accent line replaces the control line (kinds: data, verify, accent) and the figure
+    // still reaches the DATUM-25 colour refusal.
     const s = spec((x: any) => {
       SIX(x);
-      x.edges[1].kind = "accent";
+      x.edges[5].kind = "accent";
       x.legend.push("accent = jalur utama");
     });
     const msg = refusal(s);

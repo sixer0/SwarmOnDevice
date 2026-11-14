@@ -1,0 +1,16 @@
+{
+  "about": "Swarm 1.2.8 row 53a, AT-HD35 (01f §1.4, N8-245): notation sets with overlap acceptance (D-V1). Synthetic: filler labels only. `shapes` are the node shapes n1..nN in order; the test builds a flow spec around them (chain n1 -> n2 -> ... with labelled edges, every diamond gets two labelled exits). `expect` is the DATUM-35 verdict; `dialects` the message entries in order when refused.",
+  "base_case": {
+    "name": "stadium + hexagon + diamond + parallelogram (BASE: refused, 3 entries for 2 dialects)",
+    "shapes": ["stadium", "hexagon", "diamond", "parallelogram"],
+    "expect": "valid"
+  },
+  "cases": [
+    { "name": "stadium + hexagon + diamond", "shapes": ["stadium", "hexagon", "diamond"], "expect": "valid", "common": ["ISO 5807"] },
+    { "name": "event_start + diamond + task", "shapes": ["event_start", "diamond", "task"], "expect": "valid", "common": ["BPMN"], "after": "VIS-3 (row 54, plan I-3)" },
+    { "name": "stadium + task", "shapes": ["stadium", "task"], "expect": "DATUM-35", "message": "ISO 5807 (n1: stadium); BPMN (n2: task)" },
+    { "name": "parallelogram + gateway_exclusive", "shapes": ["parallelogram", "gateway_exclusive"], "expect": "DATUM-35", "message": "ISO 5807 (n1: parallelogram); BPMN (n2: gateway_exclusive)" },
+    { "name": "doubled + stadium", "shapes": ["doubled", "stadium"], "expect": "DATUM-35", "message": "UML component (n1: doubled); ISO 5807 (n2: stadium)" },
+    { "name": "box + cylinder + annotation", "shapes": ["box", "cylinder", "annotation"], "expect": "valid", "common": [] }
+  ]
+}

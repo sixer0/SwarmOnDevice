@@ -225,6 +225,9 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
       return window.api.revealPath(path)
     },
 
+    // 1.2.8 row 42c (AC-OBSf, N8-116): the memory view's one Obsidian action
+    openObsidianNote: (hubPath: string) => window.api.openObsidianNote(hubPath),
+
     storage,
     draftStore: createDraftStore({
       get: window.api.draftGet,

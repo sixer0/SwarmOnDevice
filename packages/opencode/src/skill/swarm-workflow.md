@@ -12,7 +12,7 @@ Agents. Delegate a step with the task tool. Pick the agent by the kind of work:
 |---|---|---|---|
 | planner | intent, blueprint, analysis, spec; no code changes | thinker | the request is unclear, large or needs a design |
 | coder | implement, fix, refactor, make its checks pass | worker | a row changes code or config |
-| verifier | check finished work against its criteria, review, run tests; never edits | thinker | a row is finished; always the last rows |
+| verifier | check finished work against its criteria, review, run tests; edits no code, writes only Markdown after asking | thinker | a row is finished; always the last rows |
 | data-collector | read and digest the person's own files and documents | worker-fast | the inputs are the person's files |
 | explore | find files and code in this codebase | worker-fast | you need to know where something lives |
 | document-writer | DOCX, PDF, XLSX or PPTX in the house style | worker | the output is an office document |
@@ -112,8 +112,9 @@ Return: status complete, blocked or needs-review; files created or changed; the 
 ## 7. Close
 
 1. With studio_mission_get, check that each row's status matches the work actually done. A skipped step is dropped with a note saying why. Never drop a row to get past a gate.
-2. Set the mission done (mission-control step 6).
-3. Write docs/<task>/10_report/report.md and give the person the same report: what was done, the checks and their results, the decisions made on their behalf, the files created or changed, and what is still open.
+2. Write docs/<task>/10_report/report.md and give the person the same report: what was done, the checks and their results, the decisions made on their behalf, the files created or changed, and what is still open.
+3. After the final report: write one mission index entry with remember {kind: "index", missionId} in the format "YYYY-MM-DD <mission-id> | <outcome> | triggers: k1, k2, k3 | <report path>" (one line, <= 300 characters), then close the mission as done. A done close without it is refused (MEMORY_INDEX_MISSING).
+4. Set the mission done (mission-control step 6).
 
 ## docs/ folder (kept light)
 

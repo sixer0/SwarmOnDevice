@@ -1,0 +1,113 @@
+{
+  "$comment": "Swarm 1.2.8 row 55 (AC-VIS2a, AT-V2-phases-v, register N8-374 / N8-475). Synthetic labels only. Same nodes and edges as vis2_phases_h.json with lane_orientation vertical (lanes are columns, phases are rows).",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "swimlane",
+    "id": "9.22",
+    "title": "Gambar sintetis lajur berfase tegak.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "lane_orientation": "vertical",
+    "phases": [
+      {
+        "id": "f1",
+        "label": "Fase 1"
+      },
+      {
+        "id": "f2",
+        "label": "Fase 2"
+      },
+      {
+        "id": "f3",
+        "label": "Fase 3"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f1"
+        }
+      },
+      {
+        "id": "b",
+        "label": "Cek B",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f1"
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "lane": "Lajur 3",
+          "phase": "f2"
+        }
+      },
+      {
+        "id": "d",
+        "label": "Langkah D",
+        "class": {
+          "lane": "Lajur 1",
+          "phase": "f2"
+        }
+      },
+      {
+        "id": "e",
+        "label": "Langkah E",
+        "class": {
+          "lane": "Lajur 2",
+          "phase": "f3"
+        }
+      },
+      {
+        "id": "f",
+        "label": "Langkah F",
+        "class": {
+          "lane": "Lajur 3",
+          "phase": "f3"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "serah"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "control",
+        "label": "ya"
+      },
+      {
+        "from": "c",
+        "to": "d",
+        "kind": "control",
+        "label": "kirim"
+      },
+      {
+        "from": "d",
+        "to": "e",
+        "kind": "control",
+        "label": "teruskan"
+      },
+      {
+        "from": "e",
+        "to": "f",
+        "kind": "control",
+        "label": "selesai"
+      }
+    ]
+  }
+}

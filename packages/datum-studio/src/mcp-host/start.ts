@@ -37,6 +37,8 @@ export const TEMPLATES_LOG_FILE = "datum-studio-templates.jsonl"
 /** Base URL of the in-process API. Port 1 (tcpmux): even a stray real fetch would find nothing. */
 export const LOCAL_API_BASE_URL = "http://127.0.0.1:1"
 const TOKEN_RE = /^[0-9a-fA-F]{64}$/
+/** 1.2.8 row 45b: = desktop protocol.ts isHostCommand (row 45c): 64 lowercase hex. */
+const MISSION_CONTROL_KEY_RE = /^[0-9a-f]{64}$/
 
 export type HostLogLevel = "info" | "warn" | "error"
 
@@ -44,6 +46,11 @@ export type HostLogLevel = "info" | "warn" | "error"
 export interface StudioHostServerOptions {
   store: { close(): Promise<void> } & object
   token: string
+  /**
+   * 1.2.8 row 45b (SR8-05; C35 contract with desktop row 45c): the per-launch Mission Control key (64 hex), from the
+   * host start message only; never from env or a file, never logged. Absent: no session is attested.
+   */
+  missionControlKey?: string
   hostname: "127.0.0.1"
   port: number
   log: (level: HostLogLevel, source: string, message: string, context?: Record<string, unknown>) => void
@@ -70,6 +77,9 @@ export class HostConfigError extends Error {
 export async function startStudioHostServer(opts: StudioHostServerOptions): Promise<StudioHostServer> {
   if (opts.hostname !== "127.0.0.1") throw new HostConfigError("hostname must be 127.0.0.1")
   if (typeof opts.token !== "string" || !TOKEN_RE.test(opts.token)) throw new HostConfigError("token must be 32 random bytes as hex")
+  if (opts.missionControlKey !== undefined && (typeof opts.missionControlKey !== "string" || !MISSION_CONTROL_KEY_RE.test(opts.missionControlKey) || opts.missionControlKey === opts.token)) {
+    throw new HostConfigError("missionControlKey must be 32 random bytes as hex, distinct from the token")
+  }
   if (!Number.isInteger(opts.port) || opts.port < 0 || opts.port > 65535) throw new HostConfigError("port must be 0..65535")
   if (getStudioStore() !== (opts.store as unknown)) throw new HostConfigError("the store passed is not the installed store (call openHostStore first)")
   const storeRoot = process.env.STUDIO_WORKSPACE_ROOT?.trim() ?? ""
@@ -128,8 +138,9 @@ export async function startStudioHostServer(opts: StudioHostServerOptions): Prom
   const endpoint = await startEndpoint({
     port: opts.port,
     token: opts.token,
+    ...(opts.missionControlKey !== undefined ? { missionControlKey: opts.missionControlKey } : {}),
     log: (rec) => write((rec.level as HostLogLevel) ?? "info", "datum-studio-host.http", String(rec.event ?? "event"), rec),
-    openSession: ({ sessionId, agentId, callerCwd, callerSession }) => {
+    openSession: ({ sessionId, agentId, callerCwd, callerSession, attested }) => {
       let root: string
       try {
         root = resolveSessionRoot(callerCwd, facts)
@@ -150,7 +161,7 @@ export async function startStudioHostServer(opts: StudioHostServerOptions): Prom
         root,
       )
       const api = createLocalStudioApi({ baseUrl: config.baseUrl, secret, agentId, routes: LOCAL_ROUTES, fileRoot: root })
-      const server = createHostMcpServer({ config, fetchImpl: api.fetch, session: { sessionId, agentId, fileRoot: root, ...(callerSessionOf(callerSession) ? { callerSession: callerSessionOf(callerSession) } : {}) }, extensions, repoRoot: REPO_ROOT, log: lineLog })
+      const server = createHostMcpServer({ config, fetchImpl: api.fetch, session: { sessionId, agentId, fileRoot: root, ...(callerSessionOf(callerSession) ? { callerSession: callerSessionOf(callerSession) } : {}), ...(attested === true ? { attested: true as const } : {}) }, extensions, repoRoot: REPO_ROOT, log: lineLog })
       let closed = false
       return {
         server,

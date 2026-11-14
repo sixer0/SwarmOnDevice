@@ -193,3 +193,193 @@ export function nudgeRoutes(input: readonly Pt[][], ends: ReadonlyArray<readonly
   }
   return { paths: moved ? paths : input.map((p) => [...p]), moved };
 }
+
+// ------------------------------------------------------------------ Swarm 1.2.8 row 56d: runs off container rules
+/**
+ * Row 56d (C134 G3-07): a container rule of a swimlane frame as `build/svg.ts` draws it (lane rules, phase separators,
+ * pool borders, pool head and lane header rules): `vertical` = a line x = `c` from `lo` to `hi` (y), else y = `c` (x).
+ */
+export interface RouteRule {
+  vertical: boolean;
+  c: number;
+  lo: number;
+  hi: number;
+}
+
+/** Row 56d: least distance (mm) between a connector run and a parallel container rule it lies along. */
+export const RULE_CLEAR_MM = 1.0;
+/** Row 56d: a run found on a rule moves this far off it (the rule stays visible beside the line). */
+export const RULE_OFFSET_MM = 1.5;
+/** Row 56d: least visible line kept before the arrowhead when a run moves (the default head 3.2 mm + 1 mm, as 57c). */
+const RULE_HEAD_RUN_MM = 4.2;
+
+const frameRules = new WeakMap<object, RouteRule[]>();
+
+/** Row 56d: the swimlane frame fields this module reads (`layout-b/swimlane.ts` SwimFrame). */
+interface RuleFrame {
+  orientation: "horizontal" | "vertical";
+  lanes: ReadonlyArray<{ lo: number; hi: number }>;
+  phases: ReadonlyArray<{ lo: number; hi: number }>;
+  top: number;
+  headBottom: number;
+  bottom: number;
+  gutter: number;
+  pools?: ReadonlyArray<{ lo: number; hi: number; lanes: number[] }>;
+  poolHead?: number;
+}
+
+/**
+ * Row 56d (C134 G3-07): record the container rules of a placed swimlane sheet (`build/place.ts`), from its frame and
+ * its horizontal lane boxes, in the positions `build/svg.ts` `laneDecorSvg` / `swimFrameSvg` / `swimPoolsSvg` draw them.
+ * `half` = half the pool border stroke. A sheet without a frame has no rules.
+ */
+export function setRouteRules(sheet: object, f: RuleFrame | undefined, lanes: ReadonlyArray<{ y: number; h: number }>, W: number, half: number): void {
+  if (!f) return;
+  const r: RouteRule[] = [];
+  const v = (c: number, lo: number, hi: number) => r.push({ vertical: true, c, lo, hi });
+  const h = (c: number, lo: number, hi: number) => r.push({ vertical: false, c, lo, hi });
+  if (f.orientation === "horizontal") {
+    f.phases.forEach((p, i) => i > 0 && v(p.lo, f.top, f.bottom));
+    if (f.pools) {
+      const strip = f.poolHead ?? 0;
+      for (const p of f.pools) {
+        h(p.lo, 0, W);
+        h(p.hi, 0, W);
+        v(half, p.lo, p.hi);
+        v(W - half, p.lo, p.hi);
+        v(strip, p.lo, p.hi);
+        v(f.gutter, p.lo, p.hi);
+        p.lanes.forEach((li, j) => j > 0 && h((f.lanes[p.lanes[j - 1]].hi + f.lanes[li].lo) / 2.0, strip, W));
+      }
+    } else {
+      for (const ln of lanes) {
+        h(ln.y, 0, W);
+        if (f.gutter) v(f.gutter, ln.y, ln.y + ln.h);
+      }
+    }
+  } else {
+    f.phases.forEach((p, i) => i > 0 && h(p.lo, 0, W));
+    if (f.pools) {
+      const head = f.poolHead ?? f.top;
+      for (const p of f.pools) {
+        v(p.lo, f.top, f.bottom);
+        v(p.hi, f.top, f.bottom);
+        h(f.top + half, p.lo, p.hi);
+        h(f.bottom, p.lo, p.hi);
+        h(head, p.lo, p.hi);
+        p.lanes.forEach((li, j) => j > 0 && v(f.lanes[li].lo, head, f.bottom));
+      }
+    } else {
+      for (const ln of f.lanes) {
+        if (ln.lo > 1e-6) v(ln.lo, f.top, f.bottom);
+        h(f.headBottom, ln.lo, ln.hi);
+      }
+    }
+  }
+  frameRules.set(sheet, r);
+}
+
+/** Row 56d: the container rules recorded for `sheet` (empty = none). */
+export function routeRulesOf(sheet: object): readonly RouteRule[] {
+  return frameRules.get(sheet) ?? [];
+}
+
+/** Row 56d: maximal axis-parallel runs [first, last] point index of a polyline (zero-length steps join the run). */
+function axisRuns(P: readonly Pt[]): Array<{ a: number; b: number; vertical: boolean }> {
+  const out: Array<{ a: number; b: number; vertical: boolean }> = [];
+  let a = 0;
+  let vertical: boolean | null = null;
+  for (let i = 0; i + 1 < P.length; i++) {
+    const dx = Math.abs(P[i + 1][0] - P[i][0]);
+    const dy = Math.abs(P[i + 1][1] - P[i][1]);
+    if (dx < EPS && dy < EPS) continue;
+    const vert = dx < EPS ? true : dy < EPS ? false : null;
+    if (vert === null) return []; // a diagonal route (straight / curved style): not handled
+    if (vertical === null) vertical = vert;
+    else if (vert !== vertical) {
+      out.push({ a, b: i, vertical });
+      a = i;
+      vertical = vert;
+    }
+  }
+  if (vertical !== null) out.push({ a, b: P.length - 1, vertical });
+  return out;
+}
+
+/**
+ * Row 56d (C134 G3-07, register N8-C25): a connector run that lies on a container rule (lane rule, phase separator, pool
+ * border; within `RULE_CLEAR_MM`, overlapping it by more than 1 mm) hides the rule and makes lane membership ambiguous.
+ * Each such inner run (not the first or last run, which leave and enter the nodes) moves `RULE_OFFSET_MM` off the rule,
+ * to the side where the route stays valid: its neighbouring runs keep their direction, the source run keeps
+ * `min(own, 2 mm)`, the run into the head keeps `min(own, RULE_HEAD_RUN_MM)`, no node other than the ends is crossed,
+ * no parallel rule comes within `RULE_CLEAR_MM`, and the measured conflicts (crossings, collinear runs) do not rise.
+ * Collinear points of a neighbouring run passed by the move collapse onto the new corner. `skip[i]` = keep path i.
+ * No rules: the input is returned as it is (byte-identical for every non-swimlane figure).
+ */
+export function offRules(
+  input: readonly Pt[][],
+  rules: readonly RouteRule[],
+  ends: ReadonlyArray<readonly [string, string]>,
+  boxes: readonly Box[],
+  W: number,
+  skip: readonly boolean[],
+): Pt[][] {
+  if (!rules.length) return input as Pt[][];
+  let paths = input.map((p) => [...p]);
+  let base = score(paths);
+  for (let e = 0; e < paths.length; e++) {
+    if (skip[e]) continue;
+    const runs = axisRuns(paths[e]);
+    for (let r = 1; r + 1 < runs.length; r++) {
+      const P = paths[e];
+      const { a, b, vertical } = runs[r];
+      const k = vertical ? 0 : 1; // the run's fixed coordinate
+      const c = P[a][k];
+      const lo = Math.min(P[a][1 - k], P[b][1 - k]);
+      const hi = Math.max(P[a][1 - k], P[b][1 - k]);
+      if (hi - lo <= 1.0) continue;
+      const near = (x: number) => rules.filter((u) => u.vertical === vertical && Math.abs(u.c - x) < RULE_CLEAR_MM - 1e-9 && Math.min(u.hi, hi) - Math.max(u.lo, lo) > 1.0);
+      const on = near(c);
+      if (!on.length) continue;
+      const prev = runs[r - 1];
+      const next = runs[r + 1];
+      const cands = on.flatMap((u) => [u.c - RULE_OFFSET_MM, u.c + RULE_OFFSET_MM]).sort((x, y) => Math.abs(x - c) - Math.abs(y - c) || x - y);
+      let pick: { Q: Pt[]; sc: number } | null = null;
+      for (const nc of cands) {
+        if (near(nc).length) continue;
+        // neighbouring runs keep their direction and a visible length
+        const keeps = (from: number, min: number) => {
+          const d0 = c - P[from][k];
+          const d1 = nc - P[from][k];
+          return Math.sign(d0) === Math.sign(d1) && Math.abs(d1) >= Math.min(Math.abs(d0), min) - 1e-9;
+        };
+        if (!keeps(prev.a, prev.a === 0 ? 2.0 : 0.5) || !keeps(next.b, next.b === P.length - 1 ? RULE_HEAD_RUN_MM : 0.5)) continue;
+        const Q = [...P];
+        const set = (i: number): Pt => (k === 0 ? [nc, P[i][1]] : [P[i][0], nc]);
+        for (let i = a; i <= b; i++) Q[i] = set(i);
+        // collinear points of the neighbouring runs that the move passes collapse onto the corner
+        for (let i = prev.a + 1; i < a; i++) if ((P[i][k] - nc) * (P[prev.a][k] - nc) < 0 || Math.abs(P[i][k] - P[prev.a][k]) > Math.abs(nc - P[prev.a][k])) Q[i] = set(i);
+        for (let i = b + 1; i < next.b; i++) if ((P[i][k] - nc) * (P[next.b][k] - nc) < 0 || Math.abs(P[i][k] - P[next.b][k]) > Math.abs(nc - P[next.b][k])) Q[i] = set(i);
+        let ok = Q.every(([x, y]) => x >= -EPS && x <= W + EPS && y >= -EPS);
+        // no other node is crossed; the moved run itself also stays out of its own end nodes
+        for (let s = 0; ok && s + 1 < Q.length; s++) {
+          for (const n of boxes) {
+            const own = n.id === ends[e][0] || n.id === ends[e][1];
+            if ((!own || (s >= a && s < b)) && hitsBox(Q[s], Q[s + 1], n)) ok = false;
+          }
+        }
+        if (!ok) continue;
+        const trial = paths.map((p, i) => (i === e ? Q : p));
+        const sc = score(trial);
+        if (sc > base) continue;
+        pick = { Q, sc };
+        break;
+      }
+      if (pick) {
+        paths = paths.map((p, i) => (i === e ? pick!.Q : p));
+        base = pick.sc;
+      }
+    }
+  }
+  return paths;
+}

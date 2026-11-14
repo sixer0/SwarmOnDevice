@@ -47,7 +47,7 @@ import type {
   SessionLink,
 } from "./types.ts"
 import { ROW_DELIVERABLE_KEY, rowDeliverablesNotFinal } from "./output-gate.ts"
-import { assertActor, assertCheckpoint, assertDecisionAnswer, assertDecisionRequest, assertMessage, assertMissionSchema } from "./validate.ts"
+import { assertActor, assertCheckpoint, assertDecisionAnswer, assertDecisionRequest, assertMessage, assertMissionSchema, groupNameOk } from "./validate.ts"
 
 export interface MissionReader {
   get<T = Row>(sql: string, params?: readonly SqlParam[]): T | undefined
@@ -496,6 +496,9 @@ export class MissionStore {
     if (to === "done") {
       const open = tx.all<{ row_id: string }>("SELECT row_id FROM mission_row WHERE mission_id = ? AND status NOT IN ('done','dropped') ORDER BY ord", [mission]).map((r) => r.row_id)
       if (open.length > 0) throw err("MISSION_ROWS_OPEN", "rows are not done or dropped", { mission, rows: open })
+      // 1.2.8 row 39 (MEM-e): Swarm said this project's memory has no index entry for the mission (order: STATUS_TRANSITION
+      // -> MISSION_ROWS_OPEN -> MEMORY_INDEX_MISSING; a no-op move above is never checked).
+      if (opts?.memoryIndex?.missionId === mission && opts.memoryIndex.present === false) throw err("MEMORY_INDEX_MISSING", "no mission index entry in this project's memory", { mission })
     }
     let decision: string | null = null
     if (to === "cancelled") {
@@ -1009,8 +1012,8 @@ export class MissionStore {
     for (const r of req.blockingRows ?? []) this.rowDb(tx, mission, r)
     if (tx.get("SELECT 1 FROM mission_decision_request WHERE mission_id = ? AND request_id = ?", [mission, req.id])) throw err("DECISION_REQUEST_ID_TAKEN", "decision request id exists", { mission, request: req.id })
     tx.run(
-      "INSERT INTO mission_decision_request (mission_id, request_id, question, context, options, recommended, blocking_rows, status, requested_by, time_created) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)",
-      [mission, req.id, req.question, req.context ?? null, JSON.stringify(req.options), req.recommended ?? null, JSON.stringify(req.blockingRows ?? []), actor, tx.now],
+      "INSERT INTO mission_decision_request (mission_id, request_id, question, context, options, recommended, blocking_rows, status, requested_by, time_created, topic, proposal) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)",
+      [mission, req.id, req.question, req.context ?? null, JSON.stringify(req.options), req.recommended ?? null, JSON.stringify(req.blockingRows ?? []), actor, tx.now, req.topic ?? null, req.proposal ? JSON.stringify(req.proposal) : null],
     )
     this.event(tx, { mission, verb: "decision", actor, detail: { request: req.id, action: "request", blockingRows: req.blockingRows ?? [] } })
     this.afterWrite(tx, mission, opts)
@@ -1034,16 +1037,22 @@ export class MissionStore {
       text: answer.text ?? `${req.question} -> ${option.label} (${req.id})`.slice(0, 8000),
       ...(req.blockingRows && req.blockingRows.length > 0 ? { rows: req.blockingRows } : {}),
     }
+    // 1.2.8 row 45b (SR8-05, N8-461): the host passes the answering session's agent id and attestation; trusted store
+    // code without a session leaves both NULL (no label). An attestation without a session is not recorded.
+    const via = typeof answer.via === "string" && VIA_RE.test(answer.via) ? answer.via : null
+    const attested = via === null ? null : answer.attested === true ? 1 : 0
     this.insertDecision(tx, mission, decision, actor)
-    tx.run("UPDATE mission_decision_request SET status = 'answered', answer_option = ?, answered_by = ?, answer_decision_id = ?, time_closed = ? WHERE mission_id = ? AND request_id = ?", [
+    tx.run("UPDATE mission_decision_request SET status = 'answered', answer_option = ?, answered_by = ?, answer_decision_id = ?, time_closed = ?, answered_via = ?, answered_attested = ? WHERE mission_id = ? AND request_id = ?", [
       option.id,
       answer.by,
       decision.id,
       tx.now,
+      via,
+      attested,
       mission,
       requestId,
     ])
-    this.event(tx, { mission, verb: "decision", actor, decision: decision.id, detail: { request: requestId, action: "answer", option: option.id } })
+    this.event(tx, { mission, verb: "decision", actor, decision: decision.id, detail: { request: requestId, action: "answer", option: option.id, ...(via !== null ? { via, attested: attested === 1 } : {}) } })
     this.afterWrite(tx, mission, opts)
     const g = this.graph(tx, mission)
     const ready = new Set(readyRows(g.rows, g.deps, new Set(this.requestBlocks(tx, mission).keys())))
@@ -1060,6 +1069,44 @@ export class MissionStore {
     this.event(tx, { mission, verb: "decision", actor, detail: { request: requestId, action: "withdraw" } })
     this.afterWrite(tx, mission, opts)
     return this.getDecisionRequest(mission, requestId, tx)!
+  }
+
+  /**
+   * 1.2.8 row 45 (PROJ-b, N8-142): re-point a mission's project dir to a group folder one level below its current dir,
+   * only on an ANSWERED placement request of this mission (join/new; the option's group names the folder) or an
+   * answered tidy request (approve) of `approvalRef.tidyMission` whose proposal puts this mission in that group, and
+   * whose holder lives in the same parent folder. Anything else is PLACE_DECISION_UNANSWERED (N8-145). The disk fact
+   * (`<dir>/.swarm/group.json`) is the host's check (studio_mission_place). A closed mission may be placed (tidy lists
+   * existing missions). Setting the same dir again returns unchanged: true. OP20-7: no trigger guards project_dir; the
+   * 0003 CHECK (absolute) holds.
+   */
+  setProjectDir(tx: StoreTx, mission: string, dir: string, approvalRef: { request: string; tidyMission?: string }, opts?: MissionWriteOptions): { id: string; from: string; to: string; unchanged: boolean } {
+    const actor = this.actorOf(opts)
+    const m = this.missionRow(tx, mission)
+    const holder = approvalRef.tidyMission ?? mission
+    const refuse = (reason: string): never => {
+      throw err("PLACE_DECISION_UNANSWERED", `no answered placement decision moves this mission to ${dir}: ${reason}`, { mission, projectDir: dir, request: approvalRef.request, ...(approvalRef.tidyMission ? { tidyMission: approvalRef.tidyMission } : {}), reason })
+    }
+    const parent = m.project_dir === dir ? posix.dirname(dir) : m.project_dir
+    if (!posix.isAbsolute(dir) || posix.normalize(dir) !== dir || dir.endsWith("/") || posix.dirname(dir) !== parent) refuse("projectDir must be a folder directly inside the mission's project dir")
+    const group = posix.basename(dir)
+    if (!groupNameOk(group)) refuse("the folder name is not a group name")
+    const req = this.getDecisionRequest(holder, approvalRef.request, tx)
+    if (!req || req.status !== "answered" || !req.answer) refuse(`request ${approvalRef.request} of ${holder} is ${req?.status ?? "unknown"}`)
+    const answer = req!.answer!
+    if (approvalRef.tidyMission) {
+      const item = req!.topic === "project-tidy" && answer.option === "approve" ? req!.proposal?.find((x) => x.mission === mission) : undefined
+      if (!item || item.group !== group) refuse("the approved tidy proposal does not put this mission in that group")
+      if (this.missionRow(tx, holder).project_dir !== parent) refuse("the tidy mission lives in another folder")
+    } else {
+      const option = req!.topic === "project-placement" && (answer.option === "join" || answer.option === "new") ? req!.options.find((o) => o.id === answer.option) : undefined
+      if (!option || option.group !== group) refuse("the answer does not name that group")
+    }
+    if (m.project_dir === dir) return { id: mission, from: dir, to: dir, unchanged: true }
+    tx.run("UPDATE mission SET project_dir = ? WHERE id = ?", [dir, mission])
+    this.event(tx, { mission, verb: "decision", actor, decision: answer.decision, detail: { action: "place", request: approvalRef.request, ...(approvalRef.tidyMission ? { tidyMission: approvalRef.tidyMission } : {}), from: m.project_dir, to: dir } })
+    this.afterWrite(tx, mission, opts)
+    return { id: mission, from: m.project_dir, to: dir, unchanged: false }
   }
 
   getDecisionRequest(mission: string, requestId: string, tx?: MissionReader): DecisionRequest | null {
@@ -1463,12 +1510,18 @@ function findingOf(f: Row): MissionFinding {
   }
 }
 
+/** 1.2.8 row 45b: an answering session's agent id (= the host's X-Studio-Agent rule, http-server.ts AGENT_RE). */
+const VIA_RE = /^[A-Za-z0-9_.-]{1,40}$/
+
 function decisionRequestOf(r: Row): DecisionRequest {
   const blockingRows = JSON.parse(r.blocking_rows as string) as string[]
+  // 1.2.8 row 45b: topic and proposal have their own columns (migration 0008 moved row 45's options[0]["$request"]).
   return {
     id: r.request_id as string,
     question: r.question as string,
     ...(r.context ? { context: r.context as string } : {}),
+    ...(r.topic ? { topic: r.topic as DecisionRequest["topic"] & string } : {}),
+    ...(r.proposal ? { proposal: JSON.parse(r.proposal as string) as NonNullable<DecisionRequest["proposal"]> } : {}),
     options: JSON.parse(r.options as string) as DecisionRequest["options"],
     ...(r.recommended ? { recommended: r.recommended as string } : {}),
     blockingRows,
@@ -1476,7 +1529,7 @@ function decisionRequestOf(r: Row): DecisionRequest {
     requestedBy: r.requested_by as string,
     createdAt: iso(r.time_created as number)!,
     ...(r.time_closed !== null && r.time_closed !== undefined ? { closedAt: iso(r.time_closed as number)! } : {}),
-    ...(r.status === "answered" ? { answer: { option: r.answer_option as string, by: r.answered_by as "user" | "controller", decision: r.answer_decision_id as string } } : {}),
+    ...(r.status === "answered" ? { answer: { option: r.answer_option as string, by: r.answered_by as "user" | "controller", decision: r.answer_decision_id as string, ...(typeof r.answered_via === "string" ? { via: r.answered_via } : {}), ...(r.answered_attested !== null && r.answered_attested !== undefined ? { attested: Number(r.answered_attested) === 1 } : {}) } } : {}),
   }
 }
 

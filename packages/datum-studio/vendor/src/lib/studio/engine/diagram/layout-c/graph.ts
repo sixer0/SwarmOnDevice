@@ -79,10 +79,10 @@ function graphColumnPos(
   const p = pDefault <= pCap + 1e-9 ? pDefault : snapFloor(pCap, LX);
   if (p < LX * 3 - 1e-9) {
     throw diagramDefect(
-      `DATUM-37: ${cols.length} kolom graph tidak muat di ${W.toFixed(1)} mm ` +
+      `DATUM-37-sheet: ${cols.length} kolom graph tidak muat di ${W.toFixed(1)} mm ` +
         `(pitch tersedia ${pCap.toFixed(2)} mm di bawah lebar minimum simpul ${(LX * 3).toFixed(2)} mm)` +
         " — rapatkan col/row atau persempit label (P8, layout_graph)",
-      "DATUM-37",
+      "DATUM-37-sheet",
     );
   }
   const total = (cols.length - 1) * p + lastW;
@@ -235,10 +235,10 @@ function graphColumnPos(
       any = true;
     }
     throw diagramDefect(
-      `DATUM-37/ROWPACK: ${cols.length} kolom graph berbagi baris tidak muat di ` +
+      `DATUM-37-sheet/ROWPACK: ${cols.length} kolom graph berbagi baris tidak muat di ` +
         `${W.toFixed(1)} mm setelah dorong-kolom dan rapat-lebar (baris terlapar butuh ` +
         `${worst.toFixed(2)} mm) — beri row berbeda atau persempit label/sub (P8, layout_graph)`,
-      "DATUM-37",
+      "DATUM-37-sheet",
     );
   }
 
@@ -339,9 +339,9 @@ export function layoutGraphDetail(s: StudioDiagramV1, sheet: DiagramSheet): Grap
     const y = snap(L.top + r * rowPitch, L.y);
     if (adaptive && x + nw > L.W + 1e-6) {
       throw diagramDefect(
-        `DATUM-37: simpul ${n.id} (kolom graph ${c}) keluar lebar lembar (${x.toFixed(1)}..${(x + nw).toFixed(1)} dari ${L.W.toFixed(1)} mm) ` +
+        `DATUM-37-sheet: simpul ${n.id} (kolom graph ${c}) keluar lebar lembar (${x.toFixed(1)}..${(x + nw).toFixed(1)} dari ${L.W.toFixed(1)} mm) ` +
           "setelah penempatan kolom (P8, layout_graph)",
-        "DATUM-37",
+        "DATUM-37-sheet",
       );
     }
     nodes[n.id] = { x, y, w: nw, h: nh };

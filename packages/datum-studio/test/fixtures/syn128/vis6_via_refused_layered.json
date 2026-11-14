@@ -1,0 +1,116 @@
+{
+  "$comment": "Swarm 1.2.8 row 56b (AC-VIS6, D-V3, register N8-377). Synthetic labels only. via in auto-laid-out families is refused P3-via-family: `layered` and `ranked` (flow + direction).",
+  "layered": {
+    "$schema": "studio.diagram/v1",
+    "family": "layered",
+    "id": "9.7",
+    "title": "Gambar sintetis lapis via.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "tier": 1
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "tier": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "satu"
+      },
+      {
+        "from": "a",
+        "to": "c",
+        "kind": "control",
+        "label": "dua",
+        "via": [
+          {
+            "col": 2,
+            "row": 3
+          }
+        ]
+      }
+    ]
+  },
+  "ranked": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.7",
+    "title": "Gambar sintetis alur berperingkat via.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "direction": "TB",
+    "nodes": [
+      {
+        "id": "a",
+        "label": "Langkah A",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "b",
+        "label": "Langkah B",
+        "class": {
+          "tier": 1
+        }
+      },
+      {
+        "id": "c",
+        "label": "Langkah C",
+        "class": {
+          "tier": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "a",
+        "to": "b",
+        "kind": "control",
+        "label": "satu"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "kind": "control",
+        "label": "dua",
+        "via": [
+          {
+            "col": 2,
+            "row": 3
+          }
+        ]
+      }
+    ]
+  }
+}

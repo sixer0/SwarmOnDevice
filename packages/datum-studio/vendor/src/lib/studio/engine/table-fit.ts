@@ -25,8 +25,12 @@ const PROP_EM_MIN = 0.42;
 const HEADER_PT = 7;
 const HEADER_SPACING_PT = 0.6;
 const UNIT_PT = 7;
-const TEXT_PT = 7.5;
-const COLUMN_GAP_MM = 2.5;
+/** Cell text size (pt). Exported so the write-time overflow estimate (write-content.ts) reads the same value. */
+export const TEXT_PT = 7.5;
+/** Gap between table columns (mm). Exported for the same reason. */
+export const COLUMN_GAP_MM = 2.5;
+/** Default `type.scale.tableNumerals.size` (pt). Exported for the same reason. */
+export const TABLE_NUMERALS_PT_DEFAULT = 7.8;
 const FALLBACK_SPAN_MM = 166;
 
 function num(p: ParamMap, key: string, dflt: number): number {
@@ -181,7 +185,7 @@ type TableShape = Pick<TableBlock, "columns" | "rows">;
 function scanColumns(t: TableShape, params: ParamMap, budgetOf: (ci: number) => number): { columnsMm: number[]; at: Array<{ row: number; text: string } | null> } {
   const cols: readonly ColumnSpec[] = Array.isArray(t.columns) ? t.columns : [];
   const rows: readonly Row[] = Array.isArray(t.rows) ? t.rows : [];
-  const monoPt = num(params, "type.scale.tableNumerals.size", 7.8);
+  const monoPt = num(params, "type.scale.tableNumerals.size", TABLE_NUMERALS_PT_DEFAULT);
   const columnsMm = cols.map(() => 0);
   const at: Array<{ row: number; text: string } | null> = cols.map(() => null);
   rows.forEach((r, ri) => {

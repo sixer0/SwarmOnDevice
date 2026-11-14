@@ -72,6 +72,19 @@ export interface HostToolSession {
    * taken from the initialize header: it is judged per call, so a mode switched off holds from the next call.
    */
   autonomousMode?: true
+  /**
+   * 1.2.8 row 39 (MEM-e, N8-467): Swarm's own lookup of the mission index entry for a `done` close, from this call's
+   * `params._meta["studio/memoryIndex"]` (N8-012). Read only from agent id `swarm` and only when well-formed; anything
+   * else is ignored, never refused. A compliance check, not access control (SR8-22, R20-C05).
+   */
+  memoryIndex?: { missionId: string; present: boolean }
+  /**
+   * 1.2.8 row 45b (SR8-05, AC-SEC05): `true` only when this MCP session's initialize carried the per-launch Mission
+   * Control key (`x-swarm-mission-control-key`, N8-459) and it matched (timing-safe). Set once per session by the host
+   * endpoint, never from a call's `_meta` or arguments. Person-only host tools (`studio_mission_place`) refuse a session
+   * without it (SESSION_NOT_ATTESTED, N8-460); decision answers record it (N8-461).
+   */
+  attested?: true
 }
 
 /** Row 188: `_meta` key of a tools/call that names the caller's session. */
@@ -81,18 +94,34 @@ const CALLER_SESSION_RE = /^[A-Za-z0-9_.:-]{1,128}$/
 /** Row 197 (S194-01): `_meta` key of a tools/call that says Swarm's autonomous mode is on for the calling session. */
 export const AUTONOMOUS_META = "studio/autonomous"
 
+/** 1.2.8 row 39 (N8-012): `_meta` key Swarm sets on a `done` close: `{ missionId, present }` from its project memory. */
+export const MEMORY_INDEX_META = "studio/memoryIndex"
+/** The mission id pattern (mission/schemas.ts MISSION_ID_PATTERN, pinned equal by test N8-348). */
+const MEMORY_INDEX_MISSION_RE = /^\d{4}-\d{2}-\d{2}[_-][a-z0-9][a-z0-9_-]{0,80}$/
+
+/** Row 39: a well-formed `studio/memoryIndex` value, from Swarm only; undefined otherwise (ignored, never refused). */
+export function memoryIndexOf(agentId: string, raw: unknown): HostToolSession["memoryIndex"] {
+  if (agentId !== "swarm" || raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined
+  const { missionId, present } = raw as Record<string, unknown>
+  if (typeof missionId !== "string" || !MEMORY_INDEX_MISSION_RE.test(missionId) || typeof present !== "boolean") return undefined
+  return { missionId, present }
+}
+
 /**
  * The session of one call: a well-formed `_meta` caller session wins over the one given at initialize. The autonomous
- * mark comes from this call's `_meta` only (exactly `true`); a base session never carries it into another call.
+ * mark comes from this call's `_meta` only (exactly `true`); a base session never carries it into another call. The
+ * memory index lookup (row 39) is per call too.
  */
 export function sessionForCall(base: HostToolSession, meta: unknown): HostToolSession {
   const m = meta !== null && typeof meta === "object" ? (meta as Record<string, unknown>) : {}
-  const { autonomousMode: _drop, ...rest } = base
+  const { autonomousMode: _drop, memoryIndex: _dropIndex, ...rest } = base
   const raw = m[CALLER_SESSION_META]
+  const memoryIndex = memoryIndexOf(base.agentId, m[MEMORY_INDEX_META])
   return {
     ...rest,
     ...(typeof raw === "string" && CALLER_SESSION_RE.test(raw) ? { callerSession: raw } : {}),
     ...(m[AUTONOMOUS_META] === true ? { autonomousMode: true as const } : {}),
+    ...(memoryIndex ? { memoryIndex } : {}),
   }
 }
 

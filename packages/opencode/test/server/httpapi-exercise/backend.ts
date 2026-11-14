@@ -1,3 +1,6 @@
+import fs from "fs/promises"
+import os from "os"
+import path from "path"
 import { ConfigProvider, Effect, Layer } from "effect"
 import { HttpRouter } from "effect/unstable/http"
 import { parse } from "./assertions"
@@ -17,13 +20,45 @@ export function call(scenario: ActiveScenario, ctx: SeededContext<unknown>, opti
   )
 }
 
+// Auth probes run without a scenario project. Without a directory the server falls back to
+// process.cwd(), which is the checkout itself: a valid POST /experimental/worktree probe then
+// created a real `swarm/<slug>` branch and worktree in the developer's repository on every
+// test:httpapi run (1.2.8 row 44f). Every probe therefore names a throwaway git repository.
+let probeRepository: Promise<string> | undefined
+
+function authProbeDirectory() {
+  return (probeRepository ??= (async () => {
+    const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "opencode-httpapi-probe-")))
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(["git", ...args], { cwd: dir, stdout: "ignore", stderr: "pipe" })
+      if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`)
+    }
+    git("init", "--quiet")
+    git("config", "core.fsmonitor", "false")
+    git("config", "commit.gpgsign", "false")
+    git("config", "user.email", "test@opencode.test")
+    git("config", "user.name", "Test")
+    git("commit", "--quiet", "--allow-empty", "-m", "httpapi auth probe root")
+    return dir
+  })())
+}
+
+async function removeAuthProbeDirectory() {
+  const pending = probeRepository
+  probeRepository = undefined
+  if (!pending) return
+  const dir = await pending.catch(() => undefined)
+  if (dir) await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined)
+}
+
 export function callAuthProbe(scenario: ActiveScenario, credentials: "missing" | "valid" = "missing") {
   return Effect.promise(async () => {
     const controller = new AbortController()
+    const directory = await authProbeDirectory()
     return Promise.race([
       Promise.resolve(
         app(await runtime(), { auth: { password: "secret" } }).request(
-          toAuthProbeRequest(scenario, credentials, controller.signal),
+          toAuthProbeRequest(scenario, credentials, controller.signal, directory),
         ),
       ).then((response) => capture(response, scenario.capture)),
       Bun.sleep(1_000).then(() => {
@@ -48,6 +83,7 @@ export async function disposeApps() {
   const apps = Object.values(appCache)
   for (const key of Object.keys(appCache)) delete appCache[key]
   await Promise.all(apps.flatMap((app) => (app === undefined ? [] : [app.dispose()])))
+  await removeAuthProbeDirectory()
 }
 
 function app(modules: Runtime, options: CallOptions) {
@@ -86,13 +122,19 @@ function toRequest(scenario: ActiveScenario, ctx: SeededContext<unknown>) {
   })
 }
 
-function toAuthProbeRequest(scenario: ActiveScenario, credentials: "missing" | "valid", signal: AbortSignal) {
+function toAuthProbeRequest(
+  scenario: ActiveScenario,
+  credentials: "missing" | "valid",
+  signal: AbortSignal,
+  directory: string,
+) {
   const spec = scenario.authProbe ?? {
     path: authProbePath(scenario.path),
     body: scenario.method === "GET" ? undefined : {},
   }
   const headers = {
     ...(spec.body === undefined ? {} : { "content-type": "application/json" }),
+    "x-opencode-directory": directory,
     ...spec.headers,
     ...(credentials === "valid" ? { authorization: basic("opencode", "secret") } : {}),
   }

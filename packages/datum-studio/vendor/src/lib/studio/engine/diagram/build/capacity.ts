@@ -17,6 +17,7 @@
 import { StudioEngineError } from "../../../contract/errors";
 import type { StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect, LATTICE_X } from "../core";
+import { STROKE_PRIMARY } from "../core/tokens";
 import { GRAPH_EDGE_INSET_MM, footReserveMm } from "../core/sheet";
 import { flowDirectionOf, flowRankOverload, flowRanks } from "../layout-a/flow";
 import { DiagramOverCapacity, type FigureOverCapacityDetails } from "../../figure-capacity";
@@ -59,7 +60,17 @@ export function capacityAction(s: StudioDiagramV1, checkId: string): string | nu
       ? `rapatkan class.col (ada kolom kosong di antara kolom ${cols.join(", ")}); maks ${maxCols} kolom pada ${W} mm`
       : `maks ${maxCols} kolom pada ${W} mm; bagi menjadi dua gambar atau pakai layered`;
   }
-  if (fam === "swimlane") return `kurangi simpul per lajur, bagi lajur, atau pecah menjadi 2 diagram (lebar ${W} mm)`;
+  if (fam === "swimlane") {
+    // Swarm 1.2.8 row 57c (C71 R3, C116 D55b-1): with phases the remedy names the phase; horizontal pools (2 x gutter of
+    // header) point to vertical pools. A swimlane without phases or pools keeps today's text.
+    const phases = Array.isArray(s.phases) && s.phases.length > 0;
+    const pools = Array.isArray(s.pools) && s.pools.length > 0;
+    const vertical = (s as { lane_orientation?: unknown }).lane_orientation === "vertical";
+    if (!phases && !pools) return `kurangi simpul per lajur, bagi lajur, atau pecah menjadi 2 diagram (lebar ${W} mm)`;
+    const per = phases ? "kurangi simpul per lajur atau per fase, kurangi fase" : "kurangi simpul per lajur, bagi lajur";
+    const alt = pools && !vertical ? ', pakai lane_orientation "vertical" (kolam tegak memuat lebih banyak kolom)' : "";
+    return `${per}${alt}, atau pecah menjadi 2 diagram (lebar ${W} mm)`;
+  }
   if (fam === "sld") return `maks 3 cabang per tingkat pada ${W} mm; pecah rel atau bagi menjadi dua gambar`;
   // Swarm 1.2.6 row 46 (T-11): the flow text names `direction` (ranked flow) beside per_row.
   if (fam === "flow") {
@@ -124,6 +135,44 @@ function graphColumns(s: StudioDiagramV1): { cols: number[]; span: number; maxCo
   return { cols, span, maxCols, width: W };
 }
 
+/**
+ * Swarm 1.2.8 row 55g (C140, G3-21): vertical pools. The binding quantity is the lane COLUMNS across the width (one per
+ * (pool, lane), swimlane.ts `poolLanes`), not nodes per lane row: lanes are keyed per pool, never by name across pools. The
+ * columns that fit use the budget of swimlane.ts `fitPoolColumns` (>= 2 lattice per column, a lattice gap between columns,
+ * 2 lattice between pools, half a lattice inside the frame, `L.W - STROKE_PRIMARY / 2`). The shown max is kept below the
+ * measured count: the figure was refused, so a line reading "maks N ... terukur N" would be false.
+ */
+function verticalPoolLoad(s: StudioDiagramV1): { columns: number; pools: number; maxColumns: number; width: number } {
+  const W = Number(s.width_mm) || 166;
+  const cols = new Map<string, string[]>();
+  for (const p of s.pools ?? []) cols.set(String(p.id), []);
+  for (const n of s.nodes ?? []) {
+    const c = (n.class ?? {}) as Record<string, unknown>;
+    const pid = String(c.pool);
+    const ln = Object.prototype.hasOwnProperty.call(c, "lane") && c.lane !== undefined ? String(c.lane) : "";
+    const a = cols.get(pid);
+    if (a && !a.includes(ln)) a.push(ln);
+  }
+  const perPool = [...cols.values()].map((a) => Math.max(1, a.length));
+  const columns = perPool.reduce((a, b) => a + b, 0);
+  const startX = Array.isArray(s.phases) && s.phases.length > 0 ? LATTICE_X * 3 : 0;
+  let fit = 0;
+  for (let k = 1; k <= columns; k++) {
+    // the first k columns, pool by pool
+    let left = k;
+    let breaks = -1;
+    for (const c of perPool) {
+      if (left <= 0) break;
+      breaks++;
+      left -= c;
+    }
+    const room = W - STROKE_PRIMARY / 2 - (startX + LATTICE_X + (k - 1) * LATTICE_X + Math.max(0, breaks) * LATTICE_X * 2 + LATTICE_X / 2);
+    if (room + 1e-6 >= LATTICE_X * 2 * k) fit = k;
+    else break;
+  }
+  return { columns, pools: perPool.length, maxColumns: Math.max(1, Math.min(fit, columns - 1)), width: W };
+}
+
 /** Swimlane: busiest lane vs the nodes one wrapped lane row holds (layout-b/swimcap.ts `perRow`). */
 function swimlaneLoad(s: StudioDiagramV1): { lane: string; count: number; perRow: number; width: number } {
   const W = Number(s.width_mm) || 166;
@@ -136,7 +185,14 @@ function swimlaneLoad(s: StudioDiagramV1): { lane: string; count: number; perRow
   let count = 0;
   for (const [k, v] of per) if (v > count) [lane, count] = [k, v];
   // gutter 3 kisi + 1 kisi tepi, simpul 3 kisi + 1 kisi jarak (swimlane.ts gutter, swimcap.ts x0/pitch)
-  const perRow = Math.max(1, Math.floor((W - LATTICE_X * 4 + LATTICE_X) / (LATTICE_X * 4) + 1e-9));
+  let perRow = Math.max(1, Math.floor((W - LATTICE_X * 4 + LATTICE_X) / (LATTICE_X * 4) + 1e-9));
+  // Swarm 1.2.8 row 55d (C135 R3): horizontal pools put a second gutter (the pool header strip, 3 lattice) left of the lane
+  // headers (swimlane.ts startX = 2 x gutter) and keep half a lattice column inside the pool frame (the DATUM-37-sheet
+  // limit W - x/2). Without this the line read "maks 2 ... terukur 2" next to a refusal. Figures
+  // without pools keep the formula above (vertical pools: see verticalPoolLoad, row 55g).
+  if (Array.isArray(s.pools) && s.pools.length > 0 && s.lane_orientation !== "vertical") {
+    perRow = Math.max(1, Math.floor((W - LATTICE_X * 6 - LATTICE_X / 2 + LATTICE_X) / (LATTICE_X * 4) + 1e-9));
+  }
   return { lane, count, perRow, width: W };
 }
 
@@ -170,9 +226,16 @@ export function overCapacityOf(e: unknown, s: StudioDiagramV1, note?: string): D
       suggestion = o.suggestion;
     }
   } else if (checkId.startsWith("DATUM-37") && fam === "swimlane") {
-    const l = swimlaneLoad(s);
-    m = { quantity: "simpul per baris lajur", unit: "simpul", measured: l.count, limit: l.perRow };
-    suggestion = `${action}; lajur "${l.lane}" memuat ${l.count} simpul, maks ${l.perRow} per baris lajur pada ${l.width} mm (bungkus lajur hanya dipakai bila hasilnya bersih)`;
+    if (Array.isArray(s.pools) && s.pools.length > 0 && s.lane_orientation === "vertical") {
+      // Swarm 1.2.8 row 55g (C140, G3-21): vertical pools are refused on lane columns across the width, counted per pool.
+      const v = verticalPoolLoad(s);
+      m = { quantity: "kolom lajur", unit: "kolom", measured: v.columns, limit: v.maxColumns };
+      suggestion = `${action}; ${v.columns} kolom lajur dalam ${v.pools} kolam, maks ${v.maxColumns} kolom pada ${v.width} mm; kurangi jumlah kolam per gambar, pakai 166 mm, atau pecah menjadi 2 diagram`;
+    } else {
+      const l = swimlaneLoad(s);
+      m = { quantity: "simpul per baris lajur", unit: "simpul", measured: l.count, limit: l.perRow };
+      suggestion = `${action}; lajur "${l.lane}" memuat ${l.count} simpul, maks ${l.perRow} per baris lajur pada ${l.width} mm (bungkus lajur hanya dipakai bila hasilnya bersih)`;
+    }
   }
   m ??= measureFromMessage(e.message) ?? { quantity: height ? "tinggi gambar" : "lebar gambar", unit: "mm", measured: null, limit: null };
   if (checkId.startsWith("DATUM-33")) suggestion = `${action} (${(s.nodes ?? []).length} simpul, ${(s.edges ?? []).length} konektor dalam gambar ini)`;

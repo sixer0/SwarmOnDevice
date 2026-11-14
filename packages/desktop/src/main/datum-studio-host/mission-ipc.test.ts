@@ -39,9 +39,10 @@ const recorder = () => {
 }
 
 describe("mission control ipc", () => {
-  test("registers exactly the four channels of spec §3.1", () => {
+  // 1.2.8 row 46 (CHAR-MC INTENT: `place` meaning, N8-144): the fifth channel runs the placement in main.
+  test("registers exactly the five channels of spec §3.1 + 1.2.8 01d §7", () => {
     const { handlers } = setup(undefined)
-    expect([...handlers.keys()].sort()).toEqual(["mission-control:answer", "mission-control:get", "mission-control:instruct", "mission-control:list"])
+    expect([...handlers.keys()].sort()).toEqual(["mission-control:answer", "mission-control:get", "mission-control:instruct", "mission-control:list", "mission-control:place"])
     expect(Object.values(MISSION_CONTROL_IPC).sort()).toEqual([...handlers.keys()].sort())
   })
 

@@ -8,9 +8,11 @@ import { Global } from "@opencode-ai/core/global"
 import { Flock } from "@opencode-ai/core/util/flock"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { InstanceState } from "@/effect/instance-state"
+import { EffectBridge } from "@/effect/bridge"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Provider } from "@/provider/provider"
 import { MemoryLearn } from "./learn"
+import { VaultMirror } from "./vault-mirror"
 
 // One file per project under the user's data directory: never inside the repository, so it cannot be committed by
 // accident, and shared by every worktree of a project. Plain JSON the user can read, and mode 0600.
@@ -37,6 +39,30 @@ export const CONSOLIDATE_AT = 1000
 /** Estimated tokens for the whole `<project_memory>` block (U18). Used by the prompt loader. */
 export const LOAD_BUDGET_TOKENS = 8000
 
+/**
+ * The Studio mission id pattern (`MISSION_ID_PATTERN`, datum-studio `src/mcp-host/mission/schemas.ts`), copied as a
+ * literal because opencode does not depend on datum-studio; a test pins the two equal (01e §2.1).
+ */
+export const MISSION_ID_PATTERN = "^\\d{4}-\\d{2}-\\d{2}[_-][a-z0-9][a-z0-9_-]{0,80}$"
+const MISSION_ID = new RegExp(MISSION_ID_PATTERN)
+
+/**
+ * The period a roll-up of index entries covers (N8-011). The year is the second level: quarterly roll-ups of one year
+ * roll into a yearly one when the index is still full (01e §5.2).
+ */
+export const INDEX_ROLLUP_PERIOD = "quarter"
+
+/**
+ * The memory store key of a project folder (N8-446, 01d §2.2): the store file is `<data>/memory/<key>.json`. Every folder
+ * without git shares the "global" project, and their notes must not mix, so such a folder gets `dir-<sha256>` of its
+ * path. The re-home primitive (`Rehome`, N8-132) computes both stores of a move with this same function.
+ */
+export function storeKey(projectId: string, directory: string) {
+  return projectId === "global"
+    ? "dir-" + createHash("sha256").update(directory).digest("hex").slice(0, 24)
+    : String(projectId)
+}
+
 const CONSOLIDATE_STEP = 100
 const VERSION = 2
 
@@ -59,6 +85,13 @@ export interface Interface {
     refs?: readonly MemoryRef[]
     /** The writing session had consumed web, MCP, Studio data or files outside the worktree (SEC-09). */
     untrusted?: boolean
+    /**
+     * "index": a mission index entry (1.2.8 F-MEM). The line must follow ProjectMemory.INDEX_TEXT_PATTERN; one entry
+     * per mission, a second write replaces the first. Any other value is refused `index_format`.
+     */
+    kind?: string
+    /** Required with kind "index": the mission id, equal to the id in the line. */
+    missionId?: string
   }) => Effect.Effect<Result>
   readonly update: (id: string, input: { text?: string; deviceOnly?: boolean }) => Effect.Effect<Result>
   readonly remove: (id: string) => Effect.Effect<boolean>
@@ -79,6 +112,11 @@ export interface Interface {
    */
   readonly recall: (input: { query: string; model?: Provider.Model }) => Effect.Effect<string | undefined>
   readonly onDevice: (model: Provider.Model) => Effect.Effect<boolean>
+  /**
+   * OBS-d (01c §5): refresh this project's vault mirror in the background, now (`immediate`, T2/T3) or debounced
+   * (`VaultMirror.MIRROR_DEBOUNCE_MS`). Never fails and never waits for the run; nothing runs while memory is off.
+   */
+  readonly mirror: (options?: { immediate?: boolean }) => Effect.Effect<void>
   /** Watches what the shell tool ran and turns "that failed to start, this worked" into a note. */
   readonly observeCommand: (input: {
     sessionID: string
@@ -104,12 +142,7 @@ export const layer = Layer.effect(
 
     const file = Effect.fnUntraced(function* () {
       const ctx = yield* InstanceState.context
-      // Every folder without git shares the "global" project, and their notes must not mix.
-      const key =
-        ctx.project.id === "global"
-          ? "dir-" + createHash("sha256").update(ctx.directory).digest("hex").slice(0, 24)
-          : String(ctx.project.id)
-      return path.join(Global.Path.data, "memory", `${key}.json`)
+      return path.join(Global.Path.data, "memory", `${storeKey(ctx.project.id, ctx.directory)}.json`)
     })
 
     const read = (target: string) => Effect.promise(() => readStore(target))
@@ -131,7 +164,75 @@ export const layer = Layer.effect(
         }),
       )
 
-    const publish = (added?: Item) => events.publish(Event.Updated, { added })
+    /**
+     * OBS-d (01c §5). The job reads the store fresh when it runs, so a debounced run sees the last write of a burst.
+     * Refusals of the writer are logged as warnings, any failure as an error: the memory write has already succeeded and
+     * a close is never blocked. Nothing is scheduled while memory is off; a disabled store makes the run a no-op.
+     */
+    const refresh = (options: { immediate?: boolean; backfill?: boolean }) =>
+      Effect.gen(function* () {
+        if (disabled()) return
+        const ctx = yield* InstanceState.context
+        const key = storeKey(ctx.project.id, ctx.directory)
+        const target = path.join(Global.Path.data, "memory", `${key}.json`)
+        const directory = ctx.directory
+        const projectRoot = ctx.worktree === "/" ? ctx.directory : ctx.worktree
+        const bridge = yield* EffectBridge.make()
+        const run = Effect.gen(function* () {
+          if (disabled()) return undefined
+          const store = yield* read(target)
+          if (!store.enabled) return undefined
+          const refusals: { code: VaultMirror.SyncCode; path: string; reason: string }[] = []
+          const result = yield* Effect.promise(async () =>
+            VaultMirror.sync({
+              key,
+              directory,
+              projectRoot,
+              items: store.items,
+              enabled: store.enabled,
+              language: await VaultMirror.labelLanguage(directory, key),
+              log: (entry) => refusals.push(entry),
+            }),
+          )
+          for (const entry of refusals)
+            yield* Effect.logWarning("vault mirror refused a path", {
+              source: "ProjectMemory.mirror",
+              store: key,
+              code: entry.code,
+              // G2-02 (row 43f): the sync hands a vault-relative path and a reason without paths; never the home folder.
+              path: entry.path,
+              reason: entry.reason,
+            })
+          return result
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("vault mirror failed", {
+              source: "ProjectMemory.mirror",
+              store: key,
+              cause: Cause.pretty(cause),
+            }).pipe(Effect.as(undefined)),
+          ),
+        )
+        const job = () => bridge.promise(run)
+        if (!options.backfill) return VaultMirror.schedule(key, job, { immediate: options.immediate })
+        // T4: checked in the background, so the prompt never waits for the disk.
+        void VaultMirror.backfillDue(directory, key).then(
+          (due) => (due ? VaultMirror.schedule(key, job) : undefined),
+          () => undefined,
+        )
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError("vault mirror not scheduled", { source: "ProjectMemory.mirror", cause: Cause.pretty(cause) }),
+        ),
+      )
+
+    const mirror: Interface["mirror"] = (options) => refresh({ immediate: options?.immediate })
+    // T4: stores whose first prompt in this process has been seen.
+    const prompted = new Set<string>()
+
+    /** Every store write is announced here, so it is also where the mirror is refreshed (T1, debounced). */
+    const publish = (added?: Item) =>
+      events.publish(Event.Updated, { added }).pipe(Effect.andThen(mirror()))
 
     /**
      * Cleanup once a store is large (C6): merges duplicates and drops references whose target is gone. It never refuses
@@ -165,16 +266,86 @@ export const layer = Layer.effect(
         ),
       )
 
+    /**
+     * A mission index entry (01e §2.2-2.3). Checked whole before anything is written; the report path is added as the
+     * first ref. A second entry for the same mission replaces the first in place (same id, `rolledInto` kept), even when
+     * it is archived; the "same text" shortcut of ordinary notes does not apply.
+     */
+    const addIndex = Effect.fnUntraced(function* (
+      input: Parameters<Interface["add"]>[0],
+      text: string,
+      body: string | undefined,
+      given: MemoryRef[],
+    ) {
+      const missionId = input.missionId ?? ""
+      const checked = indexRefusal({ text, missionId, kind: input.kind })
+      if (typeof checked === "string") return { refused: checked } satisfies Result
+      const refs = uniqueRefs([{ path: checked.report }, ...given])
+      const refused = refusal({ text, body, refs, index: true })
+      if (refused) return { refused } satisfies Result
+      const target = yield* file()
+      type Outcome = { item: Item; fresh: boolean } | { refused: ProjectMemory.Refusal }
+      const result = yield* change(target, (store): { store?: Stored; value: Outcome } => {
+        const found = store.items.find((item) => isIndex(item) && item.missionId === missionId)
+        const used = new Set(store.items.map((item) => item.id))
+        const freshId = () => {
+          const id = randomBytes(3).toString("hex")
+          if (used.has(id)) return freshId()
+          used.add(id)
+          return id
+        }
+        const time = Date.now()
+        // A new entry that would make the live index 41 rolls older entries up first, in this same lock (01e §2.3).
+        // A replacement adds nothing and rolls nothing.
+        const rolled =
+          !found && store.items.filter(liveIndex).length >= ProjectMemory.INDEX_LIMITS.entries
+            ? rollUp(store.items, { date: checked.date, time, id: freshId })
+            : { items: store.items }
+        if ("refused" in rolled) return { value: rolled }
+        const item: Item = {
+          id: found ? found.id : freshId(),
+          text,
+          source: input.source,
+          deviceOnly: (found?.deviceOnly ?? false) || (input.deviceOnly ?? false),
+          time,
+          ...(input.sessionID ? { sessionID: input.sessionID } : {}),
+          ...(body ? { body } : {}),
+          refs,
+          ...(input.untrusted ? { untrusted: true } : {}),
+          kind: "index",
+          missionId,
+          ...(found?.rolledInto ? { rolledInto: found.rolledInto } : {}),
+        }
+        const items = found
+          ? store.items.map((existing) => (existing.id === found.id ? item : existing))
+          : [...rolled.items, item]
+        return { store: { ...store, items }, value: { item, fresh: !found } }
+      })
+      // index_full: the store is unchanged, nothing was cut (R20-C03).
+      if ("refused" in result) return { refused: result.refused } satisfies Result
+      // A replacement is no new note: no toast. A new entry announces itself like any agent note; the roll-up is silent.
+      yield* publish(result.fresh && input.source !== "user" ? result.item : undefined)
+      // T2 (01c §5): the report was written before its index entry (MEM-f), so the mirror copies it now, no debounce.
+      yield* mirror({ immediate: true })
+      return { item: result.item } satisfies Result
+    })
+
     const add: Interface["add"] = Effect.fn("ProjectMemory.add")(function* (input) {
       const text = input.text.replace(/\s+/g, " ").trim()
       const body = input.body?.trimEnd() || undefined
       const base = yield* root()
       const refs = uniqueRefs((input.refs ?? []).map((ref) => normaliseRef(ref, base)))
+      if (input.kind !== undefined) {
+        if (!text) return { refused: "empty" }
+        return yield* addIndex(input, text, body, refs)
+      }
       const refused = refusal({ text, body, refs })
       if (refused) return { refused }
       const target = yield* file()
       const result = yield* change(target, (store): { store?: Stored; value: { result: Result; fresh: boolean } } => {
-        const same = store.items.find((item) => item.text.toLowerCase() === text.toLowerCase())
+        const same = store.items.find(
+          (item) => item.kind === undefined && item.text.toLowerCase() === text.toLowerCase(),
+        )
         if (same) return { value: { result: { item: same }, fresh: false } }
         const item: Item = {
           id: randomBytes(3).toString("hex"),
@@ -241,12 +412,39 @@ export const layer = Layer.effect(
       add,
       update: Effect.fn("ProjectMemory.update")(function* (id, input) {
         const text = input.text === undefined ? undefined : input.text.replace(/\s+/g, " ").trim()
+        const target = yield* file()
+        if (text !== undefined) {
+          const current = (yield* read(target)).items.find((item) => item.id === id)
+          if (current && indexed(current) && current.text !== text) {
+            // Store-written lines (roll-ups, archived entries) stay as written; an index line keeps its format.
+            if (!isIndex(current) || current.rolledInto !== undefined) return { refused: "index_format" as const }
+            if (!text) return { refused: "empty" as const }
+            const checked = indexRefusal({ text, missionId: current.missionId ?? "", kind: "index" })
+            if (typeof checked === "string") return { refused: checked }
+            const refused = refusal({ text, index: true })
+            if (refused) return { refused }
+          }
+        }
         const refused = text === undefined ? undefined : refusal({ text })
         if (refused) return { refused }
-        const target = yield* file()
         const item = yield* change(target, (store) => {
           const found = store.items.find((item) => item.id === id)
           if (!found) return { value: undefined }
+          // Checked against the stored line above; a store changed in between keeps the line as it is.
+          if (indexed(found) && text !== undefined && text !== found.text) {
+            if (!isIndex(found) || found.rolledInto !== undefined) return { value: undefined }
+            const checked = indexRefusal({ text, missionId: found.missionId ?? "", kind: "index" })
+            if (typeof checked === "string") return { value: undefined }
+            const refs = uniqueRefs([{ path: checked.report }, ...(found.refs ?? [])])
+            const value: Item = {
+              ...found,
+              text,
+              source: "user",
+              ...(refs.length <= MAX_REFS ? { refs } : {}),
+              ...(input.deviceOnly === undefined ? {} : { deviceOnly: input.deviceOnly }),
+            }
+            return { store: { ...store, items: store.items.map((item) => (item.id === id ? value : item)) }, value }
+          }
           // Rewritten by the user, it is their note now and no longer ties to a command the runtime may retract. A body
           // or refs an agent wrote stay agent-written, so their untrusted flag stays with them.
           const next: Item =
@@ -286,8 +484,15 @@ export const layer = Layer.effect(
       }),
       prompt: Effect.fn("ProjectMemory.prompt")(function* (model, focus) {
         if (disabled()) return undefined
-        const store = yield* read(yield* file())
+        const target = yield* file()
+        const store = yield* read(target)
         if (!store.enabled) return undefined
+        // T4 (01c §5): the first prompt of a store in this process brings existing memory to the vault when the hub is
+        // absent or its language is stale. Background only; the returned block does not depend on it (P-05).
+        if (!prompted.has(target)) {
+          prompted.add(target)
+          yield* refresh({ backfill: true })
+        }
         const local = yield* onDevice(model)
         const items = store.items.filter((item) => local || !item.deviceOnly)
         if (!focus) return MemoryLearn.promptBlock(items, { budget: LOAD_BUDGET_TOKENS })
@@ -329,6 +534,7 @@ export const layer = Layer.effect(
         return MemoryLearn.recallNote(found, refs)
       }),
       onDevice,
+      mirror,
       observeCommand: Effect.fn("ProjectMemory.observeCommand")(function* (input) {
         if (disabled()) return
         const ctx = yield* InstanceState.context
@@ -377,14 +583,183 @@ function refusal(input: {
   text: string
   body?: string
   refs?: readonly MemoryRef[]
+  /** A mission index entry: its line and format were checked by indexRefusal, its body has the index limit. */
+  index?: boolean
 }): ProjectMemory.Refusal | undefined {
   if (!input.text) return "empty"
   if (input.text.length > MAX_TEXT) return "long"
+  if (input.index && input.body && input.body.length > ProjectMemory.INDEX_LIMITS.body) return "index_body_long"
   if (input.body && input.body.length > MAX_BODY) return "body_long"
   if (input.refs && input.refs.length > MAX_REFS) return "too_many_refs"
   // L5 covers everything stored; looksSecret already includes the Secrets.scrubText shapes (SEC-09 item 4).
   const strings = [input.text, input.body ?? "", ...(input.refs ?? []).flatMap(refStrings)]
   if (strings.some((value) => value && MemoryLearn.looksSecret(value))) return "secret"
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Mission index entries (1.2.8 F-MEM, 01e §2). `kind` is stored as a plain string: only these helpers narrow it, and any
+// other value is an ordinary note.
+
+const isIndex = (item: Item) => item.kind === "index"
+/** An index entry, a roll-up or an archived entry: lines the index rules govern. An unknown kind is an ordinary note. */
+const indexed = (item: Item) => isIndex(item) || item.kind === "index_rollup" || item.rolledInto !== undefined
+
+/**
+ * Rules 2-3 of 01e §2.2, in order, before anything is written: `index_long` (line over INDEX_LIMITS.text), then
+ * `index_format` (kind other than "index" from a caller, no or malformed mission id, line not matching
+ * INDEX_TEXT_PATTERN, mission id in the line different, not a calendar date, or a report path that is not a plain
+ * relative `docs/<missionId>/....md`). Returns the report path when the line is valid.
+ */
+export function indexRefusal(input: {
+  text: string
+  missionId: string
+  kind?: string
+}): ProjectMemory.Refusal | { report: string; date: string } {
+  if (input.text.length > ProjectMemory.INDEX_LIMITS.text) return "index_long"
+  if (input.kind !== "index") return "index_format"
+  if (!MISSION_ID.test(input.missionId)) return "index_format"
+  const match = ProjectMemory.INDEX_TEXT_PATTERN.exec(input.text)
+  if (!match) return "index_format"
+  const [, date, id, , , report] = match
+  if (id !== input.missionId || !calendarDate(date!) || !safeReportPath(report!, input.missionId)) return "index_format"
+  return { report: report!, date: date! }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Roll-up (01e §5, C9, R20-C03/C04). Written, never cut: a roll-up body holds one line per member, `[<id>] <line>`, and
+// every member stays whole (line, body, refs) as an archived item carrying `rolledInto`. A part that would pass
+// LIMITS.body is left as it is and a new part starts; a line is never split.
+
+/** `<period> roll-up[ part <p>] | <n> missions | triggers: t1, ... | body`; period `YYYY-Qn` or `YYYY` (N8-010). */
+const ROLLUP_LINE = /^(\d{4}(?:-Q[1-4])?) roll-up(?: part (\d+))? \| (\d+) missions \| triggers: ([^|]+) \| body$/
+
+/** Counted against INDEX_LIMITS.entries: index entries and roll-ups that are not archived. */
+const liveIndex = (item: Item) => item.rolledInto === undefined && (isIndex(item) || item.kind === "index_rollup")
+
+/**
+ * Frees index slots until fewer than INDEX_LIMITS.entries are live, so the new entry dated `date` fits (01e §5.2):
+ * A. the oldest quarter's live entries roll into that quarter's roll-up; B. otherwise the quarterly roll-ups of the
+ * oldest year that has two or more roll into that year's roll-up; C. otherwise `index_full` and nothing changes.
+ * Pure: the same items, date, time and id source give the same result. Item order is kept; new roll-ups are appended.
+ */
+export function rollUp(
+  items: readonly Item[],
+  input: { date: string; time: number; id: () => string },
+): { items: Item[] } | { refused: "index_full" } {
+  const work = [...items]
+  for (;;) {
+    const live = work.filter(liveIndex)
+    if (live.length < ProjectMemory.INDEX_LIMITS.entries) return { items: work }
+    const entries = live.filter(isIndex)
+    if (entries.length) {
+      // The oldest quarter: a complete one before the new entry's when there is one, else the current one.
+      const quarter = entries.map((item) => quarterOf(entryDate(item))).toSorted()[0]!
+      const members = entries
+        .filter((item) => quarterOf(entryDate(item)) === quarter)
+        .toSorted(
+          (a, b) =>
+            entryDate(a).localeCompare(entryDate(b)) || a.time - b.time || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        )
+      rollInto(work, quarter, members, input)
+      continue
+    }
+    const quarterly = live.flatMap((item) => {
+      const parsed = rollupOf(item)
+      return parsed && parsed.period.includes("-Q") ? [{ item, ...parsed }] : []
+    })
+    const year = [...new Set(quarterly.map((roll) => roll.period.slice(0, 4)))]
+      .toSorted()
+      .find((y) => quarterly.filter((roll) => roll.period.startsWith(y)).length >= 2)
+    if (!year) return { refused: "index_full" }
+    const members = quarterly
+      .filter((roll) => roll.period.startsWith(year))
+      .toSorted((a, b) => a.period.localeCompare(b.period) || a.part - b.part || (a.item.id < b.item.id ? -1 : 1))
+      .map((roll) => roll.item)
+    rollInto(work, year, members, input)
+  }
+}
+
+/** Appends each member's line to the newest open part of `period`, starting a new part when it would not fit. */
+function rollInto(work: Item[], period: string, members: readonly Item[], input: { time: number; id: () => string }) {
+  const open = work
+    .filter(liveIndex)
+    .flatMap((item) => {
+      const parsed = rollupOf(item)
+      return parsed && parsed.period === period ? [{ item, part: parsed.part }] : []
+    })
+    .toSorted((a, b) => b.part - a.part)[0]
+  const state = { target: open?.item, part: open?.part ?? 0 }
+  for (const member of members) {
+    const line = `[${member.id}] ${member.text}`
+    const current = state.target
+    const fits = current?.body !== undefined && current.body.length + 1 + line.length <= ProjectMemory.LIMITS.body
+    const body = fits ? `${current!.body}\n${line}` : line
+    const part = fits ? state.part : state.part + 1
+    const next: Item = {
+      id: fits ? current!.id : input.id(),
+      text: rollupText(period, part, body),
+      source: "agent",
+      deviceOnly: (fits && current!.deviceOnly) || member.deviceOnly,
+      time: input.time,
+      body,
+      ...((fits && current!.untrusted) || member.untrusted ? { untrusted: true } : {}),
+      kind: "index_rollup",
+    }
+    const at = work.findIndex((item) => item.id === next.id)
+    if (at === -1) work.push(next)
+    else work[at] = next
+    const memberAt = work.findIndex((item) => item.id === member.id)
+    work[memberAt] = { ...member, rolledInto: next.id }
+    state.target = next
+    state.part = part
+  }
+}
+
+/** The roll-up line, recomputed from its body: missions behind it and its five most frequent trigger words. */
+function rollupText(period: string, part: number, body: string) {
+  const counts = new Map<string, number>()
+  const missions = body.split("\n").reduce((total, line) => {
+    const member = line.slice(line.indexOf("] ") + 2)
+    const entry = ProjectMemory.INDEX_TEXT_PATTERN.exec(member)
+    const roll = entry ? undefined : ROLLUP_LINE.exec(member)
+    const words = (entry?.[4] ?? roll?.[4] ?? "").split(",").map((word) => word.trim())
+    for (const word of words) if (word) counts.set(word, (counts.get(word) ?? 0) + 1)
+    return total + (roll ? Number(roll[3]) : 1)
+  }, 0)
+  // Count descending, then first appearance in member order (Map keeps insertion order; the sort is stable).
+  const triggers = [...counts.entries()]
+    .toSorted((a, b) => b[1] - a[1])
+    .slice(0, ProjectMemory.INDEX_LIMITS.triggers)
+    .map(([word]) => word)
+  const label = part > 1 ? `${period} roll-up part ${part}` : `${period} roll-up`
+  return `${label} | ${missions} missions | triggers: ${(triggers.length ? triggers : [period]).join(", ")} | body`
+}
+
+function rollupOf(item: Item) {
+  if (item.kind !== "index_rollup") return undefined
+  const match = ROLLUP_LINE.exec(item.text)
+  return match ? { period: match[1]!, part: Number(match[2] ?? 1) } : undefined
+}
+
+/** The line date (group 1); an entry whose line was edited out of shape falls back to its write time. */
+function entryDate(item: Item) {
+  return ProjectMemory.INDEX_TEXT_PATTERN.exec(item.text)?.[1] ?? new Date(item.time).toISOString().slice(0, 10)
+}
+
+const quarterOf = (date: string) => `${date.slice(0, 4)}-Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1}`
+
+function calendarDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number)
+  const date = new Date(Date.UTC(year!, month! - 1, day!))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month! - 1 && date.getUTCDate() === day
+}
+
+/** Relative, already normalised, no `..`, no `~` or `\\`, inside `docs/<missionId>/`, a Markdown file (01e §9 S-3). */
+function safeReportPath(value: string, missionId: string) {
+  if (value.startsWith("/") || value.startsWith("~") || value.includes("\\")) return false
+  if (path.posix.normalize(value) !== value) return false
+  if (value.split("/").some((part) => part === ".." || part === ".")) return false
+  return value.startsWith(`docs/${missionId}/`) && value.length > `docs/${missionId}/`.length + 3 && value.endsWith(".md")
 }
 
 const refStrings = (ref: MemoryRef) => ("symbol" in ref ? [ref.symbol, ref.path ?? ""] : [ref.path])
@@ -459,7 +834,9 @@ async function withTimeout<A>(work: Promise<A>, ms: number, fallback: A): Promis
 }
 
 async function resolvePath(ref: { path: string; line?: number }, root: string): Promise<ResolvedRef> {
-  const full = path.isAbsolute(ref.path) ? ref.path : path.join(root, ref.path)
+  // `~/x` (a global skill's SKILL.md, row 43f) is under the home folder, not the project root.
+  const home = ref.path === "~" || ref.path.startsWith("~/") ? path.join(Global.Path.home, ref.path.slice(2)) : undefined
+  const full = home ?? (path.isAbsolute(ref.path) ? ref.path : path.join(root, ref.path))
   const stat = await fs.lstat(full).catch((error: NodeJS.ErrnoException) => error)
   if (stat instanceof Error) {
     if (stat.code === "ENOENT" || stat.code === "ENOTDIR") return { ref, stale: true }
@@ -580,7 +957,12 @@ export function consolidate(
     snapshot?: ReadonlyMap<string, string>
   },
 ): { items: Item[]; changed: boolean } {
-  const settled = (item: Item) => !options.snapshot || options.snapshot.get(item.id) === JSON.stringify(item)
+  // Index entries, roll-ups, archived entries and any future kind are never merged and their refs never dropped: the
+  // report link must survive the report being moved (01e §2.3).
+  const settled = (item: Item) =>
+    item.kind === undefined &&
+    item.rolledInto === undefined &&
+    (!options.snapshot || options.snapshot.get(item.id) === JSON.stringify(item))
   const drop = new Set<string>()
   const replace = new Map<string, Item>()
 

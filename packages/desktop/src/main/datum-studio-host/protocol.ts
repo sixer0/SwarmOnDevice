@@ -2,7 +2,7 @@
 // Shared by the main-side lifecycle (lifecycle.ts) and the host-side runner (host-runner.ts). No Electron import.
 
 export const STUDIO_HOST_SERVICE_NAME = "datum-studio-host"
-export const STUDIO_RELEASE = "1.2.7"
+export const STUDIO_RELEASE = "1.2.8"
 
 /** main -> host. The endpoint token travels only in this message: never in env, argv or a log line. */
 export type HostStartCommand = {
@@ -19,6 +19,13 @@ export type HostStartCommand = {
   /** Absolute root under which `src/lib/studio/assets/...` resolves (configureTemplateSource). */
   assetRepoRoot: string
   release: string
+  /**
+   * 1.2.8 SR8-05 (AC-SEC05, row 45c): per-launch Mission Control key, 32 random bytes hex, distinct from `token`.
+   * Travels only in this message (never in env, argv, `datum-studio.env` or a log line). The mission client sends it
+   * as `x-swarm-mission-control-key` at initialize; the host marks that session attested on a timing-safe match.
+   * Optional on the wire: a start without it attests no session.
+   */
+  missionControlKey?: string
 }
 
 export type HostStopCommand = { type: "stop" }
@@ -44,6 +51,8 @@ export type HostServerStartOptions = {
   hostname: "127.0.0.1"
   /** 0 = ephemeral port (spec §9.1). */
   port: number
+  /** 1.2.8 SR8-05: the per-launch Mission Control key from the start message (host side: row 45b). */
+  missionControlKey?: string
   log: (level: "info" | "warn" | "error", source: string, message: string, context?: Record<string, unknown>) => void
 }
 
@@ -66,8 +75,12 @@ export function isHostCommand(value: unknown): value is HostCommand {
   if (v.type === "stop") return true
   if (v.type !== "start") return false
   const strings = ["token", "storeRoot", "storeLogFile", "templatesDir", "assetRepoRoot", "release"] as const
+  if (v.missionControlKey !== undefined && !(typeof v.missionControlKey === "string" && MISSION_CONTROL_KEY_RE.test(v.missionControlKey))) return false
   return v.hostname === "127.0.0.1" && strings.every((k) => typeof v[k] === "string" && (v[k] as string).length > 0)
 }
+
+/** 1.2.8 SR8-05: shape of the per-launch Mission Control key (32 bytes, lowercase hex). */
+const MISSION_CONTROL_KEY_RE = /^[0-9a-f]{64}$/
 
 export function isHostMessage(value: unknown): value is HostMessage {
   if (!value || typeof value !== "object") return false

@@ -3,15 +3,17 @@
 import fs from "node:fs"
 import { stat } from "node:fs/promises"
 import path from "node:path"
-import { devNull } from "node:os"
+import os, { devNull } from "node:os"
 import { execFile, execFileSync } from "node:child_process"
 import { promisify } from "node:util"
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 import { Global } from "@opencode-ai/core/global"
+import { Vault } from "@opencode-ai/core/vault"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { Risk } from "./risk"
 import { Secrets } from "./secrets"
+import { SKILL_FOLDER_HELD_TEXT, VAULT_MIRROR_REFUSED_TEXT } from "../permission/autonomy-texts"
 
 const git = promisify(execFile)
 // Asking whether Undo can help must not itself run what the repository says to.
@@ -594,12 +596,145 @@ function ordinary(file: string, instance: InstanceContext) {
   )
 }
 
+/**
+ * 1.2.8 row 40e (SK-e, N8-411, SR8-10): the folders `Skill.Service.folders()` (N8-410) last named for an instance, so the
+ * autonomy table, which cannot ask a service, judges a shell write against the same list the edit tools do. Keyed by the
+ * instance's folder; the newest answer replaces the one before.
+ */
+const skillFolderMemo = new Map<string, readonly string[]>()
+
+export function rememberSkillFolders(instance: InstanceContext, folders: readonly string[]) {
+  skillFolderMemo.set(instance.directory, [...folders])
+}
+
+/** For tests: forget every folder list `rememberSkillFolders` kept. */
+export function forgetSkillFolders() {
+  skillFolderMemo.clear()
+}
+
+/**
+ * The skill-folder roots that hold without the Skill service (01b §7.1): the config `{skill,skills}` folders, the home and
+ * project `.agents/skills`, the project `.swarm/{skill,skills}` and both `skill-drafts` roots. The service's own list
+ * (`rememberSkillFolders`) adds every discovered skill folder and `.claude/skills` when claude_compat is on.
+ */
+function fixedSkillRoots(instance: InstanceContext) {
+  const configs = [Global.Path.config, process.env.OPENCODE_CONFIG_DIR, process.env.SWARM_CONFIG_DIR].filter(
+    (dir): dir is string => dir !== undefined && dir !== "",
+  )
+  const bases = [...new Set([instance.directory, instance.worktree])].filter((dir) => path.dirname(dir) !== dir)
+  return [
+    ...configs.flatMap((dir) => [path.join(dir, "skill"), path.join(dir, "skills")]),
+    ...homes().map((home) => path.join(home, ".agents", "skills")),
+    path.join(Global.Path.data, "skill-drafts"),
+    ...bases.flatMap((base) => [
+      path.join(base, ".swarm", "skill"),
+      path.join(base, ".swarm", "skills"),
+      path.join(base, ".swarm", "skill-drafts"),
+      path.join(base, ".agents", "skills"),
+    ]),
+  ]
+}
+
+// The home Swarm names (`Global.Path.home`) and the one the shell expands `~` to; the same folder outside tests.
+const homes = () => [...new Set([Global.Path.home, os.homedir()])]
+
+const under = (root: string, file: string) => file === root || file.startsWith(root.endsWith(path.sep) ? root : root + path.sep)
+
+/**
+ * 1.2.8 row 40e (SK-e, SR8-10): a write here would land in a skill folder: under a root of `fixedSkillRoots` or of the
+ * Skill service's list, by the name as given or where it really lands, or on a file named `SKILL.md` (any case). A
+ * discovered folder that is a worktree or project root, the home folder or `/` is not a root (a SKILL.md at the project
+ * root does not make `src/x.ts` a skill file). A path that cannot be worked out (a link loop) is judged by the name as
+ * given only; the rules after this one already hold such a write.
+ */
+export function skillFolder(file: string, instance: InstanceContext) {
+  const given = path.resolve(instance.directory, file)
+  const target = real(given) ?? given
+  if ([given, target].some((name) => path.basename(name).toLowerCase() === "skill.md")) return true
+  const broad = new Set(
+    [instance.directory, instance.worktree, ...homes(), "/"].flatMap((dir) => [path.resolve(dir), real(dir) ?? path.resolve(dir)]),
+  )
+  const roots = [...fixedSkillRoots(instance), ...(skillFolderMemo.get(instance.directory) ?? [])]
+    .map((dir) => path.resolve(dir))
+    .flatMap((dir) => [dir, real(dir) ?? dir])
+    .filter((dir) => !broad.has(dir))
+  return roots.some((root) => under(root, given) || under(root, target))
+}
+
+/**
+ * 1.2.8 row 40e (SK-e, S14-D2): an edit tool's write into a skill folder. It is refused before anything is asked, with
+ * autonomous mode on or off and whatever "always" rule a person gave for edits: a skill is saved only from Settings >
+ * Skills, where the validator, the memory note and the record run. `editClass` names the class (N8-411).
+ */
+export class SkillFolderRefused extends Error {
+  readonly editClass = "skill_folder" as const
+  constructor() {
+    super(SKILL_FOLDER_HELD_TEXT)
+    this.name = "SkillFolderRefused"
+  }
+}
+
+/**
+ * 1.2.8 row 40f (AC-SEC11, SR8-11, N8-441): the vault mirror folders a write must not reach: `Vault.mirrorDir()` as
+ * spelled, and `swarm-memory` under the real vault root (a symlinked root or SWARM_VAULT_DIR resolved first). Without
+ * SWARM_VAULT_DIR, also `~/.swarm/vault/swarm-memory` under the home the shell expands `~` to (the same folder outside
+ * tests). Independent of the `.swarm` segment rule (`risk.ts`).
+ */
+function vaultMirrorRoots() {
+  const roots = [Vault.mirrorDir()]
+  const root = real(Vault.root())
+  if (root) roots.push(path.join(root, Vault.VAULT_MIRROR_DIR))
+  if (!process.env.SWARM_VAULT_DIR?.trim())
+    for (const home of homes()) roots.push(path.join(home, Vault.VAULT_DEFAULT_DIR, Vault.VAULT_MIRROR_DIR))
+  return [...new Set(roots.flatMap((dir) => [path.resolve(dir), real(dir) ?? path.resolve(dir)]))]
+}
+
+// File names on macOS and Windows ignore case by default, so `Swarm-Memory` is the same folder there.
+const foldCase = process.platform === "darwin" || process.platform === "win32"
+const fold = (name: string) => (foldCase ? name.toLowerCase() : name)
+
+/**
+ * 1.2.8 row 40f (AC-SEC11, SR8-11): a write here would land in the vault mirror folder `<vault>/swarm-memory/**` (or
+ * replace that folder itself), by the name as given or where it really lands. The rest of the vault (`inbox/`, the
+ * person's own notes) is not covered. The mirror writer (`memory/vault-mirror.ts`) writes with fs directly, not through
+ * this check.
+ */
+export function vaultMirror(file: string, instance: InstanceContext) {
+  const given = path.resolve(instance.directory, file)
+  const target = real(given) ?? given
+  return vaultMirrorRoots().some((root) => [given, target].some((name) => under(fold(root), fold(name))))
+}
+
+/**
+ * 1.2.8 row 40f (AC-SEC11, SR8-11, N8-441): an edit tool's write into the vault mirror folder. Refused before anything is
+ * asked, with autonomous mode on or off and whatever "always" rule a person gave: the folder is generated by Swarm from
+ * project memory, and the next mirror run would overwrite or delete the change. `editClass` names the class.
+ */
+export class VaultMirrorRefused extends Error {
+  readonly editClass = "vault_mirror" as const
+  constructor() {
+    super(VAULT_MIRROR_REFUSED_TEXT)
+    this.name = "VaultMirrorRefused"
+  }
+}
+
 /** What to tell the permission layer about an edit to these files. */
 export const editTrust = Effect.fn("Reach.editTrust")(function* (
   ctx: { trust?: { canUndo: boolean } },
   instance: InstanceContext,
   files: string[],
 ) {
+  // 1.2.8 row 40e (SK-e): first, so neither a missing Undo nor a place outside the project lets it reach a prompt.
+  // Loaded when first asked: the skill module reaches the permission service, which loads the table, which loads this.
+  const { Skill } = yield* Effect.promise(() => import("../skill"))
+  const skills = Option.getOrUndefined(yield* Effect.serviceOption(Skill.Service))
+  if (skills) {
+    const folders = yield* skills.folders().pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+    if (folders) rememberSkillFolders(instance, folders)
+  }
+  if (files.some((file) => skillFolder(file, instance))) throw new SkillFolderRefused()
+  // 1.2.8 row 40f (AC-SEC11): the vault mirror folder, refused before Undo, outside or sensitive checks can ask.
+  if (files.some((file) => vaultMirror(file, instance))) throw new VaultMirrorRefused()
   if (!ctx.trust?.canUndo) return { harmless: false, editClass: "no_undo" as const }
   if (files.some((file) => !inside(file, instance)))
     return { harmless: false, risk: "irreversible" as const, editClass: "no_undo" as const }

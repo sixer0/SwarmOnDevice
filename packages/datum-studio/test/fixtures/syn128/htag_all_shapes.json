@@ -1,0 +1,481 @@
+{
+  "$comment": "Swarm 1.2.8 row 53 (AC-HTAG, AT-HTAG, register N8-371 / N8-218). Synthetic labels only. Every drawn shape except bus carries a tag, one row of at most 3 shapes per figure, one notation set per figure (DATUM-35): `stadium` (the BASE red case), `iso_a`..`iso_d` (ISO 5807 and universal shapes), `bpmn_inside` (BPMN shapes whose label stays inside: task, subprocess, data_object; drawn as boxes until row 54), `doubled`, `shadowed`. `bus` is the OP-18-10 probe (sld rail with a tag: drawn top-left above the rail). The label-below shapes (events, gateways; C12 OP-18-4, row 54) are not here.",
+  "stadium": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "id": "9.6",
+    "title": "Gambar sintetis tag stadium.",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Langkah A",
+        "tag": "T1",
+        "class": {
+          "col": 0,
+          "row": 0
+        },
+        "shape": "stadium"
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "1"
+      }
+    ],
+    "per_row": 2
+  },
+  "iso_a": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "id": "9.7",
+    "title": "Gambar sintetis tag ISO 5807 A.",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Langkah A",
+        "tag": "T1",
+        "class": {
+          "col": 0,
+          "row": 0
+        },
+        "shape": "stadium"
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "col": 1,
+          "row": 0
+        },
+        "shape": "parallelogram"
+      },
+      {
+        "id": "n3",
+        "label": "Langkah C",
+        "tag": "T3",
+        "class": {
+          "col": 2,
+          "row": 0
+        },
+        "shape": "hexagon"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "1"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "kind": "data",
+        "label": "2"
+      }
+    ],
+    "per_row": 3
+  },
+  "iso_b": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "id": "9.8",
+    "title": "Gambar sintetis tag ISO 5807 B.",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Langkah A",
+        "tag": "T1",
+        "class": {
+          "col": 0,
+          "row": 0
+        },
+        "shape": "predefined"
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "col": 1,
+          "row": 0
+        },
+        "shape": "document"
+      },
+      {
+        "id": "n3",
+        "label": "Langkah C",
+        "tag": "T3",
+        "class": {
+          "col": 2,
+          "row": 0
+        },
+        "shape": "offpage"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "1"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "kind": "data",
+        "label": "2"
+      }
+    ],
+    "per_row": 3
+  },
+  "iso_c": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "id": "9.9",
+    "title": "Gambar sintetis tag ISO 5807 C.",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Langkah A",
+        "tag": "T1",
+        "class": {
+          "col": 0,
+          "row": 0
+        },
+        "shape": "cylinder"
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "col": 1,
+          "row": 0
+        },
+        "shape": "circle"
+      },
+      {
+        "id": "n3",
+        "label": "Langkah C",
+        "tag": "T3",
+        "class": {
+          "col": 2,
+          "row": 0
+        },
+        "shape": "annotation"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "1"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "kind": "data",
+        "label": "2"
+      }
+    ],
+    "per_row": 3
+  },
+  "iso_d": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "id": "9.10",
+    "title": "Gambar sintetis tag keputusan.",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Cek A",
+        "tag": "T1",
+        "shape": "diamond",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "tier": 1
+        }
+      },
+      {
+        "id": "n3",
+        "label": "Langkah C",
+        "tag": "T3",
+        "class": {
+          "tier": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "ya"
+      },
+      {
+        "from": "n1",
+        "to": "n3",
+        "kind": "data",
+        "label": "tidak"
+      }
+    ],
+    "direction": "TB"
+  },
+  "bpmn_inside": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "id": "9.11",
+    "title": "Gambar sintetis tag BPMN.",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Langkah A",
+        "tag": "T1",
+        "class": {
+          "col": 0,
+          "row": 0
+        },
+        "shape": "task"
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "col": 1,
+          "row": 0
+        },
+        "shape": "subprocess"
+      },
+      {
+        "id": "n3",
+        "label": "Langkah C",
+        "tag": "T3",
+        "class": {
+          "col": 2,
+          "row": 0
+        },
+        "shape": "data_object"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "1"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "kind": "data",
+        "label": "2"
+      }
+    ],
+    "per_row": 3
+  },
+  "doubled": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "id": "9.12",
+    "title": "Gambar sintetis tag doubled.",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Langkah A",
+        "tag": "T1",
+        "class": {
+          "col": 0,
+          "row": 0
+        },
+        "shape": "doubled"
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "1"
+      }
+    ],
+    "per_row": 2
+  },
+  "shadowed": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "id": "9.13",
+    "title": "Gambar sintetis tag shadowed.",
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Langkah A",
+        "tag": "T1",
+        "class": {
+          "col": 0,
+          "row": 0
+        },
+        "shape": "shadowed"
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "data",
+        "label": "1"
+      }
+    ],
+    "per_row": 2
+  },
+  "bus": {
+    "$schema": "studio.diagram/v1",
+    "family": "sld",
+    "id": "9.14",
+    "title": "Gambar sintetis tag rel bus.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "bus",
+        "label": "Rel A",
+        "shape": "bus",
+        "tag": "B1",
+        "class": {
+          "tier": 0
+        }
+      },
+      {
+        "id": "n1",
+        "label": "Langkah A",
+        "tag": "T1",
+        "class": {
+          "tier": 1
+        }
+      },
+      {
+        "id": "n2",
+        "label": "Langkah B",
+        "tag": "T2",
+        "class": {
+          "tier": 1
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "bus",
+        "to": "n1",
+        "kind": "data",
+        "label": "1"
+      },
+      {
+        "from": "bus",
+        "to": "n2",
+        "kind": "data",
+        "label": "2"
+      }
+    ]
+  }
+}

@@ -97,10 +97,63 @@ function invalid(at: string, issues: SchemaIssue[]): never {
   throw new StoreError("SCHEMA_INVALID", `${at} is malformed`, { at, issues })
 }
 
+// 1.2.8 row 45 (01d §2.1 rule 3, §4, SR8-17, R20-C35): the host mirror of opencode project/rehome.ts groupNameOk.
+/** N8-150: one folder level, at most 60 characters, no leading dot, no slash. */
+export const GROUP_NAME_PATTERN = /^[^./\\][^/\\]{0,59}$/
+/** N8-445, compared case-insensitively. */
+export const RESERVED_GROUP_NAMES = ["docs"] as const
+const GROUP_KINDS = ["product", "institution", "theme"]
+const MISSION_ID = /^\d{4}-\d{2}-\d{2}[_-][a-z0-9][a-z0-9_-]{0,80}$/
+
+/** N8-150 plus SR8-17: NFC, no control, format, line or paragraph separator characters, no edge white space, no trailing dot, not reserved. */
+export function groupNameOk(name: unknown): name is string {
+  if (typeof name !== "string" || !GROUP_NAME_PATTERN.test(name)) return false
+  if (name.normalize("NFC") !== name) return false
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(name)) return false
+  if (name.trim() !== name || name.endsWith(".")) return false
+  return !RESERVED_GROUP_NAMES.some((reserved) => reserved === name.toLowerCase())
+}
+
+/**
+ * 1.2.8 row 45 (N8-146..N8-149, N8-454; 01d §3.3, §4, §5): `project-placement` options are exactly join, new, root in
+ * that order (join omitted when no group exists), join/new carry `group` + `groupKind`, root none; `project-tidy`
+ * options are exactly approve, decline with a `proposal` of 1-200 items (C8 OP-4: more go in another request).
+ */
+function topicIssues(r: NewDecisionRequest, bad: (path: string, message: string) => void): void {
+  const opts = Array.isArray(r?.options) ? r.options : []
+  const ids = opts.map((o) => o?.id).join(",")
+  const placement = r?.topic === "project-placement"
+  opts.forEach((o, i) => {
+    const grouped = placement && (o?.id === "join" || o?.id === "new")
+    if (!grouped && (o?.group !== undefined || o?.groupKind !== undefined)) bad(`/options/${i}`, "group and groupKind only on project-placement join/new options")
+    if (grouped && !groupNameOk(o.group)) bad(`/options/${i}/group`, "a group folder name: one level, 1-60 characters, no leading dot, slash, edge space, trailing dot or format character; not docs")
+    if (grouped && !GROUP_KINDS.includes(o.groupKind as string)) bad(`/options/${i}/groupKind`, "product, institution or theme")
+  })
+  if (r?.topic !== undefined && r.topic !== "project-placement" && r.topic !== "project-tidy") bad("/topic", "project-placement or project-tidy")
+  if (placement && ids !== "join,new,root" && ids !== "new,root") bad("/options", "project-placement options are join, new, root in that order (join only when a group exists)")
+  if (r?.topic === "project-tidy" && ids !== "approve,decline") bad("/options", "project-tidy options are approve, decline")
+  if (r?.topic !== "project-tidy") {
+    if (r?.proposal !== undefined) bad("/proposal", "only with topic project-tidy")
+    return
+  }
+  const items = Array.isArray(r.proposal) ? r.proposal : []
+  if (!Array.isArray(r.proposal) || items.length < 1 || items.length > 200) bad("/proposal", "1-200 items (maxItems 200: send more missions in another request)")
+  const seen = new Set<string>()
+  items.forEach((x, i) => {
+    if (Object.keys(x ?? {}).some((k) => !["mission", "group", "groupKind"].includes(k))) bad(`/proposal/${i}`, "unknown field")
+    if (typeof x?.mission !== "string" || !MISSION_ID.test(x.mission)) bad(`/proposal/${i}/mission`, "must be a mission id")
+    else if (seen.has(x.mission)) bad(`/proposal/${i}/mission`, "duplicate mission")
+    else seen.add(x.mission)
+    if (x?.group !== null && !groupNameOk(x?.group)) bad(`/proposal/${i}/group`, "a group folder name, or null to stay at the root")
+    if (x?.group !== null && !GROUP_KINDS.includes(x?.groupKind as string)) bad(`/proposal/${i}/groupKind`, "product, institution or theme")
+    if (x?.group === null && x.groupKind !== undefined) bad(`/proposal/${i}/groupKind`, "only with a group")
+  })
+}
+
 export function assertDecisionRequest(r: NewDecisionRequest): void {
   const issues: SchemaIssue[] = []
   const bad = (path: string, message: string) => issues.push({ path, keyword: "c57", message })
-  const allowed = new Set(["id", "question", "context", "options", "recommended", "blockingRows"])
+  const allowed = new Set(["id", "question", "context", "options", "recommended", "blockingRows", "topic", "proposal"])
   for (const k of Object.keys(r ?? {})) if (!allowed.has(k)) bad(`/${k}`, "unknown field")
   if (typeof r?.id !== "string" || !REQUEST_ID.test(r.id)) bad("/id", "must match ^D-[0-9]{1,5}$")
   if (!text(r?.question, 1000)) bad("/question", "1-1000 characters, no control characters")
@@ -110,7 +163,7 @@ export function assertDecisionRequest(r: NewDecisionRequest): void {
   const ids = new Set<string>()
   opts.forEach((o, i) => {
     const keys = Object.keys(o ?? {})
-    if (keys.some((k) => !["id", "label", "consequence"].includes(k))) bad(`/options/${i}`, "unknown field")
+    if (keys.some((k) => !["id", "label", "consequence", "group", "groupKind"].includes(k))) bad(`/options/${i}`, "unknown field")
     if (typeof o?.id !== "string" || !OPTION_ID.test(o.id)) bad(`/options/${i}/id`, "must match ^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
     else if (ids.has(o.id)) bad(`/options/${i}/id`, "duplicate option id")
     else ids.add(o.id)
@@ -127,6 +180,7 @@ export function assertDecisionRequest(r: NewDecisionRequest): void {
       })
     }
   }
+  topicIssues(r, bad)
   if (issues.length > 0) invalid("decision request", issues)
 }
 

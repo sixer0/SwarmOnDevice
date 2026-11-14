@@ -10,6 +10,7 @@
  * Tidak ada hex/mm gaya lain di luar objek `DIAGRAM_TOKENS`.
  */
 import type { DiagramEdgeKind, DiagramFamily, DiagramShape, ProvenanceMark } from "../../../contract";
+import { FIGURE_BOUNDS } from "../../../contract/schema/figure-bounds";
 import { DiagramDefect } from "./defect";
 import { pyFixed, pyLen, pyRound0, pyStr } from "./pyfmt";
 
@@ -109,7 +110,68 @@ export const LIMITS = {
   max_colour_values: 5,
   max_accented_subjects: 1,
   hop_radius_mm: 0.9,
+  // Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §4.1; register N8-213, N8-253, N8-255, N8-259, N8-217, N8-264, N8-470,
+  // N8-471, values per R20-C36/C42): limits and sizes of the 1.2.8 diagram contract fields. Read by the rows that draw
+  // and check them (35c, 53-57); nothing reads them in row 52. Phases, pools and via alias the contract bounds.
+  max_line_styles: 4,
+  max_line_styles_with_mark: 3,
+  max_phases: FIGURE_BOUNDS.diagramPhases,
+  max_pools: FIGURE_BOUNDS.diagramPools,
+  max_via: FIGURE_BOUNDS.diagramVia,
+  curve_samples: 32,
+  arrow_sizes_mm: { s: 2.5, m: 3.2, l: 4.0 },
+  weight_mm: { thin: 0.3, normal: 0.45, thick: 0.7 },
+  shape_glyph_mm: 2.4,
+  label_at_fraction: { start: 0.2, middle: 0.5, end: 0.8 },
+  // Swarm 1.2.8 row 57b (C86; register N8-478, N8-479): row 54's label-below sizes, moved from fit/text.ts.
+  label_below_gap_mm: 1.0,
+  bpmn_event_diameter_mm: 8.0,
+  bpmn_gateway_size_mm: 11.0,
 } as const;
+
+/** Swarm 1.2.8 row 52 (VIS-0a): exported aliases of the LIMITS keys above (register names). */
+export const LINE_STYLE_MAX = LIMITS.max_line_styles;
+export const LINE_STYLE_MAX_WITH_MARK = LIMITS.max_line_styles_with_mark;
+export const PHASES_MAX = LIMITS.max_phases;
+export const POOLS_MAX = LIMITS.max_pools;
+export const VIA_MAX = LIMITS.max_via;
+export const CURVE_SAMPLES = LIMITS.curve_samples;
+export const ARROW_SIZES_MM = LIMITS.arrow_sizes_mm;
+/**
+ * Swarm 1.2.8 row 57 (H-ARW, AC-HARW, register N8-216, value R20-C36): the shortest arrowhead length (mm) at print size.
+ * Heads are drawn in `markerUnits="userSpaceOnUse"` mm (core/svg.ts), so every size of `ARROW_SIZES_MM` is a printed
+ * length; the smallest (`s`) equals this floor.
+ */
+export const ARROW_HEAD_MIN_MM = 2.5;
+export const WEIGHT_MM = LIMITS.weight_mm;
+export const SHAPE_GLYPH_MM = LIMITS.shape_glyph_mm;
+export const LABEL_AT_FRACTION = LIMITS.label_at_fraction;
+
+// Swarm 1.2.8 row 57b (C86, C101; register N8-477..N8-479, N8-470): the label-below names of row 54 and the BPMN shape
+// constants of row 54b, moved here from `fit/text.ts` (which re-exports them, so its importers are unchanged). Values
+// unchanged (OP20-6).
+/**
+ * Row 54 (VIS-3a, C12 OP-18-4, N8-477): BPMN events and gateways are drawn at a fixed outline size, centred
+ * horizontally at the top of the node's layout cell, with their label block (tag line, label, sub) below the outline.
+ */
+export const LABEL_BELOW_SHAPES: ReadonlySet<string> = new Set([
+  "event_start",
+  "event_intermediate",
+  "event_end",
+  "gateway_exclusive",
+  "gateway_parallel",
+  "gateway_inclusive",
+  "gateway_complex",
+]);
+/** Row 54 (N8-478): gap (mm) from the outline's outer stroke edge to the top of the label block. */
+export const LABEL_BELOW_GAP_MM = LIMITS.label_below_gap_mm;
+/** Row 54 (N8-479): outline diameter (mm) of a BPMN event; side of the bounding square of a BPMN gateway (mm). */
+export const BPMN_EVENT_DIAMETER_MM = LIMITS.bpmn_event_diameter_mm;
+export const BPMN_GATEWAY_SIZE_MM = LIMITS.bpmn_gateway_size_mm;
+/** Row 54b (VIS-3b): clearance (mm) between the sub-process [+] square and the outline stroke below it, and the text. */
+export const SUBPROCESS_GLYPH_CLEAR_MM = 0.4;
+/** Row 54b (01f §1.3): arm length (mm) of the text annotation's open bracket (`M x+1.6 y L x y L x y+h L x+1.6 y+h`). */
+export const ANNOTATION_BRACKET_MM = 1.6;
 
 /** Peran tipografi yang dicetak mesin (diuji DATUM-28). */
 export const DIAGRAM_ROLES = ["caption", "source_line", "table_header", "evidence_rail", "register_block"] as const;
@@ -128,18 +190,42 @@ export const FAMILIES: Readonly<Record<DiagramFamily, { drawWhen: string; engine
   graph: { drawWhen: "selain itu, ditempatkan lewat col dan row", engine: "layout_graph" },
 };
 
-/** P3: 10 bentuk simpul. */
-export const SHAPES: Readonly<Record<DiagramShape, { means: string; notation: string; radius: boolean }>> = {
-  box: { means: "komponen, langkah proses, peralatan", notation: "universal", radius: false },
-  stadium: { means: "awal atau akhir; satu-satunya bentuk yang boleh beradius", notation: "ISO 5807", radius: true },
-  diamond: { means: "keputusan; setiap keluaran berlabel", notation: "ISO 5807", radius: false },
-  parallelogram: { means: "masukan atau keluaran", notation: "ISO 5807", radius: false },
-  cylinder: { means: "data tersimpan, arsip", notation: "universal", radius: false },
-  hexagon: { means: "persiapan, gerbang", notation: "ISO 5807, BPMN", radius: false },
-  doubled: { means: "subsistem dengan struktur lanjutan", notation: "UML component", radius: false },
-  shadowed: { means: "entitas eksternal di luar batas", notation: "DFD Gane-Sarson", radius: false },
-  circle: { means: "persimpangan, penyambung luar-halaman", notation: "universal", radius: false },
-  bus: { means: "rel bus atau backplane, garis berat", notation: "IEC 60617", radius: false },
+/** Swarm 1.2.8 row 53a (H-D35, ruling D-V1, register N8-245): notation dialects of `SHAPES[s].notation_set`. */
+const UNIVERSAL: readonly string[] = [];
+const ISO: readonly string[] = ["ISO 5807"];
+const BPMN: readonly string[] = ["BPMN"];
+
+/**
+ * P3: 10 bentuk simpul + Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §1): 14 bentuk Basic Flowchart / BPMN Basic / anotasi.
+ * Bentuk baru digambar sebagai kotak sampai row 53/54 memasang garis luarnya.
+ * Swarm 1.2.8 row 53a (H-D35, D-V1, 01f §1.4, N8-245): `notation_set` menggantikan string `notation`. `[]` = universal;
+ * sebuah gambar sah bila irisan himpunan semua simpul non-universal tidak kosong (DATUM-35, `core/spec.ts`).
+ */
+export const SHAPES: Readonly<Record<DiagramShape, { means: string; notation_set: readonly string[]; radius: boolean }>> = {
+  box: { means: "komponen, langkah proses, peralatan", notation_set: UNIVERSAL, radius: false },
+  stadium: { means: "awal atau akhir; satu-satunya bentuk yang boleh beradius", notation_set: ISO, radius: true },
+  diamond: { means: "keputusan; setiap keluaran berlabel", notation_set: ["ISO 5807", "BPMN"], radius: false },
+  parallelogram: { means: "masukan atau keluaran", notation_set: ISO, radius: false },
+  cylinder: { means: "data tersimpan, arsip", notation_set: UNIVERSAL, radius: false },
+  hexagon: { means: "persiapan, gerbang", notation_set: ISO, radius: false },
+  doubled: { means: "subsistem dengan struktur lanjutan", notation_set: ["UML component"], radius: false },
+  shadowed: { means: "entitas eksternal di luar batas", notation_set: ["DFD Gane-Sarson"], radius: false },
+  circle: { means: "persimpangan, penyambung luar-halaman", notation_set: UNIVERSAL, radius: false },
+  bus: { means: "rel bus atau backplane, garis berat", notation_set: ["IEC 60617"], radius: false },
+  predefined: { means: "subproses terdefinisi (proses dengan dua garis sisi)", notation_set: ISO, radius: false },
+  document: { means: "dokumen", notation_set: ISO, radius: false },
+  offpage: { means: "penyambung ke halaman lain", notation_set: ISO, radius: false },
+  event_start: { means: "peristiwa awal (BPMN)", notation_set: BPMN, radius: false },
+  event_intermediate: { means: "peristiwa antara (BPMN)", notation_set: BPMN, radius: false },
+  event_end: { means: "peristiwa akhir (BPMN)", notation_set: BPMN, radius: false },
+  task: { means: "tugas (BPMN)", notation_set: BPMN, radius: true },
+  subprocess: { means: "subproses terlipat [+] (BPMN)", notation_set: BPMN, radius: true },
+  gateway_exclusive: { means: "gerbang eksklusif X (BPMN); setiap keluaran berlabel", notation_set: BPMN, radius: false },
+  gateway_parallel: { means: "gerbang paralel + (BPMN)", notation_set: BPMN, radius: false },
+  gateway_inclusive: { means: "gerbang inklusif O (BPMN)", notation_set: BPMN, radius: false },
+  gateway_complex: { means: "gerbang kompleks * (BPMN)", notation_set: BPMN, radius: false },
+  data_object: { means: "objek data (BPMN)", notation_set: BPMN, radius: false },
+  annotation: { means: "anotasi teks dengan kurung", notation_set: UNIVERSAL, radius: false },
 };
 
 export type DashPatternName = "solid" | "dashed" | "dotted" | "longdash" | "dashdot";

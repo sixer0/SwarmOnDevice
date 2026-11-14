@@ -20,7 +20,8 @@ describe("row 97: diagram resource norms (G-01)", () => {
     ["W-01 caption", `Studio prints the label; the caption never starts with it; at most ${K.cap} characters`],
     ["labels ~20/~40 + sub (FX-10, C19b: the engine hints)", "edge label at most ~20 characters, node label at most ~40; a second detail goes in `sub`"],
     ["one accent", "One accent per drawing"],
-    ["line kinds with glyphs", "At most 3 edge kinds when any node has a mark (4 without; DATUM-25)"],
+    // 1.2.8 row 35c (AT-HT06, INTENT): the line names the spec check DATUM-25L that now enforces it.
+    ["line kinds with glyphs", "Edge kinds max 4, 3 if a node has a mark (DATUM-25L)"],
     ["col 0 + inset", `\`col: 0\` is valid; Studio keeps a ${K.inset} mm inset from the sheet edge`],
     ["fan-out + split", `Fan-out of ${K.fan} or more edges is sub-ranked by Studio`],
     ["measure first (W-04)", "Preview a shape before promising it"],

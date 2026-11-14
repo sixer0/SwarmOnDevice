@@ -9,7 +9,9 @@ describe("public event manifest", () => {
     expect(EventManifest.Definitions).toBe(SchemaEventManifest.Definitions)
     expect(EventManifest.Latest).toBe(SchemaEventManifest.Latest)
     expect(EventManifest.Durable).toBe(SchemaEventManifest.Durable)
-    expect(EventManifest.Latest.size).toBe(92)
+    expect(EventManifest.Latest.size).toBe(93)
+    // 1.2.8 row 44b: +1 for project.rehomed (N8-131).
+    expect(EventManifest.Latest.has("project.rehomed")).toBe(true)
     expect(EventManifest.Latest.has("memory.updated")).toBe(true)
     expect(EventManifest.Latest.has("command.updated")).toBe(true)
     expect(EventManifest.Latest.has("autonomy.mode.changed")).toBe(true)

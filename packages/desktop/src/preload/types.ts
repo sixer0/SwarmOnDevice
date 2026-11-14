@@ -115,6 +115,8 @@ export type MissionControlPlatform = {
     option: string
   }): Promise<MissionControlResult<{ decision: string; released: string[] }>>
   instruct(input: { mission: string; text: string; row?: string }): Promise<MissionControlResult<{ seq: number }>>
+  /** 1.2.8 row 46 (N8-144): join/new of an open placement request; main answers, moves and places in one sequence. */
+  place?(input: { mission: string; request: string; option: string }): Promise<MissionControlResult<{ decision: string; group: string }>>
 }
 export type MissionControlAPI = MissionControlPlatform
 
@@ -192,6 +194,8 @@ export type ElectronAPI = {
   openLocalFile: (url: string) => void
   openPath: (path: string, app?: string) => Promise<void>
   revealPath: (path: string) => Promise<boolean>
+  /** 1.2.8 row 42c (AC-OBSf, N8-116): opens the project's vault hub note in Obsidian; main checks the path. */
+  openObsidianNote: (hubPath: string) => Promise<"opened" | "missing" | "outside" | "no-app" | "failed">
   readClipboardImage: () => Promise<{ buffer: ArrayBuffer; width: number; height: number } | null>
   getWindowFocused: () => Promise<boolean>
   getWindowFullscreen: () => Promise<boolean>

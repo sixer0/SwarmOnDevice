@@ -26,6 +26,7 @@ import {
   isOldLayoutEligible,
 } from "./onboarding"
 import { prepareOnboardingTestRoot } from "./onboarding-test-root"
+import { applyLoopbackProxyBypass } from "./proxy-bypass"
 import {
   getDefaultServerUrl,
   preferAppEnv,
@@ -204,7 +205,8 @@ const main = Effect.gen(function* () {
 
   ensureLoopbackNoProxy()
   useEnvProxy()
-  app.commandLine.appendSwitch("proxy-bypass-list", "<-loopback>")
+  // AC-R5: loopback always bypasses any proxy (fixed, PAC, system); `<-loopback>` used to send it to a fixed proxy.
+  applyLoopbackProxyBypass(app.commandLine)
   const features = app.commandLine.getSwitchValue("enable-features")
   app.commandLine.appendSwitch("enable-features", features ? `${jsCallStackFeature},${features}` : jsCallStackFeature)
   if (!app.isPackaged) app.commandLine.appendSwitch("remote-debugging-port", "9222")

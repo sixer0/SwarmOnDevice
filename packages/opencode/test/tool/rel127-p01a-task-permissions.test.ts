@@ -278,7 +278,7 @@ describe("P-01a task tool", () => {
           role,
           command,
           expect.stringContaining(
-            `${Task.TASK_GRANT_ROLE_DENIED} Task not started: the ${shownRole} role may not run "${command}". Hand it to a coder subagent.`,
+            `${Task.TASK_GRANT_ROLE_DENIED} Task not started: the ${shownRole} role may not run "${command}". Ask for it in your final message instead.`, // 1.2.8 AC-HN1 INTENT (N8-391)
           ),
         ])
         expect(children).toEqual([])

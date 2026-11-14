@@ -2,7 +2,7 @@
 // session handling of the mission control client. The host is a recording fake fetch; the real host is in
 // mission-client.integration.test.ts.
 import { afterAll, describe, expect, test } from "bun:test"
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
 import {
   createMissionControlClient,
@@ -14,6 +14,11 @@ import {
   parseListInput,
   type FetchLike,
 } from "./mission-client"
+// 1.2.8 row 45c (SR8-05): namespace imports, so the file still loads at BASE where the new names are absent (red run).
+import * as missionClientModule from "./mission-client"
+import * as lifecycleModule from "./lifecycle"
+import * as descriptorModule from "./descriptor"
+import * as protocolModule from "./protocol"
 
 const SCRATCH = "/private/tmp/claude-501/row127"
 const dir = mkdtempSync(join(SCRATCH, "unit-"))
@@ -54,12 +59,14 @@ const client = (fetch: FetchLike, extra: Partial<Parameters<typeof createMission
   createMissionControlClient({ url: URL_OK, token: TOKEN, callerCwd: join(dir, "mc"), fetch, ...extra })
 
 describe("allow-list", () => {
-  test("exactly the four tools of spec §3.3", () => {
+  // 1.2.8 row 46 (CHAR-MC INTENT: 5 allowed tools): studio_mission_place joins for the person's placement click.
+  test("exactly the five tools of spec §3.3 + 1.2.8 01d §7.2", () => {
     expect([...MISSION_CONTROL_TOOLS]).toEqual([
       "studio_mission_list",
       "studio_mission_get",
       "studio_mission_answer_decision",
       "studio_mission_update_row",
+      "studio_mission_place",
     ])
   })
 
@@ -213,7 +220,8 @@ describe("token isolation", () => {
     for (const text of [block, channels, typeBlock]) {
       expect(text).not.toMatch(/token|bearer|authorization|datum-studio\.env|127\.0\.0\.1|callTool|tools\/call/i)
     }
-    expect(channels.match(/"mission-control:[a-z]+"/g)).toEqual(['"mission-control:list"', '"mission-control:get"', '"mission-control:answer"', '"mission-control:instruct"'])
+    // 1.2.8 row 46 (CHAR-MC INTENT: `place` meaning, N8-144): the person's placement click is the fifth channel.
+    expect(channels.match(/"mission-control:[a-z]+"/g)).toEqual(['"mission-control:list"', '"mission-control:get"', '"mission-control:answer"', '"mission-control:instruct"', '"mission-control:place"'])
     expect(preload).not.toMatch(/datum-studio-host|mission-client/)
   })
 })
@@ -299,5 +307,137 @@ describe("answer id rule and session handling", () => {
       new Response(new ReadableStream({ start() {} }), { status: 200, headers: { "content-type": "application/json", "mcp-session-id": "s1" } })
     const r = await Promise.race([client(fetch, { timeoutMs: 100 }).list({ directory: "/a", sessions: ["ses_abc123"] }), Bun.sleep(1500).then(() => "STILL_PENDING" as const)])
     expect(r).toMatchObject({ ok: false, code: "TIMEOUT" })
+  })
+})
+
+// 1.2.8 row 45c, contributor to AC-SEC05 (SR8-05). CHAR-MC INTENT: the initialize request now carries
+// `x-swarm-mission-control-key` (N8-459); no other request does. Host attestation itself is row 45b.
+describe("SR8-05 per-launch Mission Control key (row 45c)", () => {
+  const KEY = "a".repeat(64)
+  const HEADER = "x-swarm-mission-control-key"
+
+  test("N8-459: the header constant is x-swarm-mission-control-key", () => {
+    expect((missionClientModule as Record<string, unknown>).MISSION_CONTROL_KEY_HEADER).toBe(HEADER)
+  })
+
+  test("the key rides on every initialize (incl. the 404 re-initialise) and on no other request; never in a body", async () => {
+    const host = fakeHost(() => ({ ok: true, tool: "studio_mission_list", items: [] }), { status: (n, body) => (n === 3 && body.method === "tools/call" ? 404 : undefined) })
+    const c = client(host.fetch, { missionControlKey: KEY } as Record<string, unknown>)
+    await c.list({ directory: "/a", sessions: ["ses_abc123"] })
+    const inits = host.calls.filter((x) => x.body.method === "initialize")
+    expect(inits).toHaveLength(2)
+    for (const call of host.calls) {
+      if (call.body.method === "initialize") expect(call.headers[HEADER]).toBe(KEY)
+      else expect(call.headers[HEADER]).toBeUndefined()
+      expect(JSON.stringify(call.body)).not.toContain(KEY)
+    }
+  })
+
+  test("host text and logs never carry the key", async () => {
+    const host = fakeHost((name) => ({ ok: false, tool: name, code: "MISSION_NOT_FOUND", error: { code: "MISSION_NOT_FOUND", message: `unknown ${KEY}` } }))
+    const logs: unknown[] = []
+    const r = await client(host.fetch, { missionControlKey: KEY, log: (...a: unknown[]) => void logs.push(a) } as Record<string, unknown>).get({ mission: MISSION })
+    expect(JSON.stringify(r)).not.toContain(KEY)
+    const failing = client(async () => {
+      throw new Error(`connect failed ${KEY}`)
+    }, { missionControlKey: KEY, log: (...a: unknown[]) => void logs.push(a) } as Record<string, unknown>)
+    const r2 = await failing.list({ directory: "/a", sessions: ["ses_abc123"] })
+    expect(JSON.stringify(r2) + JSON.stringify(logs)).not.toContain(KEY)
+  })
+
+  test("lifecycle: a fresh 64-hex key per launch only in the start message and the mission client; never in env, datum-studio.env or logs (grep)", async () => {
+    const root = mkdtempSync(join(dir, "sec05-"))
+    const studio = join(root, "Res", "datum-studio")
+    const home = join(root, "home")
+    const state = join(root, "state")
+    for (const d of [join(studio, "assets"), join(studio, "templates"), home, state]) mkdirSync(d, { recursive: true })
+    const layout = { root: studio, assetsRoot: join(studio, "assets"), templatesDir: join(studio, "templates"), vendorRoot: studio, assetRepoRoot: studio, kind: "packaged" as const }
+    const baseEnv = { HOME: home, PATH: "/usr/bin:/bin", XDG_STATE_HOME: state, XDG_DATA_HOME: join(home, ".local", "share") }
+    const descriptorPath = descriptorModule.studioDescriptorPath(state)
+
+    const starts: Record<string, unknown>[] = []
+    const envs: Record<string, string>[] = []
+    const logs: unknown[] = []
+    const fork = ((_path: string, _args: string[], options: { env: Record<string, string> }) => {
+      envs.push(options.env)
+      const listeners = { message: new Set<(m: unknown) => void>(), exit: new Set<(c: number) => void>() }
+      return {
+        pid: 4242,
+        postMessage(message: Record<string, unknown>) {
+          if (message.type === "start") {
+            starts.push(message)
+            queueMicrotask(() => listeners.message.forEach((l) => l({ type: "ready", url: URL_OK, pid: 4242, cwd: studio })))
+          } else if (message.type === "stop") {
+            queueMicrotask(() => {
+              listeners.message.forEach((l) => l({ type: "stopped" }))
+              listeners.exit.forEach((l) => l(0))
+            })
+          }
+        },
+        on(event: "message" | "exit", l: (v: never) => void) {
+          ;(listeners[event] as Set<unknown>).add(l)
+        },
+        off(event: "message" | "exit", l: (v: never) => void) {
+          ;(listeners[event] as Set<unknown>).delete(l)
+        },
+        kill: () => true,
+      }
+    }) as unknown as Parameters<typeof lifecycleModule.startStudioHost>[0]["fork"]
+
+    const realFetch = globalThis.fetch
+    const host = fakeHost(() => ({ ok: true, tool: "studio_mission_list", items: [] }))
+    globalThis.fetch = ((u: string, init: Parameters<FetchLike>[1]) => host.fetch(String(u), init)) as unknown as typeof fetch
+    try {
+      const launch = () =>
+        lifecycleModule.startStudioHost({
+          fork,
+          entryPath: join(root, "entry.js"),
+          layout,
+          storeRoot: join(home, ".local", "share", "swarm", "datum-studio"),
+          descriptorPath,
+          mainPid: process.pid,
+          home,
+          baseEnv,
+          log: (...a) => void logs.push(a),
+          missionCallerCwd: join(root, "mc-cwd"),
+        })
+      const first = await launch()
+      const descriptor = readFileSync(descriptorPath, "utf8")
+      await first.missions.list({ directory: "/a", sessions: ["ses_abc123"] })
+      await first.stop()
+      const second = await launch()
+      await second.stop()
+
+      expect(starts).toHaveLength(2)
+      const keys = starts.map((s) => s.missionControlKey)
+      for (const [i, key] of keys.entries()) {
+        expect(typeof key).toBe("string")
+        expect(key as string).toMatch(/^[0-9a-f]{64}$/)
+        expect(key).not.toBe(starts[i]!.token)
+        // The start message passes the host-command check with its key.
+        expect(protocolModule.isHostCommand(starts[i])).toBe(true)
+      }
+      expect(keys[0]).not.toBe(keys[1])
+      const key = keys[0] as string
+      // Sent by the mission client at initialize only.
+      const inits = host.calls.filter((x) => x.body.method === "initialize")
+      expect(inits.length).toBeGreaterThan(0)
+      for (const call of host.calls) expect(call.headers[HEADER]).toBe(call.body.method === "initialize" ? key : undefined)
+      // Grep: never in the host env, the descriptor (datum-studio.env), the logs or the handle.
+      const haystack = JSON.stringify(envs) + descriptor + JSON.stringify(logs) + JSON.stringify(Object.keys(first)) + JSON.stringify(process.env)
+      for (const k of keys) expect(haystack).not.toContain(k as string)
+      // A malformed key is refused by the host-command check.
+      expect(protocolModule.isHostCommand({ ...starts[0], missionControlKey: "short" })).toBe(false)
+    } finally {
+      globalThis.fetch = realFetch
+    }
+  })
+
+  test("source grep: no log call in the host files names the key", () => {
+    for (const file of ["lifecycle.ts", "host-runner.ts", "mission-client.ts"]) {
+      const text = readFileSync(join(import.meta.dir, file), "utf8")
+      const logLines = text.split("\n").filter((line) => /\blog\(|opts\.log\(|console\./.test(line))
+      for (const line of logLines) expect(line).not.toMatch(/missionControlKey|missionKey/)
+    }
   })
 })

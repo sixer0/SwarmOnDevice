@@ -37,8 +37,18 @@ export async function paginate<T, R extends { nextCursor?: string }>(
   throw new Error(`MCP list exceeded ${MAX_LIST_PAGES} pages`)
 }
 
+/**
+ * 1.2.8 row 45 (PROJ-b, N8-456, 01d §7.3): Studio host tools that act for the person. Swarm's own Mission Control
+ * client calls them; opencode never lists them to an agent, whatever the server. Other MCP clients still see them
+ * (residual S-5; the host's attested-session check is row 45b, SR8-05).
+ */
+export const PERSON_ONLY_MCP_TOOLS: readonly string[] = ["studio_mission_place"]
+
 export function defs(client: Client, timeout?: number) {
-  return listTools(client, timeout ?? DEFAULT_TIMEOUT).pipe(Effect.catch(() => Effect.void))
+  return listTools(client, timeout ?? DEFAULT_TIMEOUT).pipe(
+    Effect.map((tools) => tools.filter((tool) => !PERSON_ONLY_MCP_TOOLS.includes(tool.name))),
+    Effect.catch(() => Effect.void),
+  )
 }
 
 /** Row 188/192 (L51): the `_meta` key datum-studio reads to link a mission write to the calling Swarm session. */
@@ -55,8 +65,20 @@ export function callerSessionMeta(sessionID: string): Record<string, unknown> {
  */
 export const AUTONOMOUS_META = "studio/autonomous"
 
-/** The `_meta` of one call: fixed, or read when the call is made (so a mode switched off holds from the next call). */
-export type CallMeta = Record<string, unknown> | (() => Promise<Record<string, unknown> | undefined>)
+/**
+ * 1.2.8 MEM-e (N8-012, 01e §4.2): the `_meta` key that tells datum-studio whether this project's memory holds the
+ * mission's index entry, as `{missionId, present}`. Swarm's own code sets it on `studio_mission_set_status {to: done}`
+ * only; the host reads it only from agent `swarm` (a compliance gate, not access control: SR8-22).
+ */
+export const MEMORY_INDEX_META = "studio/memoryIndex"
+
+/**
+ * The `_meta` of one call: fixed, or read when the call is made (so a mode switched off holds from the next call). The
+ * function gets the call's arguments (MEM-e); callers that ignore them are unchanged.
+ */
+export type CallMeta =
+  | Record<string, unknown>
+  | ((args: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>)
 
 /** SEC-21: settle with the signal's reason as soon as it aborts, whichever comes first. */
 function abortable<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
@@ -193,11 +215,12 @@ export function convertTool(
       // notifications/cancelled), so a hung server cannot hold the call for the full `timeout`.
       const signal = options.abortSignal
       signal?.throwIfAborted()
-      const callMeta = typeof meta === "function" ? await abortable(meta(), signal) : meta
+      const callArgs = (args || {}) as Record<string, unknown>
+      const callMeta = typeof meta === "function" ? await abortable(meta(callArgs), signal) : meta
       const result = await client.callTool(
         {
           name: mcpTool.name,
-          arguments: (args || {}) as Record<string, unknown>,
+          arguments: callArgs,
           // The SDK merges its progress token into this object (protocol.js request), so both reach the server.
           ...(callMeta ? { _meta: { ...callMeta } } : {}),
         },

@@ -33,14 +33,17 @@ describe("N-7 AUTO_FIT remainder (engine, fixture n7_autofit_t03_rest)", () => {
     ["buildDiagramSvg", async () => buildDiagramSvg(FIX.spec, FIX.buildOptions)],
     ["buildDiagramSvgAuto", async () => buildDiagramSvgAuto(FIX.spec, FIX.buildOptions)],
   ] as const) {
-    test(`${name}: AUTO_FIT says sisa 1 (termasuk 1 isu GEOM T-03) and points at the GEOM_* lines`, async () => {
+    // Swarm 1.2.8 row 57c (C102, INTENT): the label placement no longer leaves the fixture's stub beside a label band,
+    // so the best auto-fit has no T-03 remainder: the text says sisa 0 (no "termasuk"), suggest `tidak ada`, and no
+    // GEOM_STUB_SEGMENT line follows. The remainder wording with T-03 defects is pinned by the unit tests below.
+    test(`${name}: AUTO_FIT says sisa 0 without a T-03 remainder; no GEOM_STUB_SEGMENT line (row 57c)`, async () => {
       const geo = geomOf((await build()) as Rec);
       const auto = geo.find((i) => i.checkId === "AUTO_FIT");
       expect(auto).toBeDefined();
-      expect(String(auto!.detail)).toMatch(/sisa 1 \(termasuk 1 isu GEOM T-03\)/);
-      expect(String(auto!.detail)).not.toMatch(/-> sisa 0\b/);
-      expect(auto!.suggest).toBe("lihat isu GEOM_* berikut");
-      expect(geo.filter((i) => i.checkId === "GEOM_STUB_SEGMENT").length).toBe(1);
+      expect(String(auto!.detail)).toMatch(/sesudah fit sisa 0;/);
+      expect(String(auto!.detail)).not.toMatch(/termasuk/);
+      expect(auto!.suggest).toBe("tidak ada");
+      expect(geo.filter((i) => i.checkId === "GEOM_STUB_SEGMENT").length).toBe(0);
     });
   }
 });
@@ -63,7 +66,8 @@ describe("N-7 autoFitRestText (unit, N7-139)", () => {
   });
 
   test("both AUTO_FIT sites (autofit.ts, capacity.ts) build their remainder with autoFitRestText", () => {
-    expect(SRC("autofit.ts")).toMatch(/-> \$\{autoFitRestText\([^)]*\)\.rest\}/);
+    // Swarm 1.2.8 row 35 (AC-HNB, INTENT): the lead now reads `sebelum fit <n>, sesudah fit <rest>`; the remainder is still autoFitRestText.
+    expect(SRC("autofit.ts")).toMatch(/sesudah fit \$\{autoFitRestText\([^)]*\)\.rest\}/);
     expect(SRC("capacity.ts")).toMatch(/import \{[^}]*\bautoFitRestText\b[^}]*\} from "\.\/autofit"/);
     expect(SRC("capacity.ts")).toMatch(/autoFitRestText\(best\.g\)/);
     expect(SRC("capacity.ts")).not.toMatch(/-> sisa \$\{best\.g\.score\}/);

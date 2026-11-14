@@ -705,7 +705,10 @@ export function decompose(root: Node, cwd: string, options: { zsh?: boolean } = 
     const [name, ...args] = words.slice(assigned)
     if (assigned > 0 && (name === "cd" || name === "set" || name === "export" || stdin !== undefined)) fail()
     if (revisionWords > 0 && name !== "git") fail()
-    if (name === "cd") {
+    // 1.2.8 row 27 (R-2 cd): `pushd <dir>` and zsh's `chdir <dir>` move the folder as `cd <dir>` does; `popd` goes back to a
+    // folder of the directory stack, which the text does not name.
+    if (name === "popd") fail()
+    if (name === "cd" || name === "pushd" || name === "chdir") {
       // `-`, `-1` and `+1` are zsh's directory stack. A bare name may be found through CDPATH, anywhere on the disk.
       if (args.length !== 1 || /^[-+]/.test(args[0]!) || stdin !== undefined) fail()
       if (process.env.CDPATH && !/^(\/|\.{1,2}(\/|$))/.test(args[0]!)) fail()

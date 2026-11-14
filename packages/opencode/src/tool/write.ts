@@ -11,7 +11,7 @@ import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { Format } from "../format"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { InstanceState } from "@/effect/instance-state"
-import { checkpointBefore, followedByEdit, lock, trimDiff } from "./edit"
+import { checkpointBefore, followedByEdit, linkedLabels, lock, trimDiff } from "./edit"
 import { ActionCheckpoint } from "./checkpoint"
 import { FileSeen } from "./file-seen"
 import { Secrets } from "./secrets"
@@ -49,6 +49,11 @@ export const WriteTool = Tool.define(
           const filepath = target.written
           const label = path.relative(instance.worktree, filepath)
           if (target.landing === undefined) throw new Error(`Cannot resolve ${label}: a link on the way loops`)
+          // 1.2.8 row 40h (SK-e, C82): a skill folder is refused before the outside-folder prompt, so a write into
+          // ~/.agents/skills asks nothing first (Reach.editTrust checks again with the service's newest list).
+          if ([filepath, target.landing].some((file) => Reach.skillFolder(file, instance))) throw new Reach.SkillFolderRefused()
+          // 1.2.8 row 40f (AC-SEC11): the vault mirror folder likewise, before any prompt, mode on and off.
+          if ([filepath, target.landing].some((file) => Reach.vaultMirror(file, instance))) throw new Reach.VaultMirrorRefused()
           yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), filepath)
           if (target.landing !== filepath) yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), target.landing)
 
@@ -64,7 +69,7 @@ export const WriteTool = Tool.define(
           const trust = yield* Reach.editTrust(ctx, instance, [filepath])
           yield* ctx.ask({
             permission: "edit",
-            patterns: [label],
+            patterns: [label, ...linkedLabels(instance.worktree, [filepath])],
             always: trust.risk ? [] : ["*"],
             metadata: {
               filepath,

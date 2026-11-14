@@ -26,15 +26,25 @@ const DEST = join(PKG_DIR, "tools.lock.json")
 
 /** Resolve the authoritative masterplan lock: explicit env override wins; otherwise scan
  *  docs/ for task folders (same workspace layout as this checkout's docs root) and take the
- *  newest date-prefixed folder that actually carries the file. */
+ *  newest date-prefixed folder that actually carries the file. If neither applies (a build
+ *  checkout outside the workspace, e.g. under /opt), fall back to the tracked DEST itself
+ *  (AC-R3, 1.2.8 row 29); it is still validated below and is never rewritten. */
 function resolveSource(): string | null {
+  const found = resolveAuthoritative()
+  if (found !== undefined) return found
+  return existsSync(DEST) ? DEST : null
+}
+
+/** undefined = nothing configured or found (fallback allowed); null = an explicit override
+ *  that does not exist (fail closed, no fallback). */
+function resolveAuthoritative(): string | null | undefined {
   const override = process.env.SWARM_TOOLS_LOCK_SOURCE ?? process.env.SWARM_DOCS_ROOT
   if (override && override.trim() !== "") {
     const dir = override.endsWith(LOCK_BASENAME) ? override : join(override, "masterplan", LOCK_BASENAME)
     return existsSync(dir) ? dir : null
   }
   const docsRoot = join(REPO_DIR, "..", "docs")
-  if (!existsSync(docsRoot)) return null
+  if (!existsSync(docsRoot)) return undefined
   const candidates = readdirSync(docsRoot)
     .filter((name) => /^\d{4}-\d{2}-\d{2}_/.test(name))
     .sort()
@@ -43,7 +53,7 @@ function resolveSource(): string | null {
     const p = join(docsRoot, name, "masterplan", LOCK_BASENAME)
     if (existsSync(p)) return p
   }
-  return null
+  return undefined
 }
 
 function sha256Hex(bytes: Uint8Array | string): string {
@@ -61,7 +71,7 @@ function parseSource(raw: Uint8Array): { ok: true; parsed: unknown } | { ok: fal
 const source = resolveSource()
 if (source === null) {
   console.error(
-    `LOCK_GEN_FAIL: authoritative ${LOCK_BASENAME} not found (looked in ../docs/<task>/masterplan; set SWARM_TOOLS_LOCK_SOURCE or SWARM_DOCS_ROOT to override)`,
+    `LOCK_GEN_FAIL: authoritative ${LOCK_BASENAME} not found (looked in ../docs/<task>/masterplan and the tracked tools.lock.json; set SWARM_TOOLS_LOCK_SOURCE or SWARM_DOCS_ROOT to override)`,
   )
   process.exit(1)
 }
@@ -79,7 +89,9 @@ if (!validated.ok) {
   process.exit(1)
 }
 
-writeFileSync(DEST, raw, { mode: 0o644 })
+// Tracked-lock fallback: the source IS the destination, so nothing is written (the file
+// stays untouched, mtime included); the re-read below still proves byte-identity.
+if (source !== DEST) writeFileSync(DEST, raw, { mode: 0o644 })
 
 // Byte-equality is asserted AFTER the write (a pre-existing read-only dest could make
 // writeFileSync silently no-op on some filesystems; the re-read catches that).

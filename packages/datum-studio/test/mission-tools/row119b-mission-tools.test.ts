@@ -81,6 +81,7 @@ const EXPECTED_TOOLS = [
   "studio_mission_export",
   "studio_mission_request_decision",
   "studio_mission_answer_decision",
+  "studio_mission_place", // 1.2.8 row 45 (PROJ-b, INTENT 40 -> 41)
   // Row 50c (1.2.6, W-13): host built-in, last
   "studio_asset_put",
 ]
@@ -118,8 +119,11 @@ async function client(url: string, agent: string): Promise<Client> {
 }
 
 type S = Record<string, any>
-async function call(c: Client, name: string, args: Record<string, unknown>): Promise<S> {
-  const r = await c.callTool({ name, arguments: args })
+// 1.2.8 row 31 (INTENT, C10 OP13-2): a call that passes an explicit session ref also names the caller session in
+// _meta, the way Swarm does; an explicit ref with no caller session known is SESSION_UNKNOWN (H-N12).
+const CALLER = { "studio/callerSession": SES }
+async function call(c: Client, name: string, args: Record<string, unknown>, meta?: Record<string, unknown>): Promise<S> {
+  const r = await c.callTool({ name, arguments: args, ...(meta ? { _meta: meta } : {}) })
   return { ...((r.structuredContent ?? {}) as S), _isError: r.isError === true, _text: (r.content as Array<{ text?: string }>).map((x) => x.text ?? "").join("\n") }
 }
 const code = (r: S) => (r.ok === false ? r.code : "OK")
@@ -205,12 +209,12 @@ afterAll(async () => {
 })
 
 describe("row 119b: tool list and the wrapper seam", () => {
-  test("tools/list = the exact 40 names in order (23 kept + 5 template + 11 mission + studio_asset_put); wrappers keep their slot", async () => {
+  test("tools/list = the exact 41 names in order (23 kept + 5 template + 12 mission + studio_asset_put); wrappers keep their slot", async () => {
     const tools = (await swarm.listTools()).tools
     const names = tools.map((t) => t.name)
     quote("tool count", names.length)
     expect(names).toEqual(EXPECTED_TOOLS)
-    expect(names.length).toBe(40) // W-13 / row 50c: +studio_asset_put
+    expect(names.length).toBe(41) // W-13 / row 50c: +studio_asset_put; 1.2.8 row 45: + studio_mission_place
     const props = (n: string) => Object.keys((tools.find((t) => t.name === n)!.inputSchema as S).properties ?? {})
     expect(props("studio_report_template")).toContain("row")
     expect(props("studio_report_check")).toContain("row")
@@ -247,13 +251,13 @@ describe("row 119b: create, approve, sessions", () => {
     expect(dry.ok).toBe(true)
     expect(dry.dryRun).toBe(true)
     expect(code(await call(swarm, "studio_mission_get", { mission: M1 }))).toBe("MISSION_NOT_FOUND")
-    const c1 = await call(swarm, "studio_mission_create", { mission: m1, session: { ref: SES, role: "controller" }, actor: "master-controller" })
+    const c1 = await call(swarm, "studio_mission_create", { mission: m1, session: { ref: SES, role: "controller" }, actor: "master-controller" }, CALLER)
     quote("create M1", { ok: c1.ok, id: c1.id, status: c1.status, rows: c1.rows, waves: c1.waves })
     expect(c1).toMatchObject({ ok: true, id: M1, status: "draft", rows: 4 })
     const c2 = await call(swarm, "studio_mission_create", {
       mission: { id: M2, title: "Row 119b research mission", type: "research", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1", "research", "research"), row("2", "synthesis", "synthesis", ["1:B"])], decisions: [{ id: "U1", by: "user", date: "2026-11-07", text: "go" }] },
       session: { ref: SES, role: "controller" },
-    })
+    }, CALLER)
     expect(c2.ok).toBe(true)
     const c0 = await call(swarm, "studio_mission_create", { mission: { id: M0, title: "Old mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1", "implementation", "implementation")], decisions: [{ id: "U1", by: "user", date: "2026-11-06", text: "go" }, { id: "U3", by: "user", date: "2026-11-06", text: "replaced by 119b feature" }] } })
     expect(c0.ok).toBe(true)
@@ -325,7 +329,7 @@ describe("row 119b: report tools with mission semantics", () => {
   })
 
   test("submit per row: row 1 complete -> needs-review, mission approved -> running; one link per document", async () => {
-    const r = await call(swarm, "studio_report_submit", { markdown: report({ mission: M1, taskRef: "1" }), row: "1", session: { ref: SES, role: "driver" } })
+    const r = await call(swarm, "studio_report_submit", { markdown: report({ mission: M1, taskRef: "1" }), row: "1", session: { ref: SES, role: "driver" } }, CALLER)
     quote("submit row 1", { ok: r.ok, mission: r.mission, documentId: r.documentId })
     expect(r.ok).toBe(true)
     expect(r.mission).toMatchObject({ id: M1, kind: "row", row: "1", docKey: "row-1", reportStatus: "complete", rowStatus: "needs-review", missionStatus: "running" })

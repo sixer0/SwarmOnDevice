@@ -150,6 +150,8 @@ import type {
   MemorySettingsResponses,
   MemoryUpdateErrors,
   MemoryUpdateResponses,
+  MemoryVaultErrors,
+  MemoryVaultResponses,
   ModelRef,
   MoveSessionDestination,
   OutputFormat,
@@ -179,6 +181,9 @@ import type {
   ProjectInitGitResponses,
   ProjectListErrors,
   ProjectListResponses,
+  ProjectRehomeErrors,
+  ProjectRehomeInput,
+  ProjectRehomeResponses,
   ProjectTrustDecideErrors,
   ProjectTrustDecideResponses,
   ProjectTrustErrors,
@@ -280,6 +285,18 @@ import type {
   SessionUpdateResponses,
   ShellRerunnableErrors,
   ShellRerunnableResponses,
+  SkillDeleteErrors,
+  SkillDeleteResponses,
+  SkillDraftApproveErrors,
+  SkillDraftApproveResponses,
+  SkillDraftDiscardErrors,
+  SkillDraftDiscardResponses,
+  SkillDraftsErrors,
+  SkillDraftsResponses,
+  SkillSaveErrors,
+  SkillSaveResponses,
+  SkillSourceErrors,
+  SkillSourceResponses,
   SubtaskPartInput,
   SyncHistoryListErrors,
   SyncHistoryListResponses,
@@ -1392,15 +1409,26 @@ export class Config extends HeyApiClient {
   /**
    * Update global configuration
    *
-   * Update global Swarm configuration settings and preferences.
+   * Update global Swarm configuration settings and preferences. While the server holds the desktop app's per-launch nonce, the request needs the matching x-swarm-desktop-nonce header, else 403 CONFIG_PERSON_ONLY; a server started without the app takes it as before.
    */
   public update<ThrowOnError extends boolean = false>(
     parameters?: {
+      "x-swarm-desktop-nonce"?: string
       config?: Config3
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams([parameters], [{ args: [{ key: "config", map: "body" }] }])
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { key: "config", map: "body" },
+          ],
+        },
+      ],
+    )
     return (options?.client ?? this.client).patch<GlobalConfigUpdateResponses, GlobalConfigUpdateErrors, ThrowOnError>({
       url: "/global/config",
       ...options,
@@ -1939,10 +1967,11 @@ export class Config2 extends HeyApiClient {
   /**
    * Update configuration
    *
-   * Update Swarm configuration settings and preferences.
+   * Update Swarm configuration settings and preferences. While the server holds the desktop app's per-launch nonce, the request needs the matching x-swarm-desktop-nonce header, else 403 CONFIG_PERSON_ONLY; a server started without the app takes it as before.
    */
   public update<ThrowOnError extends boolean = false>(
     parameters?: {
+      "x-swarm-desktop-nonce"?: string
       directory?: string
       workspace?: string
       config?: Config3
@@ -1954,6 +1983,7 @@ export class Config2 extends HeyApiClient {
       [
         {
           args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
             { key: "config", map: "body" },
@@ -2796,6 +2826,232 @@ export class Command extends HeyApiClient {
   }
 }
 
+export class Skill extends HeyApiClient {
+  /**
+   * Delete a skill
+   *
+   * Move the skill's folder to the archive (never deleted outright) and remove its memory note. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      "x-swarm-desktop-nonce"?: string
+      directory?: string
+      workspace?: string
+      scope: "global" | "project"
+      name: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "scope" },
+            { in: "query", key: "name" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<SkillDeleteResponses, SkillDeleteErrors, ThrowOnError>({
+      url: "/skill",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Save a skill
+   *
+   * Write <scope root>/skills/<name>/SKILL.md atomically after the shared checks, record the approval and keep one memory note for the skill. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).
+   */
+  public save<ThrowOnError extends boolean = false>(
+    parameters?: {
+      "x-swarm-desktop-nonce"?: string
+      directory?: string
+      workspace?: string
+      scope?: "global" | "project"
+      name?: string
+      content?: string
+      baseHash?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "scope" },
+            { in: "body", key: "name" },
+            { in: "body", key: "content" },
+            { in: "body", key: "baseHash" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<SkillSaveResponses, SkillSaveErrors, ThrowOnError>({
+      url: "/skill",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read a skill's source
+   *
+   * The raw SKILL.md (frontmatter included) of a global or project skill Swarm saved, with the hash PUT /skill takes as baseHash. Show it as plain text.
+   */
+  public source<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      scope: "global" | "project"
+      name: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "scope" },
+            { in: "query", key: "name" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SkillSourceResponses, SkillSourceErrors, ThrowOnError>({
+      url: "/skill/source",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List skill drafts
+   *
+   * Skills an agent drafted, global and project. A draft is never loaded until the person approves it. Show the content as plain text.
+   */
+  public drafts<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SkillDraftsResponses, SkillDraftsErrors, ThrowOnError>({
+      url: "/skill/drafts",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Approve a skill draft
+   *
+   * Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).
+   */
+  public draftApprove<ThrowOnError extends boolean = false>(
+    parameters: {
+      "x-swarm-desktop-nonce"?: string
+      name: string
+      directory?: string
+      workspace?: string
+      scope?: "global" | "project"
+      acceptCommands?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "scope" },
+            { in: "body", key: "acceptCommands" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillDraftApproveResponses, SkillDraftApproveErrors, ThrowOnError>({
+      url: "/skill/drafts/{name}/approve",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Discard a skill draft
+   *
+   * Remove one draft, named by scope and name. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).
+   */
+  public draftDiscard<ThrowOnError extends boolean = false>(
+    parameters: {
+      "x-swarm-desktop-nonce"?: string
+      name: string
+      directory?: string
+      workspace?: string
+      scope: "global" | "project"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<SkillDraftDiscardResponses, SkillDraftDiscardErrors, ThrowOnError>({
+      url: "/skill/drafts/{name}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Lsp extends HeyApiClient {
   /**
    * Get LSP status
@@ -3237,6 +3493,38 @@ export class Memory extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Get the vault mirror of project memory
+   *
+   * Return the project's folder under the vault's swarm-memory folder, the path of its index note, and whether that note exists and is still Swarm's own. Writes nothing. A language, when given, is remembered for the next mirror run, which then re-renders the generated labels once in that language.
+   */
+  public vault<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      language?: "en" | "id"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "language" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<MemoryVaultResponses, MemoryVaultErrors, ThrowOnError>({
+      url: "/memory/vault",
+      ...options,
+      ...params,
     })
   }
 
@@ -3726,6 +4014,45 @@ export class Project extends HeyApiClient {
     )
     return (options?.client ?? this.client).patch<ProjectUpdateResponses, ProjectUpdateErrors, ThrowOnError>({
       url: "/project/{projectID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Move a mission into a group
+   *
+   * Move docs/<missionId> from the Default Project root into a one-level group folder, with the mission's memory notes and sessions, under a write-ahead journal that undoes every step on a failure. Any refusal leaves the disk unchanged. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 (also on a server holding no nonce).
+   */
+  public rehome<ThrowOnError extends boolean = false>(
+    parameters?: {
+      "x-swarm-desktop-nonce"?: string
+      directory?: string
+      workspace?: string
+      projectRehomeInput?: ProjectRehomeInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "projectRehomeInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProjectRehomeResponses, ProjectRehomeErrors, ThrowOnError>({
+      url: "/project/rehome",
       ...options,
       ...params,
       headers: {
@@ -7603,7 +7930,7 @@ export class Command2 extends HeyApiClient {
   }
 }
 
-export class Skill extends HeyApiClient {
+export class Skill2 extends HeyApiClient {
   /**
    * List skills
    *
@@ -8124,9 +8451,9 @@ export class V2 extends HeyApiClient {
     return (this._command ??= new Command2({ client: this.client }))
   }
 
-  private _skill?: Skill
-  get skill(): Skill {
-    return (this._skill ??= new Skill({ client: this.client }))
+  private _skill?: Skill2
+  get skill(): Skill2 {
+    return (this._skill ??= new Skill2({ client: this.client }))
   }
 
   private _event?: Event2
@@ -8241,6 +8568,11 @@ export class OpencodeClient extends HeyApiClient {
   private _command?: Command
   get command(): Command {
     return (this._command ??= new Command({ client: this.client }))
+  }
+
+  private _skill?: Skill
+  get skill(): Skill {
+    return (this._skill ??= new Skill({ client: this.client }))
   }
 
   private _lsp?: Lsp

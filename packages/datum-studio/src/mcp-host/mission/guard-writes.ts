@@ -48,7 +48,7 @@ import type { HostToolExtension, HostToolNext, HostToolSession } from "../tool-t
 import type { MissionHostStore } from "./mission-tools.ts"
 import { actorOf, sessionOf } from "./mission-tools.ts"
 import { reportFacts } from "./report-facts.ts"
-import { abortAfter, argStr, docOf, guarded, isOk, JobAbort, linkOf, missionIssues, REPORT_STATUSES, resolveTarget, sc, strip, vendoredDef, withMission, type Target } from "./report-tools.ts"
+import { abortAfter, argStr, docKeyExample, docOf, guarded, isOk, JobAbort, linkOf, missionIssues, REPORT_STATUSES, resolveTarget, sc, strip, vendoredDef, withMission, type Target } from "./report-tools.ts"
 import { REPORT_EXTRA_PROPERTIES } from "./schemas.ts"
 import { errorResult, MissionToolError, refusal, type MissionLog } from "./tool-result.ts"
 
@@ -129,8 +129,8 @@ export function guardWriteWrappers(store: MissionHostStore, opts: { log: Mission
       if (!doc) abortAfter(next, documentId, saved, refusal(tool, "INTERNAL_ERROR", "the write returned no stored document", {}))
       const abort = (c: string, msg: string, d: Record<string, unknown>) => abortAfter(next, doc.id, saved, refusal(tool, c, msg, d))
       if (doc.contract_kind !== WORK_REPORT_CONTRACT_KIND) return out // the template made no work report (no record slot): nothing to link
-      if (doc.mission_folder !== t.mission || doc.mission_doc_key !== t.docKey) abort("DOC_KEY_MISMATCH", "the stored document is not the mission + docKey of the report", { mission: t.mission, docKey: t.docKey, stored: { mission: doc.mission_folder, docKey: doc.mission_doc_key } })
-      if (t.kind === "row" && (f.requireTaskRef || doc.contract_task_ref !== null) && doc.contract_task_ref !== t.row) abort("DOC_KEY_MISMATCH", "TaskRef must equal the row id of docKey", { mission: t.mission, row: t.row, taskRef: doc.contract_task_ref })
+      if (doc.mission_folder !== t.mission || doc.mission_doc_key !== t.docKey) abort("DOC_KEY_MISMATCH", `the stored document is not the mission + docKey of the report${docKeyExample(t.mission, t.row)}`, { mission: t.mission, docKey: t.docKey, stored: { mission: doc.mission_folder, docKey: doc.mission_doc_key } })
+      if (t.kind === "row" && (f.requireTaskRef || doc.contract_task_ref !== null) && doc.contract_task_ref !== t.row) abort("DOC_KEY_MISMATCH", `TaskRef must equal the row id of docKey${docKeyExample(t.mission, t.row)}`, { mission: t.mission, row: t.row, taskRef: doc.contract_task_ref })
       const status = (REPORT_STATUSES.includes(doc.contract_status ?? "") ? doc.contract_status : "draft") as ReportStatus
       const revisionNo = Number(doc.current_revision_no)
       if (existing && revisionNo === Number(existing.current_revision_no)) {

@@ -1,0 +1,399 @@
+{
+  "$comment": "Swarm 1.2.8 row 57b (AC-VIS9, AT-V9-label-jumps, register N8-265, N8-266, N8-471, N8-381). Synthetic labels only. `placed`: three vertical data edges (row 0 -> row 3, one per column) with label_at start, middle, end (centre at 0.2 / 0.5 / 0.8 of the path length). `crossing`: a horizontal edge (Kiri -> Kanan) listed before a vertical edge (Atas -> Bawah) from row 0 to row 3 crossing it above its midpoint bend (one hop, on the horizontal piece), no `jumps` field; `crossing_on` = the same with jumps \"on\" (byte-equal); `crossing_off` = jumps \"off\" (no hop path); `crossing_thick`: the horizontal edge weight thick (hop stroke 0.70 mm). `collision`: the crossing figure with Bawah on row 2 (both paths have their middle at the crossing point) and both labels label_at middle: the labels overlap and are reported, not moved.",
+  "placed": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.30",
+    "title": "Gambar sintetis label berposisi.",
+    "nodes": [
+      {
+        "id": "l0",
+        "label": "Langkah A1",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "r0",
+        "label": "Langkah B1",
+        "class": {
+          "col": 0,
+          "row": 3
+        }
+      },
+      {
+        "id": "l1",
+        "label": "Langkah A2",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "r1",
+        "label": "Langkah B2",
+        "class": {
+          "col": 1,
+          "row": 3
+        }
+      },
+      {
+        "id": "l2",
+        "label": "Langkah A3",
+        "class": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      {
+        "id": "r2",
+        "label": "Langkah B3",
+        "class": {
+          "col": 2,
+          "row": 3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "l0",
+        "to": "r0",
+        "kind": "data",
+        "label": "awal",
+        "label_at": "start"
+      },
+      {
+        "from": "l1",
+        "to": "r1",
+        "kind": "data",
+        "label": "tengah",
+        "label_at": "middle"
+      },
+      {
+        "from": "l2",
+        "to": "r2",
+        "kind": "data",
+        "label": "akhir",
+        "label_at": "end"
+      }
+    ]
+  },
+  "crossing": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.31",
+    "title": "Gambar sintetis konektor bersilang.",
+    "nodes": [
+      {
+        "id": "kiri",
+        "label": "Kiri",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "kanan",
+        "label": "Kanan",
+        "class": {
+          "col": 2,
+          "row": 1
+        }
+      },
+      {
+        "id": "atas",
+        "label": "Atas",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "bawah",
+        "label": "Bawah",
+        "class": {
+          "col": 1,
+          "row": 3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "kiri",
+        "to": "kanan",
+        "kind": "data",
+        "label": "datar"
+      },
+      {
+        "from": "atas",
+        "to": "bawah",
+        "kind": "control",
+        "label": "tegak"
+      }
+    ]
+  },
+  "crossing_on": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.31",
+    "title": "Gambar sintetis konektor bersilang.",
+    "nodes": [
+      {
+        "id": "kiri",
+        "label": "Kiri",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "kanan",
+        "label": "Kanan",
+        "class": {
+          "col": 2,
+          "row": 1
+        }
+      },
+      {
+        "id": "atas",
+        "label": "Atas",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "bawah",
+        "label": "Bawah",
+        "class": {
+          "col": 1,
+          "row": 3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "kiri",
+        "to": "kanan",
+        "kind": "data",
+        "label": "datar"
+      },
+      {
+        "from": "atas",
+        "to": "bawah",
+        "kind": "control",
+        "label": "tegak"
+      }
+    ],
+    "jumps": "on"
+  },
+  "crossing_off": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.31",
+    "title": "Gambar sintetis konektor bersilang.",
+    "nodes": [
+      {
+        "id": "kiri",
+        "label": "Kiri",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "kanan",
+        "label": "Kanan",
+        "class": {
+          "col": 2,
+          "row": 1
+        }
+      },
+      {
+        "id": "atas",
+        "label": "Atas",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "bawah",
+        "label": "Bawah",
+        "class": {
+          "col": 1,
+          "row": 3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "kiri",
+        "to": "kanan",
+        "kind": "data",
+        "label": "datar"
+      },
+      {
+        "from": "atas",
+        "to": "bawah",
+        "kind": "control",
+        "label": "tegak"
+      }
+    ],
+    "jumps": "off"
+  },
+  "crossing_thick": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.31",
+    "title": "Gambar sintetis konektor bersilang.",
+    "nodes": [
+      {
+        "id": "kiri",
+        "label": "Kiri",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "kanan",
+        "label": "Kanan",
+        "class": {
+          "col": 2,
+          "row": 1
+        }
+      },
+      {
+        "id": "atas",
+        "label": "Atas",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "bawah",
+        "label": "Bawah",
+        "class": {
+          "col": 1,
+          "row": 3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "kiri",
+        "to": "kanan",
+        "kind": "data",
+        "label": "datar",
+        "weight": "thick"
+      },
+      {
+        "from": "atas",
+        "to": "bawah",
+        "kind": "control",
+        "label": "tegak"
+      }
+    ]
+  },
+  "collision": {
+    "$schema": "studio.diagram/v1",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "family": "graph",
+    "id": "9.32",
+    "title": "Gambar sintetis konektor bersilang.",
+    "nodes": [
+      {
+        "id": "kiri",
+        "label": "Kiri",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "kanan",
+        "label": "Kanan",
+        "class": {
+          "col": 2,
+          "row": 1
+        }
+      },
+      {
+        "id": "atas",
+        "label": "Atas",
+        "class": {
+          "col": 1,
+          "row": 0
+        }
+      },
+      {
+        "id": "bawah",
+        "label": "Bawah",
+        "class": {
+          "col": 1,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "kiri",
+        "to": "kanan",
+        "kind": "data",
+        "label": "datar",
+        "label_at": "middle"
+      },
+      {
+        "from": "atas",
+        "to": "bawah",
+        "kind": "control",
+        "label": "tegak",
+        "label_at": "middle"
+      }
+    ]
+  }
+}

@@ -1145,7 +1145,9 @@ describe("knowledge-library when it cannot answer", () => {
     "Knowledge Library is not available in this session. It is available only in sessions run by the Swarm desktop app. Tell the user and continue without it. Do not look for a copy on disk."
   const FAILED_TEXT =
     "Knowledge Library could not be opened in this app because its copy is missing or failed a check. Tell the user and continue without it. Do not look for a copy on disk."
-  const NOT_FOUND_TEXT = `Skill "${NAME}" not found. Available skills: customize-swarm, flux3-image-gen, mission-control, swarm-workflow, tool-health`
+  // 1.2.8 row 47 (INTENT): obsidian-memory, project-folders and skill-authoring joined the built-ins.
+  // 1.2.8 row 58 (INTENT): diagram-flow joined the built-ins. Row 58c (INTENT): swarm-whats-new joined them too.
+  const NOT_FOUND_TEXT = `Skill "${NAME}" not found. Available skills: customize-swarm, diagram-flow, flux3-image-gen, mission-control, obsidian-memory, project-folders, skill-authoring, swarm-whats-new, swarm-workflow, tool-health`
   const UNUSABLE_ROOT = "/synthetic/!`Resources`/knowledge-library"
 
   const itCall = testEffect(
@@ -1248,7 +1250,7 @@ describe("knowledge-library when it cannot answer", () => {
       return provideTmpdirInstance(() =>
         Effect.gen(function* () {
           expect(failureText(yield* callTool("no-such-skill"))).toBe(
-            'Skill "no-such-skill" not found. Available skills: customize-swarm, flux3-image-gen, mission-control, swarm-workflow, tool-health',
+            'Skill "no-such-skill" not found. Available skills: customize-swarm, diagram-flow, flux3-image-gen, mission-control, obsidian-memory, project-folders, skill-authoring, swarm-whats-new, swarm-workflow, tool-health',
           )
         }),
       )

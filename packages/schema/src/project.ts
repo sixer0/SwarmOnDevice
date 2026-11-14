@@ -41,4 +41,16 @@ export const Info = Schema.Struct({
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
 const Updated = define({ type: "project.updated", schema: Info.fields })
-export const Event = { Updated, Definitions: inventory(Updated) }
+// 1.2.8 row 44b (N8-131, R20-C28): a mission folder moved from the Default Project root into a group. The app re-points
+// its project list, open routes and per-session persisted keys on it (row 44c).
+const Rehomed = define({
+  type: "project.rehomed",
+  schema: {
+    missionId: Schema.String,
+    from: Schema.String,
+    to: Schema.String,
+    sessions: Schema.Array(Schema.String),
+    journalId: Schema.String,
+  },
+})
+export const Event = { Updated, Rehomed, Definitions: inventory(Updated, Rehomed) }

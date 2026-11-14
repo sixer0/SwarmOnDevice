@@ -1,0 +1,436 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (01d F-PROJ e/f/g/i tests, rows 44-46): manifest of the synthetic Default Project tree in ./default_project/. Copy the folder to a mkdtemp `Documents/Default Project` (R) before use; `projectDir` is relative to R ('.' = R itself). 21 root missions in 3 themes (7 each: product Lumen, institution Dinas Contoh, research theme Pasang Surut), 1 mission already in the marked group Lumen, 1 unmarked child folder 'Arsip Lama'. `expectedGroup` is the tidy answer a correct proposal gives (signal S1/S3: the group or institution name is in the title).",
+  "root": "default_project",
+  "groups": [
+    {
+      "name": "Lumen",
+      "kind": "product",
+      "marked": true
+    },
+    {
+      "name": "Arsip Lama",
+      "marked": false
+    }
+  ],
+  "missions": [
+    {
+      "id": "2026-09-01_lumen-onboarding-flow",
+      "title": "Lumen onboarding flow",
+      "type": "dev",
+      "theme": "lumen",
+      "expectedGroup": "Lumen",
+      "groupKind": "product",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan lumen onboarding flow"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-02_lumen-release-checklist",
+      "title": "Lumen release checklist",
+      "type": "dev",
+      "theme": "lumen",
+      "expectedGroup": "Lumen",
+      "groupKind": "product",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan lumen release checklist"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-03_lumen-pricing-page-copy",
+      "title": "Lumen pricing page copy",
+      "type": "dev",
+      "theme": "lumen",
+      "expectedGroup": "Lumen",
+      "groupKind": "product",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan lumen pricing page copy"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-04_lumen-offline-sync",
+      "title": "Lumen offline sync",
+      "type": "dev",
+      "theme": "lumen",
+      "expectedGroup": "Lumen",
+      "groupKind": "product",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan lumen offline sync"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-05_lumen-widget-gallery",
+      "title": "Lumen widget gallery",
+      "type": "dev",
+      "theme": "lumen",
+      "expectedGroup": "Lumen",
+      "groupKind": "product",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan lumen widget gallery"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-06_lumen-crash-triage",
+      "title": "Lumen crash triage",
+      "type": "dev",
+      "theme": "lumen",
+      "expectedGroup": "Lumen",
+      "groupKind": "product",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan lumen crash triage"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-07_lumen-accessibility-pass",
+      "title": "Lumen accessibility pass",
+      "type": "dev",
+      "theme": "lumen",
+      "expectedGroup": "Lumen",
+      "groupKind": "product",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan lumen accessibility pass"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-08_dinas-contoh-nota-layanan",
+      "title": "Dinas Contoh nota layanan",
+      "type": "document",
+      "theme": "dinas-contoh",
+      "expectedGroup": "Dinas Contoh",
+      "groupKind": "institution",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan dinas contoh nota layanan"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-09_dinas-contoh-laporan-triwulan",
+      "title": "Dinas Contoh laporan triwulan",
+      "type": "document",
+      "theme": "dinas-contoh",
+      "expectedGroup": "Dinas Contoh",
+      "groupKind": "institution",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan dinas contoh laporan triwulan"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-10_dinas-contoh-rencana-kerja",
+      "title": "Dinas Contoh rencana kerja",
+      "type": "document",
+      "theme": "dinas-contoh",
+      "expectedGroup": "Dinas Contoh",
+      "groupKind": "institution",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan dinas contoh rencana kerja"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-11_dinas-contoh-kajian-anggaran",
+      "title": "Dinas Contoh kajian anggaran",
+      "type": "document",
+      "theme": "dinas-contoh",
+      "expectedGroup": "Dinas Contoh",
+      "groupKind": "institution",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan dinas contoh kajian anggaran"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-12_dinas-contoh-surat-edaran",
+      "title": "Dinas Contoh surat edaran",
+      "type": "document",
+      "theme": "dinas-contoh",
+      "expectedGroup": "Dinas Contoh",
+      "groupKind": "institution",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan dinas contoh surat edaran"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-13_dinas-contoh-rapat-koordinasi",
+      "title": "Dinas Contoh rapat koordinasi",
+      "type": "document",
+      "theme": "dinas-contoh",
+      "expectedGroup": "Dinas Contoh",
+      "groupKind": "institution",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan dinas contoh rapat koordinasi"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-14_dinas-contoh-daftar-aset",
+      "title": "Dinas Contoh daftar aset",
+      "type": "document",
+      "theme": "dinas-contoh",
+      "expectedGroup": "Dinas Contoh",
+      "groupKind": "institution",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan dinas contoh daftar aset"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-15_riset-pasang-surut-pesisir-utara",
+      "title": "Riset pasang surut pesisir utara",
+      "type": "research",
+      "theme": "pasang-surut",
+      "expectedGroup": "Pasang Surut",
+      "groupKind": "theme",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan riset pasang surut pesisir utara"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-16_pasang-surut-model-harian",
+      "title": "Pasang surut model harian",
+      "type": "research",
+      "theme": "pasang-surut",
+      "expectedGroup": "Pasang Surut",
+      "groupKind": "theme",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan pasang surut model harian"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-17_pasang-surut-data-stasiun-sintetis",
+      "title": "Pasang surut data stasiun sintetis",
+      "type": "research",
+      "theme": "pasang-surut",
+      "expectedGroup": "Pasang Surut",
+      "groupKind": "theme",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan pasang surut data stasiun sintetis"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-18_pasang-surut-grafik-musiman",
+      "title": "Pasang surut grafik musiman",
+      "type": "research",
+      "theme": "pasang-surut",
+      "expectedGroup": "Pasang Surut",
+      "groupKind": "theme",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan pasang surut grafik musiman"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-19_pasang-surut-tinjauan-pustaka",
+      "title": "Pasang surut tinjauan pustaka",
+      "type": "research",
+      "theme": "pasang-surut",
+      "expectedGroup": "Pasang Surut",
+      "groupKind": "theme",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan pasang surut tinjauan pustaka"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-20_pasang-surut-validasi-model",
+      "title": "Pasang surut validasi model",
+      "type": "research",
+      "theme": "pasang-surut",
+      "expectedGroup": "Pasang Surut",
+      "groupKind": "theme",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan pasang surut validasi model"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-09-21_pasang-surut-ringkasan-temuan",
+      "title": "Pasang surut ringkasan temuan",
+      "type": "research",
+      "theme": "pasang-surut",
+      "expectedGroup": "Pasang Surut",
+      "groupKind": "theme",
+      "projectDir": ".",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan pasang surut ringkasan temuan"
+        },
+        {
+          "id": "2",
+          "title": "Tulis laporan sintetis"
+        }
+      ]
+    },
+    {
+      "id": "2026-08-20_lumen-design-palette",
+      "title": "Lumen design palette",
+      "type": "dev",
+      "theme": "lumen",
+      "expectedGroup": "Lumen",
+      "groupKind": "product",
+      "projectDir": "Lumen",
+      "rows": [
+        {
+          "id": "1",
+          "title": "Kumpulkan bahan"
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "rootMissions": 21,
+    "groupMissions": 1,
+    "themes": 3
+  }
+}

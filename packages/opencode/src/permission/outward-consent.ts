@@ -278,7 +278,7 @@ const CURL_GUESSED = /^(ftp|dict|ldap|imap|pop3|smtp)\./i
 type Parsed = { options: [string, string | undefined][]; positional: string[] } | undefined
 
 /** 1.2.7 47f (M1-08): the value tables this reader uses, the same objects the own-API reader (F-4) uses. */
-export const netOptions = { curl: NetOptions.CURL, wget: NetOptions.WGET } as const
+export const netOptions = { curl: NetOptions.CURL, wget: NetOptions.WGET, httpie: NetOptions.HTTPIE } as const
 
 /**
  * Options and positional words; short clusters split (`-sSL`, `-XPOST`, `-d@f`), `--opt=value` split. An option is read
@@ -440,15 +440,16 @@ const HTTPIE_FLAGS = new Set([
   "--follow", "-I", "--ignore-stdin", "-q", "--quiet", "-S", "--stream", "--check-status", "--offline",
   "--https", "--native-tls", "-4", "--ipv4", "-6", "--ipv6", "--no-check-status",
 ])
+// The value-taking options this reader knows the meaning of; whether one takes a value is the shared table's answer
+// (1.2.8 row 27, R-2: `NetOptions.HTTPIE`, the object the own-API reader uses too). An option outside this list is unread.
 const HTTPIE_VALUES = new Set([
   "-p", "--print", "-a", "--auth", "-A", "--auth-type", "--timeout", "--pretty", "-s", "--style", "--verify",
   "--max-redirects", "--bearer", "-o", "--output",
 ])
 const HTTPIE_EXPANDS = new Set(["-a", "--auth", "--bearer"])
-const HTTPIE_TAKES: NetOptions.ValueTable = { short: new Set("paAso"), long: HTTPIE_VALUES }
 
 function httpie(program: string, args: readonly string[], known: Known | undefined, whole: string): Reading {
-  const found = parse(args, HTTPIE_FLAGS, HTTPIE_VALUES, HTTPIE_TAKES)
+  const found = parse(args, HTTPIE_FLAGS, HTTPIE_VALUES, netOptions.httpie)
   if (!found) return { held: "unread" }
   for (const [name, value] of found.options)
     if (value !== undefined && expands(value) && !(HTTPIE_EXPANDS.has(name) && plainExpansions(value))) return { held: "unread" }

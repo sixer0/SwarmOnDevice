@@ -1,0 +1,298 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-HNA, rows 33/68): one valid DiagramV2 block, 5 nodes (stadium, box, diamond), caption and source; `chapter` is a studio.chapter/v2 submission with the $schema key (submit as object or as JSON.stringify(chapter), set target.documentId); `writeBlock` is the studio_write / studio_edit section-block form. Filler text. MEASURED (engine = BASE): validateSpec 0 refusals; buildDiagramSvg score 0 with 1 GEOM_STUB_SEGMENT + 1 GEOM_ARROW_TANGENT REPORT lines (T-03 kinds, not scored).",
+  "block": {
+    "type": "diagram",
+    "spec": {
+      "family": "flow",
+      "labels_verified": true,
+      "nodes": [
+        {
+          "id": "a",
+          "label": "Mulai",
+          "class": {
+            "col": 0,
+            "row": 0
+          },
+          "shape": "stadium"
+        },
+        {
+          "id": "b",
+          "label": "Periksa berkas",
+          "class": {
+            "col": 0,
+            "row": 1
+          },
+          "shape": "box"
+        },
+        {
+          "id": "c",
+          "label": "Berkas lengkap?",
+          "class": {
+            "col": 0,
+            "row": 2
+          },
+          "shape": "diamond"
+        },
+        {
+          "id": "d",
+          "label": "Arsipkan",
+          "class": {
+            "col": 0,
+            "row": 3
+          },
+          "shape": "box"
+        },
+        {
+          "id": "e",
+          "label": "Selesai",
+          "class": {
+            "col": 0,
+            "row": 4
+          },
+          "shape": "stadium"
+        }
+      ],
+      "edges": [
+        {
+          "from": "a",
+          "to": "b",
+          "kind": "data",
+          "label": "masuk"
+        },
+        {
+          "from": "b",
+          "to": "c",
+          "kind": "data",
+          "label": "cek"
+        },
+        {
+          "from": "c",
+          "to": "d",
+          "kind": "data",
+          "label": "ya"
+        },
+        {
+          "from": "c",
+          "to": "e",
+          "kind": "control",
+          "label": "tidak"
+        },
+        {
+          "from": "d",
+          "to": "e",
+          "kind": "data",
+          "label": "simpan"
+        }
+      ]
+    },
+    "caption": {
+      "text": "Alur sintetis pemeriksaan berkas."
+    },
+    "source": {
+      "text": "Sumber sintetis uji."
+    }
+  },
+  "writeBlock": {
+    "diagram": {
+      "spec": {
+        "family": "flow",
+        "labels_verified": true,
+        "nodes": [
+          {
+            "id": "a",
+            "label": "Mulai",
+            "class": {
+              "col": 0,
+              "row": 0
+            },
+            "shape": "stadium"
+          },
+          {
+            "id": "b",
+            "label": "Periksa berkas",
+            "class": {
+              "col": 0,
+              "row": 1
+            },
+            "shape": "box"
+          },
+          {
+            "id": "c",
+            "label": "Berkas lengkap?",
+            "class": {
+              "col": 0,
+              "row": 2
+            },
+            "shape": "diamond"
+          },
+          {
+            "id": "d",
+            "label": "Arsipkan",
+            "class": {
+              "col": 0,
+              "row": 3
+            },
+            "shape": "box"
+          },
+          {
+            "id": "e",
+            "label": "Selesai",
+            "class": {
+              "col": 0,
+              "row": 4
+            },
+            "shape": "stadium"
+          }
+        ],
+        "edges": [
+          {
+            "from": "a",
+            "to": "b",
+            "kind": "data",
+            "label": "masuk"
+          },
+          {
+            "from": "b",
+            "to": "c",
+            "kind": "data",
+            "label": "cek"
+          },
+          {
+            "from": "c",
+            "to": "d",
+            "kind": "data",
+            "label": "ya"
+          },
+          {
+            "from": "c",
+            "to": "e",
+            "kind": "control",
+            "label": "tidak"
+          },
+          {
+            "from": "d",
+            "to": "e",
+            "kind": "data",
+            "label": "simpan"
+          }
+        ]
+      },
+      "caption": "Alur sintetis pemeriksaan berkas.",
+      "source": "Sumber sintetis uji."
+    }
+  },
+  "chapter": {
+    "$schema": "studio.chapter/v2",
+    "chapter": {
+      "key": "1",
+      "title": {
+        "text": "Uraian uji diagram"
+      },
+      "sections": [
+        {
+          "title": {
+            "text": "Bagian uji"
+          },
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Paragraf pembuka sintetis alfa bravo."
+            },
+            {
+              "type": "diagram",
+              "spec": {
+                "family": "flow",
+                "labels_verified": true,
+                "nodes": [
+                  {
+                    "id": "a",
+                    "label": "Mulai",
+                    "class": {
+                      "col": 0,
+                      "row": 0
+                    },
+                    "shape": "stadium"
+                  },
+                  {
+                    "id": "b",
+                    "label": "Periksa berkas",
+                    "class": {
+                      "col": 0,
+                      "row": 1
+                    },
+                    "shape": "box"
+                  },
+                  {
+                    "id": "c",
+                    "label": "Berkas lengkap?",
+                    "class": {
+                      "col": 0,
+                      "row": 2
+                    },
+                    "shape": "diamond"
+                  },
+                  {
+                    "id": "d",
+                    "label": "Arsipkan",
+                    "class": {
+                      "col": 0,
+                      "row": 3
+                    },
+                    "shape": "box"
+                  },
+                  {
+                    "id": "e",
+                    "label": "Selesai",
+                    "class": {
+                      "col": 0,
+                      "row": 4
+                    },
+                    "shape": "stadium"
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "a",
+                    "to": "b",
+                    "kind": "data",
+                    "label": "masuk"
+                  },
+                  {
+                    "from": "b",
+                    "to": "c",
+                    "kind": "data",
+                    "label": "cek"
+                  },
+                  {
+                    "from": "c",
+                    "to": "d",
+                    "kind": "data",
+                    "label": "ya"
+                  },
+                  {
+                    "from": "c",
+                    "to": "e",
+                    "kind": "control",
+                    "label": "tidak"
+                  },
+                  {
+                    "from": "d",
+                    "to": "e",
+                    "kind": "data",
+                    "label": "simpan"
+                  }
+                ]
+              },
+              "caption": {
+                "text": "Alur sintetis pemeriksaan berkas."
+              },
+              "source": {
+                "text": "Sumber sintetis uji."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

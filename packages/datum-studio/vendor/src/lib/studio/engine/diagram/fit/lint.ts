@@ -17,6 +17,12 @@
  * - `edgeCollinear`: dua konektor berimpit pada garis yang sama > 1 mm;
  * - `edgeThroughNode`: segmen konektor menembus interior simpul bukan-ujung (susut 0,3 mm);
  * - `textStraddleMark` tidak berlaku (diagram tidak punya tanda isian data) dan tidak dihitung.
+ * - `labelCollision` (Swarm 1.2.8 row 57c, C71/C86/C101/C102/C116/C119): the knockout band of an edge label covers an
+ *   arrowhead, crosses a node outline, or crosses a container rule (lane rule, phase separator, pool border) that no
+ *   connector runs along. In `score`, so auto-fit re-places the label.
+ * - Swarm 1.2.8 row 68a (C166): `edgeThroughNode` also counts a connector through the body of its own end node;
+ *   `edgeOutside` (stroke past the figure box) and `edgeEndOffNode` (target end on no node outline, e.g. a zone frame)
+ *   are counted and fail FIGURE_FIT, outside `score` like the T-03 kinds (`connectorEnds`).
  *
  * Murni dan deterministik. Parser hanya memahami keluaran `Sheet`/`core/svg.ts` (atribut
  * ber-kutip ganda, angka mm, tanpa transform) — bukan parser SVG umum. Satu-satunya transform yang
@@ -40,7 +46,7 @@ import {
   unescXml as unesc,
 } from "../../chart/core/svgscan";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure } from "../../chart/core/textfit";
-import { LATTICE_X } from "../core/tokens";
+import { LATTICE_X, LATTICE_Y } from "../core/tokens";
 
 export type { Box } from "../../chart/core/svgscan";
 
@@ -55,7 +61,11 @@ export type DiagramDefectKind =
   | "edgeThroughNode"
   | "edgeEntryCollision"
   | "stubSegment"
-  | "arrowTangent";
+  | "arrowTangent"
+  | "labelCollision"
+  | "frameOutside"
+  | "edgeOutside"
+  | "edgeEndOffNode";
 
 export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "textOverlap",
@@ -69,7 +79,42 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
   "edgeEntryCollision",
   "stubSegment",
   "arrowTangent",
+  "labelCollision",
+  "frameOutside",
+  "edgeOutside",
+  "edgeEndOffNode",
 ];
+
+/**
+ * Swarm 1.2.8 row 68a (C166 (2); user item 7, Visio minimum: everything inside the figure; kind `edgeOutside`, check id
+ * GEOM_EDGE_OUTSIDE): a connector whose stroke (centre line plus half its width) runs past the figure box by more than
+ * this (mm). A connector drawn on the figure edge (x = 0) has half its line clipped and, with the caption above, lies in
+ * the caption band.
+ */
+export const EDGE_OUTSIDE_MIN_MM = 0.05;
+
+/**
+ * Swarm 1.2.8 row 68a (C166 (4); kind `edgeEndOffNode`, check id GEOM_EDGE_END): a connector end (start or end, with or
+ * without a head) farther than this (mm, beyond the outline's half stroke) from every node outline, and not inside a
+ * node, ends on nothing (a container frame, the paper). The allowance covers the path trimmed under a filled head
+ * (row 57b `headTrimMm`, under 1 mm). An end under the label block of an event (`data-label-pos="below"`) belongs to it.
+ */
+export const EDGE_END_ON_NODE_MM = 1.2;
+
+/**
+ * Swarm 1.2.8 row 68a (C166 (1), (3)): `edgeThroughNode` also counts a connector that runs through the body of its OWN
+ * end node (a via leg entering the node and crossing its label, a straight route from one side across the box) at more
+ * than this distance (mm) from the end that attaches it; the piece next to that end is how the connector meets the node.
+ */
+export const OWN_NODE_END_MM = 1.5;
+
+/**
+ * Swarm 1.2.8 row 55c (C133, kind `frameOutside`, check id GEOM_FRAME_OUTSIDE): a container frame (pool or lane box,
+ * lane / phase / pool rule, zone or group outline: unmarked stroked `<line>` / unfilled `<rect>` outside a symbol)
+ * whose centre line runs past the figure box by more than this (mm) is clipped. Measured on the centre line, so a rule
+ * drawn edge to edge (x 0..W) is inside.
+ */
+export const FRAME_OUTSIDE_MIN_MM = 0.05;
 
 /**
  * Swarm 1.2.6 T-03 (register N-008..N-010). Thresholds of the three connector-end checks:
@@ -81,9 +126,15 @@ export const DIAGRAM_DEFECT_KINDS: readonly DiagramDefectKind[] = [
  *   runs along the border instead of into it (`arrowTangent`).
  */
 export const ENTRY_COLLISION_MM = 1.5;
-/** T-03 kinds: counted and failed by the gate, not part of `score` (see `DiagramGeomLint.score`). */
-const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set(["edgeEntryCollision", "stubSegment", "arrowTangent"]);
+/**
+ * T-03 kinds: counted and failed by the gate, not part of `score` (see `DiagramGeomLint.score`). Swarm 1.2.8 row 68a: the
+ * two connector-end kinds `edgeOutside` and `edgeEndOffNode` join them (auto-fit has no move that fixes a via or a glued
+ * side; the figures it keeps today keep their bytes).
+ */
+const T03_KINDS: ReadonlySet<DiagramDefectKind> = new Set(["edgeEntryCollision", "stubSegment", "arrowTangent", "edgeOutside", "edgeEndOffNode"]);
 export const STUB_SEGMENT_MIN_MM = 2.0;
+/** Row 53 (H-TAG): tolerance of the tag-inside-outline check (0.01 mm output grid plus float noise). */
+const TAG_OUTSIDE_MIN_MM = 0.05;
 export const ARROW_TANGENT_TOL_DEG = 15;
 
 export interface DiagramGeomDefect {
@@ -113,6 +164,13 @@ interface TextEl {
   area: number;
   knock: boolean;
   samples: Pt[];
+  /** Row 53 (H-TAG): anchor point (x, baseline) of a requirement-tag-like text (start or middle, bold, tracked). */
+  tagAt?: Pt;
+  /**
+   * Swarm 1.2.8 row 54 (VIS-3a, §5.3, N8-480): index in `nodes` of the outline a text is the label block of (text inside
+   * `<g data-label-pos="below">`, which follows its node's outline element).
+   */
+  belowOf?: number;
 }
 
 interface NodeShape {
@@ -120,6 +178,8 @@ interface NodeShape {
   /** Garis tepi (polilinear tertutup atau terbuka) dan setengah tebal goresan. */
   outline: Pt[][];
   circle?: { cx: number; cy: number; r: number };
+  /** Row 53 (H-TAG): corner radius of a rounded `<rect>` (stadium), read only by the tag containment check. */
+  rx?: number;
   half: number;
   box: Box;
 }
@@ -187,8 +247,24 @@ interface Scan {
   linkHalf: number[];
   /** T-03: document order of each link (a knockout band drawn later hides it). */
   linkOrder: number[];
+  /** Swarm 1.2.8 row 56 (VIS-4, OP-18-6): true for a link drawn with `data-route="curved"` (sampled Bezier). */
+  linkCurved: boolean[];
+  /** Swarm 1.2.8 row 57 (VIS-7, 01f §7 (a)): true for a link drawn with a `marker-start` head. */
+  linkStart: boolean[];
   /** T-03: label knockout bands (paper rect right before a `<text>`) with their document order. */
-  bands: { box: Box; order: number }[];
+  bands: { box: Box; order: number; text?: string }[];
+  /** Row 57c: arrowhead of each link at its end / start (marker size in mm), null without a head. */
+  linkHeads: Array<{ end: HeadSize | null; start: HeadSize | null }>;
+  /** Row 57c: container rules (solid unmarked `<line>` / stroked unfilled `<rect>` sides: lane rules, phase separators, pool borders). */
+  rules: Array<{ a: Pt; b: Pt; half: number }>;
+  /** Row 55c: container frames (also dashed zone / group outlines) as centre-line boxes, for `frameOutside`. */
+  frames: Box[];
+}
+
+/** Row 57c: length and width (mm) of an arrowhead marker (`markerWidth` / `markerHeight` minus the 1 mm margins). */
+export interface HeadSize {
+  L: number;
+  W: number;
 }
 
 function scan(svg: string): Scan {
@@ -201,8 +277,17 @@ function scan(svg: string): Scan {
   const links: Pt[][] = [];
   const linkHalf: number[] = [];
   const linkOrder: number[] = [];
-  const bands: { box: Box; order: number }[] = [];
-  let pendingBand: { box: Box; order: number } | null = null;
+  const linkCurved: boolean[] = [];
+  const linkStart: boolean[] = [];
+  const bands: { box: Box; order: number; text?: string }[] = [];
+  let pendingBand: { box: Box; order: number; text?: string } | null = null;
+  const markers = new Map<string, HeadSize>();
+  const linkHeads: Scan["linkHeads"] = [];
+  const rules: Scan["rules"] = [];
+  const frames: Box[] = [];
+  // Row 57c: a leader line is drawn right before its label band; it is not a container rule.
+  let lastWasRule = false;
+  let lastWasFrameLine = false;
   let inDefs = 0;
   // Row 150c (C144 A): one frame per open <g> inside a `data-symbol` group. A group whose transform is
   // only translate(...) (symbol-sheet cell, symbols/index.ts, sheet-fit.ts) prints at 1:1, so its text
@@ -210,12 +295,14 @@ function scan(svg: string): Scan {
   // badge, diagram/core/svg.ts nodeSymbolSvg) is cell units: its text stays skipped, as in row 124.
   const symStack: { read: boolean; dx: number; dy: number }[] = [];
   let prevKnock = false;
+  // Row 54 (VIS-3a): node index of the open `<g data-label-pos="below">` (it holds only texts, so the next `</g>` closes it).
+  let belowOf: number | null = null;
   const re = /<text\b([^>]*)>([\s\S]*?)<\/text>|<(\/?)([a-zA-Z]+)\b([^>]*?)(\/?)>/g;
   for (let k = re.exec(svg); k; k = re.exec(svg)) {
     if (k[1] !== undefined) {
       const knock = prevKnock;
       prevKnock = false;
-      if (knock && pendingBand && !inDefs && !symStack.length) bands.push(pendingBand);
+      if (knock && pendingBand && !inDefs && !symStack.length) bands.push({ ...pendingBand, text: unesc(k[2].replace(/<[^>]+>/g, "")) });
       pendingBand = null;
       if (inDefs) continue;
       const sym = symStack.length ? symStack[symStack.length - 1] : null;
@@ -261,12 +348,16 @@ function scan(svg: string): Scan {
       } else lines.push({ x: x0, y: y0, s: unesc(body.replace(/<[^>]+>/g, "")) });
       const box = textBlockBox(lines, sizeMm, anchor, face, bold, track);
       if (!box) continue;
+      // Row 53 (H-TAG): the tag (role table_header: weight 600, tracked) is the only bold tracked text a node draws.
+      const tagLike = bold && track > 0 && (anchor === "start" || anchor === "middle") && lines.length === 1;
       texts.push({
         text: lines.map((l) => l.s).join(" "),
         box,
         area: Math.max(1e-9, (box[2] - box[0]) * (box[3] - box[1])),
         knock,
         samples: samplesOf(box),
+        ...(tagLike ? { tagAt: [x0, y0] as Pt } : {}),
+        ...(belowOf !== null ? { belowOf } : {}),
       });
       continue;
     }
@@ -274,6 +365,7 @@ function scan(svg: string): Scan {
     const tag = k[4];
     const selfClose = k[6] === "/";
     if (closing) {
+      if (tag === "g" && belowOf !== null && !symStack.length) belowOf = null;
       if (tag === "defs") inDefs = Math.max(0, inDefs - 1);
       if (tag === "g" && symStack.length) symStack.pop();
       continue;
@@ -288,13 +380,28 @@ function scan(svg: string): Scan {
       continue;
     }
     if (symStack.length) continue;
+    if (tag === "g" && !selfClose && /\bdata-label-pos="below"/.test(k[5]) && nodes.length) {
+      belowOf = nodes.length - 1;
+      continue;
+    }
     if (tag === "defs" && !selfClose) {
       inDefs++;
       prevKnock = false;
       continue;
     }
+    if (inDefs && tag === "marker") {
+      // Row 57c: arrowhead size of each marker id (core/svg.ts arrowMarkerSvg: width L + 2, height W + 2).
+      const ma = attrsOf(k[5]);
+      const mw = Number(ma.markerWidth ?? NaN);
+      const mh = Number(ma.markerHeight ?? NaN);
+      if (ma.id && Number.isFinite(mw) && Number.isFinite(mh)) markers.set(ma.id, { L: Math.max(0, mw - 2), W: Math.max(0, mh - 2) });
+    }
     if (inDefs || tag === "svg" || tag === "g" || tag === "title" || tag === "tspan") continue;
     const a = attrsOf(k[5]);
+    const wasRule = lastWasRule;
+    lastWasRule = false;
+    const wasFrameLine = lastWasFrameLine;
+    lastWasFrameLine = false;
     // pita knockout: rect berisi tanpa goresan/tanda tepat sebelum <text> (core/svg labelKnockoutSvg)
     prevKnock =
       tag === "rect" &&
@@ -307,14 +414,54 @@ function scan(svg: string): Scan {
     pendingBand = prevKnock
       ? { box: [Number(a.x ?? 0), Number(a.y ?? 0), Number(a.x ?? 0) + Number(a.width ?? 0), Number(a.y ?? 0) + Number(a.height ?? 0)], order: k.index }
       : null;
+    if (prevKnock && wasRule) rules.pop(); // row 57c: the line before a band is its leader
+    if (prevKnock && wasFrameLine) frames.pop(); // row 55c: same leader, not a frame
     const mark = a["data-mark"];
     const nodeId = a["data-node"];
+    // Row 55c: container frames, dashed or solid. A hair solid rect is a node's offset shadow, not a frame.
+    if (mark === undefined && nodeId === undefined && a.stroke !== undefined && a.stroke !== "none") {
+      const sw = Number(a["stroke-width"] ?? 0) || 0;
+      if (tag === "line") {
+        const x1 = Number(a.x1 ?? 0), y1 = Number(a.y1 ?? 0), x2 = Number(a.x2 ?? 0), y2 = Number(a.y2 ?? 0);
+        frames.push([Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)]);
+        lastWasFrameLine = true;
+      } else if (tag === "rect" && (a.fill === undefined || a.fill === "none") && (sw > 0.3 || a["stroke-dasharray"] !== undefined)) {
+        const x = Number(a.x ?? 0), y = Number(a.y ?? 0);
+        frames.push([x, y, x + Number(a.width ?? 0), y + Number(a.height ?? 0)]);
+      }
+    }
+    // Row 57c: container rules = solid decoration without a mark (lane rules, phase separators, pool borders).
+    if (mark === undefined && nodeId === undefined && a.stroke !== undefined && a.stroke !== "none" && a["stroke-dasharray"] === undefined) {
+      const half = (Number(a["stroke-width"] ?? 0) || 0) / 2;
+      if (tag === "line") {
+        rules.push({ a: [Number(a.x1 ?? 0), Number(a.y1 ?? 0)], b: [Number(a.x2 ?? 0), Number(a.y2 ?? 0)], half });
+        lastWasRule = true;
+        continue;
+      }
+      // a pool border is a primary-stroke rect; a hair rect (the `shadowed` node's offset shadow) is not a rule
+      if (tag === "rect" && (a.fill === undefined || a.fill === "none") && half * 2 > 0.3) {
+        const x = Number(a.x ?? 0);
+        const y = Number(a.y ?? 0);
+        const w = Number(a.width ?? 0);
+        const h = Number(a.height ?? 0);
+        const c: Pt[] = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+        for (let i = 0; i < 4; i++) rules.push({ a: c[i], b: c[(i + 1) % 4], half });
+        continue;
+      }
+    }
     if (mark === "link" && tag === "path") {
       const pl = pathPolylines(a.d ?? "");
       if (pl.length && pl[0].length >= 2) {
         links.push(pl[0].map((p) => [p[0], p[1]] as Pt));
         linkHalf.push((Number(a["stroke-width"] ?? 0) || 0) / 2);
         linkOrder.push(k.index);
+        linkCurved.push(a["data-route"] === "curved");
+        linkStart.push(a["marker-start"] !== undefined);
+        const head = (v: string | undefined): HeadSize | null => {
+          const m = v ? /url\(#([^)]+)\)/.exec(v) : null;
+          return m ? (markers.get(m[1]) ?? null) : null;
+        };
+        linkHeads.push({ end: head(a["marker-end"]), start: head(a["marker-start"]) });
       }
       continue;
     }
@@ -322,12 +469,14 @@ function scan(svg: string): Scan {
     const half = (Number(a["stroke-width"] ?? 0) || 0) / 2;
     let outline: Pt[][] = [];
     let circle: NodeShape["circle"];
+    let rx: number | undefined;
     if (tag === "rect") {
       const x = Number(a.x ?? 0);
       const y = Number(a.y ?? 0);
       const w = Number(a.width ?? 0);
       const h = Number(a.height ?? 0);
       outline = [[[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]];
+      if (Number(a.rx ?? 0) > 0) rx = Math.min(Number(a.rx), w / 2, h / 2);
     } else if (tag === "polygon") {
       const v = (a.points ?? "").trim().split(/[\s,]+/).map(Number);
       const pts: Pt[] = [];
@@ -344,9 +493,9 @@ function scan(svg: string): Scan {
       ? [circle.cx - circle.r, circle.cy - circle.r, circle.cx + circle.r, circle.cy + circle.r]
       : bboxOf(outline.flat());
     if (!Number.isFinite(box[0])) continue;
-    nodes.push({ id: nodeId ?? null, outline, circle, half, box });
+    nodes.push({ id: nodeId ?? null, outline, circle, ...(rx !== undefined ? { rx } : {}), half, box });
   }
-  return { W, H, texts, nodes, links, linkHalf, linkOrder, bands };
+  return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, frames };
 }
 
 function segX(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
@@ -526,10 +675,14 @@ function entryCollisions(links: ReadonlyArray<ReadonlyArray<Pt>>, nodes: readonl
  *      join the two. A label sitting on a straight or half-column jog (the accepted rev 210 figure,
  *      fixture t03_n1) is not a stub.
  * Calibration (row 25): F1 fixtures t03_k1..k7 each give at least one stub; t03_n1/n2 give none.
+ * Swarm 1.2.8 row 56 (VIS-4, 01f §7 (b), OP-18-6): on a link with `data-route="curved"` only the first and the last
+ * straight piece are checked. Its `CURVE_SAMPLES` steps merge into pieces of about `STRAIGHT_TURN_DEG`, whose length
+ * is the sampling of one smooth curve, not a routing stub.
  */
 function stubSegments(
   links: ReadonlyArray<ReadonlyArray<Pt>>,
   bandsOver: ReadonlyArray<ReadonlyArray<Box>>,
+  curved: ReadonlyArray<boolean> = [],
 ): Array<{ link: number; length: number }> {
   type End = "src" | "head" | "bend" | "cut";
   interface Piece { a: Pt; b: Pt; st: End; en: End; jog: boolean; len: number }
@@ -538,6 +691,7 @@ function stubSegments(
     const pl = straightPieces(raw);
     const pieces: Piece[] = [];
     for (let s = 0; s + 1 < pl.length; s++) {
+      if (curved[li] && s > 0 && s + 2 < pl.length) continue; // row 56: interior piece of a sampled curve
       const a = pl[s];
       const b = pl[s + 1];
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -583,10 +737,17 @@ function stubSegments(
  * T-03 `arrowTangent`: a connector whose last straight piece lands on a node border within
  * `ARROW_TANGENT_TOL_DEG` of that border's direction (it runs along the border, or into a corner
  * along the next side, instead of meeting the border head-on).
+ * Swarm 1.2.8 row 57 (VIS-7, 01f §7 (a)): a link with a start head (`marker-start`) is checked at its first piece too,
+ * read from the start backwards (a second entry for the same link when both ends graze a border).
  */
-function arrowTangents(links: ReadonlyArray<ReadonlyArray<Pt>>, nodes: readonly NodeShape[]): Array<{ link: number; node: number; deg: number }> {
+function arrowTangents(
+  links: ReadonlyArray<ReadonlyArray<Pt>>,
+  nodes: readonly NodeShape[],
+  starts: ReadonlyArray<boolean> = [],
+): Array<{ link: number; node: number; deg: number }> {
   const out: Array<{ link: number; node: number; deg: number }> = [];
-  links.forEach((raw, li) => {
+  const ends = links.flatMap((raw, li) => (starts[li] ? [{ raw, li }, { raw: [...raw].reverse(), li }] : [{ raw, li }]));
+  ends.forEach(({ raw, li }) => {
     const pl = straightPieces(raw);
     if (pl.length < 2) return;
     const e = pl[pl.length - 1];
@@ -619,6 +780,289 @@ function arrowTangents(links: ReadonlyArray<ReadonlyArray<Pt>>, nodes: readonly 
   return out;
 }
 
+/** Row 53 (H-TAG): ray-cast point-in-polygon on a closed ring (the last point may repeat the first). */
+function inRing(p: Pt, ring: readonly Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Row 53 (H-TAG, 01f §5.4): how far (mm) the point lies outside the region the node outline encloses (0 inside), or
+ * null when the outline encloses no area (bus rail, open path). Circle and rounded rect exact; else the outline ring.
+ */
+function outsideRegion(p: Pt, n: NodeShape): number | null {
+  if (n.circle) return Math.max(0, Math.hypot(p[0] - n.circle.cx, p[1] - n.circle.cy) - n.circle.r);
+  if (n.rx !== undefined) {
+    const [x0, y0, x1, y1] = n.box;
+    const r = n.rx;
+    const qx = Math.max(x0 + r - p[0], 0, p[0] - (x1 - r));
+    const qy = Math.max(y0 + r - p[1], 0, p[1] - (y1 - r));
+    return Math.max(0, Math.hypot(qx, qy) - r);
+  }
+  const ring = n.outline[0];
+  if (!ring || n.outline.length !== 1 || ring.length < 4) return null;
+  const distinct = new Set(ring.map((q) => `${q[0]},${q[1]}`));
+  if (distinct.size < 3) return null;
+  if (inRing(p, ring)) return 0;
+  let d = Infinity;
+  for (let k = 0; k < ring.length; k++) d = Math.min(d, segDist(p, ring[k], ring[(k + 1) % ring.length]));
+  return d;
+}
+
+/**
+ * Row 68a (C166): connector checks that read the ends.
+ * - `edgeEndOffNode`: the target end (and a start with a head) farther than `EDGE_END_ON_NODE_MM` from every node
+ *   outline, not inside a node, not under an event's label block and not on a sequence lifeline;
+ * - `edgeThroughNode` (other = the end node): a sample of the connector strictly inside the body of a node it ends on, more
+ *   than `OWN_NODE_END_MM` from that end (other nodes are checked in `lintDiagramGeometry`);
+ * - `edgeOutside`: the stroke past the figure box by more than `EDGE_OUTSIDE_MIN_MM`.
+ */
+function connectorEnds(
+  W: number,
+  H: number,
+  links: ReadonlyArray<ReadonlyArray<Pt>>,
+  linkHalf: readonly number[],
+  linkStart: readonly boolean[],
+  nodes: readonly NodeShape[],
+  texts: readonly TextEl[],
+  frames: readonly Box[],
+): DiagramGeomDefect[] {
+  const out: DiagramGeomDefect[] = [];
+  // a sequence lifeline (unmarked vertical line hanging from a node's bottom) carries the messages that end on it
+  const lifelines = frames.filter(
+    (f) => Math.abs(f[2] - f[0]) < 1e-6 && f[3] > f[1] && nodes.some((n) => n.id !== null && Math.abs(f[1] - n.box[3]) < 0.1 && f[0] > n.box[0] && f[0] < n.box[2]),
+  );
+  const onLifeline = (p: Pt) => lifelines.some((f) => Math.abs(p[0] - f[0]) <= EDGE_END_ON_NODE_MM && p[1] >= f[1] - 1e-6 && p[1] <= f[3] + 1e-6);
+  // an event's label block (texts after its outline in `<g data-label-pos="below">`) extends the node downwards
+  const ext = nodes.map((n): Box => [...n.box] as Box);
+  for (const t of texts) {
+    if (t.belowOf === undefined || !ext[t.belowOf]) continue;
+    const b = ext[t.belowOf];
+    ext[t.belowOf] = [Math.min(b[0], t.box[0]), b[1], Math.max(b[2], t.box[2]), Math.max(b[3], t.box[3])];
+  }
+  const named = nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.id !== null);
+  const deep = (p: Pt, n: NodeShape): boolean => {
+    if (p[0] <= n.box[0] || p[0] >= n.box[2] || p[1] <= n.box[1] || p[1] >= n.box[3]) return false;
+    const o = outsideRegion(p, n);
+    if (o === null) return p[0] > n.box[0] + 0.3 && p[0] < n.box[2] - 0.3 && p[1] > n.box[1] + 0.3 && p[1] < n.box[3] - 0.3;
+    return o === 0 && borderDist(p, n) > n.half + 0.3;
+  };
+  /** Index (in `nodes`) of the node an end attaches to, or -1. */
+  const attach = (p: Pt): number => {
+    const own = attachTo(p, named);
+    // a node part without an id (a bus rail, an inner line) still carries the end
+    return own >= 0 ? own : attachTo(p, nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.id === null));
+  };
+  const attachTo = (p: Pt, cands: ReadonlyArray<{ n: NodeShape; i: number }>): number => {
+    let best = -1;
+    let bd = Infinity;
+    for (const { n, i } of cands) {
+      const e = ext[i];
+      const tol = n.half + EDGE_END_ON_NODE_MM;
+      const below = e[3] > n.box[3] + 1e-6 ? LATTICE_Y : 0;
+      if (p[0] < e[0] - tol || p[0] > e[2] + tol || p[1] < e[1] - tol || p[1] > e[3] + below + tol) continue;
+      let d = borderDist(p, n);
+      if (outsideRegion(p, n) === 0) d = 0;
+      // under the label block of an event / gateway: the end sits on its cell bottom, within one lattice row of the block
+      if (e[3] > n.box[3] + 1e-6 && p[0] >= e[0] - tol && p[0] <= e[2] + tol && p[1] >= n.box[3] && p[1] <= e[3] + LATTICE_Y + tol) d = Math.min(d, 0);
+      if (d <= tol && d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+  links.forEach((P, li) => {
+    if (P.length < 2) return;
+    const name = `konektor ${li}`;
+    const ends: Array<[Pt, number]> = [[P[0], attach(P[0])], [P[P.length - 1], attach(P[P.length - 1])]];
+    // the target end (and a start that carries a head) must sit on a node
+    for (const [p, ni] of linkStart[li] ? ends : ends.slice(1)) {
+      if (ni < 0 && !onLifeline(p)) out.push({ kind: "edgeEndOffNode", text: name, other: `${p[0].toFixed(2)}, ${p[1].toFixed(2)}` });
+    }
+    // through its own end node(s)
+    const own = [...new Set(ends.map(([, ni]) => ni).filter((ni) => ni >= 0))];
+    for (const ni of own) {
+      const n = nodes[ni];
+      const near = ends.filter(([, k]) => k === ni).map(([p]) => p);
+      let hit = false;
+      for (let a = 0; a + 1 < P.length && !hit; a++) {
+        for (let q = 0; q <= 24; q++) {
+          const t = q / 24;
+          const s: Pt = [P[a][0] + (P[a + 1][0] - P[a][0]) * t, P[a][1] + (P[a + 1][1] - P[a][1]) * t];
+          if (near.some((e) => Math.hypot(s[0] - e[0], s[1] - e[1]) <= OWN_NODE_END_MM)) continue;
+          if (deep(s, n)) {
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (hit) out.push({ kind: "edgeThroughNode", text: name, other: n.id ?? "" });
+    }
+    // outside the figure box
+    const hw = linkHalf[li] ?? 0;
+    let over = 0;
+    for (const p of P) over = Math.max(over, -p[0] + hw, p[0] + hw - W, -p[1] + hw, p[1] + hw - H);
+    if (over > EDGE_OUTSIDE_MIN_MM) out.push({ kind: "edgeOutside", text: name, other: `lembar ${W.toFixed(1)} x ${H.toFixed(1)}`, amount: Number(over.toFixed(2)) });
+  });
+  return out;
+}
+
+// ── Row 57c (Swarm 1.2.8, C71/C86/C101/C102/C116/C119): edge label placement ──────────────────────────
+
+/**
+ * Row 57c: rules and text boxes of SVG decoration fragments (frame lines, headers), read by the lint's own scanner so the
+ * label placement and the check agree on what a container rule is.
+ */
+export function decorationOf(parts: readonly string[], widthMm: number): { rules: Array<{ a: Pt; b: Pt; half: number }>; texts: Box[] } {
+  const sc = scan(`<svg viewBox="0 0 ${widthMm} 10000">${parts.join("")}</svg>`);
+  return { rules: sc.rules, texts: sc.texts.map((t) => t.box) };
+}
+
+/** Row 57c: a band edge closer than this to an obstacle is not counted (0.01 mm output grid plus float noise). */
+export const LABEL_COLLISION_EPS_MM = 0.05;
+
+/**
+ * Row 57c: the region an arrowhead covers: a quadrilateral from just past the tip back `L` along the last piece, `W` wide
+ * (plus 0.1 mm), for the head at the end of `pl` (reverse `pl` for a start head). Null for a zero-length polyline.
+ */
+export function headQuad(pl: readonly Pt[], head: HeadSize): Pt[] | null {
+  const e = pl[pl.length - 1];
+  let p: Pt | undefined;
+  for (let i = pl.length - 2; i >= 0; i--) {
+    if (Math.hypot(pl[i][0] - e[0], pl[i][1] - e[1]) > 1e-6) {
+      p = pl[i];
+      break;
+    }
+  }
+  if (!p) return null;
+  const len = Math.hypot(e[0] - p[0], e[1] - p[1]);
+  const ux = (e[0] - p[0]) / len;
+  const uy = (e[1] - p[1]) / len;
+  const hw = head.W / 2 + 0.1;
+  const tip: Pt = [e[0] + ux * 0.2, e[1] + uy * 0.2];
+  const base: Pt = [e[0] - ux * head.L, e[1] - uy * head.L];
+  return [
+    [tip[0] - uy * hw, tip[1] + ux * hw],
+    [tip[0] + uy * hw, tip[1] - ux * hw],
+    [base[0] + uy * hw, base[1] - ux * hw],
+    [base[0] - uy * hw, base[1] + ux * hw],
+  ];
+}
+
+/** Row 57c: a convex polygon and an axis-aligned box overlap (separating axis test). */
+export function polyHitsBox(poly: readonly Pt[], b: Box): boolean {
+  const xs = poly.map((q) => q[0]);
+  const ys = poly.map((q) => q[1]);
+  if (Math.max(...xs) <= b[0] || Math.min(...xs) >= b[2] || Math.max(...ys) <= b[1] || Math.min(...ys) >= b[3]) return false;
+  const corners: Pt[] = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const c = poly[(i + 1) % poly.length];
+    const nx = -(c[1] - a[1]);
+    const ny = c[0] - a[0];
+    const pp = poly.map((q) => q[0] * nx + q[1] * ny);
+    const bp = corners.map((q) => q[0] * nx + q[1] * ny);
+    if (Math.max(...pp) <= Math.min(...bp) + 1e-9 || Math.max(...bp) <= Math.min(...pp) + 1e-9) return false;
+  }
+  return true;
+}
+
+/** Row 57c: segment a-b, thickened by `half`, crosses the inside of box `b`. */
+function segInBox(a: Pt, c: Pt, half: number, b: Box): boolean {
+  return clipT(a, c, [b[0] - half, b[1] - half, b[2] + half, b[3] + half]) !== null;
+}
+
+/** Row 57c: the rim of circle (cx, cy, r) thickened by `half` passes through box `b`. */
+function circleInBox(cx: number, cy: number, r: number, half: number, b: Box): boolean {
+  const nx = Math.min(Math.max(cx, b[0]), b[2]);
+  const ny = Math.min(Math.max(cy, b[1]), b[3]);
+  const near = Math.hypot(nx - cx, ny - cy);
+  const far = Math.max(...[[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]].map(([x, y]) => Math.hypot(x - cx, y - cy)));
+  return near < r + half && far > r - half;
+}
+
+/**
+ * Row 57c: the part of an axis-aligned rule inside a band that is NOT under a connector running along it (a label on a
+ * connector that follows a lane rule hides only what the connector already covers). Non-axis rules always count.
+ */
+function ruleVisibleInBand(r: { a: Pt; b: Pt; half: number }, band: Box, links: ReadonlyArray<ReadonlyArray<Pt>>): boolean {
+  const t = clipT(r.a, r.b, [band[0] - r.half, band[1] - r.half, band[2] + r.half, band[3] + r.half]);
+  if (!t) return false;
+  const hor = Math.abs(r.a[1] - r.b[1]) < 1e-6;
+  const ver = Math.abs(r.a[0] - r.b[0]) < 1e-6;
+  if (!hor && !ver) return true;
+  const k = hor ? 0 : 1;
+  const at = (u: number) => r.a[k] + (r.b[k] - r.a[k]) * u;
+  const lo = Math.min(at(t[0]), at(t[1]));
+  const hi = Math.max(at(t[0]), at(t[1]));
+  const line = hor ? r.a[1] : r.a[0];
+  const cover: [number, number][] = [];
+  for (const pl of links) {
+    for (let i = 0; i + 1 < pl.length; i++) {
+      const p = pl[i];
+      const q = pl[i + 1];
+      const along = hor ? Math.abs(p[1] - q[1]) < 1e-6 && Math.abs(p[1] - line) < 0.3 : Math.abs(p[0] - q[0]) < 1e-6 && Math.abs(p[0] - line) < 0.3;
+      if (along) cover.push([Math.min(p[k], q[k]), Math.max(p[k], q[k])]);
+    }
+  }
+  cover.sort((x, y) => x[0] - y[0]);
+  let at0 = lo;
+  for (const [s, e] of cover) {
+    if (s > at0 + LABEL_COLLISION_EPS_MM) break;
+    at0 = Math.max(at0, e);
+  }
+  return at0 < hi - LABEL_COLLISION_EPS_MM;
+}
+
+/**
+ * Row 57c (N8 request, `GEOM_LABEL_COLLISION`): for every edge-label knockout band (shrunk by `LABEL_COLLISION_EPS_MM`):
+ * an arrowhead it covers (`headQuad`), the first node outline it crosses, the first container rule visible inside it.
+ */
+export function labelCollisions(
+  bands: ReadonlyArray<{ box: Box; text?: string }>,
+  links: ReadonlyArray<ReadonlyArray<Pt>>,
+  heads: ReadonlyArray<{ end: HeadSize | null; start: HeadSize | null }>,
+  nodes: readonly NodeShape[],
+  rules: ReadonlyArray<{ a: Pt; b: Pt; half: number }>,
+): Array<{ text: string; other: string }> {
+  const out: Array<{ text: string; other: string }> = [];
+  const e = LABEL_COLLISION_EPS_MM;
+  const quads: Array<{ q: Pt[]; link: number }> = [];
+  links.forEach((pl, i) => {
+    const h = heads[i];
+    if (!h) return;
+    if (h.end) {
+      const q = headQuad(pl, h.end);
+      if (q) quads.push({ q, link: i });
+    }
+    if (h.start) {
+      const q = headQuad([...pl].reverse(), h.start);
+      if (q) quads.push({ q, link: i });
+    }
+  });
+  for (const band of bands) {
+    const b: Box = [band.box[0] + e, band.box[1] + e, band.box[2] - e, band.box[3] - e];
+    if (b[2] <= b[0] || b[3] <= b[1]) continue;
+    const text = band.text ?? "";
+    const head = quads.find((h) => polyHitsBox(h.q, b));
+    if (head) out.push({ text, other: `kepala panah konektor ${head.link}` });
+    const node = nodes.find((n) => {
+      if (n.box[2] + n.half < b[0] || n.box[0] - n.half > b[2] || n.box[3] + n.half < b[1] || n.box[1] - n.half > b[3]) return false;
+      if (n.circle) return circleInBox(n.circle.cx, n.circle.cy, n.circle.r, n.half, b);
+      return n.outline.some((pl) => pl.some((p, k) => k + 1 < pl.length && segInBox(p, pl[k + 1], n.half, b)));
+    });
+    if (node) out.push({ text, other: node.id ?? "garis tepi simpul" });
+    if (rules.some((r) => ruleVisibleInBand(r, b, links))) out.push({ text, other: "garis wadah" });
+  }
+  return out;
+}
+
 function emptyCounts(): Record<DiagramDefectKind, number> {
   return {
     textOverlap: 0,
@@ -632,12 +1076,16 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
     edgeEntryCollision: 0,
     stubSegment: 0,
     arrowTangent: 0,
+    labelCollision: 0,
+    frameOutside: 0,
+    edgeOutside: 0,
+    edgeEndOffNode: 0,
   };
 }
 
 /** Lint geometri SVG diagram (tanpa browser). `score` = jumlah semua cacat. */
 export function lintDiagramGeometry(svg: string): DiagramGeomLint {
-  const { W, H, texts, nodes, links, linkHalf, linkOrder, bands } = scan(svg);
+  const { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, frames } = scan(svg);
   const defects: DiagramGeomDefect[] = [];
   // teks-teks
   for (let i = 0; i < texts.length; i++) {
@@ -657,6 +1105,17 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
     const [x0, y0, x1, y1] = t.box;
     const over = Math.max(0, -x0, x1 - W, -y0, y1 - H);
     if (over > OUTSIDE_MIN_MM) defects.push({ kind: "textOutside", text: t.text, amount: Number(over.toFixed(2)) });
+    // Row 53 (H-TAG, 01f §5.4): a requirement tag whose anchor lies in a node's box must have its ink inside that
+    // node's outline (stadium corner, diamond side, cylinder lid); else `textOutside` naming the node.
+    const at = t.tagAt;
+    if (!at || over > OUTSIDE_MIN_MM) continue;
+    const host = nodes.find((n) => n.id !== null && at[0] > n.box[0] && at[0] < n.box[2] && at[1] > n.box[1] && at[1] < n.box[3]);
+    if (!host) continue;
+    const corners: Pt[] = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    const out = corners.map((c) => outsideRegion(c, host));
+    if (out.some((v) => v === null)) continue;
+    const worst = Math.max(...(out as number[]));
+    if (worst > TAG_OUTSIDE_MIN_MM) defects.push({ kind: "textOutside", text: t.text, other: host.id ?? "", amount: Number(worst.toFixed(2)) });
   }
   // teks x konektor / garis tepi simpul
   for (const t of texts) {
@@ -670,7 +1129,7 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
       });
       if (hit) defects.push({ kind: "lineThroughText", text: t.text });
     }
-    const over = nodes.some((n) => {
+    const overNode = nodes.find((n) => {
       if (n.box[2] + n.half < b[0] || n.box[0] - n.half > b[2] || n.box[3] + n.half < b[1] || n.box[1] - n.half > b[3]) return false;
       if (n.circle) {
         const c = n.circle;
@@ -678,7 +1137,23 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
       }
       return t.samples.some((p) => onPolylines(p, n.outline, n.half));
     });
-    if (over) defects.push({ kind: "textOverNode", text: t.text });
+    const over = overNode !== undefined;
+    // Row 54 (VIS-3a): a label-below text names the node whose outline it touches.
+    if (over) defects.push({ kind: "textOverNode", text: t.text, ...(t.belowOf !== undefined ? { other: overNode.id ?? "" } : {}) });
+    // Row 54 (VIS-3a, §5.3): a label-below block lies wholly under its own outline (stroke included) and inside no
+    // other node; else `textOverNode` naming the node it overlaps. Its host is the cell, not the outline box, so the
+    // `textExceedsNode` test below (centre inside a node box) does not apply to it.
+    if (t.belowOf !== undefined) {
+      const own = nodes[t.belowOf];
+      // Row 57c (C86): a block wholly right of its outline (label beside the circle) is placed, not overlapping.
+      const beside = own !== undefined && b[0] >= own.box[2] + own.half - 1e-6;
+      if (own && !over && !beside && b[1] < own.box[3] + own.half - 1e-6 && b[0] < own.box[2] + own.half && b[2] > own.box[0] - own.half) {
+        defects.push({ kind: "textOverNode", text: t.text, other: own.id ?? "" });
+      }
+      const hit = nodes.find((n, ni) => ni !== t.belowOf && n.id !== null && b[0] < n.box[2] + n.half && b[2] > n.box[0] - n.half && b[1] < n.box[3] + n.half && b[3] > n.box[1] - n.half);
+      if (hit) defects.push({ kind: "textOverNode", text: t.text, other: hit.id ?? "" });
+      continue;
+    }
     const cx = (b[0] + b[2]) / 2;
     const cy = (b[1] + b[3]) / 2;
     const host = nodes.find((n) => n.id !== null && cx > n.box[0] && cx < n.box[2] && cy > n.box[1] && cy < n.box[3]);
@@ -724,12 +1199,26 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
     defects.push({ kind: "edgeEntryCollision", text: `konektor ${c.a}`, other: `konektor ${c.b} @ ${nodeName(c.node)}`, amount: Number(c.gap.toFixed(2)) });
   }
   const bandsOver = links.map((_, i) => bands.filter((b) => b.order > linkOrder[i]).map((b) => b.box));
-  for (const s of stubSegments(links, bandsOver)) {
+  for (const s of stubSegments(links, bandsOver, linkCurved)) {
     defects.push({ kind: "stubSegment", text: `konektor ${s.link}`, amount: Number(s.length.toFixed(2)) });
   }
-  for (const t of arrowTangents(links, nodes)) {
+  for (const t of arrowTangents(links, nodes, linkStart)) {
     defects.push({ kind: "arrowTangent", text: `konektor ${t.link}`, other: nodeName(t.node), amount: Number(t.deg.toFixed(1)) });
   }
+  // Row 57c: label bands against arrowheads, node outlines and container rules.
+  for (const c of labelCollisions(bands, links, linkHeads, nodes, rules)) {
+    defects.push({ kind: "labelCollision", text: c.text, other: c.other });
+  }
+  // Row 55c (C133): a container frame clipped by the figure box (pool past the edge at 128 mm).
+  for (const f of frames) {
+    const over = Math.max(-f[0], f[2] - W, -f[1], f[3] - H);
+    if (over > FRAME_OUTSIDE_MIN_MM) {
+      const at = `x ${f[0].toFixed(2)}..${f[2].toFixed(2)}, y ${f[1].toFixed(2)}..${f[3].toFixed(2)} (lembar ${W.toFixed(1)} x ${H.toFixed(1)})`;
+      defects.push({ kind: "frameOutside", text: "bingkai wadah", other: at, amount: Number(over.toFixed(2)) });
+    }
+  }
+  // Row 68a (C166): connector ends on their nodes, never through their own node, and inside the figure.
+  for (const d of connectorEnds(W, H, links, linkHalf, linkStart, nodes, texts, frames)) defects.push(d);
   const counts = emptyCounts();
   for (const d of defects) counts[d.kind]++;
   return { widthMm: W, heightMm: H, counts, defects, score: defects.filter((d) => !T03_KINDS.has(d.kind)).length };

@@ -1,0 +1,8 @@
+Propose a new skill, or a change to one, as a draft for the person to approve. You cannot write into skill folders yourself: the edit tools and the shell are refused there. A draft is never loaded or offered to any agent until the person approves it in Settings > Skills; after you draft one, tell the person it is waiting.
+
+Parameters:
+- name: the skill name, 1 to 64 characters of lower-case letters, digits and hyphens, starting with a letter or digit. It must equal the `name` in the frontmatter. A draft with the name of an earlier draft in the same scope replaces it.
+- scope: "project" (this project only, the usual choice) or "global" (every project).
+- content: the full SKILL.md text, at most 64 KiB: YAML frontmatter with `name`, a one-line `description` (at most 1024 characters) saying when to load the skill, and optional `triggers` (keywords, files, missionTypes lists, at most 10 entries each); then the instructions in Markdown. See the skill-authoring skill for the format.
+
+A skill whose text runs shell commands (!`...`) is marked for the person, who must confirm that separately. A draft written after this session read web, MCP or Studio content, or used a subagent that did, is marked as from untrusted input. At most 20 drafts wait per scope.

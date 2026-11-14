@@ -5,8 +5,10 @@
 import type { DiagramZone, RoutedEdge, StudioDiagramV1 } from "../../../contract";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure } from "../../chart/core/textfit";
 import { EDGE_KINDS, LATTICE_Y, pt2mm, role, STROKE_PRIMARY, svgText, type Sheet, type SheetNode } from "../core";
-import type { Box } from "../fit/lint";
-import { placeEdgeLabels, type EdgeLabelInput, type EdgeLabelPlan, layoutNotes } from "../fit/labels";
+import { edgeArrowsOfPaths, edgeLineDash, type EdgeArrows } from "../core/svg";
+import { ARROW_SIZES_MM } from "../core/tokens";
+import { decorationOf, type Box, type HeadSize } from "../fit/lint";
+import { labelAtBaseline, placeEdgeLabels, type EdgeLabelInput, type EdgeLabelPlan, layoutNotes } from "../fit/labels";
 import { diagramFitAllows, diagramFitNote } from "../fit/state";
 import { capLineMm, capWidthMm, nodeTextLayout } from "../fit/text";
 
@@ -91,6 +93,18 @@ export interface FitLabelInputs {
   orig: ReadonlyArray<readonly [number, number]>;
   yMax: number;
   yMin?: number;
+  /**
+   * Row 57c: the frame decoration the sheet draws (swimlane lane rules, phase separators and headers, pool borders and
+   * labels, as SVG elements): its rules may not be crossed by a label band, its texts are obstacles.
+   */
+  decoration?: readonly string[];
+}
+
+/** Row 57c: marker size (mm) of a head as core/svg.ts `arrowMarkerSvg` draws it (W = 0.89 L). */
+function headSize(h: EdgeArrows["end"] | EdgeArrows["start"]): HeadSize | null {
+  if (!h) return null;
+  const L = ARROW_SIZES_MM[h === "kind" ? "m" : h.size];
+  return { L, W: 0.89 * L };
 }
 
 /** Rencana label tepi saat fit (rintangan: simpul, teks simpul, label zona dan lajur). */
@@ -103,8 +117,30 @@ export function fitEdgeLabels(a: FitLabelInputs): EdgeLabelPlan {
   }
   const hdr = pt2mm(role("table_header").size);
   for (const lane of a.sheet.lanes) obstacles.push(textBox(0.5, lane.y + hdr + LATTICE_Y / 2.0, headerWidth(lane.name), hdr, "start"));
-  const edges: EdgeLabelInput[] = a.paths.map((p, i) => ({ points: p.points, label: String(p.label ?? ""), kind: p.kind, orig: a.orig[i] }));
-  const plan = placeEdgeLabels(edges, { W: a.sheet.widthMm, yMax: a.yMax, yMin: a.yMin, nodeBoxes, obstacles, allowNumbered: diagramFitAllows("numbered") });
+  // Row 57c: frame rules and header texts (lane, phase, pool) from the decoration the sheet draws.
+  const deco = a.decoration?.length ? decorationOf(a.decoration, a.sheet.widthMm) : { rules: [], texts: [] };
+  obstacles.push(...deco.texts);
+  // Swarm 1.2.8 row 57b (VIS-9, 01f §3.4): an edge with `label_at` keeps its label at that fraction of the path, fixed.
+  const arrows = edgeArrowsOfPaths(a.s.edges ?? [], a.paths);
+  const at = arrows.map((x) => x.labelAt);
+  const edges: EdgeLabelInput[] = a.paths.map((p, i) => {
+    const fixedAt = at[i];
+    // Row 57c: the drawn heads, so a band keeps them visible.
+    const heads = { end: headSize(arrows[i]?.end ?? null), start: headSize(arrows[i]?.start ?? null) };
+    // Row 56d (C134 G3-09): the drawn dash pattern, so a band leaves no stray dash fragment.
+    const dash = edgeLineDash(p.kind, arrows[i]?.line)?.split(",").map(Number).filter((v) => Number.isFinite(v));
+    const base = { points: p.points, label: String(p.label ?? ""), kind: p.kind, heads, ...(dash?.length ? { dash } : {}) };
+    return fixedAt ? { ...base, orig: labelAtBaseline(p.points, fixedAt), fixed: true } : { ...base, orig: a.orig[i] };
+  });
+  const plan = placeEdgeLabels(edges, {
+    W: a.sheet.widthMm,
+    yMax: a.yMax,
+    yMin: a.yMin,
+    nodeBoxes,
+    obstacles,
+    allowNumbered: diagramFitAllows("numbered"),
+    rules: deco.rules,
+  });
   const moved = plan.placed.filter((p) => p.mode === "moved").length;
   if (moved) diagramFitNote("LABEL_MOVED", `${moved} label tepi dipindah ke posisi bebas tabrakan`);
   plan.placed.forEach((p, i) => {

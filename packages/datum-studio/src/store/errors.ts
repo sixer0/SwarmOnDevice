@@ -81,6 +81,10 @@ export const STORE_ERROR_CODES = [
   "OUTPUT_UNVERIFIED",
   // row 174 (C218 F146b-3): studio_mission_update_row `retire` refused (not a live deliverable of the row, or none would stay).
   "DELIVERABLE_NOT_RETIRABLE",
+  // 1.2.8 row 39 (MEM-e, N8-013): a Swarm `done` close while the project memory has no index entry for the mission.
+  "MEMORY_INDEX_MISSING",
+  // 1.2.8 row 45 (PROJ-b, N8-145): studio_mission_place / setProjectDir without an answered placement or tidy decision.
+  "PLACE_DECISION_UNANSWERED",
 ] as const
 
 export type StoreErrorCode = (typeof STORE_ERROR_CODES)[number]

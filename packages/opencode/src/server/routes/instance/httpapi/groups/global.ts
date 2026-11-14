@@ -12,6 +12,8 @@ import "@/server/event"
 import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import semver from "semver"
+import { DesktopNonceHeaders } from "./autonomy"
+import { ApiConfigPersonOnlyError, PERSON_ONLY_NOTE } from "./config"
 import { described } from "./metadata"
 
 const GlobalHealth = Schema.Struct({
@@ -331,14 +333,15 @@ export const GlobalApi = HttpApi.make("global").add(
         }),
       ),
       HttpApiEndpoint.patch("configUpdate", GlobalPaths.config, {
+        headers: DesktopNonceHeaders,
         payload: ConfigV1.Info,
         success: described(ConfigV1.Info, "Successfully updated global config"),
-        error: HttpApiError.BadRequest,
+        error: [HttpApiError.BadRequest, ApiConfigPersonOnlyError],
       }).annotateMerge(
         OpenApi.annotations({
           identifier: "global.config.update",
           summary: "Update global configuration",
-          description: "Update global Swarm configuration settings and preferences.",
+          description: "Update global Swarm configuration settings and preferences." + PERSON_ONLY_NOTE,
         }),
       ),
       HttpApiEndpoint.post("dispose", GlobalPaths.dispose, {

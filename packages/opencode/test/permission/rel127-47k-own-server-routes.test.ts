@@ -128,20 +128,43 @@ const expectRuns = (input: Input) => {
     ])
 }
 
+// INTENT (1.2.8 row 28, H-U10, C13 narrowing of C10 OP13-1): a GET/HEAD to a route on `OWN_API_READ_ROUTES` (N8-387) with
+// only `OWN_API_READ_OPTIONS` (N8-388) is class A `own_api_read` under consent, for root and subagent, instead of the
+// twin's verdict; with the mode off it is still not refused and not own_api. Every other form keeps `expectRuns`.
+const OWN_API_READ: Verdict = { class: "A", decidedBy: "gate", category: "own_api_read" }
+const expectReads = (input: Input) => {
+  const base = AutonomyTable.classify(input)
+  expect({ call: label(input), ownApi: base.category === "own_api", refused: base.class === "X" }).toEqual({
+    call: label(input),
+    ownApi: false,
+    refused: false,
+  })
+  for (const caller of ["root", "subagent"] as const)
+    expect([label(input), caller, AutonomyTable.classify({ ...input, bypass: { caller } })]).toEqual([
+      label(input),
+      caller,
+      OWN_API_READ,
+    ])
+}
+
 describe("U10-1: an own-server call runs under the consent unless its route is person-only", () => {
   test("allowed routes: session list, health, project list, file search, a config read, the permission list", () => {
+    // INTENT (row 28): these six are on the read list with listed options, so A own_api_read under consent.
     for (const command of [
       `curl -s ${OWN}/session`,
       `curl -s http://localhost:${PORT}/global/health`,
       `curl -s ${OWN}/project`,
+      `curl -s ${OWN}/permission`,
+      `http :${PORT}/session`,
+      `xh GET :${PORT}/session/ses_1/message`,
+    ])
+      expectReads(bash(command))
+    for (const command of [
       `curl -s '${OWN}/find/file?query=a'`,
       `curl -s ${OWN}/config`,
       `curl -s ${OWN}/config/providers`,
-      `curl -s ${OWN}/permission`,
       `curl -s -X GET ${OWN}/global/config`,
       `wget -qO- ${OWN}/session`,
-      `http :${PORT}/session`,
-      `xh GET :${PORT}/session/ses_1/message`,
       `H=127.0.0.1; curl -s $H:${PORT}/session`,
       `sh -c 'curl -s ${OWN}/session'`,
       `curl -s --url ${OWN}/session`,
@@ -151,7 +174,8 @@ describe("U10-1: an own-server call runs under the consent unless its route is p
     ])
       expectRuns(bash(command))
   })
-  test("a webfetch of an allowed route", () => expectRuns(fetchOf(`${OWN}/session`)))
+  // INTENT (row 28): a webfetch of a listed route is A own_api_read under consent.
+  test("a webfetch of an allowed route", () => expectReads(fetchOf(`${OWN}/session`)))
 
   test("person-only: mode and consent, by any method", () => {
     for (const command of [

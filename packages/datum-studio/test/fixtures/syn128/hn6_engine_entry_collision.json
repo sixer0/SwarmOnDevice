@@ -1,0 +1,105 @@
+{
+  "$comment": "Swarm 1.2.8 row 25b (N8-390, AT-HN6, row 35): engine graph spec, 5-way fan-in into one side (left) of node t. MEASURED (row 25b, engine = BASE): buildDiagramSvg and buildDiagramSvgAuto give edgeEntryCollision 0 for this spec (2 GEOM_STUB_SEGMENT only); a seeded search over ~1000 synthetic 5- and 6-way fan-in specs (graph, flow, layered, topology; 128 and 166 mm) found NO engine render with edgeEntryCollision >= 1 (the 1.2.7 F-6 entry spreading holds). The AT-HN6 red premise therefore is not met by any engine spec found; row 35 decides (C-decision), see 04_fixtures.md.",
+  "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "graph",
+    "id": "9.1",
+    "title": "Gambar sintetis uji.",
+    "classification": "BIASA",
+    "width_mm": 128,
+    "apparatus": "page",
+    "labels_verified": true,
+    "sources": [
+      "Sumber sintetis uji"
+    ],
+    "nodes": [
+      {
+        "id": "s0",
+        "label": "Sumber A",
+        "class": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      {
+        "id": "s1",
+        "label": "Sumber B",
+        "class": {
+          "col": 0,
+          "row": 1
+        }
+      },
+      {
+        "id": "s2",
+        "label": "Sumber C",
+        "class": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      {
+        "id": "s3",
+        "label": "Sumber D",
+        "class": {
+          "col": 0,
+          "row": 3
+        }
+      },
+      {
+        "id": "s4",
+        "label": "Sumber E",
+        "class": {
+          "col": 0,
+          "row": 4
+        }
+      },
+      {
+        "id": "t",
+        "label": "Tujuan",
+        "class": {
+          "col": 2,
+          "row": 2
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "s0",
+        "to": "t",
+        "kind": "data",
+        "label": "m1"
+      },
+      {
+        "from": "s1",
+        "to": "t",
+        "kind": "data",
+        "label": "m2"
+      },
+      {
+        "from": "s2",
+        "to": "t",
+        "kind": "data",
+        "label": "m3"
+      },
+      {
+        "from": "s3",
+        "to": "t",
+        "kind": "data",
+        "label": "m4"
+      },
+      {
+        "from": "s4",
+        "to": "t",
+        "kind": "data",
+        "label": "m5"
+      }
+    ]
+  },
+  "buildOptions": {
+    "release": false
+  },
+  "measured": {
+    "edgeEntryCollision": 0,
+    "stubSegment": 2
+  }
+}

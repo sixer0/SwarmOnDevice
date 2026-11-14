@@ -97,12 +97,13 @@ import { globalHandlers } from "./handlers/global"
 import { instanceHandlers } from "./handlers/instance"
 import { mcpHandlers } from "./handlers/mcp"
 import { permissionHandlers } from "./handlers/permission"
-import { projectHandlers } from "./handlers/project"
+import { projectHandlers, rehomeRecovery } from "./handlers/project"
 import { projectCopyHandlers } from "./handlers/project-copy"
 import { providerHandlers } from "./handlers/provider"
 import { ptyConnectHandlers, ptyHandlers } from "./handlers/pty"
 import { questionHandlers } from "./handlers/question"
 import { memoryHandlers } from "./handlers/memory"
+import { skillHandlers } from "./handlers/skill"
 import { savedCommandHandlers } from "./handlers/saved-command"
 import { sessionHandlers } from "./handlers/session"
 import { syncHandlers } from "./handlers/sync"
@@ -176,6 +177,7 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
     permissionHandlers,
     providerHandlers,
     sessionHandlers,
+    skillHandlers,
     syncHandlers,
     tuiHandlers,
     workspaceHandlers,
@@ -297,6 +299,8 @@ export function createRoutes(
     docRoute,
     uiRoute,
     SessionResume.layer,
+    // 1.2.8 row 44b (01d section 6.3): a re-home interrupted by a crash is rolled back when the server starts.
+    rehomeRecovery,
     SessionSearch.indexing,
   ).pipe(
     Layer.provide([

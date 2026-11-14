@@ -91,7 +91,7 @@ export function layoutFlow(s: StudioDiagramV1, sheet: DiagramSheet): LayoutResul
 // ranked flow. Ranks come from the edges (longest path, back edges ignored); TB puts the nodes of
 // one rank side by side, LR stacks them in one column. Every x/w is a lattice multiple and every
 // y/h a LATTICE_Y multiple, so `snapToLattice` never moves or clamps a ranked node; widths that do
-// not fit are refused BEFORE placement (FIGURE_OVER_CAPACITY / DATUM-37-lebar), never clipped.
+// not fit are refused BEFORE placement (FIGURE_OVER_CAPACITY / DATUM-37-rank), never clipped.
 // ---------------------------------------------------------------------------------------------
 
 /** N-161: minimum node width of a ranked flow, in lattice units lx (legacy flow and other families keep 3). */
@@ -291,7 +291,7 @@ export function flowRankOverload(dir: FlowDirection, ranks: readonly DiagramNode
       unit: "simpul",
       measured: m,
       limit: M,
-      message: `DATUM-37: peringkat ${r} memuat ${m} simpul, maks ${M} pada ${W} mm (lebar simpul minimum ${(FLOW_RANK_NODE_MIN_UNITS * lx).toFixed(2)} mm)`,
+      message: `DATUM-37-rank: peringkat ${r} memuat ${m} simpul, maks ${M} pada ${W} mm (lebar simpul minimum ${(FLOW_RANK_NODE_MIN_UNITS * lx).toFixed(2)} mm)`,
       suggestion: `pakai ${alt}direction "LR" (maks ${FLOW_LR_MAX_PARALLEL} per peringkat), atau pecah menjadi 2 diagram`,
     };
   }
@@ -303,7 +303,7 @@ export function flowRankOverload(dir: FlowDirection, ranks: readonly DiagramNode
       unit: "simpul",
       measured: ranks[r].length,
       limit: FLOW_LR_MAX_PARALLEL,
-      message: `DATUM-37: peringkat ${r} memuat ${ranks[r].length} simpul kiri-kanan, maks ${FLOW_LR_MAX_PARALLEL}`,
+      message: `DATUM-37-rank: peringkat ${r} memuat ${ranks[r].length} simpul kiri-kanan, maks ${FLOW_LR_MAX_PARALLEL}`,
       suggestion: `pakai direction "TB" atau pecah menjadi 2 diagram`,
     };
   }
@@ -316,7 +316,7 @@ export function flowRankOverload(dir: FlowDirection, ranks: readonly DiagramNode
     unit: "peringkat",
     measured: ranks.length,
     limit: Rmax,
-    message: `DATUM-37: ${ranks.length} peringkat kiri-kanan, maks ${Rmax} pada ${W} mm`,
+    message: `DATUM-37-rank: ${ranks.length} peringkat kiri-kanan, maks ${Rmax} pada ${W} mm`,
     suggestion: `pakai direction "TB"${alt}, atau pecah menjadi 2 diagram`,
   };
 }
@@ -326,7 +326,7 @@ function assertRankCapacity(dir: FlowDirection, ranks: readonly DiagramNode[][],
   const o = flowRankOverload(dir, ranks, W, lx);
   if (!o) return;
   throw new DiagramOverCapacity(o.message, {
-    checkId: "DATUM-37-lebar",
+    checkId: "DATUM-37-rank",
     family: "flow",
     quantity: o.quantity,
     unit: o.unit,
@@ -354,7 +354,7 @@ export interface RankedFlowSizes {
 
 /**
  * 01e §4.2 sizes of a ranked flow (shared by the layout and the ELK adapter, so both agree on the
- * boxes). Throws FIGURE_OVER_CAPACITY / DATUM-37-lebar when the width capacity is exceeded.
+ * boxes). Throws FIGURE_OVER_CAPACITY / DATUM-37-rank when the width capacity is exceeded.
  * With fit active (AUTO_FIT candidates) labels wrap up to 3 lines and heights grow, as in layered.
  */
 export function rankedFlowSizes(s: StudioDiagramV1, lat: Lattice, W: number, dir: FlowDirection, fr: FlowRanks = flowRanks(s)): RankedFlowSizes {

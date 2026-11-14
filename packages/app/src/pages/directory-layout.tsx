@@ -12,6 +12,7 @@ import { Schema } from "effect"
 import type { ServerConnection } from "@/context/server"
 import { sessionHref } from "@/utils/session-route"
 import { useServerSync } from "@/context/server-sync"
+import { rehomedSessionPath } from "@/context/project-rehomed"
 
 export function DirectoryDataProvider(
   props: ParentProps<{
@@ -40,6 +41,17 @@ export function DirectoryDataProvider(
     if (!next || next === directory()) return
     const path = location.pathname.slice(slug().length + 1)
     navigate(`/${base64Encode(next)}${path}${location.search}${location.hash}`, { replace: true })
+  })
+
+  // 1.2.8 row 44c (AC-PROJd): an open `/<dir>/session/<id>` of a session whose mission folder moved into a group
+  // follows it to the new directory (history replace; the prompt draft was re-keyed before this runs).
+  createEffect(() => {
+    const stop = serverSync().onProjectRehomed((payload) => {
+      if (props.draftID || props.server?.()) return
+      const next = rehomedSessionPath(location.pathname, payload)
+      if (next) navigate(`${next}${location.search}${location.hash}`, { replace: true })
+    })
+    onCleanup(() => void stop())
   })
 
   createResource(

@@ -502,8 +502,9 @@ describe("row 134: four fixture missions from the real host, through the desktop
     expect(prompts.at(-1)).toContain(text)
   })
 
-  test("allow-list: the bridge client knows exactly the four tools; anything else is refused before a request", async () => {
-    expect([...MISSION_CONTROL_TOOLS]).toEqual(["studio_mission_list", "studio_mission_get", "studio_mission_answer_decision", "studio_mission_update_row"])
+  // 1.2.8 row 46: the same CHAR-MC INTENT as mission-client.test.ts (5 allowed tools, + studio_mission_place).
+  test("allow-list: the bridge client knows exactly the five tools; anything else is refused before a request", async () => {
+    expect([...MISSION_CONTROL_TOOLS]).toEqual(["studio_mission_list", "studio_mission_get", "studio_mission_answer_decision", "studio_mission_update_row", "studio_mission_place"])
     await expect(client.callTool("studio_mission_set_status", { mission: EXPECT.debug.id, to: "done" })).rejects.toMatchObject({ code: "TOOL_NOT_ALLOWED" })
     const host = await hostGet(EXPECT.debug.id, ["rows"])
     expect(host.mission.status).toBe("running")

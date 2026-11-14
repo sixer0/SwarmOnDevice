@@ -227,7 +227,8 @@ describe("U7-R2: the read roles see the shell", () => {
         expect(Permission.evaluate("bash", "sudo ls", rules).action).toBe("deny")
         expect(Permission.evaluate("bash", "ls", rules).action).toBe("ask")
       }
-      expect(ROLE_SHELL_OUTSIDE_READ_TEXT).toContain("coder")
+      // 1.2.8 AC-HN1 (INTENT, N8-391): the text names the final-message route, not a coder subagent.
+      expect(ROLE_SHELL_OUTSIDE_READ_TEXT).toContain("final message")
     }),
     GIT,
   )

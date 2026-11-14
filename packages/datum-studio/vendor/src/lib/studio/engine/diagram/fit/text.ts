@@ -10,7 +10,31 @@
 import type { DiagramNode, DiagramShape } from "../../../contract";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, LINE_HEIGHT_EM, measure, wrap } from "../../chart/core/textfit";
 import { pyStr } from "../core/pyfmt";
-import { pt2mm, role, snapCeil, STROKE_PRIMARY } from "../core/tokens";
+import {
+  ANNOTATION_BRACKET_MM,
+  BPMN_EVENT_DIAMETER_MM,
+  BPMN_GATEWAY_SIZE_MM,
+  LABEL_BELOW_GAP_MM,
+  LABEL_BELOW_SHAPES,
+  pt2mm,
+  role,
+  SHAPE_GLYPH_MM,
+  snapCeil,
+  STROKE_PRIMARY,
+  SUBPROCESS_GLYPH_CLEAR_MM,
+} from "../core/tokens";
+
+// Swarm 1.2.8 row 57b (C86, C101): the label-below names and the row 54b constants live in `core/tokens.ts`; they are
+// re-exported here so the importers of this module (core/svg.ts, build/route.ts, chart flowchart) keep their imports.
+export {
+  ANNOTATION_BRACKET_MM,
+  BPMN_EVENT_DIAMETER_MM,
+  BPMN_GATEWAY_SIZE_MM,
+  LABEL_BELOW_GAP_MM,
+  LABEL_BELOW_SHAPES,
+  SHAPE_GLYPH_MM,
+  SUBPROCESS_GLYPH_CLEAR_MM,
+};
 
 /** Baris label simpul paling banyak sebelum lebar/tinggi dilaporkan (audit §6 P1-10). */
 export const NODE_MAX_LINES = 3;
@@ -39,10 +63,70 @@ export function subWidthMm(s: string): number {
   return measure(s, subPt(), "struct");
 }
 
+// ---------------------------------------------------------------- row 54 (VIS-3a, label below)
+// Swarm 1.2.8 row 54 (VIS-3a, C12 OP-18-4, 01_specs.md §5.3): BPMN events and gateways draw their label below a fixed
+// outline; the names (LABEL_BELOW_SHAPES, LABEL_BELOW_GAP_MM, BPMN_EVENT_DIAMETER_MM, BPMN_GATEWAY_SIZE_MM) are in
+// core/tokens.ts since row 57b (C86).
+export function isLabelBelow(shape: string | undefined): boolean {
+  return shape !== undefined && LABEL_BELOW_SHAPES.has(shape);
+}
+
+/** Outline size (mm) of a label-below shape: event diameter or gateway square. */
+export function labelBelowSizeMm(shape: string | undefined): number {
+  return shape !== undefined && shape.startsWith("gateway_") ? BPMN_GATEWAY_SIZE_MM : BPMN_EVENT_DIAMETER_MM;
+}
+
+/** Stroke width (mm) of the outline of a label-below shape (01f §1.3: end event 2 x primary). */
+export function labelBelowStrokeMm(shape: string | undefined): number {
+  return shape === "event_end" ? STROKE_PRIMARY * 2 : STROKE_PRIMARY;
+}
+
+/**
+ * Outline box of a label-below node inside its layout cell: a square of `labelBelowSizeMm`, centred horizontally, its
+ * top on the cell top (the cell is never narrower: `nodeSize` keeps w >= 3 lattice columns).
+ */
+export function labelBelowOutline(nd: { x: number; y: number; w: number; spec: Pick<DiagramNode, "shape"> }): { x: number; y: number; w: number; h: number } {
+  const d = labelBelowSizeMm(nd.spec.shape);
+  return { x: nd.x + nd.w / 2 - d / 2, y: nd.y, w: d, h: d };
+}
+
+/**
+ * Top (mm, from the cell top) of the label block of a label-below shape: outline, the outer half of the thickest outline
+ * stroke (end event, 2 x primary), gap. One value for every event, so labels of one rank share their baseline.
+ */
+function labelBelowTop(shape: string | undefined): number {
+  return labelBelowSizeMm(shape) + STROKE_PRIMARY + LABEL_BELOW_GAP_MM;
+}
+
+// ---------------------------------------------------------------- row 54b (VIS-3b)
+// Swarm 1.2.8 row 54b (VIS-3b, 01f §1.3): SHAPE_GLYPH_MM (N8-470), SUBPROCESS_GLYPH_CLEAR_MM and ANNOTATION_BRACKET_MM
+// are in core/tokens.ts since row 57b (C101). Gateway markers are sized from the gateway (core/svg.ts), not from them.
+
+/** Row 54b (01f §1.3): corner radius (mm) of a BPMN task / sub-process, rx = ry = min(1.6 mm, h / 4). */
+export function taskRadiusMm(h: number): number {
+  return Math.min(1.6, h / 4);
+}
+
+/** Row 54b (01f §1.3): fold (mm) of a BPMN data object, f = min(0.25 w, 2.4 mm). */
+export function dataFoldMm(w: number): number {
+  return Math.min(0.25 * w, 2.4);
+}
+
+/** Row 54b: height (mm) of the bottom band of a sub-process: half the outline stroke, clearance, [+] square, clearance. */
+export function subprocessBandMm(): number {
+  return STROKE_PRIMARY / 2 + SUBPROCESS_GLYPH_CLEAR_MM + SHAPE_GLYPH_MM + SUBPROCESS_GLYPH_CLEAR_MM;
+}
+
 /** Lebar dalam bentuk simpul tempat teks dibungkus (mm), di garis tengah vertikal. */
 export function innerWidthMm(shape: DiagramShape | undefined, w: number, h: number): number {
   const pad = padMm();
+  if (isLabelBelow(shape)) return w - pad; // row 54: the label block wraps to the layout cell width
   switch (shape) {
+    case "task": // row 54b (VIS-3b, 01f §1.3): w - pad - 2 rx x 0.3
+    case "subprocess":
+      return w - pad - 2 * taskRadiusMm(h) * 0.3;
+    case "data_object": // row 54b: w - pad - f / 2
+      return w - pad - dataFoldMm(w) / 2;
     case "diamond":
       return w * 0.5 - pad * 0.5;
     case "hexagon":
@@ -53,6 +137,8 @@ export function innerWidthMm(shape: DiagramShape | undefined, w: number, h: numb
       return Math.min(w, h) * 0.7 - pad * 0.5;
     case "stadium":
       return w - Math.min(h, w) * 0.3 - pad;
+    case "predefined": // row 53 (VIS-1b, 01f §1.1): between the two side bars (b = 1.2 mm, core/svg.ts)
+      return w - 2 * PREDEFINED_BAR_MM - pad;
     default:
       return w - pad;
   }
@@ -88,11 +174,26 @@ function tagH(n: Pick<DiagramNode, "tag">): number {
   return truthy(n.tag) ? capMm() * 1.2 : 0;
 }
 
+/**
+ * Swarm 1.2.8 row 53 (VIS-1b, 01f §1.1): share of the node height below the text box. Document: the wave band 2a,
+ * a = 0.08 h; off-page reference: the point below the straight sides (0.3 h). Same fractions as `core/svg.ts`.
+ */
+const PREDEFINED_BAR_MM = 1.2; // = the doubled inner-line inset
+function footFrac(shape: DiagramShape | undefined): number {
+  if (shape === "document") return 2 * 0.08;
+  if (shape === "offpage") return 1 - 0.7;
+  return 0;
+}
+
 /** Tinggi minimum simpul untuk `label`/`sub` berbaris (bentuk diamond butuh dua kali blok). */
 function neededHeight(n: Pick<DiagramNode, "shape" | "tag">, labelLines: number, subLines: number): number {
   const b = blockMm(labelLines, subLines);
+  // row 54 (VIS-3a, §5.3): cell = outline + gap + label block (+ tag line) + the bottom margin
+  if (isLabelBelow(n.shape)) return labelBelowTop(n.shape) + tagH(n) + b + V_MARGIN_MM;
   const core = n.shape === "diamond" || n.shape === "hexagon" ? b * 2 : b;
-  return core + 2 * V_MARGIN_MM + tagH(n);
+  // row 53: document / offpage need the text box above the wave / point (needed height / (1 - foot))
+  // row 54b (VIS-3b, G-3): a sub-process adds its bottom [+] band below the text box
+  return (core + 2 * V_MARGIN_MM + tagH(n)) / (1 - footFrac(n.shape)) + (n.shape === "subprocess" ? subprocessBandMm() : 0);
 }
 
 /**
@@ -202,22 +303,100 @@ export function nodeTextLayout(nd: { x: number; y: number; w: number; h: number;
     const plan: NodeTextPlan = { label: [textOf(n.label)], sub: [], needH: nd.h, overflow: false, wrapped: false };
     return { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
   }
+  if (isLabelBelow(n.shape)) return labelBelowLayout(nd);
   // Silinder: busur tutup atas (ry = 0,16 h, digambar sampai y + 2 ry) memotong label di pusat.
   const lid = n.shape === "cylinder" ? nd.h * 0.16 * 2 + 0.3 : 0;
+  // Row 53 (VIS-1b): document / offpage keep their text above the wave / point, so they always get a layout.
+  // Row 54b (VIS-3b): a sub-process keeps its text above the [+] band, so it always gets a layout too.
+  const foot = nd.h * footFrac(n.shape) + (n.shape === "subprocess" ? subprocessBandMm() : 0);
   const probe = planNodeText(n, nd.w, nd.h, NODE_HARD_MAX_LINES);
-  const lidHit = lid > 0 && nd.y + nd.h / 2.0 - FONT_ASCENT_EM * capMm() * (1 - 0.12) < nd.y + lid;
+  // Row 53 (H-TAG): with a tag the cylinder's free top is below the lid AND the tag line.
+  const lidTop = lid > 0 && tagH(n) > 0 ? lid + tagH(n) : lid;
+  const lidHit = (lid > 0 && nd.y + nd.h / 2.0 - FONT_ASCENT_EM * capMm() * (1 - 0.12) < nd.y + lidTop) || foot > 0;
   if (!probe.wrapped && !lidHit) return null;
   const maxLines = linesForHeight(n, nd.h - lid, probe.sub.length);
   const plan = planNodeText(n, nd.w, nd.h, maxLines);
   if (!plan.wrapped && !lidHit) return null;
   // Blok label + sub dipusatkan vertikal di area di bawah tag (atau di bawah tutup silinder).
-  const top = nd.y + Math.max(tagH(n), lid);
+  // Row 53 (H-TAG): a cylinder's tag sits below the lid (core/svg.ts tagAnchor), so the block starts below both.
+  // Row 53 (H-TAG): a doubled node's tag sits inside its inner rectangle (1.2 mm down, core/svg.ts tagAnchor).
+  const tagTop = n.shape === "doubled" && tagH(n) > 0 ? PREDEFINED_BAR_MM + tagH(n) : tagH(n);
+  const top = nd.y + (lidTop > lid ? lidTop : Math.max(tagTop, lid));
   const L = plan.label.length;
   const S = plan.sub.length;
   const total = blockMm(L, S);
-  const blockTop = top + (nd.y + nd.h - top - total) / 2.0;
+  const blockTop = top + (nd.y + nd.h - foot - top - total) / 2.0;
   const y = blockTop + FONT_ASCENT_EM * capMm();
   const out: NodeTextLayout = { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
   if (S > 0) out.sub = { x: cx, y: y + L * capLineMm(), lines: plan.sub, lineMm: subLineMm() };
   return out;
+}
+
+/**
+ * Row 54 (VIS-3a, §5.3): text layout of a label-below node, always present (outside fit too). The block starts
+ * `labelBelowTop` under the cell top: the tag line first (core/svg.ts `tagAnchor` puts the tag one line above the label),
+ * then the label lines wrapped to the cell width, then the sub line(s); all centred on the cell (= the outline) centre.
+ */
+function labelBelowLayout(nd: { x: number; y: number; w: number; h: number; spec: DiagramNode }): NodeTextLayout {
+  const n = nd.spec;
+  const probe = planNodeText(n, nd.w, nd.h, NODE_HARD_MAX_LINES);
+  const plan = planNodeText(n, nd.w, nd.h, linesForHeight(n, nd.h, probe.sub.length));
+  if (labelBesideNodes.has(nd)) return besideLayout(nd, plan);
+  const cx = nd.x + nd.w / 2.0;
+  const y = nd.y + labelBelowTop(n.shape) + tagH(n) + FONT_ASCENT_EM * capMm();
+  const out: NodeTextLayout = { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
+  if (plan.sub.length > 0) out.sub = { x: cx, y: y + plan.label.length * capLineMm(), lines: plan.sub, lineMm: subLineMm() };
+  return out;
+}
+
+// ---------------------------------------------------------------- row 57c (C86, label beside)
+/**
+ * Swarm 1.2.8 row 57c (C86): event nodes whose label is drawn beside the outline (right of the circle, block centred on
+ * its centre height) instead of below it, so a connector leaving downward starts on the circle. Set per build by the
+ * router (`build/route.ts`), keyed by the sheet node object (a new sheet = no node marked).
+ */
+const labelBesideNodes = new WeakSet<object>();
+
+/** Row 57c: gap (mm) between the outer edge of the outline stroke and a label drawn beside it. */
+export const LABEL_BESIDE_GAP_MM = 1.0;
+
+/** Row 57c: mark (`on`) or unmark a label-below node as labelled beside its outline. */
+export function setLabelBeside(nd: object, on: boolean): void {
+  if (on) labelBesideNodes.add(nd);
+  else labelBesideNodes.delete(nd);
+}
+
+/** Row 57c: the node's label is drawn beside its outline. */
+export function isLabelBeside(nd: object): boolean {
+  return labelBesideNodes.has(nd);
+}
+
+function besideLayout(nd: { x: number; y: number; w: number; h: number; spec: DiagramNode }, plan: NodeTextPlan): NodeTextLayout {
+  const o = labelBelowOutline(nd);
+  const wide = Math.max(0, ...plan.label.map(capWidthMm), ...plan.sub.map(subWidthMm));
+  const x0 = o.x + o.w + labelBelowStrokeMm(nd.spec.shape) / 2 + LABEL_BESIDE_GAP_MM;
+  const cx = x0 + wide / 2;
+  const total = blockMm(plan.label.length, plan.sub.length);
+  const y = o.y + o.h / 2 - total / 2 + FONT_ASCENT_EM * capMm();
+  const out: NodeTextLayout = { label: { x: cx, y, lines: plan.label, lineMm: capLineMm() }, plan };
+  if (plan.sub.length > 0) out.sub = { x: cx, y: y + plan.label.length * capLineMm(), lines: plan.sub, lineMm: subLineMm() };
+  return out;
+}
+
+/**
+ * Row 57c: the box [x0, y0, x1, y1] the label block of `nd` would take beside its outline (for the router's room test).
+ */
+export function labelBesideBox(nd: { x: number; y: number; w: number; h: number; spec: DiagramNode }): [number, number, number, number] {
+  const n = nd.spec;
+  const probe = planNodeText(n, nd.w, nd.h, NODE_HARD_MAX_LINES);
+  const plan = planNodeText(n, nd.w, nd.h, linesForHeight(n, nd.h, probe.sub.length));
+  const lay = besideLayout(nd, plan);
+  const wide = Math.max(0, ...plan.label.map(capWidthMm), ...plan.sub.map(subWidthMm));
+  const top = lay.label.y - FONT_ASCENT_EM * capMm();
+  return [lay.label.x - wide / 2, top, lay.label.x + wide / 2, top + blockMm(plan.label.length, plan.sub.length)];
+}
+
+/** Row 54 (VIS-3a, §5.3): height (mm, not lattice-locked) of the layout cell of a label-below node of width `w`. */
+export function labelBelowHeightMm(n: Pick<DiagramNode, "label" | "sub" | "shape" | "tag">, w: number): number {
+  return planNodeText(n, w, Infinity, NODE_HARD_MAX_LINES).needH;
 }

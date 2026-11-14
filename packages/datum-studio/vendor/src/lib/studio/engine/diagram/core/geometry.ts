@@ -20,7 +20,7 @@ import type { DiagramNode, DiagramSheet } from "../../../contract";
 import { StudioEngineError } from "../../../contract/errors";
 import { pyRound0, pyStr } from "./pyfmt";
 import { DIAGRAM_TOKENS, estTextPt, pt2mm, role, snap, snapCeil, snapFloor } from "./tokens";
-import { diamondTwoLineHeightMm } from "../fit/text";
+import { diamondTwoLineHeightMm, isLabelBelow, labelBelowHeightMm, planNodeText } from "../fit/text";
 
 export { pyRound0, pt2mm, snap, snapCeil, snapFloor, estTextPt };
 
@@ -167,6 +167,11 @@ export function nodeSize(
   if (pyTruthy(nodeGet(n, "tag", undefined))) units += 1;
   let h = textUnitsHeightMm(units, L);
   if (n.shape === "diamond") h = diamondHeightMm(n, h, L);
+  // Swarm 1.2.8 row 54 (VIS-3a, 01_specs.md §5.3): a BPMN event/gateway cell holds the fixed outline, the gap and the
+  // label block below it (lattice-locked up); never lower than the text-unit height above.
+  if (isLabelBelow(n.shape)) h = Math.max(h, snapCeil(labelBelowHeightMm(n, w) - 1e-9, L.y));
+  // Swarm 1.2.8 row 54b (VIS-3b, 01f §1.3 G-3): a sub-process also holds its bottom [+] band (graph pad 1 is the tightest).
+  if (n.shape === "subprocess") h = Math.max(h, snapCeil(planNodeText(n, w, h).needH - 1e-9, L.y));
   return [w, h];
 }
 

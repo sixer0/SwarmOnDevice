@@ -117,7 +117,9 @@ describe("row 188 (1): the session link is the host's job", () => {
     const r = await call("studio_mission_create", { mission: mission("2026-11-08_r188-doc", { sessions: [{ client: "swarm", ref: "my-session" }] }) }, { c: swarmWithHeader })
     expect(r.ok).toBe(true)
     expect(await sessionsOf("2026-11-08_r188-doc")).toEqual([`swarm:${SES_HEADER}`])
-    const k = await call("studio_mission_create", { mission: mission("2026-11-08_r188-valid"), session: { ref: SES_META } }, { c: swarmWithHeader })
+    // 1.2.8 row 31 (INTENT, AT-HN12 grep): an explicit ref is kept only when it is the calling session, so the call
+    // names SES_META as its caller in _meta (it wins over the header); a different ref is SESSION_REF_IGNORED (N8-328).
+    const k = await call("studio_mission_create", { mission: mission("2026-11-08_r188-valid"), session: { ref: SES_META } }, { c: swarmWithHeader, meta: { "studio/callerSession": SES_META } })
     expect(k.ok).toBe(true)
     expect(k.sessionNotes).toBeUndefined()
     expect(await sessionsOf("2026-11-08_r188-valid")).toEqual([`swarm:${SES_META}`])

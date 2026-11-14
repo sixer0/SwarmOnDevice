@@ -1,0 +1,412 @@
+{
+ "$comment": "Swarm 1.2.8 row 68a (C166). The three figures of the row 68 final live check that failed 68a, as stored by Studio after the agent revision (test/live_1_2_8_final/m3/specs166.json): C1_via = vis6 graph with via bend points; B4_carry_flow and B1_carry_pools_phases = every 1.2.8 field in one figure each (vis0_carry_b / vis0_carry_a). Synthetic labels only.",
+ "C1_via": {
+  "caption": "Titik belok sintetis.",
+  "source": "Sumber sintetis uji row 68.",
+  "spec": {
+   "family": "graph",
+   "labels_verified": true,
+   "nodes": [
+    {
+     "id": "a",
+     "label": "Langkah A",
+     "class": {
+      "col": 0,
+      "row": 0
+     }
+    },
+    {
+     "id": "b",
+     "label": "Langkah B",
+     "class": {
+      "col": 1,
+      "row": 0
+     }
+    },
+    {
+     "id": "c",
+     "label": "Langkah C",
+     "class": {
+      "col": 0,
+      "row": 1
+     }
+    },
+    {
+     "id": "d",
+     "label": "Langkah D",
+     "class": {
+      "col": 1,
+      "row": 1
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "a",
+     "to": "d",
+     "kind": "control",
+     "label": "satu",
+     "from_side": "bottom",
+     "to_side": "right",
+     "via": [
+      {
+       "col": 10,
+       "row": 5
+      }
+     ],
+     "arrow_end_size": "l"
+    },
+    {
+     "from": "c",
+     "to": "b",
+     "kind": "control",
+     "label": "dua",
+     "route": "straight",
+     "from_side": "left",
+     "to_side": "top",
+     "to_slot": 0.3333333333333333,
+     "via": [
+      {
+       "col": 1,
+       "row": 8
+      },
+      {
+       "col": 1,
+       "row": 1
+      },
+      {
+       "col": 7,
+       "row": 1
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "B4_carry_flow": {
+  "caption": "Alur sintetis dokumen dan sambungan.",
+  "source": "Sumber sintetis uji row 68.",
+  "spec": {
+   "family": "flow",
+   "labels_verified": true,
+   "jumps": "on",
+   "nodes": [
+    {
+     "id": "a",
+     "label": "Mulai A",
+     "shape": "stadium",
+     "class": {
+      "col": 0,
+      "row": 0
+     }
+    },
+    {
+     "id": "b",
+     "label": "Proses B",
+     "shape": "predefined",
+     "class": {
+      "col": 0,
+      "row": 1
+     }
+    },
+    {
+     "id": "c",
+     "label": "Dokumen C",
+     "shape": "document",
+     "class": {
+      "col": 1,
+      "row": 1
+     }
+    },
+    {
+     "id": "d",
+     "label": "Cek D",
+     "shape": "diamond",
+     "class": {
+      "col": 0,
+      "row": 2
+     }
+    },
+    {
+     "id": "e",
+     "label": "Lanjut E",
+     "shape": "offpage",
+     "class": {
+      "col": 0,
+      "row": 3
+     }
+    },
+    {
+     "id": "n",
+     "label": "Catatan N",
+     "shape": "annotation",
+     "class": {
+      "col": 1,
+      "row": 0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "a",
+     "to": "b",
+     "kind": "data",
+     "label": "masuk",
+     "route": "orthogonal",
+     "via": [
+      {
+       "col": 0,
+       "row": 0
+      },
+      {
+       "col": 0,
+       "row": 1
+      }
+     ],
+     "arrow_end_size": "l"
+    },
+    {
+     "from": "b",
+     "to": "c",
+     "kind": "data",
+     "label": "salin",
+     "route": "straight",
+     "from_side": "right",
+     "to_side": "left",
+     "from_slot": 0.25,
+     "to_slot": 0.75,
+     "arrow_start": "open",
+     "arrow_start_size": "m",
+     "label_at": "end"
+    },
+    {
+     "from": "b",
+     "to": "d",
+     "kind": "data",
+     "label": "cek",
+     "dash": "longdash",
+     "weight": "thick",
+     "from_side": "auto",
+     "to_side": "auto"
+    },
+    {
+     "from": "d",
+     "to": "e",
+     "kind": "control",
+     "label": "ya",
+     "route": "curved",
+     "dash": "dashdot",
+     "arrow_end": "triangle",
+     "arrow_end_size": "s"
+    },
+    {
+     "from": "d",
+     "to": "c",
+     "kind": "control",
+     "label": "tidak",
+     "dash": "dashdot",
+     "label_at": "start"
+    },
+    {
+     "from": "n",
+     "to": "b",
+     "kind": "data",
+     "label": "catatan",
+     "dash": "dotted",
+     "weight": "thin",
+     "arrow_end": "none"
+    }
+   ],
+   "zones": [
+    {
+     "id": "z",
+     "label": "Zona Z",
+     "members": [
+      "b",
+      "c"
+     ],
+     "style": "zone"
+    }
+   ]
+  }
+ },
+ "B1_carry_pools_phases": {
+  "caption": "Alur sintetis kolam dan fase.",
+  "source": "Sumber sintetis uji row 68.",
+  "spec": {
+   "family": "swimlane",
+   "labels_verified": true,
+   "lane_orientation": "vertical",
+   "jumps": "off",
+   "phases": [
+    {
+     "id": "f1",
+     "label": "Fase 1"
+    },
+    {
+     "id": "f2",
+     "label": "Fase 2"
+    }
+   ],
+   "pools": [
+    {
+     "id": "p1",
+     "label": "Kolam X"
+    },
+    {
+     "id": "p2",
+     "label": "Kolam Y"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "a",
+     "label": "Mulai A",
+     "shape": "event_start",
+     "event_type": "message",
+     "class": {
+      "lane": "Lajur 2",
+      "phase": "f1",
+      "pool": "p1"
+     }
+    },
+    {
+     "id": "b",
+     "label": "Tugas B",
+     "shape": "task",
+     "class": {
+      "lane": "Lajur 2",
+      "phase": "f1",
+      "pool": "p1"
+     }
+    },
+    {
+     "id": "c",
+     "label": "Cek C",
+     "shape": "gateway_exclusive",
+     "class": {
+      "lane": "Lajur 2",
+      "phase": "f1",
+      "pool": "p1"
+     }
+    },
+    {
+     "id": "d",
+     "label": "Tunggu D",
+     "shape": "event_intermediate",
+     "event_type": "timer",
+     "class": {
+      "lane": "Lajur 1",
+      "phase": "f2",
+      "pool": "p2"
+     }
+    },
+    {
+     "id": "e",
+     "label": "Data E",
+     "shape": "data_object",
+     "class": {
+      "lane": "Lajur 1",
+      "phase": "f2",
+      "pool": "p2"
+     }
+    },
+    {
+     "id": "f",
+     "label": "Selesai F",
+     "shape": "event_end",
+     "event_type": "none",
+     "class": {
+      "lane": "Lajur 1",
+      "phase": "f2",
+      "pool": "p2"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "a",
+     "to": "b",
+     "kind": "data",
+     "label": "mulai",
+     "route": "orthogonal",
+     "from_side": "bottom",
+     "to_side": "top",
+     "from_slot": 0.5,
+     "to_slot": 0.25,
+     "via": [
+      {
+       "col": 0,
+       "row": 1
+      }
+     ],
+     "arrow_start": "circle",
+     "arrow_start_size": "s",
+     "arrow_end": "triangle",
+     "arrow_end_size": "s",
+     "dash": "solid",
+     "weight": "normal",
+     "label_at": "start"
+    },
+    {
+     "from": "b",
+     "to": "c",
+     "kind": "data",
+     "label": "cek",
+     "route": "straight",
+     "label_at": "middle"
+    },
+    {
+     "from": "c",
+     "to": "d",
+     "kind": "control",
+     "label": "ya",
+     "route": "curved",
+     "dash": "dashed",
+     "weight": "thick",
+     "arrow_end": "open",
+     "label_at": "end"
+    },
+    {
+     "from": "c",
+     "to": "f",
+     "kind": "control",
+     "label": "tidak",
+     "dash": "dashed",
+     "weight": "thick",
+     "to_side": "right"
+    },
+    {
+     "from": "d",
+     "to": "e",
+     "kind": "data",
+     "label": "simpan",
+     "dash": "dotted",
+     "weight": "thin",
+     "arrow_end": "diamond",
+     "arrow_end_size": "m"
+    },
+    {
+     "from": "e",
+     "to": "f",
+     "kind": "data",
+     "label": "tutup",
+     "dash": "dotted",
+     "weight": "thin",
+     "arrow_end": "none"
+    }
+   ],
+   "zones": [
+    {
+     "id": "z1",
+     "label": "Grup 1",
+     "members": [
+      "a",
+      "b"
+     ],
+     "style": "group"
+    }
+   ]
+  }
+ }
+}

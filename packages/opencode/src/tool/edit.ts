@@ -49,6 +49,41 @@ export const followedByEdit = (ctx: Tool.Context, patterns: readonly string[]): 
   ask: (request) => ctx.ask({ ...request, follows: [{ permission: "edit", patterns }] }),
 })
 
+/**
+ * 1.2.8 AC-HN17 (SR8-03): for each file that is itself a link, the label of where it really leads, when that differs from
+ * the file's own label. The edit prompt names both, so a role whose rules allow `*.md` but deny the rest (planner,
+ * data-collector, verifier) cannot write `src/a.ts` through a link named `notes.md`. A link loop adds nothing: the write
+ * fails on it anyway.
+ *
+ * 1.2.8 row 28g (G1-02): the same when a folder on the way is a link (`docs -> src`, writing `docs/x.md`), so a person's
+ * path rule on where it really lands (deny `src/**`) applies. Only folders below the nearest folder the file shares with
+ * the project are looked at: a system link above both (macOS `/var`) moves the project too and names nothing new. Only
+ * ever adds a label, never removes one.
+ */
+export function linkedLabels(worktree: string, files: readonly string[]): string[] {
+  const root = Reach.real(worktree) ?? worktree
+  return files.flatMap((file) => {
+    if (!Reach.isLink(file) && !linkedFolder(worktree, file)) return []
+    const target = Reach.real(file)
+    if (target === undefined) return []
+    const label = path.relative(root, target).replaceAll("\\", "/")
+    return label === path.relative(worktree, file).replaceAll("\\", "/") ? [] : [label]
+  })
+}
+
+/** A folder between `file` and the nearest folder that also holds the project is a link. */
+function linkedFolder(worktree: string, file: string): boolean {
+  const holdsProject = (dir: string) => {
+    const rel = path.relative(dir, worktree)
+    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
+  }
+  for (let dir = path.dirname(file); !holdsProject(dir); dir = path.dirname(dir)) {
+    if (Reach.isLink(dir)) return true
+    if (path.dirname(dir) === dir) return false
+  }
+  return false
+}
+
 export function lock(filePath: string) {
   const resolvedFilePath = FSUtil.resolve(filePath)
   const hit = locks.get(resolvedFilePath)
@@ -175,6 +210,11 @@ export const EditTool = Tool.define(
           const filePath = target.written
           const label = path.relative(instance.worktree, filePath)
           if (target.landing === undefined) throw new Error(`Cannot resolve ${label}: a link on the way loops`)
+          // 1.2.8 row 40h (SK-e, C82): a skill folder is refused before the outside-folder prompt, so an edit in
+          // ~/.agents/skills asks nothing first (Reach.editTrust checks again with the service's newest list).
+          if ([filePath, target.landing].some((file) => Reach.skillFolder(file, instance))) throw new Reach.SkillFolderRefused()
+          // 1.2.8 row 40f (AC-SEC11): the vault mirror folder likewise, before any prompt, mode on and off.
+          if ([filePath, target.landing].some((file) => Reach.vaultMirror(file, instance))) throw new Reach.VaultMirrorRefused()
           yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), filePath)
           if (target.landing !== filePath) yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), target.landing)
 
@@ -200,7 +240,7 @@ export const EditTool = Tool.define(
                 const trust = yield* Reach.editTrust(ctx, instance, [filePath])
                 yield* ctx.ask({
                   permission: "edit",
-                  patterns: [label],
+                  patterns: [label, ...linkedLabels(instance.worktree, [filePath])],
                   always: trust.risk ? [] : ["*"],
                   metadata: {
                     filepath: filePath,
@@ -260,7 +300,7 @@ export const EditTool = Tool.define(
               const trust = yield* Reach.editTrust(ctx, instance, [filePath])
               yield* ctx.ask({
                 permission: "edit",
-                patterns: [label],
+                patterns: [label, ...linkedLabels(instance.worktree, [filePath])],
                 always: trust.risk ? [] : ["*"],
                 metadata: {
                   filepath: filePath,

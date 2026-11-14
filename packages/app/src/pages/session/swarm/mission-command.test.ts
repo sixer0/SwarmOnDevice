@@ -66,7 +66,6 @@ function model(extra: Partial<MissionVM> = {}): MissionVM {
     waves: [],
     decision,
     openDecisions: 1,
-    answered: null,
     feed: [],
     deliverables: [],
     finalCount: 0,

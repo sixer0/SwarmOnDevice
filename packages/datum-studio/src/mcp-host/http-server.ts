@@ -13,6 +13,10 @@
  * `X-Studio-Caller-Cwd` (percent-encoded caller directory = the session's file root, spec §9.4) and
  * `X-Studio-Agent` (`claude`, `swarm`, ...). Each session has its own MCP server, McpSession, LocalStudioApi
  * and file root, so base-revision memory and file roots of Swarm and Claude never mix (spec §3.2).
+ *
+ * 1.2.8 row 45b (SR8-05, AC-SEC05): an initialize that also carries `x-swarm-mission-control-key` (N8-459) equal to the
+ * per-launch Mission Control key (`missionControlKey`, from the desktop host start message only; timing-safe compare)
+ * opens an ATTESTED session. A missing or wrong key opens an ordinary session (never a refusal); the key is never logged.
  */
 import { randomUUID } from "node:crypto"
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http"
@@ -28,6 +32,8 @@ export const CALLER_CWD_HEADER = "x-studio-caller-cwd"
 export const AGENT_HEADER = "x-studio-agent"
 /** Row 188 (L47): optional; the caller's own session ref (Swarm `ses_...`), linked to mission writes that omit `session`. */
 export const CALLER_SESSION_HEADER = "x-studio-caller-session"
+/** 1.2.8 row 45b (N8-459): the desktop mission client's per-launch Mission Control key, sent at initialize only. */
+export const MISSION_CONTROL_KEY_HEADER = "x-swarm-mission-control-key"
 /**
  * Row FX-4 (1.2.6, review M2 S2): the endpoint's node:http limits, explicit. The host runs in an Electron
  * utilityProcess (Node runtime), not Bun.serve. 0 = no limit: a silent `tools/call` (studio_render R17, 540 s) is
@@ -57,8 +63,10 @@ export interface EndpointOptions {
   /** 0 = ephemeral (production); tests pass a fixed port. */
   port: number
   token: string
+  /** 1.2.8 row 45b: the per-launch Mission Control key; absent = no session is ever attested. */
+  missionControlKey?: string
   /** Build the session's server for (agent, raw caller-cwd header); throw SessionRefused to refuse. */
-  openSession(i: { sessionId: string; agentId: string; callerCwd: string | null; callerSession?: string | null }): Promise<SessionHandle> | SessionHandle
+  openSession(i: { sessionId: string; agentId: string; callerCwd: string | null; callerSession?: string | null; attested?: boolean }): Promise<SessionHandle> | SessionHandle
   log: (rec: Record<string, unknown>) => void
 }
 
@@ -102,6 +110,15 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer | "too-la
     })
     req.on("error", reject)
   })
+}
+
+/**
+ * 1.2.8 row 45b: true when the initialize header equals the per-launch key (HMAC digests + timingSafeEqual, as the
+ * bearer token). No key configured, no header, an array header or an empty value -> false.
+ */
+export function missionControlKeyOk(header: string | string[] | undefined, key: string | undefined): boolean {
+  if (typeof key !== "string" || key.length === 0 || typeof header !== "string" || header.length === 0) return false
+  return secretEquals(header, key)
 }
 
 export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
@@ -170,10 +187,11 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
     if (!AGENT_RE.test(agentId)) return rpcError(res, 400, "X-Studio-Agent is required (1..40 of A-Z a-z 0-9 _ . -)")
     const cwdRaw = req.headers[CALLER_CWD_HEADER]
     const sessionId = randomUUID()
+    const attested = missionControlKeyOk(req.headers[MISSION_CONTROL_KEY_HEADER], opts.missionControlKey)
     let sessionHandle: SessionHandle
     try {
       const callerSessionRaw = req.headers[CALLER_SESSION_HEADER]
-      sessionHandle = await opts.openSession({ sessionId, agentId, callerCwd: typeof cwdRaw === "string" ? cwdRaw : null, callerSession: typeof callerSessionRaw === "string" ? callerSessionRaw : null })
+      sessionHandle = await opts.openSession({ sessionId, agentId, callerCwd: typeof cwdRaw === "string" ? cwdRaw : null, callerSession: typeof callerSessionRaw === "string" ? callerSessionRaw : null, attested })
     } catch (e) {
       const st = e instanceof SessionRefused ? e.status : 500
       const msg = e instanceof SessionRefused ? e.message : "DATUM Studio could not open the session"
@@ -184,7 +202,7 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
       sessionIdGenerator: () => sessionId,
       onsessioninitialized: (id) => {
         sessions.set(id, { transport, handle: sessionHandle })
-        opts.log({ level: "info", event: "session_open", sessionId: id, agentId })
+        opts.log({ level: "info", event: "session_open", sessionId: id, agentId, attested })
       },
       onsessionclosed: (id) => {
         sessions.delete(id)

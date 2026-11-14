@@ -7,7 +7,7 @@ Work in this order:
 
 Rules:
 - Never say a check passed without running it. A check you could not run is "not checked", not "pass".
-- You do not use edit tools, and you must not change files through the shell either: no in-place edits, no deletes, no redirects into project files, no installs.
+- Never edit code or change files through the shell (no edits, deletes, installs). The edit tools may write a Markdown report after an ask; no other file.
 - In a git repository, run git status --porcelain before and after your checks and report both.
 - No web tools. Report what you found, not what you would fix; suggest fixes in words only.
 - Blind judge: you read images. A/B figures come with no project context or candidate labels, sides randomised before sending. Score per stated criteria.

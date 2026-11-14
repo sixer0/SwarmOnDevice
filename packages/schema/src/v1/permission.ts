@@ -64,7 +64,17 @@ export const Approval = Schema.Struct({ projectID: Project.ID, patterns: Schema.
 })
 export type Approval = typeof Approval.Type
 
-export const EditClass = Schema.Literals(["ordinary", "not_ordinary", "no_undo", "sensitive", "secret"]).annotate({
+// 1.2.8 row 40e (SK-e, N8-411): `skill_folder`, a write into a skill folder, refused in every mode.
+// 1.2.8 row 40f (AC-SEC11, N8-441): `vault_mirror`, a write into the vault mirror folder, refused in every mode.
+export const EditClass = Schema.Literals([
+  "ordinary",
+  "not_ordinary",
+  "no_undo",
+  "sensitive",
+  "secret",
+  "skill_folder",
+  "vault_mirror",
+]).annotate({
   identifier: "PermissionEditClass",
 })
 export type EditClass = typeof EditClass.Type
@@ -110,6 +120,12 @@ export const DeferredCategory = Schema.Literals([
   // X (1.2.7 F-4, N7-051): a call to Swarm's own running server, literal or indirect (a config file, a host or port in a
   // variable), split from `app_state`. Refused with or without the consented bypass, and never opened.
   "own_api",
+  // X (1.2.8 row 40e, SK-e, N8-411): an agent's write into a skill folder, by an edit tool or the shell. Refused in every
+  // mode and never opened by a consent item: a skill is saved only from Settings > Skills.
+  "skill_folder",
+  // X (1.2.8 row 40f, AC-SEC11, SR8-11, N8-441): an agent's write into the vault mirror folder <vault>/swarm-memory/, by
+  // an edit tool or the shell. Refused in every mode and never opened by a consent item: Swarm generates that folder.
+  "vault_mirror",
 ]).annotate({ identifier: "PermissionDeferredCategory" })
 export type DeferredCategory = typeof DeferredCategory.Type
 

@@ -6,6 +6,8 @@
  */
 import type { DiagramFamily, DiagramNode, LayoutFn, LayoutResult, StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect, Sheet } from "../core";
+import { STROKE_PRIMARY } from "../core/tokens";
+import { setRouteRules } from "./lanesroute";
 
 /** Medan lembar tambahan yang dikembalikan layout-b (swimlane/sequence) di atas `LayoutResult`. */
 interface LayoutExtras {
@@ -137,5 +139,7 @@ export function placeDiagram(s: StudioDiagramV1, sheet: Sheet, layouts: Readonly
   if (sheet.msgStep === undefined && typeof layout.msgStep === "number") sheet.msgStep = layout.msgStep;
 
   sheet.snapToLattice();
+  // Swarm 1.2.8 row 56d (C134 G3-07): the router keeps connector runs off the swimlane frame's rules.
+  setRouteRules(sheet, (layout as { frame?: Parameters<typeof setRouteRules>[1] }).frame, sheet.lanes, sheet.widthMm, STROKE_PRIMARY / 2);
   return { sheet, layout };
 }
