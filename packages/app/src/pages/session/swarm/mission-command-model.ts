@@ -58,7 +58,7 @@ export type Translate = (key: string, params?: Record<string, string | number | 
  * 1.2.9 row 24a (AC-C04, N9-043): the count-aware lookup of the tidy result (`language.plural`). The key literal makes
  * the app typecheck prove that `"session.mission.tidy.done"` is a `PluralKey` where mission-command.tsx passes it.
  */
-export type Plural = (key: "session.mission.tidy.done", count: number, params?: Record<string, string | number | boolean>) => string
+type Plural = (key: "session.mission.tidy.done", count: number, params?: Record<string, string | number | boolean>) => string
 
 /** Feed "who" label (§5.6): owner = You, controller = Swarm, agent = its name or "Agent"; a row adds " · <row>". */
 export function feedWho(line: MissionFeedLine, t: Translate) {
@@ -98,7 +98,7 @@ export const TIDY_TOPIC = "project-tidy"
 export const isTidy = (decision: MissionDecisionVM) => decision.topic === TIDY_TOPIC
 const kindChip = (kind: string | undefined, t: Translate) => (kind && GROUP_KINDS.includes(kind) ? t(`session.mission.group.${kind}`) : undefined)
 
-export type TidyLineView = { mission: string; text: string; stays: boolean; kind?: string }
+type TidyLineView = { mission: string; text: string; stays: boolean; kind?: string }
 
 /**
  * One line per proposal item: N8-161 `{{mission}} → {{group}}` or N8-162 when the mission stays. `{{mission}}` is the id
@@ -114,10 +114,10 @@ export function tidyLines(decision: MissionDecisionVM, t: Translate): TidyLineVi
 }
 
 /** Items that move (have a valid group): the count on the approve button (N8-163). */
-export const tidyCount = (decision: MissionDecisionVM) =>
+const tidyCount = (decision: MissionDecisionVM) =>
   (decision.proposal ?? []).filter((item) => item.group !== null && groupNameOk(item.group)).length
 
-export type DecisionOptionView = {
+type DecisionOptionView = {
   id: string
   label: string
   consequence: string
@@ -170,7 +170,10 @@ export function decisionOptions(decision: MissionDecisionVM, t: Translate): Deci
   return shown
 }
 
-/** 1.2.8 row 46: a move refusal or failure as the person reads it (N8-169..N8-175, 01d §12). */
+/**
+ * 1.2.8 row 46: a move refusal or failure as the person reads it (N8-169..N8-175, 01d §12).
+ * @internal test seam
+ */
 export function moveErrorText(result: { code: string; message: string }, t: Translate) {
   const key: Record<string, string> = {
     REHOME_SOURCE_MISSING: "session.mission.move.error.sourceMissing",

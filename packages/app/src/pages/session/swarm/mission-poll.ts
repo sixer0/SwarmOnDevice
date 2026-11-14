@@ -19,7 +19,7 @@ import { canonicalPathKey } from "@/utils/path-key"
  * One entry of a folder listing for the deliverables lookup. A bare name is an entry the caller already chose to
  * show (a file or an `.app` bundle); it is never taken for a folder.
  */
-export type MissionFileEntry = string | { name: string; type: "file" | "directory" }
+type MissionFileEntry = string | { name: string; type: "file" | "directory" }
 
 const isAbsolutePath = (path: string) => path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\")
 
@@ -29,6 +29,7 @@ const isAbsolutePath = (path: string) => path.startsWith("/") || /^[A-Za-z]:[\\/
  * that folder's config), so it is used only when it is the session's folder or a folder the app already has open
  * (the Default Project root or one of its groups). The answer is the app's own spelling of that folder, never the
  * agent's. Otherwise `undefined`: no lookup is made. No project folder (an older host): the session's folder.
+ * @internal test seam
  */
 export function deliverablesDir(input: {
   projectDir: string | undefined

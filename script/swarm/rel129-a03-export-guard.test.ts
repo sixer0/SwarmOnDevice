@@ -370,3 +370,23 @@ describe("AC-A03.63b", () => {
     expect(text).toContain("on every request")
   })
 })
+
+describe("AC-A03.63c", () => {
+  // Row 63c: app. 12 names with no outside reader lose `export` (10 from the list, plus Plural and MissionFileEntry,
+  // added by 1.2.9 rows with no outside reader, C91 OP-60-1); 4 test seams stay exported and carry N9-071 (the 3 of the list
+  // and `deliverablesDir`, 1.2.9 row 56).
+  a03SweepCases(
+    [
+      ["packages/app/src/components/settings-skills.tsx", ["SkillScope", "SkillRow", "SkillDraftRow", "skillErrorCode", "useSettingsDirectory"]],
+      ["packages/app/src/context/project-rehomed.ts", ["REHOMED_SESSION_KEYS", "moveRehomedSessionState"]],
+      ["packages/app/src/pages/session/swarm/mission-command-model.ts", ["TidyLineView", "tidyCount", "DecisionOptionView", "Plural"]],
+      ["packages/app/src/pages/session/swarm/mission-poll.ts", ["MissionFileEntry"]],
+    ],
+    [
+      ["packages/app/src/context/project-rehomed.ts", ["projectRehomedPayload"]],
+      ["packages/app/src/pages/home/home-controller.ts", ["addCheckedProjectFolders"]],
+      ["packages/app/src/pages/session/swarm/mission-command-model.ts", ["moveErrorText"]],
+      ["packages/app/src/pages/session/swarm/mission-poll.ts", ["deliverablesDir"]],
+    ],
+  )
+})

@@ -23,8 +23,9 @@ export type ProjectRehomed = {
 }
 
 // The per-session keys the app persists (prompt-state.ts, comments.tsx, file/view-cache.ts, layout.tsx).
-export const REHOMED_SESSION_KEYS = ["prompt", "comments", "file-view", "terminal"] as const
+const REHOMED_SESSION_KEYS = ["prompt", "comments", "file-view", "terminal"] as const
 
+/** @internal test seam */
 export function projectRehomedPayload(event: { type: string; properties?: unknown }): ProjectRehomed | undefined {
   if (event.type !== "project.rehomed") return
   const value = event.properties
@@ -56,7 +57,7 @@ export function rehomedSessionPath(pathname: string, payload: ProjectRehomed): s
 
 // Copies every per-session key of the moved sessions from `from` to `to`; returns how many keys moved and how
 // many failed (a failed key keeps its old value: nothing is removed before its copy succeeded).
-export async function moveRehomedSessionState(input: {
+async function moveRehomedSessionState(input: {
   payload: ProjectRehomed
   scope: ServerScope
   platform?: Platform
