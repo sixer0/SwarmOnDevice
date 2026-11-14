@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test"
 // register text in en and id, the two changed values (N8-118 as corrected R20-C25, N8-482 memory.privacy) carry the corrected
 // text, the two R-6 keys are gone, and the 90 keys are held by both exemption lists (en and id only, the 1.2.6/1.2.7 convention).
 // Row 24a (C99) adds the two placement retry keys: 92 keys, pin 324. Row 24b (C128) adds placement.otherFolder: 93, pin 325.
+// Row 24c (C176) adds placement.rootUnknown and placement.folderMissing: 95, pin 327.
 
 const app = async (locale: string): Promise<Record<string, string>> => (await import(`./${locale}.ts`)).dict
 
@@ -107,6 +108,15 @@ const NEW_APP: Record<string, { en: string; id: string }> = {
     en: "A session of this mission now lives in another folder, so this move was not made.",
     id: "Sesi misi ini kini berada di folder lain, jadi pemindahan ini tidak dilakukan.",
   },
+  // row 24c (C176): rehome refusals REHOME_ROOT_UNKNOWN and REHOME_FOLDER_MISSING (row 68f) get their own texts.
+  "session.mission.placement.rootUnknown": {
+    en: "The Default Project is not set up yet, so this move was not made. Open it once or restart Swarm, then try again.",
+    id: "Default Project belum disiapkan, jadi pemindahan ini tidak dilakukan. Buka sekali atau mulai ulang Swarm, lalu coba lagi.",
+  },
+  "session.mission.placement.folderMissing": {
+    en: "A folder this move needs is no longer on disk: {{folder}}",
+    id: "Folder yang diperlukan pemindahan ini sudah tidak ada di disk: {{folder}}",
+  },
 }
 
 const PRIVACY_SENTENCE = {
@@ -115,8 +125,8 @@ const PRIVACY_SENTENCE = {
 }
 
 describe("1.2.8 i18n contract (N8-303)", () => {
-  test("the register lists 93 new app keys", () => {
-    expect(Object.keys(NEW_APP).length).toBe(93)
+  test("the register lists 95 new app keys", () => {
+    expect(Object.keys(NEW_APP).length).toBe(95)
   })
 
   test("every new key carries the register text in en and id", async () => {
@@ -152,7 +162,7 @@ describe("1.2.8 i18n contract (N8-303)", () => {
     }
   })
 
-  test("the 93 new keys are exempt in both lists, memory.privacy is not, and no other locale carries them", async () => {
+  test("the 95 new keys are exempt in both lists, memory.privacy is not, and no other locale carries them", async () => {
     const parity = await Bun.file(new URL("./parity.test.ts", import.meta.url)).text()
     const guard = await Bun.file(new URL("./parity-exemption-guard.test.ts", import.meta.url)).text()
     for (const key of Object.keys(NEW_APP)) {
@@ -165,8 +175,8 @@ describe("1.2.8 i18n contract (N8-303)", () => {
     for (const key of Object.keys(NEW_APP)) expect({ key, present: Object.hasOwn(fr, key) }).toEqual({ key, present: false })
   })
 
-  test("the exemption pin is 325 at both sites", async () => {
+  test("the exemption pin is 327 at both sites", async () => {
     const guard = await Bun.file(new URL("./parity-exemption-guard.test.ts", import.meta.url)).text()
-    expect(guard.split("toBe(325)").length - 1).toBe(2)
+    expect(guard.split("toBe(327)").length - 1).toBe(2)
   })
 })

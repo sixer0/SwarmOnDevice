@@ -1716,4 +1716,6 @@ export const dict = {
   "session.mission.placement.unplaced": "Your answer is saved, but the mission has not moved yet.",
   "session.mission.placement.retry": "Try the move to {{group}} again",
   "session.mission.placement.otherFolder": "A session of this mission now lives in another folder, so this move was not made.",
+  "session.mission.placement.rootUnknown": "The Default Project is not set up yet, so this move was not made. Open it once or restart Swarm, then try again.",
+  "session.mission.placement.folderMissing": "A folder this move needs is no longer on disk: {{folder}}",
 }

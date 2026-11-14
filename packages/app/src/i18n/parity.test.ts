@@ -155,9 +155,10 @@ const pluralCategories = new Map(
 //     settings tab (49), the Obsidian action (5) and project placement, tidy and move (29), EN and ID only; the two 1.2.7
 //     keys `session.mission.decision.answered`/`.recorded` are removed (R-6, unused), so the list ends at 322;
 //     two more for row 24a (C99): the placement retry card `session.mission.placement.unplaced`/`.retry`, ending at 324;
-//     one more for row 24b (C128): the rehome refusal text `session.mission.placement.otherFolder`, ending at 325.
+//     one more for row 24b (C128): the rehome refusal text `session.mission.placement.otherFolder`, ending at 325;
+//     two more for row 24c (C176): the rehome refusal texts `session.mission.placement.rootUnknown`/`.folderMissing`, ending at 327.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// three-hundred-and-twenty-sixth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// three-hundred-and-twenty-eighth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -484,6 +485,8 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.mission.placement.unplaced",
   "session.mission.placement.retry",
   "session.mission.placement.otherFolder",
+  "session.mission.placement.rootUnknown",
+  "session.mission.placement.folderMissing",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

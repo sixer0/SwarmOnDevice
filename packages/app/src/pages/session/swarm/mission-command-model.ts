@@ -178,6 +178,10 @@ export function moveErrorText(result: { code: string; message: string }, t: Tran
   // row 24b (C128): rehome's own detail for an idle session outside the mission folder (desktop passes it as the message).
   if (result.code === "REHOME_SESSION_ACTIVE" && result.message.endsWith("lives in another folder"))
     return t("session.mission.placement.otherFolder")
+  // row 24c (C176): rehome refusals from row 68f. Desktop names the missing folder as "<route text>: <folder>".
+  if (result.code === "REHOME_ROOT_UNKNOWN") return t("session.mission.placement.rootUnknown")
+  const folder = result.code === "REHOME_FOLDER_MISSING" ? result.message.split(": ").slice(1).join(": ") : ""
+  if (folder) return t("session.mission.placement.folderMissing", { folder })
   if (key[result.code]) return t(key[result.code]!)
   if (result.code === "REHOME_ROLLBACK_FAILED") return t("session.mission.move.error.rollbackFailed", { path: result.message })
   return t("session.mission.move.error.failed", { reason: result.message || result.code })

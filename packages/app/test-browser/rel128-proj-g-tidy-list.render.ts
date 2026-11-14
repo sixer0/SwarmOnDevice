@@ -244,6 +244,44 @@ describe("1.2.8 row 46b C98: retry an answered placement whose move did not fini
     expect(busy.el.querySelector("[data-mission-decision-error]")?.textContent === tr("session.mission.move.error.sessionActive")).toBe(true)
   })
 
+  test("row 24c (C176): REHOME_ROOT_UNKNOWN gets the 'not set up yet' text, not the route's English text", async () => {
+    const { el } = mount([answeredPlacement()], {
+      place: async () => ({
+        ok: false,
+        code: "REHOME_ROOT_UNKNOWN",
+        message: "Swarm does not know where your Default Project folder is, so missions cannot be moved into groups.",
+      }),
+    })
+    el.querySelector<HTMLButtonElement>("[data-mission-retry]")!.click()
+    await settle()
+    const shown = el.querySelector("[data-mission-decision-error]")?.textContent
+    expect(shown === tr("session.mission.placement.rootUnknown")).toBe(true)
+    expect(shown?.includes("Swarm does not know") ?? true).toBe(false)
+  })
+
+  test("row 24c (C176): REHOME_FOLDER_MISSING names the folder the desktop passed; without one it keeps the generic text", async () => {
+    const missing = mount([answeredPlacement()], {
+      place: async () => ({ ok: false, code: "REHOME_FOLDER_MISSING", message: "A folder this move needs is no longer on disk: Kampus" }),
+    })
+    missing.el.querySelector<HTMLButtonElement>("[data-mission-retry]")!.click()
+    await settle()
+    expect(
+      missing.el.querySelector("[data-mission-decision-error]")?.textContent ===
+        tr("session.mission.placement.folderMissing", { folder: "Kampus" }),
+    ).toBe(true)
+    dispose()
+    document.body.innerHTML = ""
+    const bare = mount([answeredPlacement()], {
+      place: async () => ({ ok: false, code: "REHOME_FOLDER_MISSING", message: "A folder this move needs is no longer on disk." }),
+    })
+    bare.el.querySelector<HTMLButtonElement>("[data-mission-retry]")!.click()
+    await settle()
+    expect(
+      bare.el.querySelector("[data-mission-decision-error]")?.textContent ===
+        tr("session.mission.move.error.failed", { reason: "A folder this move needs is no longer on disk." }),
+    ).toBe(true)
+  })
+
   test("no retry: already in the group, an answer not attested or by an agent, root, or while another request is open", () => {
     const cases: Array<[string, unknown[], string | undefined]> = [
       ["in group", [answeredPlacement()], `${ROOT}/DEMS`],

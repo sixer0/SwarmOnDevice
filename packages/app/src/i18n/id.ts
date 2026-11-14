@@ -1876,4 +1876,6 @@ export const dict = {
   "session.mission.placement.unplaced": "Jawaban Anda tersimpan, tetapi misi belum dipindahkan.",
   "session.mission.placement.retry": "Coba lagi pindahkan ke {{group}}",
   "session.mission.placement.otherFolder": "Sesi misi ini kini berada di folder lain, jadi pemindahan ini tidak dilakukan.",
+  "session.mission.placement.rootUnknown": "Default Project belum disiapkan, jadi pemindahan ini tidak dilakukan. Buka sekali atau mulai ulang Swarm, lalu coba lagi.",
+  "session.mission.placement.folderMissing": "Folder yang diperlukan pemindahan ini sudah tidak ada di disk: {{folder}}",
 }
