@@ -177,12 +177,14 @@ export function renderFlowchart(spec: StudioChartV1, canvas: ChartCanvas, tpl: R
   const T = TYPE_PT[style];
   const edgeW = style === "gallery" ? 0.3 : 0.35;
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  routes.forEach((e, i) => {
+  const drawn = routes.map((e) => {
     const pts = simplify(e.points);
     clipToDiamond(pts, byId.get(e.from), 0);
     clipToDiamond(pts, byId.get(e.to), pts.length - 1);
-    drawEdge(ctx, { ...e, points: pts }, i, map, edgeW, T.edge);
+    return { ...e, points: pts };
   });
+  spreadHeads(drawn, byId, sx);
+  drawn.forEach((e, i) => drawEdge(ctx, e, i, map, edgeW, T.edge));
 
   const nodeW = style === "gallery" ? 0.45 : 0.35;
   let overflow = 0;
@@ -513,6 +515,69 @@ export function simplify(points: ReadonlyArray<XY>): XY[] {
   });
 }
 
+/** Arrowhead length at full size (chart mm); its full width is `HEAD_MM * 0.9` (`drawEdge`). */
+const HEAD_MM = 1.4;
+/** Row 66b: clear space between two spread arrowheads (chart mm), so their base corners do not touch. */
+const HEAD_GAP_MM = 0.3;
+
+/**
+ * Swarm 1.2.9 row 66b (gate 66 F2, C77). The engine fans several ends into one side of a BPMN event or gateway over the
+ * middle of its fixed outline (`route-ends.ts` `anchor`, on the sheet); the chart scale shrinks that fan while the
+ * arrowheads keep their physical size, so two heads into one event could sit ~0.58 mm apart and read as one doubled head.
+ * When the tips of two such ends are closer than one head width in the chart, the ends are spread symmetrically about
+ * the outline's centre, one head width plus a gap apart, and put back on the outline (circle or diamond); the last
+ * segment moves with its tip, so the route stays orthogonal. If that spread does not fit in the middle 80 % of the
+ * outline, the ends meet at its centre instead and their heads merge into one. Only label-below BPMN targets are
+ * touched; every other chart (g04 and the parity charts) keeps its bytes. `scale` is chart mm per sheet mm.
+ */
+function spreadHeads(edges: Array<RoutedEdge & { points: XY[] }>, byId: ReadonlyMap<string, SheetNode>, scale: number): void {
+  const groups = new Map<string, { n: SheetNode; side: "top" | "bottom" | "left" | "right"; edges: Array<{ points: XY[] }> }>();
+  for (const e of edges) {
+    const n = byId.get(e.to);
+    const k = e.points.length;
+    if (!n || !isLabelBelow(n.spec.shape) || k < 2) continue;
+    const [a, t] = [e.points[k - 2], e.points[k - 1]];
+    const vertical = Math.abs(a[0] - t[0]) < 1e-6;
+    if (!vertical && Math.abs(a[1] - t[1]) >= 1e-6) continue;
+    const side = vertical ? (t[1] > a[1] ? "top" : "bottom") : t[0] > a[0] ? "left" : "right";
+    const g = groups.get(`${n.id}\u0000${side}`) ?? { n, side, edges: [] };
+    g.edges.push(e);
+    groups.set(`${n.id}\u0000${side}`, g);
+  }
+  for (const g of groups.values()) {
+    if (g.edges.length < 2) continue;
+    const along = g.side === "top" || g.side === "bottom" ? 0 : 1;
+    const tipU = (e: { points: XY[] }) => e.points[e.points.length - 1][along];
+    const sorted = [...g.edges].sort((p, q) => tipU(p) - tipU(q));
+    const headW = HEAD_MM * 0.9;
+    if (sorted.every((e, i) => i === 0 || (tipU(e) - tipU(sorted[i - 1])) * scale >= headW)) continue;
+    const ol = labelBelowOutline(g.n);
+    const half = along === 0 ? ol.w / 2 : ol.h / 2;
+    const across = along === 0 ? ol.h / 2 : ol.w / 2;
+    const centre = along === 0 ? ol.x + ol.w / 2 : ol.y + ol.h / 2;
+    const middle = along === 0 ? ol.y + ol.h / 2 : ol.x + ol.w / 2;
+    const step0 = (headW + HEAD_GAP_MM) / scale;
+    const step = ((sorted.length - 1) / 2) * step0 <= half * 0.8 ? step0 : 0;
+    const sign = g.side === "top" || g.side === "left" ? -1 : 1;
+    sorted.forEach((e, i) => {
+      const pts = e.points;
+      const k = pts.length;
+      const u = centre + (i - (sorted.length - 1) / 2) * step;
+      const f = Math.abs(u - centre) / half;
+      // the rim of the outline at `u` (a bottom end stays where the engine put it, under the label block)
+      const v = g.side === "bottom" ? pts[k - 1][1 - along] : middle + sign * across * (g.n.spec.shape?.startsWith("gateway_") ? 1 - f : Math.sqrt(1 - f * f));
+      const at = (uu: number, vv: number): XY => (along === 0 ? [uu, vv] : [vv, uu]);
+      if (k === 2) {
+        const mid = (pts[0][1 - along] + pts[1][1 - along]) / 2;
+        pts.splice(1, 0, at(pts[0][along], mid), at(u, mid));
+      } else {
+        pts[k - 2] = at(u, pts[k - 2][1 - along]);
+      }
+      pts[pts.length - 1] = at(u, v);
+    });
+  }
+}
+
 function drawEdge(ctx: GCtx, e: RoutedEdge, index: number, map: (x: number, y: number) => Pt, w: number, labelPt: number): void {
   const { doc, pal } = ctx;
   const kind = EDGE_KINDS[e.kind] ?? EDGE_KINDS.data;
@@ -525,7 +590,7 @@ function drawEdge(ctx: GCtx, e: RoutedEdge, index: number, map: (x: number, y: n
   const segL = Math.hypot(tip.x - a.x, tip.y - a.y) || 1;
   const ux = (tip.x - a.x) / segL;
   const uy = (tip.y - a.y) / segL;
-  const headL = Math.min(1.4, segL * 0.6);
+  const headL = Math.min(HEAD_MM, segL * 0.6);
   const headW = headL * 0.45;
   const base = { x: tip.x - ux * headL, y: tip.y - uy * headL };
   const line = kind.head === "solid" ? [...pts.slice(0, -1), base] : pts;

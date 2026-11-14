@@ -125,7 +125,7 @@
   "patched": 167,
   "replaced": 12,
   "added": 32,
-  "bytes": 10286360
+  "bytes": 10290166
  },
  "files": [
   {
@@ -1759,9 +1759,10 @@
   {
    "path": "src/lib/studio/engine/chart/family-g/flowchart.ts",
    "status": "patched",
-   "bytes": 28014,
+   "bytes": 31820,
    "source_sha256": "d34ed3f70e6f4cc782edbd7ed6972db55e3a5eb5ab7caf364629329984eab563",
-   "sha256": "72d10748f522d3e769ae97f4977896509a066d0bbf9b1650d07594802ff126d3",
+   "sha256": "a88945a332a38e3c81473ad7558c8c7c862b5828f5d0e9962ad34c325247c309",
+   "patch_row129-66b": {"id": "129-66b-bpmn-arrowheads", "row": "66b", "decision": "1.2.9 gate 66 F2, C77 (follow-up of AC-A11b; N9-112, N9-155; replaces C56 '35a')", "summary": "G-04: spreadHeads — when two or more connector ends enter one side of a label-below BPMN node (event or gateway) and their tips in the chart are closer than one arrowhead width (HEAD_MM 1.4 x 0.9), the ends are spread symmetrically about the outline centre one head width plus HEAD_GAP_MM 0.3 apart and put back on the outline (circle or diamond), moving the last segment with the tip so the route stays orthogonal; if the spread does not fit in the middle 80 % of the outline the ends meet at its centre (one merged head); drawEdge reads HEAD_MM; other charts unchanged (g04 and the 92 chart parity renders byte-identical); diagram engine untouched", "diff_base": "sha256 before this row", "before_sha256": "72d10748f522d3e769ae97f4977896509a066d0bbf9b1650d07594802ff126d3", "after_sha256": "a88945a332a38e3c81473ad7558c8c7c862b5828f5d0e9962ad34c325247c309", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/66b_row66b_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "78c59afa1d119a4c655a10ff9cbf0d64bd5349a6cf0c2a17c4ac69b66006eb14"},
    "patch_row129-35": {"id": "129-35-a11b-bpmn-layout", "row": "35", "decision": "1.2.9 AC-A11b (B9-A11; N9-077, N9-112, N9-155; C10(f), C42, 01a AT-A11b)", "summary": "G-04: a chart whose spec holds a label-below BPMN shape and no direction gets direction TB before validation, placement and routing, so layoutFlow uses the engine's ranked layout along the edges instead of the legacy list (renders byte-equal to the direction TB spec); an event that routePlaced marks labelled beside (row 57c) gets its label beside the circle, start-anchored and vertically centred, when it fits up to the next node or the drawing edge, else below as before; specs with direction and charts without such a shape unchanged (g04 and the 92 chart parity renders byte-identical)", "diff_base": "sha256 before this row", "before_sha256": "5f463062013b2b89e876c580063e60400d5fba4d28089f3c3809d9bda3e64603", "after_sha256": "72d10748f522d3e769ae97f4977896509a066d0bbf9b1650d07594802ff126d3", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/35_row35_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "100995d6d96a385ab253455cd6c08453004dad3c76d40153e029d8aee12c895a"},
    "patch_row129-34": {"id": "129-34-a11a-bpmn-events", "row": "34", "decision": "1.2.9 AC-A11a (B9-A11; N9-077, N9-111, N9-155; C10(f), 01a AT-A11a)", "summary": "G-04: a chart whose spec holds a label-below BPMN shape (isLabelBelow: events, gateways) maps the diagram sheet with one uniform scale sx = sy = min(sx, sy), centred, so event outlines are circles (rx = ry) and the connector ends routePlaced glued onto them stay on their rims; charts without such a shape keep the two-axis scale (g04 and the 92 chart parity renders byte-identical); ellipseD comment updated", "diff_base": "sha256 before this row", "before_sha256": "e13d30f35a704e136e49f4cfc72a24590c317be5f30b1979c9466113524e0764", "after_sha256": "5f463062013b2b89e876c580063e60400d5fba4d28089f3c3809d9bda3e64603", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/34_row34_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "293bd649fafc01a57930566f5a538b4c3bba02c32b9b9ed12668a59e030aace2"},
    "patch_row54b": {"id": "128-54b-vis3b", "row": "54b", "decision": "1.2.8 row 54b (AC-VIS3b BPMN task, sub-process, gateways, data object, annotation; C86 gateway exits spread)", "summary": "G-04: gateways are decisions (exit labels as diamonds); task/subprocess rounded (+[+]), data_object folded, annotation bracket, events and gateways drawn at the diagram outline mapped to the chart scale with markers and the label below; ISO 5807 REPORT unchanged", "diff_base": "sha256 before this row", "before_sha256": "5836527b8152a247e09406e9d8295761fc70bf8bc891b8fb477ea030c9014aa2", "after_sha256": "e13d30f35a704e136e49f4cfc72a24590c317be5f30b1979c9466113524e0764", "diff": "docs/2026-11-13_swarm_1_2_8_patch/implementation/54b_row54b_diffs/engine_chart_family-g_flowchart.ts.diff", "diff_sha256": "212c42a1b3d665affab02530d94ff653462ef83dc9117bc6bc7e77859869838e"},
@@ -6436,6 +6437,7 @@
   "129-28-a05-terukur-mark",
   "129-33-a10b-double-back",
   "129-30b-a08",
-  "129-29-a06-zone-clearance"
+  "129-29-a06-zone-clearance",
+  "129-66b-bpmn-arrowheads"
  ]
 }

@@ -86,6 +86,46 @@ describe("AC-A11b chart flowchart: BPMN ranks follow the edges (N9-155)", () => 
   }
 })
 
+/** Every arrowhead of the chart: link index, tip and full head width (solid head `M tip L c1 L c2 Z`; open head `M c1 L tip L c2`). */
+function heads(svg: string): { index: number; tip: { x: number; y: number }; width: number }[] {
+  const byIndex = new Map<number, string[]>()
+  for (const m of svg.matchAll(/<path data-mark="link" data-series="konektor" data-index="(\d+)" d="([^"]+)"/g)) byIndex.set(Number(m[1]), [...(byIndex.get(Number(m[1])) ?? []), m[2]])
+  return [...byIndex].map(([index, ds]) => {
+    expect(ds.length, `link ${index}: line + head`).toBe(2)
+    const p = [...ds[1].matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }))
+    const [tip, c1, c2] = ds[1].endsWith("Z") ? [p[0], p[1], p[2]] : [p[1], p[0], p[2]]
+    return { index, tip, width: Math.hypot(c1.x - c2.x, c1.y - c2.y) }
+  })
+}
+
+// Swarm 1.2.9 row 66b (gate 66 F2, C77). The engine fans two ends into one side of an event over the middle of its 8 mm
+// outline (1.33 mm on the sheet); the chart scale (~0.42) shrank that to ~0.58 mm while the arrowheads keep their 1.26 mm
+// width, so the two heads into `Selesai` read as one thick doubled head. Red at HEAD before 66b: tips 0.58 mm apart.
+describe("AC-A11b chart flowchart: arrowheads into one BPMN node read as distinct (66b, N9-155)", () => {
+  for (const variant of ["no_direction", "direction_tb"]) {
+    for (const style of ["datum", "gallery"]) {
+      test(`${variant} @${style}: tips of two arrowheads into one node are at least one head width apart`, () => {
+        const chart = FX[variant]
+        const svg = render(chart, style).svg as string
+        const edges = chart.data.spec.edges as J[]
+        const hs = heads(svg)
+        expect(hs.length, "one head per edge").toBe(edges.length)
+        let pairs = 0
+        for (const a of hs) {
+          for (const b of hs) {
+            if (a.index >= b.index || edges[a.index].to !== edges[b.index].to) continue
+            const gap = Math.hypot(a.tip.x - b.tip.x, a.tip.y - b.tip.y)
+            const w = Math.max(a.width, b.width)
+            expect(gap, `links ${a.index}, ${b.index} into ${edges[a.index].to}: tips ${gap.toFixed(4)} mm apart, head width ${w.toFixed(4)} mm`).toBeGreaterThanOrEqual(w - 1e-6)
+            pairs++
+          }
+        }
+        expect(pairs, "pairs of links into one node (d->f, e->f)").toBe(1)
+      })
+    }
+  }
+})
+
 /** g04 pins and one digest over the 92 chart parity pins of row 34 (rel129-a11a, HEAD before row 35, equal at BASE). */
 const G04_DATUM = "37039bce2451383aa168efd9cd5fed86322be0be3ea60ddbe55c7e28ca68f07c"
 const G04_GALLERY = "006e6ee19675485b8b66286bff9d23957357e087bbb0e1e6cf8ddc5fb09f48e6"
