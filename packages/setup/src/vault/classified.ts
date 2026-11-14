@@ -13,13 +13,15 @@
 // vault/writer.ts writeInboxNote) call classifiedNote before anything is written or created
 // (row 67c: one check, one slugify, shared by both writers and the proxy's audit name guard).
 
+/** @internal test seam */
 export const CLASSIFIED_WORDS = ["TERBATAS", "RAHASIA", "CONFIDENTIAL", "RESTRICTED"] as const
 
 // Built exactly as the mirror's matcher: whole word, case-insensitive.
 const CLASSIFIED = new RegExp(`\\b(?:${CLASSIFIED_WORDS.join("|")})\\b`, "i")
 
 /** The list entry (in capitals) whose word the text holds as a whole word, or undefined.
- *  Returns the list entry, never the matched text itself. */
+ *  Returns the list entry, never the matched text itself.
+ *  @internal test seam */
 export function classificationWord(text: string): string | undefined {
   const match = CLASSIFIED.exec(text)
   if (match === null) return undefined

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import os from "node:os"
 import path from "node:path"
 
 // N9-102 (1.2.9 A03). One describe block per AC line (AC-A03.60, .61, .62, .63a, .63b, .63c, .64); each block carries
@@ -389,4 +390,139 @@ describe("AC-A03.63c", () => {
       ["packages/app/src/pages/session/swarm/mission-poll.ts", ["deliverablesDir"]],
     ],
   )
+})
+
+describe("AC-A03.64", () => {
+  // Row 64: the guard N9-084 (check-exports.ts) with its shrink-only baseline N9-085 (check-exports.baseline.json).
+  // An export without a production reader outside its file is explained by the N9-071 marker (either form, C91
+  // OP-60-3), by a baseline entry, or by living in the generated SDK (C10(g)). Shrink-only (01a AT-A03.64):
+  // (1) a stale entry fails; (2) the entry count is pinned below; (3) every entry was exported at 1.2.9 BASE, so a new
+  // 1.2.9 export can never be parked in the baseline. Raising BASELINE_MAX needs a C-decision.
+  const BASELINE_MAX = 4433
+  const BASE = "d4282fcfd8"
+  // Row 25 split route.ts (C31): names exported by the two new files were exported by route.ts at BASE.
+  const route = "packages/datum-studio/vendor/src/lib/studio/engine/diagram/build"
+  const MOVED: Record<string, string> = {
+    [`${route}/route-ends.ts`]: `${route}/route.ts`,
+    [`${route}/route-shape.ts`]: `${route}/route.ts`,
+  }
+  const GEN = /^packages\/sdk\/js\/src\/v2\/gen\//
+  // Mutation target: a name row 61 un-exported (block AC-A03.61).
+  const mutFile = "packages/datum-studio/vendor/src/lib/studio/engine/diagram/fit/text.ts"
+  const mutDecl = "function subprocessBandMm(): number {"
+
+  type Guard = typeof import("./check-exports")
+  let loaded: Promise<Guard> | undefined
+  // Dynamic import: at BASE the script is absent, so this block fails on import and the other blocks still run.
+  const guard = () => (loaded ??= import("./check-exports"))
+  let first: ReturnType<Guard["checkExports"]> | undefined
+  const run = async () => {
+    const g = await guard()
+    first ??= g.checkExports({ repo, baseline: g.loadBaseline(repo) })
+    return first
+  }
+
+  /** `git cat-file --batch` of `<rev>:<file>` for each file; null when the file does not exist at that revision. */
+  function showAll(rev: string, files: readonly string[]): Map<string, string | null> {
+    const out = spawnSync("git", ["cat-file", "--batch"], {
+      cwd: repo,
+      input: files.map((f) => `${rev}:${f}\n`).join(""),
+      maxBuffer: 1 << 30,
+    })
+    if (out.status !== 0) throw new Error(`git cat-file failed (${out.status}): ${out.stderr}`)
+    const buf = out.stdout as Buffer
+    const res = new Map<string, string | null>()
+    let at = 0
+    for (const f of files) {
+      const nl = buf.indexOf(10, at)
+      const header = buf.subarray(at, nl).toString("utf8")
+      at = nl + 1
+      if (header.endsWith(" missing")) {
+        res.set(f, null)
+        continue
+      }
+      const size = Number(header.split(" ")[2])
+      res.set(f, buf.subarray(at, at + size).toString("utf8"))
+      at += size + 1
+    }
+    return res
+  }
+
+  test("0 unexplained exports at HEAD", async () => {
+    const r = await run()
+    expect(r.files).toBeGreaterThan(5000)
+    expect(r.unexplained.map((u) => `${u.file}:${u.line} ${u.name}`)).toEqual([])
+  }, 120_000)
+
+  test("shrink-only (1): no stale baseline entry", async () => {
+    const r = await run()
+    expect(r.stale.map((s) => `${s.file} ${s.name}`)).toEqual([])
+    expect(r.explainedByBaseline).toBe((await guard()).loadBaseline(repo).length)
+  }, 120_000)
+
+  test(`shrink-only (2): at most ${BASELINE_MAX} entries, sorted, no duplicate`, async () => {
+    const entries = (await guard()).loadBaseline(repo)
+    expect(entries.length).toBeLessThanOrEqual(BASELINE_MAX)
+    const keys = entries.map((e) => `${e.file}\0${e.name}`)
+    expect(new Set(keys).size).toBe(keys.length)
+    const sorted = [...entries].sort((a, b) =>
+      a.file < b.file ? -1 : a.file > b.file ? 1 : a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    )
+    expect(entries).toEqual(sorted)
+  })
+
+  test(`shrink-only (3): every entry was exported at BASE ${BASE} (no 1.2.9 name in the baseline)`, async () => {
+    const g = await guard()
+    const entries = g.loadBaseline(repo)
+    const files = [...new Set(entries.flatMap((e) => (MOVED[e.file] ? [e.file, MOVED[e.file]] : [e.file])))]
+    const src = showAll(BASE, files)
+    const names = new Map<string, Set<string>>()
+    const at = (f: string) => {
+      if (!names.has(f)) {
+        const s = src.get(f)
+        names.set(f, s == null ? new Set() : g.exportedNames(f, s))
+      }
+      return names.get(f)!
+    }
+    const fresh = entries.filter((e) => !at(e.file).has(e.name) && !(MOVED[e.file] && at(MOVED[e.file]).has(e.name)))
+    expect(fresh.map((e) => `${e.file} ${e.name}`)).toEqual([])
+  }, 120_000)
+
+  test("the generated SDK is excluded, never baselined", async () => {
+    const r = await run()
+    expect(r.explainedByGenerated).toBeGreaterThan(0)
+    expect((await guard()).loadBaseline(repo).filter((e) => GEN.test(e.file))).toEqual([])
+    expect(r.unexplained.filter((u) => GEN.test(u.file))).toEqual([])
+  }, 120_000)
+
+  test("C91 OP-60-2: setup CLASSIFIED_WORDS and classificationWord carry the marker (one per form)", () => {
+    const file = "packages/setup/src/vault/classified.ts"
+    const lines = linesOf(file)
+    const words = declLine(file, "CLASSIFIED_WORDS")
+    expect(lines[words - 1].trim()).toBe(`/** ${MARKER} */`)
+    const word = declLine(file, "classificationWord")
+    expect(lines[word - 1].trim()).not.toBe(`/** ${MARKER} */`)
+    expect(carriesMarker(file, word)).toBe(true)
+  })
+
+  test("mutation: re-adding one export that row 61 removed turns the guard red; the marker explains it again", async () => {
+    const g = await guard()
+    const baseline = g.loadBaseline(repo)
+    const original = readFileSync(path.join(repo, mutFile), "utf8")
+    expect(original.split("\n").filter((l) => l === mutDecl).length).toBe(1)
+    const dir = mkdtempSync(path.join(os.tmpdir(), "a03-64-"))
+    try {
+      const copy = path.join(dir, "text.ts")
+      writeFileSync(copy, original.replace(`\n${mutDecl}`, `\nexport ${mutDecl}`))
+      const red = g.checkExports({ repo, baseline, replace: { [mutFile]: copy } })
+      expect(red.unexplained.map((u) => `${u.file} ${u.name}`)).toEqual([`${mutFile} subprocessBandMm`])
+      writeFileSync(copy, original.replace(`\n${mutDecl}`, `\n/**\n * Mutation.\n * ${MARKER}\n */\nexport ${mutDecl}`))
+      const marked = g.checkExports({ repo, baseline, replace: { [mutFile]: copy } })
+      expect(marked.unexplained).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    // The working tree was never edited.
+    expect(readFileSync(path.join(repo, mutFile), "utf8")).toBe(original)
+  }, 120_000)
 })
