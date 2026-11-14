@@ -552,10 +552,48 @@ describe("swarm-whats-new", () => {
     expect(text.indexOf("## Use it in this order")).toBeLessThan(text.indexOf("\n## 1.2.8"))
     const checklist = text.slice(text.indexOf("## Self-test checklist (only after the person's yes)"))
     expect(checklist.length).toBeGreaterThan(200)
-    expect(checklist).toContain(
-      "Nothing that moves missions, deletes, changes config or touches a real project\nwithout a separate yes.",
+    expect(checklist.replace(/\s+/g, " ")).toContain(
+      "Nothing that moves missions, deletes, changes config or touches a real project without a separate yes.",
     )
     expect(checklist).toContain("PASS or FAIL")
+  })
+
+  // Row 58d (C184): the delta security findings S-22, S-23 and S-24 on this text.
+  test("S-22: the self-test runs only in a dedicated scratch project and never tells the agent to write into a skills folder", () => {
+    const flat = (part: string) => part.replace(/\s+/g, " ")
+    const flow = flat(text.slice(text.indexOf("## Use it in this order"), text.indexOf("\n## 1.2.8")))
+    expect(flow).toContain("4. Test only after a yes, only in a dedicated scratch project:")
+    const checklist = flat(text.slice(text.indexOf("## Self-test checklist (only after the person's yes)")))
+    expect(checklist).toContain(
+      "Only in a dedicated scratch project and mission you create after the yes, never the person's current or a real project;",
+    )
+    expect(checklist).toContain("No probe writes into a skills folder or the vault.")
+    expect(checklist).toContain("on an unexpected success stop and tell the person, never clean up.")
+    // The refusal is checked without a write: no `write`/edit/apply_patch/shell step aimed at a skills folder.
+    expect(checklist).toContain("skills-folder refusal: attempt no write, quote the 1.2.8 Must rule, mark it documented")
+    expect(checklist).not.toMatch(/`(?:write|edit|apply_patch|bash)`[^.;]*skills?[ -]folder/i)
+    expect(checklist).not.toMatch(/(?<!No probe )\b(?:write|writes|save|put|create)\b[^.;]*\binto (?:the |a )?skills? folder\b/i)
+    for (const sentence of checklist.split(/(?<=[.;])\s/).filter((part) => /skills?[ -]folder/i.test(part)))
+      expect(sentence).toMatch(/\b(?:No|no write|never)\b/)
+    expect(checklist).not.toContain("is refused; the scratch mission")
+  })
+
+  test("S-23: the own-API brief states the 1.2.8 read list; person-only routes never", () => {
+    const v128 = text.slice(text.indexOf("\n## 1.2.8"), text.indexOf("\n## 1.2.7")).replace(/\s+/g, " ")
+    expect(v128).toContain(
+      "Swarm's own server under consent: read only the listed own-server GET/HEAD routes (no directory override outside your worktree); routes that can read secrets or file contents wait for the main agent; person-only routes never.",
+    )
+    const v127 = text.slice(text.indexOf("\n## 1.2.7"), text.indexOf("\n## 1.2.6")).replace(/\s+/g, " ")
+    expect(v127).toContain("Swarm's own server API (reads narrowed in 1.2.8), never routes that act as the person:")
+    expect(v127).not.toContain("You may call Swarm's own server API")
+  })
+
+  test("S-24: the vault is written only through swarm-web_vault_inbox inbox notes, never with another tool", () => {
+    const flat = text.replace(/\s+/g, " ")
+    expect(flat).toContain(
+      "The vault: only inbox notes with `swarm-web_vault_inbox`; never write vault files with any other tool.",
+    )
+    expect(flat).not.toContain("never write the vault yourself")
   })
 
   test("names only registered tools and real built-in skills", () => {
