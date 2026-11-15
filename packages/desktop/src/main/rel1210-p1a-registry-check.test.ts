@@ -96,7 +96,7 @@ describe("AC-P1a: Obsidian registry read and containing-vault check (N10-160)", 
   test("a4 registryUnregistered + closed runner, no lock -> not stopped at the check (runner called once)", async () => {
     const fixture = keep(registryUnregistered())
     const { step, calls } = await check(fixture)
-    expect(calls).toBe(1)
+    expect(calls).toBe(2)
     expect(step.result).not.toBe("in-vault")
     expect(step.reason).not.toBe("registry-malformed")
   })
@@ -104,7 +104,7 @@ describe("AC-P1a: Obsidian registry read and containing-vault check (N10-160)", 
   test("a5 registryMissingFile + closed runner -> not stopped at the check (runner called once)", async () => {
     const fixture = keep(registryMissingFile())
     const { step, calls } = await check(fixture)
-    expect(calls).toBe(1)
+    expect(calls).toBe(2)
     expect(step.result).not.toBe("in-vault")
     expect(step.reason).not.toBe("registry-malformed")
   })
@@ -151,7 +151,7 @@ describe("AC-P1a: Obsidian registry read and containing-vault check (N10-160)", 
     writeList(fixture, [sibling, shorter])
     expect(fixture.hubPath.startsWith(shorter)).toBe(true)
     const { step, calls } = await check(fixture)
-    expect(calls).toBe(1)
+    expect(calls).toBe(2)
     expect(step.result).not.toBe("in-vault")
   })
 

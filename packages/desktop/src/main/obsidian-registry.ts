@@ -13,8 +13,21 @@ import path from "node:path"
 // cap + 1 bytes; S10-02(P1), S2 half), parse, S3 (N1 containment).
 // Row 43 (AC-P1b, AC-P1e): S5 (data folder), S7 (own-property build, S10-13), S8 (tmp file, fchmod, S10-05), S9 (the
 // unchanged-file re-check, S10-02(P1) S9 half), S10 (one-time backup), S11 (rename), S12 (re-read confirm).
-// Row 44 adds S4 (rules N2-N5), the two-signal closed check (S6 and its S9 repeat), the deadline and the tmp re-read
-// in this file under lock DK-obsidian-registry.
+// Row 44 (AC-P1c): S4 (rules N5, N4, N2; case folding NFC then lower case, S10-06(P1), S10-14(P1)), the two-signal
+// closed check (S6 and its S9 repeat; C12, C17 Q1-2), `makeLsappinfoRunner` (S10-08(P1), S10-09(P1)), the 15 s call
+// deadline with its abort flag (S10-03(P1)) and the tmp re-read before the rename (S10-04(P1)).
+
+/** N10-131: the only detection call. A keyed find for one bundle id, never a listing (C7, C17 Q1-2). */
+const LSAPPINFO_PATH = "/usr/bin/lsappinfo"
+const LSAPPINFO_FIND_ARGV = ["find", "bundleid=md.obsidian"] as const
+/** N10-132: the runner's own timeout, and the module's race against a runner that never settles. */
+const LSAPPINFO_TIMEOUT_MS = 5000
+/** N10-133: stdout cap (`maxBuffer`); more output is an error, so "unsure". */
+const LSAPPINFO_STDOUT_MAX = 4096
+/** N10-137: present (any type, a dangling link included) while Obsidian runs; checked with `lstat`, never read. */
+const OBSIDIAN_SINGLETON_LOCK = "SingletonLock"
+/** S10-03(P1): the overall bound of one `ensureObsidianVault` call (file-local literal, pinned by AC-P1c c19). */
+const CALL_DEADLINE_MS = 15_000
 
 /** N10-134 */
 const OBSIDIAN_REGISTRY_FILE = "obsidian.json"
@@ -53,6 +66,19 @@ type ObsidianRegistryStep = {
 }
 
 type LsappinfoResult = { code: number; stdout: string }
+
+/** The Node `execFile` shape `makeLsappinfoRunner` needs (callback form, no shell). */
+type LsappinfoExecFile = (
+  file: string,
+  args: string[],
+  options: { timeout: number; maxBuffer: number },
+  callback: (error: unknown, stdout: unknown, stderr: unknown) => void,
+) => unknown
+
+/** One call's abort state (S10-03(P1)): set at the deadline; `tmp` is the call's tmp file once named. */
+type CallState = { aborted: boolean; tmp?: string }
+
+type ClosedVerdict = "closed" | "running" | "unsure"
 
 /** N10-029. `configDir` is required and has no default anywhere in this module. */
 type ObsidianRegistryInput = {
@@ -244,6 +270,7 @@ async function writeAll(handle: Awaited<ReturnType<typeof open>>, bytes: Buffer)
 /**
  * Creates `file` (flag `wx`, no link followed), sets its mode with `fchmod` so the umask cannot change it
  * (S10-05(P1)), writes `bytes` and `fsync`s it. On a failure after the create the half-written file is removed.
+ * Returns the descriptor's `dev` and `ino` (the S9 tmp re-read requires the same file, S10-04(P1)).
  */
 async function writeNewFile(file: string, bytes: Buffer, mode: number) {
   const handle = await open(file, CREATE_NEW, mode)
@@ -251,12 +278,39 @@ async function writeNewFile(file: string, bytes: Buffer, mode: number) {
     await handle.chmod(mode)
     await writeAll(handle, bytes)
     await handle.sync()
+    const seen = await handle.stat()
+    await handle.close()
+    return { dev: seen.dev, ino: seen.ino }
   } catch (error) {
     await handle.close().catch(() => undefined)
     await unlink(file).catch(() => undefined)
     throw error
   }
-  await handle.close()
+}
+
+/**
+ * S9 tmp re-read (S10-04(P1)): one no-follow descriptor on the tmp file, a regular file with the `dev` and `ino` that
+ * S8 wrote, holding exactly the S7 serialisation (at most its length + 1 bytes are read).
+ */
+async function tmpIntact(file: string, written: { dev: number; ino: number }, bytes: Buffer) {
+  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK).catch(() => undefined)
+  if (!handle) return false
+  try {
+    const seen = await handle.stat()
+    if (!seen.isFile() || seen.dev !== written.dev || seen.ino !== written.ino || seen.size !== bytes.length) return false
+    const buffer = Buffer.alloc(bytes.length + 1)
+    let length = 0
+    while (length < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length)
+      if (bytesRead === 0) break
+      length += bytesRead
+    }
+    return length === bytes.length && buffer.subarray(0, length).equals(bytes)
+  } catch {
+    return false
+  } finally {
+    await handle.close().catch(() => undefined)
+  }
 }
 
 /**
@@ -302,15 +356,114 @@ async function ensureConfigDir(configDir: string, appPresent: boolean): Promise<
 }
 
 /**
- * S6 stand-in until row 44 adds the two-signal closed check (lsappinfo + SingletonLock, its time bound and the
- * `close-obsidian` reasons): only "exit 0, empty output" may write. Anything else writes nothing (RN-3 stub).
+ * The two-signal closed check (01a §3.4.1; C12, C17 Q1-2). Closed only when the keyed lsappinfo find exits 0 with
+ * empty stdout AND `lstat(<configDir>/SingletonLock)` is ENOENT. One or more `ASN:` lines = running. Anything else
+ * (other text, non-zero or -1, a rejection, no answer within LSAPPINFO_TIMEOUT_MS, a lock of any type, an `lstat`
+ * error other than ENOENT) = unsure. The lock's target is never read and no pid is probed.
  */
-async function closedStandIn(input: ObsidianRegistryInput): Promise<boolean> {
-  const seen = await input.runLsappinfo().catch(() => undefined)
-  return seen !== undefined && seen.code === 0 && seen.stdout === ""
+async function closedCheck(input: ObsidianRegistryInput): Promise<ClosedVerdict> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const bound = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), LSAPPINFO_TIMEOUT_MS)
+  })
+  const seen = await Promise.race([Promise.resolve().then(() => input.runLsappinfo()), bound])
+    .catch(() => undefined)
+    .finally(() => clearTimeout(timer))
+  if (typeof seen !== "object" || seen === null || seen.code !== 0 || typeof seen.stdout !== "string") return "unsure"
+  if (seen.stdout.includes("ASN:")) return "running"
+  if (seen.stdout !== "") return "unsure"
+  return lstat(path.join(input.configDir, OBSIDIAN_SINGLETON_LOCK)).then(
+    () => "unsure" as const,
+    (error) => (errorCode(error) === "ENOENT" ? ("closed" as const) : ("unsure" as const)),
+  )
 }
 
-async function runStep(input: ObsidianRegistryInput): Promise<ObsidianRegistryStep> {
+const closedRefusal = (verdict: Exclude<ClosedVerdict, "closed">): ObsidianRegistryStep => ({
+  result: "close-obsidian",
+  reason: verdict === "running" ? "obsidian-running" : "obsidian-unsure",
+})
+
+/** NFC first, then lower case, on both sides of every case-folded compare (S10-14(P1)). */
+const fold = (value: string) => value.normalize("NFC").toLowerCase()
+
+/** `child` is strictly inside `parent` (both already in one form). */
+const inside = (child: string, parent: string) => child.startsWith(parent + "/")
+
+/**
+ * Rule N5 (C17 D-2, S10-06(P1)): the vault root is `/`, the home folder, an ancestor of home, Obsidian's data folder,
+ * inside it, or an ancestor of it. Home is three segments above `configDir` (N10-141, RN-4). Both are compared as real
+ * paths (a missing `configDir` as the real path of its parent joined with its last segment), after case folding.
+ */
+async function unsafeRoot(root: string, configDir: string) {
+  if (root === "/") return true
+  const home = path.resolve(configDir, "..", "..", "..")
+  const realHome = fold(await realpath(home).catch(() => home))
+  const lexicalConfig = path.resolve(configDir)
+  const realConfig = fold(
+    await realpath(lexicalConfig).catch(() =>
+      realpath(path.dirname(lexicalConfig)).then(
+        (parent) => path.join(parent, path.basename(lexicalConfig)),
+        () => lexicalConfig,
+      ),
+    ),
+  )
+  const r = fold(root)
+  return r === realHome || inside(realHome, r) || r === realConfig || inside(r, realConfig) || inside(realConfig, r)
+}
+
+/**
+ * S4 after N5 (01a §3.1). N4 `alias-case`: a listed vault matches the hub or the root only after case folding (the
+ * exact compare fails). N2 `nested-child`: a listed vault lies strictly inside the root.
+ */
+function listedConflict(listed: string[], root: string, hub: string): ObsidianRegistryReason | undefined {
+  const r = fold(root)
+  const h = fold(hub)
+  const aliased = listed.some((vault) => {
+    const v = fold(vault)
+    return (
+      (inside(h, v) && !inside(hub, vault)) ||
+      (v === r && vault !== root) ||
+      (inside(v, r) && !inside(vault, root))
+    )
+  })
+  if (aliased) return "alias-case"
+  if (listed.some((vault) => inside(vault, root))) return "nested-child"
+  return undefined
+}
+
+/**
+ * N10-027: the production runner for the closed check. It calls the injected `execFile` once, at this one site, as
+ * LSAPPINFO_PATH with LSAPPINFO_FIND_ARGV (no shell) with a 5,000 ms timeout and a 4,096 B stdout cap. Any
+ * error (spawn error, non-zero exit, timeout, signal, output over the cap) or any stderr text gives
+ * `{ code: -1, stdout: "" }`, which the caller reads as unsure (S10-08(P1)). It never logs or returns stderr, and
+ * never reads an error's fields.
+ * Production reader: `ipc.ts` (row 45). Until that row lands only the P1 tests read it (C44).
+ * @internal test seam
+ */
+export function makeLsappinfoRunner(execFileImpl: LsappinfoExecFile): () => Promise<LsappinfoResult> {
+  return () =>
+    new Promise<LsappinfoResult>((resolve) => {
+      const unsure = { code: -1, stdout: "" }
+      try {
+        execFileImpl(
+          LSAPPINFO_PATH,
+          [...LSAPPINFO_FIND_ARGV],
+          { timeout: LSAPPINFO_TIMEOUT_MS, maxBuffer: LSAPPINFO_STDOUT_MAX },
+          (error, stdout, stderr) => {
+            const quiet =
+              stderr === undefined ||
+              stderr === null ||
+              ((typeof stderr === "string" || Buffer.isBuffer(stderr)) && stderr.length === 0)
+            resolve(!error && quiet && typeof stdout === "string" ? { code: 0, stdout } : unsure)
+          },
+        )
+      } catch {
+        resolve(unsure)
+      }
+    })
+}
+
+async function runStep(input: ObsidianRegistryInput, call: CallState): Promise<ObsidianRegistryStep> {
   // S1: the handler already proved the hub note under <vault>/swarm-memory/; both are compared as real paths
   // (native realpath: on-disk case, links resolved; the written `path`, N10-030).
   const root = await realpath(input.vaultRoot)
@@ -323,13 +476,17 @@ async function runStep(input: ObsidianRegistryInput): Promise<ObsidianRegistrySt
   const listed = snapshot.kind === "file" ? await listedVaultPaths(snapshot.parsed) : []
   if (listed.some((vault) => hub.startsWith(vault + "/"))) return { result: "in-vault" }
 
-  // S4 (row 44): rules N5, N4, N2.
+  // S4: rule N5 first, then N4 and N2 over the listed vaults (no detection call, no write).
+  if (await unsafeRoot(root, input.configDir)) return notRegistered("unsafe-root")
+  const conflict = listedConflict(listed, root, hub)
+  if (conflict) return notRegistered(conflict)
 
   // S5: the Obsidian data folder (C17 D-5).
   if (!(await ensureConfigDir(input.configDir, input.appPresent))) return notRegistered("registry-write")
 
   // S6: closed check 1.
-  if (!(await closedStandIn(input))) return notRegistered("registry-write")
+  const first = await closedCheck(input)
+  if (first !== "closed") return closedRefusal(first)
 
   // S7: the new list. A missing file becomes `{"vaults":{"<id>":{"path":R,"ts":<ms>}}}` (C17 Q1-3).
   const target = snapshot.kind === "file" ? snapshot.parsed : {}
@@ -345,21 +502,29 @@ async function runStep(input: ObsidianRegistryInput): Promise<ObsidianRegistrySt
   // S8: tmp file beside the list (N10-136), flag `wx`, fchmod, fsync. From here on every path that does not rename
   // removes the tmp file (finally below).
   const tmp = path.join(input.configDir, `${OBSIDIAN_REGISTRY_FILE}.swarm-${process.pid}-${randomBytes(8).toString("hex")}.tmp`)
+  if (call.aborted) return notRegistered("registry-write")
+  call.tmp = tmp
   let tmpExists = false
   try {
+    let written: { dev: number; ino: number }
     try {
-      await writeNewFile(tmp, bytes, mode)
+      written = await writeNewFile(tmp, bytes, mode)
       tmpExists = true
     } catch {
       return notRegistered("registry-write")
     }
 
-    // S9: the test seam, then the unchanged-file check (row 44 adds closed check 2 and the tmp re-read here).
+    // S9: the test seam, closed check 2, the unchanged-file check, then the tmp re-read (S10-04(P1)).
     await input.beforeRename?.()
+    const second = await closedCheck(input)
+    if (second !== "closed") return closedRefusal(second)
     if (!(await unchangedSince(registryFile, snapshot))) return notRegistered("registry-changed")
+    if (!(await tmpIntact(tmp, written, bytes))) return notRegistered("registry-verify")
 
     // S10: the one-time backup of the bytes read in S2, with the original's mode. A backup (or anything else, a
-    // link included) already at that name is kept as it is (EEXIST); it is never overwritten or followed.
+    // link included) already at that name is kept as it is (EEXIST); it is never overwritten or followed. A call
+    // past its deadline writes nothing (S10-03(P1)).
+    if (call.aborted) return notRegistered("registry-write")
     if (snapshot.kind === "file") {
       try {
         await writeNewFile(path.join(input.configDir, OBSIDIAN_REGISTRY_BACKUP), snapshot.bytes, mode)
@@ -369,6 +534,7 @@ async function runStep(input: ObsidianRegistryInput): Promise<ObsidianRegistrySt
     }
 
     // S11: the atomic replace. After it nothing is written, unlinked, chmod-ed or renamed again (S10-15(P1)).
+    if (call.aborted) return notRegistered("registry-write")
     try {
       await rename(tmp, registryFile)
       tmpExists = false
@@ -401,7 +567,26 @@ let queue: Promise<unknown> = Promise.resolve()
  * @internal test seam
  */
 export function ensureObsidianVault(input: ObsidianRegistryInput): Promise<ObsidianRegistryStep> {
-  const step = queue.then(() => runStep(input)).catch((): ObsidianRegistryStep => notRegistered("registry-write"))
+  const step = queue.then(() => withDeadline(input)).catch((): ObsidianRegistryStep => notRegistered("registry-write"))
   queue = step.catch(() => undefined)
   return step
+}
+
+/**
+ * S10-03(P1): one call gets CALL_DEADLINE_MS overall. When it passes, the call is marked aborted, its tmp file (if
+ * already named) is unlinked, the result is `not-registered` / `registry-write` and the queue moves on. The late step
+ * checks the flag before S8, S10 and S11 and then writes nothing.
+ */
+function withDeadline(input: ObsidianRegistryInput): Promise<ObsidianRegistryStep> {
+  const call: CallState = { aborted: false }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<ObsidianRegistryStep>((resolve) => {
+    timer = setTimeout(() => {
+      call.aborted = true
+      const tmp = call.tmp
+      const removed = tmp === undefined ? Promise.resolve() : unlink(tmp).catch(() => undefined)
+      resolve(removed.then(() => notRegistered("registry-write")))
+    }, CALL_DEADLINE_MS)
+  })
+  return Promise.race([runStep(input, call), deadline]).finally(() => clearTimeout(timer))
 }
