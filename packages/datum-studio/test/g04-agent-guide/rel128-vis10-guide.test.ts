@@ -145,7 +145,11 @@ const MCP_DIR = path.join(PKG, "vendor", "scripts", "studio", "mcp")
 const STUDIO_TOOLS = new Set(
   ["figure-tools.ts", "doc-tools.ts", "write-tools.ts", "tools.ts"].flatMap((f) => [...readOptional(MCP_DIR, f).matchAll(/"(studio_[a-z_]+)"/g)].map((m) => m[1])),
 )
-const LATTICE_SRC = readOptional(PKG, "vendor", "src", "lib", "studio", "engine", "diagram", "build", "route.ts")
+// Swarm 1.2.9 row 25x (INTENT): row 25 moved the lattice keys (col_mm, row_mm) from route.ts to route-shape.ts; the pin
+// keeps its meaning (the keys exist in the route build source) by reading all three route modules.
+const LATTICE_SRC = ["route.ts", "route-shape.ts", "route-ends.ts"]
+  .map((f) => readOptional(PKG, "vendor", "src", "lib", "studio", "engine", "diagram", "build", f))
+  .join("\n")
 
 describe("AC-VIS10 diagram-flow skill text (OC/skill/diagram-flow.md)", () => {
   test("exists as a built-in text: heading, no frontmatter, no arguments, no file mention, nothing user-specific", () => {

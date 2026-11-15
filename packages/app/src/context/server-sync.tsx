@@ -24,6 +24,7 @@ import {
   loadProjectsQuery,
   loadProvidersQuery,
   loadReferencesQuery,
+  reloadFailedDirectory,
 } from "./global-sync/bootstrap"
 import { createChildStoreManager } from "./global-sync/child-store"
 import { applyDirectoryEvent, applyGlobalEvent } from "./global-sync/event-reducer"
@@ -519,6 +520,21 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     return promise
   }
 
+  // 1.2.9 row 55a (AC-C07b): Restore on the folder-missing toast re-runs a failed load of this directory (no restart).
+  async function reloadDirectory(directory: string) {
+    const key = directoryKey(directory)
+    if (!key) return false
+    await booting.get(key)?.catch(() => undefined)
+    sessionMeta.delete(key)
+    return reloadFailedDirectory({
+      queryClient,
+      scope: serverSDK.scope,
+      directory: key,
+      child: children.children[key],
+      bootstrap: (next) => (children.active(next) ? bootstrapInstance(next) : undefined),
+    })
+  }
+
   const indexSession = (info: Parameters<typeof session.remember>[0]) => {
     const key = directoryKey(info.directory)
     const existing = children.children[key]
@@ -710,6 +726,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     disableMcp: children.disableMcp,
     queryOptions: queryOptionsApi,
     refreshProviders,
+    reloadDirectory,
     // bootstrap,
     updateConfig: updateConfigMutation.mutateAsync,
     project: projectApi,

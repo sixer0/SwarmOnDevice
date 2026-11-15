@@ -1,0 +1,226 @@
+{
+ "$comment": "Swarm 1.2.9 row 23, register N9-155 (the BPMN chart fixture), used by rows 34 (AC-A11a, N9-111) and 35 (AC-A11b, N9-112). The g04 envelope (`studio.chart/v1`, kind G-04, shape `steps`, widthMm 166, heightMm 70) with nodes event_start, task, gateway_exclusive, task, task, event_end and `class.row` 0-4. `no_direction` has no `direction`; `direction_tb` is the same chart with `direction: \"TB\"`. g04 itself is untouched. Render with renderChart({...chart, style}) at style datum and gallery. Measured at BASE d4282fcfd8 (RB): every event outline arc rx/ry = 2.50 in both variants and both styles; the two variants render different bytes (legacy list layout without `direction`); `direction: \"LR\"` refuses DATUM-37-rank (5 ranks > 4 at 166 mm). Synthetic labels only.",
+ "no_direction": {
+  "$schema": "studio.chart/v1",
+  "kind": "G-04",
+  "title": "Tiket gangguan sintetis mengikuti alur BPMN dari mulai sampai selesai.",
+  "source": "Data ilustratif sintetis uji row 23 (bukan data klien).",
+  "widthMm": 166,
+  "data": {
+   "shape": "steps",
+   "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.1",
+    "title": "Alur BPMN sintetis tiket gangguan.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "labels_verified": true,
+    "sources": [
+     "Data ilustratif sintetis uji row 23 (bukan data klien)."
+    ],
+    "nodes": [
+     {
+      "id": "a",
+      "label": "Mulai",
+      "shape": "event_start",
+      "class": {
+       "row": 0
+      }
+     },
+     {
+      "id": "b",
+      "label": "Terima tiket",
+      "shape": "task",
+      "class": {
+       "row": 1
+      }
+     },
+     {
+      "id": "c",
+      "label": "Prioritas?",
+      "shape": "gateway_exclusive",
+      "class": {
+       "row": 2
+      }
+     },
+     {
+      "id": "d",
+      "label": "Kirim teknisi",
+      "shape": "task",
+      "class": {
+       "row": 3
+      }
+     },
+     {
+      "id": "e",
+      "label": "Jadwalkan",
+      "shape": "task",
+      "class": {
+       "row": 3
+      }
+     },
+     {
+      "id": "f",
+      "label": "Selesai",
+      "shape": "event_end",
+      "class": {
+       "row": 4
+      }
+     }
+    ],
+    "edges": [
+     {
+      "from": "a",
+      "to": "b",
+      "kind": "data",
+      "label": ""
+     },
+     {
+      "from": "b",
+      "to": "c",
+      "kind": "data",
+      "label": ""
+     },
+     {
+      "from": "c",
+      "to": "d",
+      "kind": "control",
+      "label": "Ya"
+     },
+     {
+      "from": "c",
+      "to": "e",
+      "kind": "control",
+      "label": "Tidak"
+     },
+     {
+      "from": "d",
+      "to": "f",
+      "kind": "data",
+      "label": ""
+     },
+     {
+      "from": "e",
+      "to": "f",
+      "kind": "data",
+      "label": ""
+     }
+    ]
+   }
+  },
+  "heightMm": 70
+ },
+ "direction_tb": {
+  "$schema": "studio.chart/v1",
+  "kind": "G-04",
+  "title": "Tiket gangguan sintetis mengikuti alur BPMN dari mulai sampai selesai.",
+  "source": "Data ilustratif sintetis uji row 23 (bukan data klien).",
+  "widthMm": 166,
+  "data": {
+   "shape": "steps",
+   "spec": {
+    "$schema": "studio.diagram/v1",
+    "family": "flow",
+    "id": "9.1",
+    "title": "Alur BPMN sintetis tiket gangguan.",
+    "classification": "BIASA",
+    "width_mm": 166,
+    "labels_verified": true,
+    "sources": [
+     "Data ilustratif sintetis uji row 23 (bukan data klien)."
+    ],
+    "nodes": [
+     {
+      "id": "a",
+      "label": "Mulai",
+      "shape": "event_start",
+      "class": {
+       "row": 0
+      }
+     },
+     {
+      "id": "b",
+      "label": "Terima tiket",
+      "shape": "task",
+      "class": {
+       "row": 1
+      }
+     },
+     {
+      "id": "c",
+      "label": "Prioritas?",
+      "shape": "gateway_exclusive",
+      "class": {
+       "row": 2
+      }
+     },
+     {
+      "id": "d",
+      "label": "Kirim teknisi",
+      "shape": "task",
+      "class": {
+       "row": 3
+      }
+     },
+     {
+      "id": "e",
+      "label": "Jadwalkan",
+      "shape": "task",
+      "class": {
+       "row": 3
+      }
+     },
+     {
+      "id": "f",
+      "label": "Selesai",
+      "shape": "event_end",
+      "class": {
+       "row": 4
+      }
+     }
+    ],
+    "edges": [
+     {
+      "from": "a",
+      "to": "b",
+      "kind": "data",
+      "label": ""
+     },
+     {
+      "from": "b",
+      "to": "c",
+      "kind": "data",
+      "label": ""
+     },
+     {
+      "from": "c",
+      "to": "d",
+      "kind": "control",
+      "label": "Ya"
+     },
+     {
+      "from": "c",
+      "to": "e",
+      "kind": "control",
+      "label": "Tidak"
+     },
+     {
+      "from": "d",
+      "to": "f",
+      "kind": "data",
+      "label": ""
+     },
+     {
+      "from": "e",
+      "to": "f",
+      "kind": "data",
+      "label": ""
+     }
+    ],
+    "direction": "TB"
+   }
+  },
+  "heightMm": 70
+ }
+}

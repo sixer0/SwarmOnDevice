@@ -23,6 +23,7 @@ import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { personCaller } from "../mission-tools/_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const DESKTOP = path.resolve(PKG, "..", "desktop")
@@ -280,7 +281,9 @@ async function runWorkload(e: Env, s: Client, c: Client, onMidRun: (acked: () =>
 
   // Setup (sequential, not counted): the mission with one row per (client, doc), and the shared document (swarm).
   const rows = (["s", "c"] as const).flatMap((x) => Array.from({ length: DOCS }, (_, i) => rowDef(`${x === "s" ? 1 : 2}${String(i).padStart(2, "0")}`)))
-  const mc = await call(s, "studio_mission_create", {
+  // 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request).
+  const d = descriptor(e)
+  const mc = await personCaller({ url: d.URL!, token: d.TOKEN!, cwd: e.projectS, fetchImpl: realFetch })("studio_mission_create", {
     mission: { id: MISSION, title: "Row 44 concurrency mission", type: "feature-release", owner: "master-controller", project: { dir: e.projectS }, rows, decisions: [{ id: "U1", by: "user", date: "2026-11-07", text: "approve row 44" }] },
   })
   quote("mission create", { code: codeOf(mc), rows: mc.rows, text: mc.ok === true ? undefined : String(mc._text).slice(0, 300) })

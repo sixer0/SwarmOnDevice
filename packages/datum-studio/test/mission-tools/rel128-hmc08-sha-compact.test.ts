@@ -8,6 +8,7 @@ import os from "node:os"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY, personCaller } from "./_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -59,6 +60,8 @@ const log = (level: "info" | "warn" | "error", source: string, message: string, 
   if (level === "error") console.log(`[rel128-hmc08] host error ${source}: ${message} ${JSON.stringify(context ?? {})}`)
 }
 
+/** 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request). */
+const asPerson = (name: string, args: Record<string, unknown>) => personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })(name, args)
 async function call(name: string, args: Record<string, unknown>): Promise<S & { text: string }> {
   const r = await c.callTool({ name, arguments: args })
   return { ...((r.structuredContent ?? {}) as S), text: (r.content as Array<{ text?: string }>).map((x) => x.text ?? "").join("\n") }
@@ -66,7 +69,7 @@ async function call(name: string, args: Record<string, unknown>): Promise<S & { 
 const row = (id: string) => ({ id, phase: "implementation", kind: "implementation", title: `Row ${id}`, agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass", review: "gate" })
 
 async function startMission(id: string) {
-  const cr = await call("studio_mission_create", { mission: { id, title: "Rel 1.2.8 HMC08", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: ["1", "2"].map(row), decisions: [{ id: "U1", by: "user", date: "2026-11-14", text: "go" }] } })
+  const cr = await asPerson("studio_mission_create", { mission: { id, title: "Rel 1.2.8 HMC08", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: ["1", "2"].map(row), decisions: [{ id: "U1", by: "user", date: "2026-11-14", text: "go" }] } })
   expect(cr.ok).toBe(true)
   expect((await call("studio_mission_approve", { mission: id, decision: "U1" })).ok).toBe(true)
   expect((await call("studio_mission_set_status", { mission: id, to: "running" })).ok).toBe(true)
@@ -99,7 +102,7 @@ beforeAll(async () => {
   await resetEnvCache()
   store = await mod.openHostStore(STORE, { release: "1.2.8", logFile: LOG, missionGuard: true })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.8" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   c = new Client({ name: "rel128-hmc08", version: "0" })
   await c.connect(
     new StreamableHTTPClientTransport(new URL(host.url), {

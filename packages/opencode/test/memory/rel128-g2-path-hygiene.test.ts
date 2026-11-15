@@ -25,6 +25,7 @@ import { Vault } from "@opencode-ai/core/vault"
 // The server first: its import graph settles the permission modules' load order (as in rel128-sk-d-skill-routes).
 import { Server } from "../../src/server/server"
 import { DesktopNonce } from "../../src/server/desktop-nonce"
+import { setRehomeDecisionForTests } from "../../src/server/routes/instance/httpapi/handlers/project"
 import { VaultMirror } from "../../src/memory/vault-mirror"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, tmpdir } from "../fixture/fixture"
@@ -315,6 +316,7 @@ describe("G2-02 the re-home failure line carries no absolute path", () => {
   })
   afterEach(async () => {
     DesktopNonce.set(undefined)
+    setRehomeDecisionForTests(undefined)
     await fs.rm(journals, { recursive: true, force: true })
     await disposeAllInstances()
     await resetDatabase()
@@ -341,12 +343,30 @@ describe("G2-02 the re-home failure line carries no absolute path", () => {
     await fs.mkdir(path.dirname(journals), { recursive: true })
     await fs.writeFile(journals, "not a folder\n")
     DesktopNonce.set(NONCE)
+    // 1.2.9 row 54 (AC-C06 INTENT, C13): the person's attested placement answer of MISSION into GROUP, through the
+    // route's test seam, so the real move gets past the decision check and fails at the journal folder as before.
+    setRehomeDecisionForTests(async () => ({
+      status: "answered",
+      topic: "project-placement",
+      option: "join",
+      by: "user",
+      attested: true,
+      group: GROUP,
+      proposal: undefined,
+    }))
 
     const already = (await logLines("re-home failed", 0)).length
     const response = await app().request("/project/rehome", {
       method: "POST",
       headers: { "x-opencode-directory": R, "content-type": "application/json", [HEADER]: NONCE },
-      body: JSON.stringify({ missionId: MISSION, from: R, to: path.join(R, GROUP), sessions: [], approvalRef: "D-1" }),
+      body: JSON.stringify({
+        missionId: MISSION,
+        from: R,
+        to: path.join(R, GROUP),
+        sessions: [],
+        approvalRef: "D-1",
+        approvalMission: MISSION,
+      }),
     })
     expect(response.status).toBe(500)
     const lines = (await logLines("re-home failed", already + 1)).slice(already)

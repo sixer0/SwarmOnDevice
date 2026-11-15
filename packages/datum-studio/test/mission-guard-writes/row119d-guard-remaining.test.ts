@@ -9,6 +9,7 @@ import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -141,7 +142,7 @@ beforeAll(async () => {
   bridge = await import("../../src/store-bridge/index.ts")
   store = await mod.openHostStore(STORE, { release: "1.2.0", logFile: LOG, missionGuard: true })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.0" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS })
   swarm = await client(host.url, "swarm")
   claude = await client(host.url, "claude")
 })
@@ -189,7 +190,8 @@ describe("row 119d: wrappers and the public flag", () => {
 
 describe("row 119d: setup", () => {
   test("mission M (approved; row 2 has B dep on 1) and MD (draft); a valid chapter body from the importer", async () => {
-    const c = await call(swarm, "studio_mission_create", {
+    // 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request).
+    const c = await personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })("studio_mission_create", {
       mission: {
         id: M,
         title: "Row 119d feature mission",

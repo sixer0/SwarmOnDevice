@@ -29,7 +29,8 @@ describe("rel127 VERIFY W-16: decision register at mission close", () => {
   test("row done without an export, then set_status done returns decisions {count, ids}; nothing exported", async () => {
     const MI = s.mission
     const row = { id: "1", phase: "implementation", kind: "test", title: "Baris uji", agent: "test-expert", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "test/p.md", verification: "uji", review: "gate" }
-    expect(okCall(await s.call("studio_mission_create", { mission: { id: MI, title: "Uji W-16", type: "feature-release", owner: "master-controller", project: { dir: s.project }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-13", text: "go" }] } }))).toBe(true)
+    // 1.2.9 row 50c (C46): the person's U1 comes from an attested request.
+    expect(okCall(await s.asPerson("studio_mission_create", { mission: { id: MI, title: "Uji W-16", type: "feature-release", owner: "master-controller", project: { dir: s.project }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-13", text: "go" }] } }))).toBe(true)
     expect(okCall(await s.call("studio_mission_approve", { mission: MI, decision: "U1" }))).toBe(true)
     expect(okCall(await s.call("studio_mission_set_status", { mission: MI, to: "running" }))).toBe(true)
     expect(okCall(await s.call("studio_mission_record_decision", { mission: MI, decision: { id: "C1", by: "controller", date: "2026-11-13", text: "Keputusan uji" } }))).toBe(true)

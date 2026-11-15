@@ -47,12 +47,6 @@ export const MISSION_ID_PATTERN = "^\\d{4}-\\d{2}-\\d{2}[_-][a-z0-9][a-z0-9_-]{0
 const MISSION_ID = new RegExp(MISSION_ID_PATTERN)
 
 /**
- * The period a roll-up of index entries covers (N8-011). The year is the second level: quarterly roll-ups of one year
- * roll into a yearly one when the index is still full (01e §5.2).
- */
-export const INDEX_ROLLUP_PERIOD = "quarter"
-
-/**
  * The memory store key of a project folder (N8-446, 01d §2.2): the store file is `<data>/memory/<key>.json`. Every folder
  * without git shares the "global" project, and their notes must not mix, so such a folder gets `dir-<sha256>` of its
  * path. The re-home primitive (`Rehome`, N8-132) computes both stores of a move with this same function.
@@ -610,7 +604,7 @@ const indexed = (item: Item) => isIndex(item) || item.kind === "index_rollup" ||
  * INDEX_TEXT_PATTERN, mission id in the line different, not a calendar date, or a report path that is not a plain
  * relative `docs/<missionId>/....md`). Returns the report path when the line is valid.
  */
-export function indexRefusal(input: {
+function indexRefusal(input: {
   text: string
   missionId: string
   kind?: string

@@ -29,7 +29,7 @@ export const Parameters = Schema.Struct({
 })
 
 /** RA-7: the tool-only refusal when a scope already holds SKILL_DRAFTS_MAX drafts. */
-export const SKILL_DRAFTS_FULL = "SKILL_DRAFTS_FULL" as const
+const SKILL_DRAFTS_FULL = "SKILL_DRAFTS_FULL" as const
 
 type Metadata = {
   name: string
@@ -41,7 +41,7 @@ type Metadata = {
 }
 
 /** 01b section 5.3 (RA-8): what `draft.json` holds beside the draft's SKILL.md. */
-export type DraftRecord = { sessionID?: string; time: number; untrusted: boolean; runsCommands: boolean }
+type DraftRecord = { sessionID?: string; time: number; untrusted: boolean; runsCommands: boolean }
 
 const IGNORE = "*\n"
 

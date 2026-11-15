@@ -320,6 +320,15 @@ export function learn(text: string, file = ".env") {
   learnedVersion++
 }
 
+// AC-B09: forgets what `learn` was taught, so one test file's values do not mask lines in the next. The filesystem
+// caches (`deepFiles`, `placeRoots`) stay. Only tests call it (pinned by rel129-b09-secrets-reset.test.ts).
+/** @internal test seam */
+export function resetForTests(): void {
+  learned.clear()
+  learnedVersion++
+  cache.clear()
+}
+
 /** 1.2.7 M1-02: a file that is there to be printed but whose values `learnFile` cannot read (too large, unreadable). */
 export function unlearnable(file: string) {
   try {

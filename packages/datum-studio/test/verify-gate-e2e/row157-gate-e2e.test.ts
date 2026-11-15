@@ -20,6 +20,7 @@ import path from "node:path"
 import { inflateSync } from "node:zlib"
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 import { realBridgeRunnable, startRealBridge, type RealBridge } from "./real-bridge"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 const E2E = process.env.ROW157_E2E === "1"
 const e2e = E2E ? describe : describe.skip
@@ -114,7 +115,7 @@ async function start(seam?: Seam) {
   const ext = seam
     ? prod.map((e) => (e.name === "studio_render" && e.wraps ? wrapperMod.renderVerifyWrapper(store as never, { log, seam: seam as never }) : e))
     : prod
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: ext })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: ext })
   const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
   const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
   c = new Client({ name: "row157-test", version: "0" })
@@ -252,7 +253,8 @@ beforeAll(async () => {
   pdfMod = await import("../../vendor/src/lib/studio/services/render/pdf")
   bridgeUp(true)
   await start()
-  const cr = await call("studio_mission_create", {
+  // 1.2.9 row 50d (C46, C72): the person's U1 comes from an attested request (Mission Control key on the request).
+  const cr = await personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })("studio_mission_create", {
     mission: { id: M, title: "Row 157 gate e2e", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: ROW_IDS.map(row), decisions: [{ id: "U1", by: "user", date: "2026-11-08", text: "go" }] },
   })
   expect(cr.ok).toBe(true)

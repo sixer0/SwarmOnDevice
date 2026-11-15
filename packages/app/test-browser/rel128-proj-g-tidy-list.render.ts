@@ -32,9 +32,12 @@ mock.module("@opencode-ai/session-ui/message-part", () => ({ getToolInfo: () => 
 const real = await import("@/context/language")
 const tr = (key: string, params?: Record<string, string>) =>
   (dict as Record<string, string>)[key] === undefined ? String(key) : resolveTemplate((dict as Record<string, string>)[key]!, params ?? {})
+// 1.2.9 row 24b: the model requires `plural`; the mock picks the category like language.tsx (one/other).
+const plural = (key: string, count: number, params?: Record<string, string>) =>
+  tr(`${key}.${count === 1 ? "one" : "other"}`, { ...params, count: String(count) })
 mock.module("@/context/language", () => ({
   ...real,
-  useLanguage: () => ({ t: tr, locale: () => "en", intl: () => "en" }),
+  useLanguage: () => ({ t: tr, plural, locale: () => "en", intl: () => "en" }),
 }))
 
 const { MissionCommand } = await import(new URL("../src/pages/session/swarm/mission-command.tsx", import.meta.url).pathname)
@@ -136,7 +139,7 @@ describe("1.2.8 row 46b AC-PROJg: the tidy list in the existing decision card", 
     expect(text.includes(tr("session.mission.tidy.stay"))).toBe(true)
     expect(el.querySelectorAll("[data-mission-tidy-list] [data-mission-group-kind]").length).toBe(2)
     expect(el.querySelectorAll("[data-mission-option]").length).toBe(2)
-    expect(button(el, "approve")?.textContent?.includes(tr("session.mission.tidy.approve", { count: "2" }))).toBe(true)
+    expect(button(el, "approve")?.textContent?.includes(tr("session.mission.tidy.approve.other", { count: "2" }))).toBe(true)
     expect(button(el, "decline")?.textContent?.includes(tr("session.mission.tidy.decline"))).toBe(true)
     for (const crafted of ["crafted", "agent consequence", "(agent text)"]) expect(text.includes(crafted)).toBe(false)
     // the list sits in the existing bounded body; no new panel or dialog
@@ -153,7 +156,7 @@ describe("1.2.8 row 46b AC-PROJg: the tidy list in the existing decision card", 
     expect(`${Object.keys(sent).sort().join(",")} ${sent.request} ${sent.option}`).toBe("mission,option,request D-2 approve")
     expect(calls.answer.length).toBe(0)
     expect(calls.toast.length).toBe(1)
-    expect(calls.toast[0]![0] === tr("session.mission.tidy.done", { count: "2" })).toBe(true)
+    expect(calls.toast[0]![0] === tr("session.mission.tidy.done.other", { count: "2" })).toBe(true)
   })
 
   test("decline is the ordinary answer; nothing moves", async () => {

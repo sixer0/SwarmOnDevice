@@ -15,6 +15,7 @@ import os from "node:os"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -75,7 +76,7 @@ beforeAll(async () => {
   const log = () => undefined
   store = await mod.openHostStore(STORE, { release: "1.2.3", logFile: LOG, missionGuard: true })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.3" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   swarm = await client(host.url, "swarm")
   swarmWithHeader = await client(host.url, "swarm", { "x-studio-caller-session": SES_HEADER })
 })
@@ -182,7 +183,8 @@ describe("row 188 (3): the honest autonomous approval path", () => {
   test("a user decision still approves and is labelled approved (decision by: user)", async () => {
     const u = "2026-11-08_r188-user"
     await call("studio_mission_create", { mission: mission(u), })
-    await call("studio_mission_record_decision", { mission: u, decision: { id: "U1", by: "user", date: "2026-11-08", text: "approved" } })
+    // 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request).
+    expect((await personCaller({ url: host.url, token: TOKEN, cwd: PROJECT })("studio_mission_record_decision", { mission: u, decision: { id: "U1", by: "user", date: "2026-11-08", text: "approved" } })).ok).toBe(true)
     const a = await call("studio_mission_approve", { mission: u, decision: "U1" })
     expect(a.ok).toBe(true)
     expect(a.approval.label).toBe("approved (decision by: user)")

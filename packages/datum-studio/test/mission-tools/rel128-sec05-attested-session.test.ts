@@ -3,8 +3,8 @@
 // the desktop mission client at initialize as `x-swarm-mission-control-key`) and marks that MCP session attested on a
 // timing-safe match. `studio_mission_place` from any other session -> SESSION_NOT_ATTESTED. Every decision answer the
 // host records stores `via` (the session's agent id) and `attested` (store migration 0008 columns `answered_via`,
-// `answered_attested`), returned by `studio_mission_get`; an unattested by: "user" answer is recorded, not refused
-// (1.2.9 backlog). Migration 0008 also moves row 45's `$request` topic/proposal into their own columns.
+// `answered_attested`), returned by `studio_mission_get`; since 1.2.9 row 50 (AC-C01) an unattested by: "user" answer
+// is refused SESSION_NOT_ATTESTED. Migration 0008 also moves row 45's `$request` topic/proposal into their own columns.
 // Real store in a mkdtemp folder, real endpoint on 127.0.0.1 (ephemeral port), real MCP SDK client. Synthetic input only.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs"
@@ -145,16 +145,22 @@ describe("N8-484 SEC05: attested Mission Control session and answer provenance",
     expect(store.missions.get(MISSION)!.mission.project.dir).toBe(lumen)
   })
 
-  test("an unattested by: user answer is recorded (not refused) with via and attested: false; studio_mission_get returns both", async () => {
+  // 1.2.9 row 50 (AC-C01, INTENT, C2(6), C7(b)): the unattested by: user answer is now refused; D-2 is answered by:
+  // "controller" instead, so the provenance columns are still covered (["D-2", "claude", 0, null]).
+  test("an unattested by: user answer is refused SESSION_NOT_ATTESTED; nothing is stored", async () => {
     const agent = await client("claude")
     const options = [
       { id: "A", label: "Option A", consequence: "a" },
       { id: "B", label: "Option B", consequence: "b" },
     ]
     expect((await call(agent, "studio_mission_request_decision", { mission: MISSION, request: { id: "D-2", question: "Which one?", options } })).ok).toBe(true)
-    const r = await call(agent, "studio_mission_answer_decision", { mission: MISSION, request: "D-2", option: "A", by: "user", decisionId: "U2" })
+    const refused = await call(agent, "studio_mission_answer_decision", { mission: MISSION, request: "D-2", option: "A", by: "user", decisionId: "U2" })
+    expect([refused.ok, refused.code]).toEqual([false, "SESSION_NOT_ATTESTED"])
+    expect(store.missions.listDecisionRequests(MISSION).find((q) => q.id === "D-2")?.status).toBe("open")
+    expect((store.missions.get(MISSION)!.mission.decisions ?? []).some((d) => d.id === "U2")).toBe(false)
+    const r = await call(agent, "studio_mission_answer_decision", { mission: MISSION, request: "D-2", option: "A", by: "controller", decisionId: "C2" })
     expect(r.ok).toBe(true)
-    expect(r.request.answer).toEqual({ option: "A", by: "user", decision: "U2", via: "claude", attested: false })
+    expect(r.request.answer).toEqual({ option: "A", by: "controller", decision: "C2", via: "claude", attested: false })
     // The arguments cannot set provenance (unknown fields are refused by the schema).
     expect((await call(agent, "studio_mission_request_decision", { mission: MISSION, request: { id: "D-3", question: "Again?", options } })).ok).toBe(true)
     const forged = await call(agent, "studio_mission_answer_decision", { mission: MISSION, request: "D-3", option: "B", by: "user", decisionId: "U3", attested: true, via: "swarm" })

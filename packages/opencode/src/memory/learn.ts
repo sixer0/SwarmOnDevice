@@ -245,8 +245,10 @@ export function promptBlock(items: readonly Note[], options: { budget?: number; 
 // Mission index part (1.2.8 MEM-c, 01e §3): index entries first, in their own budget, matched by trigger words.
 
 /** Index entries take at most this many of the session load's estimated tokens (N8-004, 01e §3.4). */
+/** @internal test seam */
 export const INDEX_LOAD_BUDGET_TOKENS = 2000
 /** Matched index entries whose body is inlined at session start (N8-463, 01e §3.4). */
+/** @internal test seam */
 export const INDEX_EXPAND_MAX = 2
 const INDEX_HEADING = "Mission index (newest first; recall an id for its detail and report link):"
 const NOTES_HEADING = "Other notes:"

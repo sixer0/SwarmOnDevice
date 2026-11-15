@@ -43,7 +43,7 @@ export type Code =
   | "REHOME_ROOT_UNKNOWN"
   | "REHOME_FOLDER_MISSING"
 
-export type StepName = "backup" | "group" | "marker" | "docs" | "folder" | "memory" | "sessions"
+type StepName = "backup" | "group" | "marker" | "docs" | "folder" | "memory" | "sessions"
 
 export interface Input {
   missionId: string
@@ -64,11 +64,12 @@ export interface Input {
 /** `renamed` (row 44g, R-02): old id -> new id of moved notes whose id the target store already used; only when any. */
 export type Moved = { folder: boolean; notes: number; sessions: number; renamed?: Record<string, string> }
 export type Planned = { folder: boolean; notes: number; sessions: number; createsGroup: boolean }
-export type Refused = { refused: Code; detail?: string; step?: StepName; journal?: string }
+type Refused = { refused: Code; detail?: string; step?: StepName; journal?: string }
 export type Result = { journalId: string; moved: Moved; replayed?: boolean } | { planned: Planned } | Refused
 
-export type JournalState = "running" | "complete" | "rolled_back" | "rollback_failed"
-export type JournalStep = { name: StepName; status: "planned" | "done" | "undone"; data: Record<string, unknown> }
+type JournalState = "running" | "complete" | "rolled_back" | "rollback_failed"
+type JournalStep = { name: StepName; status: "planned" | "done" | "undone"; data: Record<string, unknown> }
+/** @internal test seam */
 export interface Journal {
   version: 1
   journalId: string
@@ -113,7 +114,30 @@ export interface Ports {
   publish?(event: { missionId: string; from: string; to: string; sessions: string[]; journalId: string }): Promise<void>
   /** Vault mirror refresh of one store (OBS-b); derived data, a failure is a journal warning only. */
   refreshMirror?(storeKey: string): Promise<void>
+  /**
+   * 1.2.9 row 54 (C06, N9-067): the request `ref` of `mission` as the built-in DATUM Studio holds it (the route reads it
+   * through `studio_mission_get`). Asked before a real move only; absent means the answer cannot be checked.
+   */
+  decision?(mission: string, ref: string): Promise<DecisionRead>
 }
+
+/**
+ * 1.2.9 row 54 (C06, N9-068): what the decision port read. `unchecked`: not the built-in server, not connected, timed
+ * out or unreadable. `open`: the request is absent, open or withdrawn. `answered`: the answer and what binds it to a move
+ * (`group` of the chosen option for a placement, the request's `proposal` for a tidy list; `run` validates both).
+ */
+export type DecisionRead =
+  | { unchecked: true }
+  | { status: "open" }
+  | {
+      status: "answered"
+      topic: string | undefined
+      option: string
+      by: string
+      attested: boolean
+      group: string | undefined
+      proposal: unknown
+    }
 
 /** Test layer only (01d §6.3): never an environment variable or a request field. */
 export interface Options {
@@ -306,6 +330,11 @@ async function realRoot(ports: Ports) {
   // acts. A link planted there (also a dangling one that a later folder fills) would otherwise become the root and send
   // an approved move outside Documents. The detail is the last segment only.
   if ((await lstatOrUndefined(given))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", path.basename(given))
+  // 1.2.9 row 58 (AC-C10a, C7(d)): its parent too (`~/Documents` linked elsewhere, also a dangling link), one level up
+  // only: macOS /var and /tmp and a linked home folder sit further up and must keep working. The detail names no path.
+  const parentDir = path.dirname(given)
+  const parentDetail = path.basename(parentDir) === "Documents" ? "Documents" : "parent folder"
+  if ((await lstatOrUndefined(parentDir))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", parentDetail)
   const real = await fs.realpath(given).catch(() => undefined)
   // Row 68f: the first launch's onboarding creates the folder after the server started; until then it is missing.
   if (!real) throw new Refusal("REHOME_FOLDER_MISSING", path.basename(value))
@@ -314,12 +343,19 @@ async function realRoot(ports: Ports) {
   // Row 68h: and it resolves inside its own parent (a link swapped in between the two looks above resolves elsewhere).
   const parent = await fs.realpath(path.dirname(given)).catch(() => undefined)
   if (!parent || real !== path.join(parent, path.basename(given))) throw new Refusal("REHOME_SYMLINK", path.basename(given))
+  // Row 58: and the parent resolves inside its own parent (a parent swapped for a link after the lstat above).
+  const grandparent = await fs.realpath(path.dirname(parentDir)).catch(() => undefined)
+  if (!grandparent || parent !== path.join(grandparent, path.basename(parentDir)))
+    throw new Refusal("REHOME_SYMLINK", parentDetail)
   return { real, given }
 }
 
 /** Row 68h (S-21): a root of the move (`from`, a group) given as a symlink is refused by its last segment only. */
 async function notLinked(folder: string) {
-  if ((await lstatOrUndefined(folder))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", path.basename(folder))
+  // 1.2.9 row 58b (AC-C11, S-31): `lstat` of "Alias/" follows the link, so look at the resolved path; it drops a
+  // trailing separator, and the check and the detail then name the same string.
+  const resolved = path.resolve(folder)
+  if ((await lstatOrUndefined(resolved))?.isSymbolicLink()) throw new Refusal("REHOME_SYMLINK", path.basename(resolved))
 }
 
 /** Row 68g: a folder named for the person without its absolute part: relative to R inside it, else its last segment. */
@@ -468,7 +504,14 @@ async function preflight(ports: Ports, input: Input): Promise<Plan> {
   }
   if (sourceStat && ports.terminals) {
     const realSource = await fs.realpath(source)
-    for (const cwd of await ports.terminals()) {
+    // 1.2.9 row 53 (C05): a port that cannot list the terminals fails closed with its path-free detail (N9-009),
+    // returned as a refusal like the checks above; any other error still propagates as before.
+    const cwds = await ports.terminals().catch((error: unknown) => {
+      const failed = error as { code?: unknown; detail?: unknown } | undefined
+      if (failed?.code !== "REHOME_SESSION_ACTIVE") throw error
+      throw new Refusal("REHOME_SESSION_ACTIVE", typeof failed.detail === "string" ? failed.detail : undefined)
+    })
+    for (const cwd of cwds) {
       const resolved = await fs.realpath(cwd).catch(() => path.resolve(cwd))
       if (isInside(resolved, realSource) || isInside(path.resolve(cwd), source))
         throw new Refusal("REHOME_SESSION_ACTIVE", "terminal inside the mission folder")
@@ -807,6 +850,10 @@ async function run(ports: Ports, input: Input, opts: Options): Promise<Result> {
     }
   }
 
+  // 1.2.9 row 54 (C06): before the lease, so a slow read never holds the move lock; the request record is append-only.
+  const unapproved = await decisionRefusal(ports, input)
+  if (unapproved) return unapproved
+
   const lease = await Flock.acquire("rehome", { timeoutMs: 0 }).catch(() => undefined)
   if (!lease) return { refused: "REHOME_BUSY" }
   try {
@@ -937,6 +984,38 @@ async function run(ports: Ports, input: Input, opts: Options): Promise<Result> {
   } finally {
     await lease.release()
   }
+}
+
+/**
+ * 1.2.9 row 54 (C06, 01c section 3.6): a real move goes ahead only on the person's answer, read from DATUM Studio and
+ * bound to this move. A dry run runs before the person answers; a compensation undoes a move that already passed (its
+ * preflight requires the completed journal it reverses). Fails closed: no port, or a read it could not make, refuses.
+ */
+async function decisionRefusal(ports: Ports, input: Input): Promise<Refused | undefined> {
+  if (input.dryRun || input.compensates !== undefined) return undefined
+  const decision: Refused = { refused: "REHOME_APPROVAL_MISSING", detail: "decision" }
+  const unchecked: Refused = { refused: "REHOME_APPROVAL_MISSING", detail: "decision unchecked" }
+  // A legacy call does not name the mission holding its request, so the answer cannot be bound to this move.
+  if (input.approvalMission === undefined) return decision
+  if (!ports.decision) return unchecked
+  const read = await ports.decision(input.approvalMission, input.approvalRef).catch((): DecisionRead => ({ unchecked: true }))
+  if ("unchecked" in read) return unchecked
+  if (read.status !== "answered" || read.by !== "user" || read.attested !== true) return decision
+  const group = path.basename(input.to)
+  if (read.topic === "project-placement")
+    return input.approvalMission === input.missionId && (read.option === "join" || read.option === "new") && read.group === group
+      ? undefined
+      : decision
+  if (read.topic === "project-tidy")
+    return read.option === "approve" &&
+      Array.isArray(read.proposal) &&
+      read.proposal.some(
+        (item) =>
+          typeof item === "object" && item !== null && item.mission === input.missionId && item.group === group,
+      )
+      ? undefined
+      : decision
+  return decision
 }
 
 const emptyMoved: Moved = { folder: false, notes: 0, sessions: 0 }

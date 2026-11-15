@@ -40,7 +40,7 @@ const data = (res: S) => res.structuredContent?.data ?? res.structuredContent
 
 /** A running mission with one row, approved under U1. */
 async function runningMission(id: string) {
-  await store.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1")], decisions: [U1] } as never))
+  await store.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1")], decisions: [U1] } as never, { attested: true })) // 1.2.9 row 50c (C46): U1 is the person's decision (attested request)
   await store.transaction(async (t) => M.approve(t, id, "U1"))
   await store.transaction(async (t) => M.setStatus(t, id, "running"))
 }

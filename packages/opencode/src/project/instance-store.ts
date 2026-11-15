@@ -7,6 +7,8 @@ import { InstanceRef } from "@/effect/instance-ref"
 import { disposeInstance as runDisposers } from "@/effect/instance-registry"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Context, Deferred, Duration, Effect, Exit, Layer, Option, Scope } from "effect"
+import { HttpServerRespondable, HttpServerResponse } from "effect/unstable/http"
+import { stat } from "node:fs/promises"
 import { type InstanceContext } from "./instance-context"
 import { InstanceBootstrap } from "./bootstrap-service"
 import * as Project from "./project"
@@ -37,6 +39,51 @@ interface Entry {
   readonly deferred: Deferred.Deferred<InstanceContext>
 }
 
+// 1.2.9 row 55 (AC-C07a, N9-012): a location that exists but is not a folder (a regular file where the Default Project
+// folder belongs, or a path under such a file) used to die in config discovery (ENOTDIR -> BadResource -> orDie) and
+// answer 500 with an ERROR log line. The boot now refuses it first. The refusal is a Respondable defect, so the HTTP
+// layer answers it as is (400, fixed path-free detail) instead of logging an unexpected error; and because the boot
+// fails, the cache entry is dropped, so the next request after the folder is back boots fresh with its own config.
+const LOCATION_NOT_FOLDER = "LOCATION_NOT_FOLDER"
+const LOCATION_NOT_FOLDER_MESSAGE = "location is not a folder"
+
+class LocationNotFolderError extends Error implements HttpServerRespondable.Respondable {
+  readonly code = LOCATION_NOT_FOLDER
+  constructor() {
+    super(LOCATION_NOT_FOLDER_MESSAGE)
+    this.name = "LocationNotFolderError"
+  }
+  [HttpServerRespondable.symbol]() {
+    return Effect.succeed(
+      HttpServerResponse.jsonUnsafe(
+        { name: "LocationNotFolderError", data: { code: LOCATION_NOT_FOLDER, message: LOCATION_NOT_FOLDER_MESSAGE } },
+        { status: 400 },
+      ),
+    )
+  }
+}
+
+/** Refuses a location that exists but is not a folder, or sits under a file (ENOTDIR). A missing location (ENOENT)
+ *  and any other stat failure keep the boot as before. */
+const assertFolder = (directory: string) =>
+  Effect.promise(() =>
+    stat(directory).then(
+      (info) => info.isDirectory(),
+      (error: NodeJS.ErrnoException) => error?.code !== "ENOTDIR",
+    ),
+  ).pipe(Effect.flatMap((folder) => (folder ? Effect.void : Effect.die(new LocationNotFolderError()))))
+
+/** FSUtil.resolve realpaths the location and throws ENOTDIR for a path under a file; that is the same refusal. */
+const resolveLocation = (input: string) =>
+  Effect.suspend(() => {
+    try {
+      return Effect.succeed(FSUtil.resolve(input))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOTDIR") return Effect.die(new LocationNotFolderError())
+      throw error
+    }
+  })
+
 const layer: Layer.Layer<Service, never, Project.Service | InstanceBootstrap.Service> = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -47,6 +94,7 @@ const layer: Layer.Layer<Service, never, Project.Service | InstanceBootstrap.Ser
 
     const boot = (input: LoadInput & { directory: string }) =>
       Effect.gen(function* () {
+        yield* assertFolder(input.directory)
         const ctx: InstanceContext =
           input.project && input.worktree
             ? {
@@ -108,8 +156,10 @@ const layer: Layer.Layer<Service, never, Project.Service | InstanceBootstrap.Ser
       return true
     })
 
-    const load = (input: LoadInput): Effect.Effect<InstanceContext> => {
-      const directory = FSUtil.resolve(input.directory)
+    const load = (input: LoadInput): Effect.Effect<InstanceContext> =>
+      resolveLocation(input.directory).pipe(Effect.flatMap((directory) => loadResolved(directory, input)))
+
+    const loadResolved = (directory: string, input: LoadInput): Effect.Effect<InstanceContext> => {
       return Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const existing = cache.get(directory)
@@ -132,8 +182,10 @@ const layer: Layer.Layer<Service, never, Project.Service | InstanceBootstrap.Ser
       return yield* Effect.forEach(ready, (ctx) => ctx)
     })
 
-    const reload = (input: LoadInput): Effect.Effect<InstanceContext> => {
-      const directory = FSUtil.resolve(input.directory)
+    const reload = (input: LoadInput): Effect.Effect<InstanceContext> =>
+      resolveLocation(input.directory).pipe(Effect.flatMap((directory) => reloadResolved(directory, input)))
+
+    const reloadResolved = (directory: string, input: LoadInput): Effect.Effect<InstanceContext> => {
       return Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const previous = cache.get(directory)

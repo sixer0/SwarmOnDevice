@@ -176,6 +176,31 @@ describe("1.2.8 row 46 AC-PROJf: mission-control:place in main", () => {
     const oc = readFileSync(join(import.meta.dir, "..", "..", "..", "..", "opencode", "src", "project", "rehome.ts"), "utf8")
     expect(oc.includes(`GROUP_NAME_PATTERN = ${String(ipc.GROUP_NAME_PATTERN)}`)).toBe(true)
   })
+
+  // 1.2.9 row 44 (AC-B05, N9-121): the app copy of the group-name rule and the topic literals join the drift pins.
+  test("1.2.9 B05 drift: the app copy of the group-name rule and the topic literals equal desktop and the host", async () => {
+    const app = (await import(join(import.meta.dir, "..", "..", "..", "..", "app", "src", "pages", "session", "swarm", "mission-command-model.ts"))) as Record<string, any>
+    const samples = ["DEMS", "Kemenkeu", "Research 2026", "DEMS​", "DEMS.", " DEMS", "docs", "DOCS", "a/b", "a\\b", ".x", "x".repeat(60), "x".repeat(61), "é", "é", "A B", "‮abc", ""]
+    for (const name of samples) expect(`${JSON.stringify(name)} ${app.groupNameOk(name)}`).toBe(`${JSON.stringify(name)} ${ipc.groupNameOk(name)}`)
+    expect(app.GROUP_NAME_PATTERN.source).toBe(ipc.GROUP_NAME_PATTERN.source)
+    expect(app.GROUP_NAME_PATTERN.flags).toBe(ipc.GROUP_NAME_PATTERN.flags)
+    expect(app.RESERVED_GROUP_NAMES).toEqual(ipc.RESERVED_GROUP_NAMES)
+    expect(app.PLACEMENT_TOPIC).toBe(ipc.PLACEMENT_TOPIC)
+    expect(app.TIDY_TOPIC).toBe(ipc.TIDY_TOPIC)
+    const read = (...parts: string[]) => readFileSync(join(import.meta.dir, "..", "..", "..", "..", ...parts), "utf8")
+    const host = "datum-studio/src"
+    const validate = read(host, "store", "mission", "validate.ts")
+    const tools = read(host, "mcp-host", "mission", "mission-tools.ts")
+    const types = read(host, "store", "mission", "types.ts")
+    for (const [file, text] of [["validate.ts", validate], ["types.ts", types]] as const) {
+      expect(`${file} ${text.includes('"project-placement"')}`).toBe(`${file} true`)
+      expect(`${file} ${text.includes('"project-tidy"')}`).toBe(`${file} true`)
+    }
+    // mission-tools.ts quotes only the placement topic; its tool description names the tidy topic unquoted.
+    expect(tools.includes('"project-placement"')).toBe(true)
+    expect(tools.includes("project-tidy")).toBe(true)
+    expect(read("app", "src", "pages", "session", "swarm", "mission-model.ts").includes('"project-placement"')).toBe(true)
+  })
 })
 
 describe("1.2.8 row 46: the rehome caller (nonce header, local server only)", () => {

@@ -96,7 +96,7 @@ export const DIAGRAM_ALIASES: Readonly<Record<string, Readonly<Record<string, st
 /** Swarm 1.2.6 row 48 (T-11, 01e §3.2/§6.1): extra clause after `for "<alias>" use "direction" (TB, LR)`. */
 export const DIRECTION_ALIAS_CLAUSE = "direction berlaku untuk family flow; nilai rankdir TB/LR sama, RL/BT tidak didukung";
 /** Swarm 1.2.8 row 52 (VIS-0a, 01f §4.1): `orientation` keeps naming `direction`; for swimlane lanes it is lane_orientation. */
-export const LANE_ORIENTATION_CLAUSE = 'for swimlane lanes use "lane_orientation" (horizontal, vertical)';
+const LANE_ORIENTATION_CLAUSE = 'for swimlane lanes use "lane_orientation" (horizontal, vertical)';
 
 function decode(seg: string): string {
   return seg.replace(/~1/g, "/").replace(/~0/g, "~");

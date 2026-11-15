@@ -26,10 +26,12 @@ const M = store.missions
 type S = Record<string, any>
 const row = (id: string) => ({ id, phase: "implementation", kind: "implementation", title: `Row ${id}`, agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: `implementation/${id}.md`, verification: "tests pass" })
 const dec = (id: string, text: string) => ({ id, by: "user", date: "2026-11-12", text })
+/** 1.2.9 row 50c (C46): the U decisions model the person, so they are stored from an attested request. */
+const PERSON = { attested: true }
 const session = { sessionId: "mcp-87", agentId: "swarm", fileRoot: "/private/tmp/claude-501/row87" }
 
 async function approvedMission(id: string) {
-  await store.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row87" }, rows: [row("1"), row("2")], decisions: [dec("U1", "User approves the blueprint")] } as never))
+  await store.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row87" }, rows: [row("1"), row("2")], decisions: [dec("U1", "User approves the blueprint")] } as never, PERSON))
   // added while still a draft: part of the approved blueprint, never drift
   await store.transaction(async (t) => M.updateRows(t, id, [{ id: "1a", add: row("1a") } as never]))
   await store.transaction(async (t) => M.approve(t, id, "U1"))
@@ -45,7 +47,7 @@ describe("row 87 MC-09: drift in studio_mission_get", () => {
 
   test("store: a draft mission has an empty drift", async () => {
     const MI = "2026-11-12_mc09-draft"
-    await store.transaction(async (t) => M.create(t, { id: MI, title: "Draft", type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row87" }, rows: [row("1")], decisions: [dec("U1", "x")] } as never))
+    await store.transaction(async (t) => M.create(t, { id: MI, title: "Draft", type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row87" }, rows: [row("1")], decisions: [dec("U1", "x")] } as never, PERSON))
     await store.transaction(async (t) => M.updateRows(t, MI, [{ id: "2", add: row("2") } as never]))
     expect((M.get(MI)!.derived as S).drift).toEqual({ count: 0, rows: [], dropped: [] })
   })
@@ -53,9 +55,9 @@ describe("row 87 MC-09: drift in studio_mission_get", () => {
   test("store: rows added after approval are listed with their decision ids; dropped rows too", async () => {
     const MI = "2026-11-12_mc09-added"
     await approvedMission(MI)
-    await store.transaction(async (t) => M.recordDecision(t, MI, dec("U2", "Add row 3: missing migration") as never))
-    await store.transaction(async (t) => M.recordDecision(t, MI, dec("U3", "Add row 4: per-row decision") as never))
-    await store.transaction(async (t) => M.recordDecision(t, MI, dec("U4", "Drop row 2: merged into row 1") as never))
+    await store.transaction(async (t) => M.recordDecision(t, MI, dec("U2", "Add row 3: missing migration") as never, PERSON))
+    await store.transaction(async (t) => M.recordDecision(t, MI, dec("U3", "Add row 4: per-row decision") as never, PERSON))
+    await store.transaction(async (t) => M.recordDecision(t, MI, dec("U4", "Drop row 2: merged into row 1") as never, PERSON))
     await store.transaction(async (t) => M.updateRows(t, MI, [{ id: "3", add: row("3") } as never], { decision: "U2" }))
     await store.transaction(async (t) => M.updateRows(t, MI, [{ id: "4", add: { ...row("4"), decision: "U3" } } as never]))
     await store.transaction(async (t) => M.updateRows(t, MI, [{ id: "2", status: "dropped", note: "merged into row 1" } as never], { decision: "U4" }))
@@ -75,7 +77,7 @@ describe("row 87 MC-09: drift in studio_mission_get", () => {
   test("tool: studio_mission_get returns derived.drift and names it in the text", async () => {
     const MI = "2026-11-12_mc09-tool"
     await approvedMission(MI)
-    await store.transaction(async (t) => M.recordDecision(t, MI, dec("U2", "Add row 5") as never))
+    await store.transaction(async (t) => M.recordDecision(t, MI, dec("U2", "Add row 5") as never, PERSON))
     await store.transaction(async (t) => M.updateRows(t, MI, [{ id: "5", add: row("5") } as never], { decision: "U2" }))
     const tool = missionTools(store, { log: () => {} }).find((t) => t.name === "studio_mission_get")! as S
     const res = (await tool.call({ mission: MI }, session)) as S

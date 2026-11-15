@@ -86,6 +86,8 @@ function mission(id: string, type: string, rows: MissionRowInput[], over: Partia
 }
 
 const U1 = { id: "U1", by: "user" as const, date: "2026-11-07", text: "User approves the blueprint (full autonomy)" }
+/** 1.2.9 row 50c (C46): the person's by: user decisions are written from an attested request (S9-06 store sink). */
+const PERSON = { attested: true }
 const C1 = { id: "C1", by: "controller" as const, date: "2026-11-07", text: "Controller notes the plan" }
 
 const store = await openStore("main")
@@ -209,7 +211,7 @@ const FR = "2026-11-07_feature-a"
 
 describe("approve, dependencies and status transitions", () => {
   test("approve needs rows and a user decision", async () => {
-    await tx((t) => M.create(t, mission("2026-11-07_empty", "feature-release", [], { decisions: [U1] })))
+    await tx((t) => M.create(t, mission("2026-11-07_empty", "feature-release", [], { decisions: [U1] }), PERSON))
     await refused("approve without rows", tx((t) => M.approve(t, "2026-11-07_empty", "U1")), "MISSION_EMPTY")
     await tx((t) =>
       M.create(
@@ -217,6 +219,7 @@ describe("approve, dependencies and status transitions", () => {
         mission(FR, "feature-release", [row("1", "implementation", "implementation"), row("2", "implementation", "implementation", { deps: ["1:B"] }), row("3", "implementation", "test", { deps: ["1:C"] }), row("4", "verification", "review", { deps: ["2:B", "3:B"] })], {
           decisions: [U1, C1],
         }),
+        PERSON,
       ),
     )
     await refused("approve without decision", tx((t) => M.approve(t, FR, undefined)), "DECISION_REQUIRED")
@@ -311,8 +314,8 @@ describe("superseded-by and many-to-many sessions", () => {
   test("a cancelled mission names the mission that supersedes it", async () => {
     const OLD = "2026-11-06_swarm_1_1_4_patch"
     const NEW = "2026-11-06_swarm_1_2_0_datum_installer"
-    await tx((t) => M.create(t, mission(NEW, "feature-release", [row("1", "identification", "intake")], { decisions: [U1] })))
-    await tx((t) => M.create(t, mission(OLD, "feature-release", [row("1", "implementation", "fix")], { decisions: [{ id: "U3", by: "user", date: "2026-11-06", text: "1.2.0 replaces the 1.1.4 patch" }] })))
+    await tx((t) => M.create(t, mission(NEW, "feature-release", [row("1", "identification", "intake")], { decisions: [U1] }), PERSON))
+    await tx((t) => M.create(t, mission(OLD, "feature-release", [row("1", "implementation", "fix")], { decisions: [{ id: "U3", by: "user", date: "2026-11-06", text: "1.2.0 replaces the 1.1.4 patch" }] }), PERSON))
     await refused("cancel without decision", tx((t) => M.setStatus(t, OLD, "cancelled", { supersededBy: NEW })), "DECISION_REQUIRED")
     await refused("superseded by itself", tx((t) => M.setStatus(t, OLD, "cancelled", { decision: "U3", supersededBy: OLD })), "SUPERSEDE_TARGET")
     await refused("superseded by unknown", tx((t) => M.setStatus(t, OLD, "cancelled", { decision: "U3", supersededBy: "2026-11-06_nope" })), "SUPERSEDE_TARGET")
@@ -350,7 +353,7 @@ const RS = "2026-11-07_research-c57"
 
 describe("C57 entities", () => {
   test("a decision request with two options + recommended blocks its row until answered once", async () => {
-    await tx((t) => M.create(t, mission(RS, "research", [row("1", "research", "research"), row("2", "synthesis", "synthesis", { deps: ["1:C"] })], { decisions: [U1] })))
+    await tx((t) => M.create(t, mission(RS, "research", [row("1", "research", "research"), row("2", "synthesis", "synthesis", { deps: ["1:C"] })], { decisions: [U1] }), PERSON))
     await tx((t) => M.approve(t, RS, "U1"))
     const req = await tx((t) =>
       M.requestDecision(
@@ -375,7 +378,7 @@ describe("C57 entities", () => {
     await refused("blocked row starts while the request is open", tx((t) => M.updateRows(t, RS, [{ id: "2", status: "running" }])), "DECISION_PENDING")
     await refused("answer with an option not offered", tx((t) => M.answerDecision(t, RS, "D-07", { option: "C", by: "user", decisionId: "U2" })), "OPTION_UNKNOWN")
     await refused("request with one option", tx((t) => M.requestDecision(t, RS, { id: "D-08", question: "q", options: [{ id: "A", label: "a", consequence: "c" }] })), "SCHEMA_INVALID")
-    const ans = await tx((t) => M.answerDecision(t, RS, "D-07", { option: "A", by: "user", decisionId: "U2" }))
+    const ans = await tx((t) => M.answerDecision(t, RS, "D-07", { option: "A", by: "user", decisionId: "U2" }, PERSON))
     expect([ans.request.status, ans.request.answer, ans.decision.id, ans.decision.by, ans.released]).toEqual(["answered", { option: "A", by: "user", decision: "U2" }, "U2", "user", ["2"]])
     expect(ans.decision.text).toBe("Which data source does the synthesis use? -> Official statistics (D-07)")
     await refused("second answer", tx((t) => M.answerDecision(t, RS, "D-07", { option: "B", by: "user", decisionId: "U3" })), "DECISION_REQUEST_CLOSED")
@@ -439,7 +442,7 @@ const LK = "2026-11-07_locks"
 
 describe("findings, locks, reports and malformed records", () => {
   test("shared-resource lock: one holder across missions, released then taken", async () => {
-    await tx((t) => M.create(t, mission(LK, "feature-release", [row("28", "implementation", "implementation", { resources: ["lockfile"] })], { decisions: [U1] })))
+    await tx((t) => M.create(t, mission(LK, "feature-release", [row("28", "implementation", "implementation", { resources: ["lockfile"] })], { decisions: [U1] }), PERSON))
     await tx((t) => M.approve(t, LK, "U1"))
     await tx((t) => M.updateRows(t, RS, [{ id: "1", acquire: ["lockfile"] }]))
     const d = await refused("second holder of lockfile", tx((t) => M.updateRows(t, LK, [{ id: "28", acquire: ["lockfile"] }])), "LOCK_HELD")
@@ -474,7 +477,7 @@ describe("findings, locks, reports and malformed records", () => {
     const gtv = await g.transaction((t) => g.pinBuiltinVersion(t, builtinFile()))
     await refused("work report without a mission id", g.transaction((t) => g.createDocument(t, newDoc(gtv.id, { contract: { kind: "agentWorkReport", status: "complete" } }))), "MISSION_REQUIRED")
     await refused("work report for an unknown mission", g.transaction((t) => g.createDocument(t, newDoc(gtv.id, { missionFolder: "2026-11-07_none", missionDocKey: "row-1", contract: { kind: "agentWorkReport" } }))), "MISSION_NOT_FOUND")
-    await g.transaction(async (t) => g.missions.create(t, mission("2026-11-07_guarded", "debug", [row("1", "reproduce", "reproduce")], { decisions: [U1] })))
+    await g.transaction(async (t) => g.missions.create(t, mission("2026-11-07_guarded", "debug", [row("1", "reproduce", "reproduce")], { decisions: [U1] }), PERSON))
     const linked = await g.transaction((t) => g.createDocument(t, newDoc(gtv.id, { missionFolder: "2026-11-07_guarded", missionDocKey: "row-1", contract: { kind: "agentWorkReport", status: "draft" } })))
     expect(g.missions.get("2026-11-07_guarded")!.mission.rows[0]!.reports!.map((r) => r.documentId)).toEqual([linked.id])
     const client = await g.transaction((t) => g.createDocument(t, newDoc(gtv.id, {})))
@@ -489,7 +492,7 @@ describe("findings, locks, reports and malformed records", () => {
     await refused("mission id with a space", tx((t) => M.create(t, mission("swarm 1.2.0", "debug", []))), "SCHEMA_INVALID")
     await refused("U decision by the controller", tx((t) => M.recordDecision(t, RS, { id: "U5", by: "controller", date: "2026-11-07", text: "x" })), "SCHEMA_INVALID")
     await refused("host field createdAt", tx((t) => M.create(t, { ...mission("2026-11-07_bad-host", "debug", []), createdAt: "2026-11-07T00:00:00Z" } as never)), "FIELD_READ_ONLY")
-    await refused("decision id twice", tx((t) => M.recordDecision(t, RS, U1)), "DECISION_ID_TAKEN")
+    await refused("decision id twice", tx((t) => M.recordDecision(t, RS, U1, PERSON)), "DECISION_ID_TAKEN")
     let msg = ""
     try {
       await store.transaction(async (t) => {

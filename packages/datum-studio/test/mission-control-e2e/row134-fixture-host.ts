@@ -16,6 +16,7 @@ import { mkdirSync } from "node:fs"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { personCaller } from "../mission-tools/_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -70,6 +71,9 @@ type S = Record<string, any>
 const mod = await import(path.join(PKG, "src", "mcp-host", "index.ts"))
 const RELEASE = "1.2.1"
 const TOKEN = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("")
+// 1.2.9 row 50c (C46, C51): a per-launch Mission Control key, as desktop lifecycle.ts gives the real host and client;
+// the harness's desktop client gets it from READY, and the person's U1 and owner instruction carry it.
+const MISSION_CONTROL_KEY = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("")
 const store = await mod.openHostStore(STORE, { release: RELEASE, logFile: LOG, missionGuard: true })
 mod.configureTemplateSource({ templatesDir: path.join(PKG, "templates"), assetRepoRoot: VENDOR, release: RELEASE })
 const hostLog = (level: string, source: string, message: string, context?: Record<string, unknown>) => {
@@ -78,6 +82,7 @@ const hostLog = (level: string, source: string, message: string, context?: Recor
 const server = await mod.startStudioHostServer({
   store,
   token: TOKEN,
+  missionControlKey: MISSION_CONTROL_KEY,
   hostname: "127.0.0.1",
   port: 0,
   log: hostLog,
@@ -96,6 +101,14 @@ async function call(name: string, args: Record<string, unknown>): Promise<S> {
   const r = await client.callTool({ name, arguments: args })
   const out = (r.structuredContent ?? {}) as S
   if (r.isError || out.ok === false) throw new Error(`fixture: ${name} refused: ${JSON.stringify(out).slice(0, 1200)}`)
+  return out
+}
+
+/** 1.2.9 row 50c (C46): what the person records (by: user decision, owner instruction) goes as an attested request. */
+const personRaw = personCaller({ url: server.url, token: TOKEN, cwd: PROJECT, agent: "claude", key: MISSION_CONTROL_KEY, fetchImpl: realFetch })
+async function asPerson(name: string, args: Record<string, unknown>): Promise<S> {
+  const out = (await personRaw(name, args)) as S
+  if (out.ok === false) throw new Error(`fixture: ${name} refused: ${JSON.stringify(out).slice(0, 1200)}`)
   return out
 }
 
@@ -263,7 +276,7 @@ const FIXTURES: Fixture[] = [
 const manifest: S[] = []
 const t0 = performance.now()
 for (const f of FIXTURES) {
-  await call("studio_mission_create", {
+  await asPerson("studio_mission_create", {
     mission: {
       id: f.id,
       title: f.title,
@@ -282,20 +295,19 @@ for (const f of FIXTURES) {
   for (const r of f.rows) await walk(f.id, r.id, r.to, { note: r.note, checkpoint: r.checkpoint })
   for (const d of f.docs.filter((x) => !x.beforeDone)) docs.push(await deliverable(f.id, d.docKey, d.title, d.verified))
   const requested = await call("studio_mission_request_decision", { mission: f.id, request: { id: "D-1", ...f.request } })
+  // Row 50c: the agent's report from the agent's client, then the owner's instruction from the attested request (same order).
   await call("studio_mission_update_row", {
     mission: f.id,
-    messages: [
-      { from: "agent", to: "controller", kind: "report", text: `${f.rows.find((r) => r.to === "running")?.title ?? "work"} started`, row: f.rows.find((r) => r.to === "running")?.id ?? "1" },
-      { from: "owner", to: "controller", kind: "instruction", text: "Keep the scope to this release" },
-    ],
+    messages: [{ from: "agent", to: "controller", kind: "report", text: `${f.rows.find((r) => r.to === "running")?.title ?? "work"} started`, row: f.rows.find((r) => r.to === "running")?.id ?? "1" }],
   })
+  await asPerson("studio_mission_update_row", { mission: f.id, messages: [{ from: "owner", to: "controller", kind: "instruction", text: "Keep the scope to this release" }] })
   if (f.finalStatus) await call("studio_mission_set_status", { mission: f.id, to: f.finalStatus })
   manifest.push({ id: f.id, type: f.type, title: f.title, request: requested.id ?? "D-1", docs })
 }
 const generatedMs = Math.round(performance.now() - t0)
 await client.close()
 
-process.stdout.write(`READY ${JSON.stringify({ url: server.url, token: TOKEN, project: PROJECT, store: STORE, missions: manifest, mutation: MUTATION || null, generatedMs })}\n`)
+process.stdout.write(`READY ${JSON.stringify({ url: server.url, token: TOKEN, missionControlKey: MISSION_CONTROL_KEY, project: PROJECT, store: STORE, missions: manifest, mutation: MUTATION || null, generatedMs })}\n`)
 
 const stop = async () => {
   await server.close()

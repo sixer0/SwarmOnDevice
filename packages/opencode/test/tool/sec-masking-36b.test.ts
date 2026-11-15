@@ -1,7 +1,7 @@
 // Row 36b (Swarm 1.2.6): SEC-01, SEC-03, SEC-20. Since row 36 every read runs in autonomous mode without asking (U12), so
 // what a read prints must keep secret values masked (U16). Every secret here is synthetic and lives in a temporary project,
 // the test home (`Global.Path.home`) or the test data folder (`Global.Path.data`); the real home folder is never read.
-import { afterEach, describe, expect } from "bun:test"
+import { afterAll, afterEach, describe, expect } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Effect, Layer } from "effect"
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
@@ -10,6 +10,7 @@ import { Global } from "@opencode-ai/core/global"
 import { Config } from "@/config/config"
 import { ShellTool } from "../../src/tool/shell"
 import { ReadTool } from "../../src/tool/read"
+import { Secrets } from "../../src/tool/secrets"
 import { provideInstance, testInstanceStoreLayer, tmpdirScoped, disposeAllInstances } from "../fixture/fixture"
 import { Agent } from "../../src/agent/agent"
 import { Truncate } from "@/tool/truncate"
@@ -46,6 +47,8 @@ const it = testEffect(
 afterEach(async () => {
   await disposeAllInstances()
 })
+// AC-B09: what the reads here taught `Secrets.learn` is forgotten before the next file in this process runs.
+afterAll(() => Secrets.resetForTests())
 
 const ctx = {
   sessionID: SessionID.make("ses_sec36b"),

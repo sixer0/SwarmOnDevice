@@ -48,7 +48,7 @@ const SYNTH: Record<NewKind, { bad: string; clean: string }> = {
 
 describe("T-03 gate: DIAGRAM_FAIL_KINDS 6 -> 9 (N-007)", () => {
   test("the three T-03 kinds fail FIGURE_FIT; edgeCross / edgeCollinear stay report-only", () => {
-    expect(DIAGRAM_FAIL_KINDS.size).toBe(13) // 1.2.8 row 55c (INTENT, C133): + frameOutside; row 58b (INTENT, C134): + labelCollision; row 68a (INTENT, C166): + edgeOutside, edgeEndOffNode
+    expect(DIAGRAM_FAIL_KINDS.size).toBe(16) // 1.2.8 row 55c (INTENT, C133): + frameOutside; row 58b (INTENT, C134): + labelCollision; row 68a (INTENT, C166): + edgeOutside, edgeEndOffNode; 1.2.9 row 31 (AC-A09, INTENT): + edgeAlongOutline; row 32 (AC-A10a, INTENT): + edgeOverHeader; row 33 (AC-A10b, INTENT): + edgeDoublesBack
     for (const k of NEW) expect(DIAGRAM_FAIL_KINDS.has(k)).toBe(true)
     expect(DIAGRAM_FAIL_KINDS.has("edgeCross")).toBe(false)
     expect(DIAGRAM_FAIL_KINDS.has("edgeCollinear")).toBe(false)

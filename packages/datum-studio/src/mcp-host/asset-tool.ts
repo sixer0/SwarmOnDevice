@@ -30,7 +30,7 @@ import { assetRefOf, decodeImageDetailed, storeAsset } from "../../vendor/src/li
 import { McpToolError } from "../../vendor/scripts/studio/mcp/safety"
 import { docById } from "./local-api/db.ts"
 import { assetMetadataWarning, readAssetFile } from "./local-api/routes/r18-asset-path.ts"
-import type { HostToolExtension, HostToolSession } from "./tool-table.ts"
+import { sessionLogRef, type HostToolExtension, type HostToolSession } from "./tool-table.ts"
 
 type Rec = Record<string, unknown>
 export type AssetToolLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Rec) => void
@@ -42,10 +42,9 @@ const KEYS: ReadonlySet<string> = new Set(["path", "dataBase64", "documentId"])
 const MAX_MESSAGE = 300
 
 const DESCRIPTION = [
-  "Upload one PNG or JPEG image into the Studio asset store and get its sha256 reference. Give exactly one of `path` (absolute path to a .png/.jpg/.jpeg file inside the project folder of this session) or `dataBase64` (base64 or a data:image/png|jpeg;base64 URI).",
-  "For images above ~6 MiB use `path` (an MCP message is capped at 8 MiB). Limits: 20 MiB, 20,000 px per side, 80 MP. SVG, GIF and other types are refused (ASSET_TYPE_UNSUPPORTED): export the figure as PNG first.",
-  "The same bytes uploaded again return the same sha256 with created:false. The result reports embedded metadata (GPS, EXIF, PNG text); Studio stores the bytes unchanged.",
-  'Reference the asset in a block as {"type":"image","asset":"sha256:<hex>","caption":"...","source":"Sumber: ..."} or in Markdown as ![caption](sha256:<hex> "Sumber: <tool and input file>"). The caption carries no "Gambar n.m" number.',
+  "Store one PNG or JPEG in Studio; get its sha256 reference. Give `path` (a .png/.jpg/.jpeg file inside the project folder of this session) or `dataBase64`; above ~6 MiB use `path` (an MCP message is capped at 8 MiB). Other types: ASSET_TYPE_UNSUPPORTED.",
+  "The result reports embedded metadata (GPS, EXIF, PNG text); Studio stores the bytes unchanged.",
+  'Cite it as {"type":"image","asset":"sha256:<hex>",...} or ![caption](sha256:<hex> "Sumber: ...").',
 ].join(" ")
 
 const INPUT_SCHEMA: Rec = {
@@ -142,7 +141,7 @@ export function assetHostExtension(opts: AssetHostExtensionOptions = {}): HostTo
         correlationId: cid,
         tool: ASSET_TOOL_NAME,
         agentId: session.agentId,
-        sessionId: session.sessionId,
+        ...sessionLogRef(session),
         source: typeof a.path === "string" ? "path" : a.dataBase64 !== undefined ? "base64" : "none",
         ...(typeof a.path === "string" ? { file: path.basename(a.path) } : {}),
         ...(typeof a.documentId === "string" ? { documentId: a.documentId.slice(0, ID_MAX) } : {}),

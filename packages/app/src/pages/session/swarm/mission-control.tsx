@@ -33,6 +33,11 @@ export type MissionControlMount = {
   prompt: (text: string) => Promise<unknown>
   /** `(p) => tabs().open(file.tab(p))` */
   openFile?: (path: string) => void
+  /**
+   * 1.2.9 row 56b: `(abs) => platform.revealPath(abs)` (showItemInFolder only, never opens, U3); absent = the
+   * deliverables list's own platform reveal. Also what Open does for a line found outside the session's folder.
+   */
+  revealFile?: (absPath: string) => void
   /** 1.2.8 row 46 (01d §4): whether any of these sessions is busy (the placement's join/new wait for idle) */
   sessionBusy?: (sessions: string[]) => boolean
   /**
@@ -54,6 +59,32 @@ export function missionStageWidth(sectionWidth: number) {
   return missionLayoutOf(sectionWidth) === "sidebar" ? sectionWidth - 300 - 8 : sectionWidth
 }
 
+/**
+ * 1.2.9 row 57 (AC-C09, 01c §3.10 rule (b)): the side panel scroll of the dock's Files. With an open decision in the
+ * panel (its options block is rendered), scrolling the deliverables into view pushed the options out of the sheet at
+ * 1024x640, where no click could reach them. Then the panel scrolls toward the deliverables only as far as keeps the
+ * options' top edge inside it: `scrollTop = clamp(target, 0, actionsTop)`. Without one, the deliverables come into view
+ * as before. Self-contained (DOM globals only), so the Chromium half of N9-138 runs this same function.
+ * @internal test seam
+ */
+export function missionFilesScroll(aside: HTMLElement, deliverables: HTMLElement) {
+  const actions = aside.querySelector<HTMLElement>("[data-mission-decision-actions]")
+  if (!actions) {
+    deliverables.scrollIntoView?.({ block: "nearest" })
+    return
+  }
+  const box = aside.getBoundingClientRect()
+  // Offset of an element's top from the top of the panel's scrolled content (padding included).
+  const offset = (el: HTMLElement) => el.getBoundingClientRect().top - box.top - aside.clientTop + aside.scrollTop
+  const padding = Number.parseFloat(getComputedStyle(aside).paddingTop) || 0
+  const target = Math.max(
+    0,
+    offset(deliverables) - aside.clientHeight + Math.min(deliverables.offsetHeight, aside.clientHeight),
+  )
+  const actionsTop = Math.max(0, offset(actions) - padding)
+  aside.scrollTop = Math.min(target, actionsTop)
+}
+
 const FAINT = "text-v2-text-text-faint [font-weight:440]"
 const DOCK_BUTTON =
   "rounded-[6px] bg-v2-background-bg-base px-2 py-1 text-v2-text-text-base [font-weight:500] [box-shadow:inset_0_0_0_1px_var(--v2-border-border-strong)]"
@@ -68,6 +99,7 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
   const [sheet, setSheet] = createSignal(false)
   const [row, setRow] = createSignal<string>()
   let deliverables: HTMLDivElement | undefined
+  let aside: HTMLElement | undefined
 
   // A row selection belongs to one mission; a selection of a row that left the mission is dropped.
   createEffect(on(() => state.selected, () => setRow(undefined), { defer: true }))
@@ -104,7 +136,18 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
   }
   const showFiles = () => {
     setSheet(true)
-    deliverables?.scrollIntoView?.({ block: "nearest" })
+    if (aside && deliverables) missionFilesScroll(aside, deliverables)
+    else deliverables?.scrollIntoView?.({ block: "nearest" })
+  }
+  // 1.2.9 row 56b (AC-C08a residual, C53): deliverables found in another folder than the session's (a root mission seen
+  // from a group) are revealed in that folder. The file tab only reads inside the session's folder, so Open shows the
+  // file where it is (reveal, never run) instead of opening a same-named path under the session's folder.
+  const folder = () => state.deliverablesFolder
+  const revealElsewhere = (path: string) => {
+    const dir = folder()
+    if (!dir) return
+    const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/"
+    props.revealFile?.(`${dir.replace(/[\\/]+$/, "")}${sep}${path.split("/").join(sep)}`)
   }
 
   return (
@@ -305,6 +348,9 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
                     layout contract in mission-command.tsx. gap-1.5 is the command card's own spacing (its wrappers are
                     display: contents); mt-1.5 keeps the 12 px before the deliverables. */}
                 <aside
+                  ref={(el) => {
+                    aside = el
+                  }}
                   data-mission-side
                   inert={sheetMode() && !sheet() ? true : undefined}
                   class={
@@ -336,7 +382,10 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
                       mission={mission()}
                       selected={row()}
                       onSelectAgent={selectAgent}
-                      openFile={props.openFile}
+                      openFile={folder() ? revealElsewhere : props.openFile}
+                      openPane={folder() ? () => {} : undefined}
+                      revealFile={props.revealFile}
+                      directory={folder()}
                     />
                   </div>
                 </aside>

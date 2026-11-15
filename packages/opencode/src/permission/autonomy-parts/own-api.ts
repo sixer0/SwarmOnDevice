@@ -845,6 +845,7 @@ export function callsOwnServer(input: Input) {
  * `autonomy/*`, `pty*`, `saved-command/*`, `workspace*`, and every route added later. The list may shrink in review; it
  * never grows without a security re-review (01_specs §3.3 rule 1). `/memory/vault` is row 43e's route (AC-OBSe).
  */
+/** @internal test seam */
 export const OWN_API_READ_ROUTES: readonly { readonly route: string; readonly pattern: RegExp }[] = [
   "/global/health",
   "/global/agents",

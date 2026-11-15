@@ -22,7 +22,8 @@ let rig: Rig
 
 beforeAll(async () => {
   rig = await startRig("write-path")
-  const mission = await rig.h.call("studio_mission_create", {
+  // 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request).
+  const mission = await rig.h.person("studio_mission_create", {
     mission: {
       id: M,
       title: "Row 165D mission",

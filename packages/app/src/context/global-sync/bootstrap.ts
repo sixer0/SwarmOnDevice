@@ -114,6 +114,40 @@ export const loadGlobalConfigQuery = (scope: ServerScope, sdk: OpencodeClient, p
     },
   })
 
+/**
+ * 1.2.9 row 55a (AC-C07b): re-runs the load of a directory whose earlier load failed (its folder was gone or a file sat
+ * at its path, and the person pressed Restore). Without this nothing loads it again in the same app run: the per-server
+ * QueryClient does not refetch on mount, so the queries the child store mounted keep their failure, and a failed
+ * `bootstrapDirectory` leaves the store at "partial", while `child()` only loads at "loading". Only this directory's
+ * failed queries are reset (plus failed server-wide ones, `[scope, null, ...]`, which no directory owns); other
+ * directories keep their state. Resolves to whether anything was re-run.
+ */
+export async function reloadFailedDirectory(input: {
+  queryClient: QueryClient
+  scope: ServerScope
+  directory: string
+  child?: [Store<State>, SetStoreFunction<State>]
+  bootstrap?: (directory: string) => Promise<void> | void
+}) {
+  const failed = input.queryClient
+    .getQueryCache()
+    .findAll({
+      predicate: (query) =>
+        query.state.status === "error" &&
+        query.queryKey[0] === input.scope &&
+        (query.queryKey[1] === input.directory || query.queryKey[1] === null),
+    })
+    .map((query) => query.queryKey)
+  await Promise.all(
+    failed.map((queryKey) => input.queryClient.resetQueries({ queryKey, exact: true }).catch(() => undefined)),
+  )
+  const child = input.child
+  if (!child || child[0].status === "complete") return failed.length > 0
+  child[1]("status", "loading")
+  await input.bootstrap?.(input.directory)
+  return true
+}
+
 type ProjectApi = {
   readonly list: () => Promise<ProjectListOutput>
   readonly current: (input?: ProjectCurrentInput) => Promise<ProjectCurrentOutput>

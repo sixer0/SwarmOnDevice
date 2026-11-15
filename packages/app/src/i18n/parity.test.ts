@@ -157,8 +157,12 @@ const pluralCategories = new Map(
 //     two more for row 24a (C99): the placement retry card `session.mission.placement.unplaced`/`.retry`, ending at 324;
 //     one more for row 24b (C128): the rehome refusal text `session.mission.placement.otherFolder`, ending at 325;
 //     two more for row 24c (C176): the rehome refusal texts `session.mission.placement.rootUnknown`/`.folderMissing`, ending at 327.
+//   - 1.2.9 (row 24 of docs/2026-11-14_swarm_1_2_9_patch, AC-C04, N9-045): the tidy result becomes two plural forms
+//     (`session.mission.tidy.done.one`/`.other`, replacing `session.mission.tidy.done`) and the rehome approval refusal text
+//     `session.mission.move.error.approval` is added (EN and ID only): +2 +1 -1, ending at 329;
+//     1.2.9 row 79b (C112): the tidy approve button `session.mission.tidy.approve` becomes `.one`/`.other` (EN and ID only), +2 -1, ending at 330.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// three-hundred-and-twenty-eighth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// three-hundred-and-thirty-first entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -449,12 +453,15 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.mission.tidy.description",
   "session.mission.tidy.row",
   "session.mission.tidy.stay",
-  "session.mission.tidy.approve",
+  "session.mission.tidy.approve.one",
+  "session.mission.tidy.approve.other",
   "session.mission.tidy.decline",
   "session.mission.tidy.progress",
-  "session.mission.tidy.done",
+  "session.mission.tidy.done.one",
+  "session.mission.tidy.done.other",
   "session.mission.tidy.stopped",
   "session.mission.move.done",
+  "session.mission.move.error.approval",
   "session.mission.move.error.sourceMissing",
   "session.mission.move.error.targetExists",
   "session.mission.move.error.outsideRoot",
@@ -529,7 +536,7 @@ describe("i18n parity", () => {
         const extra = Object.keys(target)
           .filter((key) => !Object.hasOwn(source, key))
           .sort()
-        const expected = pluralFamilies(source)
+        const expected = requiredPluralFamilies(source, target, locale)
           .flatMap((key) => (pluralCategories.get(locale) ?? []).map((category) => `${key}.${category}`))
           .sort()
         expect({ domain: domain.name, locale, missing, extra }).toEqual({
@@ -550,7 +557,7 @@ describe("i18n parity", () => {
         const mismatched = Object.keys(source).filter(
           (key) => Object.hasOwn(target, key) && placeholders(source[key]).join() !== placeholders(target[key]).join(),
         )
-        const pluralMismatched = pluralFamilies(source).flatMap((key) =>
+        const pluralMismatched = requiredPluralFamilies(source, target, locale).flatMap((key) =>
           (pluralCategories.get(locale) ?? [])
             .map((category) => `${key}.${category}`)
             .filter((variant) => placeholders(source[`${key}.other`]).join() !== placeholders(target[variant]).join()),
@@ -596,9 +603,9 @@ describe("i18n plural parity", () => {
   test("locale-specific categories exist and preserve count placeholders", async () => {
     for (const domain of domains.slice(0, 2)) {
       const source = await dictionary(domain.source)
-      const families = pluralFamilies(source)
       for (const locale of domain.locales) {
         const target = await dictionary(domain.target(locale))
+        const families = requiredPluralFamilies(source, target, locale)
         const missing = families.flatMap((key) =>
           (pluralCategories.get(locale) ?? [])
             .map((category) => `${key}.${category}`)
@@ -639,6 +646,15 @@ function isDictionary(value: unknown): value is Record<string, string> {
 
 function placeholders(value: string) {
   return Array.from(value.matchAll(/{{\s*([^}]+?)\s*}}/g), (match) => match[1]).sort()
+}
+
+// 1.2.9 row 24 (N9-040/041): a plural family whose `.other` form is presence-exempt is not required in a locale that does not
+// carry it yet, so the extra CLDR categories (`zero`, `two`, `few`, `many`) are not demanded of 60 locales for a family that
+// lives in `en` and `id` only. Once a locale carries the family, every category is enforced again.
+function requiredPluralFamilies(source: Record<string, string>, target: Record<string, string>, locale: string) {
+  return pluralFamilies(source).filter(
+    (family) => !exemptFromPresence(`${family}.other`, locale) || Object.hasOwn(target, `${family}.other`),
+  )
 }
 
 function pluralFamilies(dictionary: Record<string, string>) {

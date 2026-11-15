@@ -11,6 +11,7 @@ import path from "node:path"
 import { useStudioEnv } from "../ported/_env"
 useStudioEnv()
 import { connect, reply } from "../ported/mcp/mcp-harness"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 const MAX = 8192 // DOCUMENT_STATUS_TEXT_MAX_BYTES (register N-042)
 const PENDING = "RENDER_VERIFY_PENDING" // literal so the red run fails on assertions
@@ -147,7 +148,7 @@ describe("row 78b: real host — status shows the verdict studio_render stored",
     await resetEnvCache()
     store = await mod.openHostStore(STORE, { release: "1.2.6", logFile: LOG, missionGuard: true })
     mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.6" })
-    host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+    host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
     const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
     const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
     c = new Client({ name: "row78b-test", version: "0" })
@@ -158,7 +159,8 @@ describe("row 78b: real host — status shows the verdict studio_render stored",
       }),
     )
     const row = { id: "1", phase: "implementation", kind: "implementation", title: "Row 1", agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "implementation/1.md", verification: "tests pass", review: "gate" }
-    const cr = await callFull("studio_mission_create", { mission: { id: M, title: "Row 78b mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-12", text: "go" }] } })
+    // 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request).
+    const cr = { sc: await personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })("studio_mission_create", { mission: { id: M, title: "Row 78b mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-12", text: "go" }] } }) }
     expect(cr.sc.ok).toBe(true)
   }, 120_000)
 

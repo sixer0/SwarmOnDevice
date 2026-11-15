@@ -1,0 +1,123 @@
+{
+ "$comment": "Swarm 1.2.9 row 23, register N9-153, used by row 32 (AC-A10a, test N9-109) and the Q1 sweep. Swimlane with two pools (`Kolam X`, `Kolam Y`), two lanes and two phases; the `mulai` connector (a -> b, edge index 0, a via at col 0 row 1) runs back up past the pool and lane header texts. Preview path. Measured at BASE d4282fcfd8 (RB): at 128 mm the link run at x 48.0 touches the `KOLAM X` header box [47.92, 12.23, 58.74, 14.60] and the `LAJUR 2` box (grown by 0.3 mm), lineThroughText reports `FASE 1` only; at 166 mm the run is at x 50.67 and the boxes start at 53.26 (negative control). No connector runs along a node outline (A09 kept apart). Synthetic labels only.",
+ "figure": {
+  "caption": "Alur sintetis konektor pada teks kepala kolam.",
+  "source": "Sumber sintetis uji row 23 (Swarm 1.2.9).",
+  "spec": {
+   "family": "swimlane",
+   "labels_verified": true,
+   "lane_orientation": "vertical",
+   "jumps": "off",
+   "phases": [
+    {
+     "id": "f1",
+     "label": "Fase 1"
+    },
+    {
+     "id": "f2",
+     "label": "Fase 2"
+    }
+   ],
+   "pools": [
+    {
+     "id": "p1",
+     "label": "Kolam X"
+    },
+    {
+     "id": "p2",
+     "label": "Kolam Y"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "a",
+     "label": "Mulai A",
+     "shape": "event_start",
+     "event_type": "message",
+     "class": {
+      "lane": "Lajur 2",
+      "phase": "f1",
+      "pool": "p1"
+     }
+    },
+    {
+     "id": "b",
+     "label": "Tugas B",
+     "shape": "task",
+     "class": {
+      "lane": "Lajur 2",
+      "phase": "f1",
+      "pool": "p1"
+     }
+    },
+    {
+     "id": "c",
+     "label": "Cek C",
+     "shape": "gateway_exclusive",
+     "class": {
+      "lane": "Lajur 2",
+      "phase": "f1",
+      "pool": "p1"
+     }
+    },
+    {
+     "id": "d",
+     "label": "Tunggu D",
+     "shape": "event_intermediate",
+     "event_type": "timer",
+     "class": {
+      "lane": "Lajur 1",
+      "phase": "f2",
+      "pool": "p2"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "a",
+     "to": "b",
+     "kind": "data",
+     "label": "mulai",
+     "route": "orthogonal",
+     "from_side": "bottom",
+     "to_side": "top",
+     "from_slot": 0.5,
+     "to_slot": 0.25,
+     "via": [
+      {
+       "col": 0,
+       "row": 1
+      }
+     ],
+     "arrow_start": "circle",
+     "arrow_start_size": "s",
+     "arrow_end": "triangle",
+     "arrow_end_size": "s",
+     "dash": "solid",
+     "weight": "normal",
+     "label_at": "start"
+    },
+    {
+     "from": "b",
+     "to": "c",
+     "kind": "data",
+     "label": "cek",
+     "route": "straight",
+     "label_at": "middle"
+    },
+    {
+     "from": "c",
+     "to": "d",
+     "kind": "control",
+     "label": "ya",
+     "route": "curved",
+     "dash": "dashed",
+     "weight": "thick",
+     "arrow_end": "open",
+     "label_at": "end"
+    }
+   ],
+   "zones": []
+  }
+ }
+}

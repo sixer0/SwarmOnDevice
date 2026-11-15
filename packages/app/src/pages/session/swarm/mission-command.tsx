@@ -61,11 +61,13 @@ export function MissionCommand(props: {
     refresh: () => props.refresh(),
     prompt: (text) => props.prompt(text),
     t,
+    // 1.2.9 row 24a (AC-C04): the tidy result through the plural lookup (PluralKey N9-043)
+    plural: language.plural,
     onState: (next) => setState(reconcile(next)),
     toast: (text, variant = "success") => (props.toast ? props.toast(text, variant) : showToast({ title: text, variant })),
   })
 
-  const options = createMemo(() => (props.model.decision ? decisionOptions(props.model.decision, t) : []))
+  const options = createMemo(() => (props.model.decision ? decisionOptions(props.model.decision, t, language.plural) : []))
   const placement = () => !!props.model.decision && isPlacement(props.model.decision)
   // 1.2.8 row 46b (01d §5): the tidy list renders in the same card; approve waits like join/new.
   const tidy = () => !!props.model.decision && isTidy(props.model.decision)

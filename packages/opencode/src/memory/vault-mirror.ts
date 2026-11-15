@@ -20,6 +20,7 @@ import { Flock } from "@opencode-ai/core/util/flock"
 import { Vault } from "@opencode-ai/core/vault"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { Secrets } from "@/tool/secrets"
+import { replaceHome, withoutPaths } from "@/util/log-path"
 import { MemoryLearn } from "./learn"
 import { MISSION_ID_PATTERN } from "./memory"
 
@@ -27,15 +28,18 @@ type Item = ProjectMemory.Item
 type Ref = ProjectMemory.MemoryRef
 
 /** N8-110: a report larger than this is a link-only note (L9), never cut. */
+/** @internal test seam */
 export const MIRROR_REPORT_MAX_BYTES = 262144
 
 /** N8-438 (SR8-12, C7): every generated file name except the hub `index.md`. Checked before any path join. */
+/** @internal test seam */
 export const VAULT_NOTE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,59}-[0-9a-f]{6}\.md$/
 
 /**
  * N8-439 (SR8-13): fence info strings that stay as they are in a report copy (Obsidian core only highlights them).
  * Any other info string, `mermaid`, `dataview`, `dataviewjs` included, becomes `text`.
  */
+/** @internal test seam */
 export const MIRROR_PLAIN_FENCE_LANGS: readonly string[] = [
   "",
   "text",
@@ -79,17 +83,19 @@ export const MIRROR_PLAIN_FENCE_LANGS: readonly string[] = [
  * schema `string` 1-64, `contract/schema/diagram.schema.ts`), so it has no enumerated set beyond these words: its
  * own fixtures use `TERBATAS`, and `SANGAT RAHASIA` contains `RAHASIA` as a whole word.
  */
+/** @internal test seam */
 export const MIRROR_CLASSIFIED_WORDS = ["TERBATAS", "RAHASIA", "CONFIDENTIAL", "RESTRICTED"] as const
 
 export type Language = "en" | "id"
-export type NoteKind = "note" | "mission" | "report" | "skill"
+type NoteKind = "note" | "mission" | "report" | "skill"
 
 /** A final report as `readReport` found it: its text, too large (L9), or missing/outside/unreadable (L11). */
-export type ReportSource =
+type ReportSource =
   | { readonly status: "ok"; readonly text: string }
   | { readonly status: "large" }
   | { readonly status: "missing" }
 
+/** @internal test seam */
 export interface RenderInput {
   /** The memory store key (`swarm-key`); a hash or project id, never a path. */
   readonly key: string
@@ -104,7 +110,7 @@ export interface RenderInput {
   readonly reports?: Readonly<Record<string, ReportSource>>
 }
 
-export interface RenderedFile {
+interface RenderedFile {
   /** Relative to the project folder: `index.md`, `notes/<name>.md`, `missions/…`, `reports/…`, `skills/…`. */
   readonly path: string
   readonly content: string
@@ -215,6 +221,7 @@ function fold(source: string, max: number): string {
  * - `mission`: `id` = the mission id; `report`: `id` = the mission id, slug `<mission slug>-report` (the slug is cut
  *   first so the suffix survives) with the mission's id part; `skill`: `id` = the skill name.
  */
+/** @internal test seam */
 export function noteName(kind: NoteKind, id: string, source?: string): string | undefined {
   const h6 = kind === "note" && HEX6.test(id) ? id : sha256(id).slice(0, 6)
   const raw = kind === "note" ? (source ?? "").split("\n")[0]! : id
@@ -273,15 +280,14 @@ function refLabel(ref: Ref) {
   return ref.line ? `${refPath(ref.path)}:${ref.line}` : refPath(ref.path)
 }
 
-/** Defence in depth (G2-01): the home folder, raw or Markdown-escaped, becomes `~` in every rendered note. */
+/**
+ * Defence in depth (G2-01): the home folder, raw or Markdown-escaped, becomes `~` in every rendered note. One home
+ * source and one boundary rule with the log scrubber (1.2.9 row 67d, C79: `replaceHome`).
+ */
 function withoutHome(text: string) {
   const home = Global.Path.home
   if (!home || !path.isAbsolute(home) || path.dirname(home) === home) return text
-  const literal = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const tail = "(?![A-Za-z0-9_-])"
-  return text
-    .replace(new RegExp(literal(escapeText(home)) + tail, "g"), escapeText("~"))
-    .replace(new RegExp(literal(home) + tail, "g"), "~")
+  return replaceHome(replaceHome(text, escapeText(home), escapeText("~"), true), home, "~")
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -425,6 +431,7 @@ function neutraliseNestedFence(line: string): string {
  * same info string rule (S-02). Then every line passes the secret masking: `Secrets.scrubText`, and a line
  * that still looks secret becomes `[hidden]` (masked, never cut: the line count is kept).
  */
+/** @internal test seam */
 export function neutraliseReport(text: string): string {
   const lines = text.replace(/\r\n?/g, "\n").split("\n")
   const out: string[] = []
@@ -458,10 +465,18 @@ export function neutraliseReport(text: string): string {
     .map((line) => {
       const masked = Secrets.scrubText(line)
       // The placeholder itself (`password=[hidden:password]`) is not a secret; what is left around it is checked.
-      return MemoryLearn.looksSecret(masked.replace(PLACEHOLDERS, "")) ? "[hidden]" : masked
+      return breakTemplater(MemoryLearn.looksSecret(masked.replace(PLACEHOLDERS, "")) ? "[hidden]" : masked)
     })
     .join("\n")
 }
+
+/**
+ * N9-058 (1.2.9 row 41, AC-B02): every Templater opener `<%` (`<%*`, `<%+`, `<%_`, `<%-` alike) becomes `<` U+200B `%`,
+ * so Templater, which reads the raw note text, finds no tag in a code span, a fence body or info string, or a generated
+ * frontmatter value. Plain text already has `&lt;`. Applied after masking (the masking sees the original text);
+ * idempotent, since `<\u200b%` holds no `<%`. Closers `%>` are left alone: without an opener there is no tag.
+ */
+const breakTemplater = (text: string) => text.replace(/<%/g, "<\u200b%")
 
 // ---------------------------------------------------------------------------------------------------------------
 // Report reading (01c §3.3 report rule)
@@ -469,7 +484,7 @@ export function neutraliseReport(text: string): string {
 /**
  * The report path of an index entry: group 5 of `INDEX_TEXT_PATTERN` (N8-005), else the first ref's path.
  */
-export function reportPath(item: Item): string | undefined {
+function reportPath(item: Item): string | undefined {
   const match = ProjectMemory.INDEX_TEXT_PATTERN.exec(item.text)
   if (match) return match[5]
   const ref = item.refs?.[0]
@@ -480,6 +495,7 @@ export function reportPath(item: Item): string | undefined {
  * Reads a final report for the mirror: only a regular `.md` file, not a symlink, whose real path lies inside the real
  * project root, at most `MIRROR_REPORT_MAX_BYTES`. Anything else is `missing` (L11) or `large` (L9). Reads only.
  */
+/** @internal test seam */
 export async function readReport(projectRoot: string, relPath: string): Promise<ReportSource> {
   const missing = { status: "missing" } as const
   if (typeof relPath !== "string" || relPath === "" || relPath.includes("\0") || path.isAbsolute(relPath)) return missing
@@ -547,6 +563,7 @@ function frontmatter(input: {
 }
 
 /** sha256 of the body below the frontmatter, first 16 hex (N8-433). */
+/** @internal test seam */
 export const bodyHash = (body: string) => sha256(body).slice(0, 16)
 
 const sharesRef = (a: Item, b: Item) =>
@@ -666,7 +683,9 @@ export function render(input: RenderInput): RenderResult {
   const emit = (note: Note | undefined, meta: Omit<Parameters<typeof frontmatter>[0], "hash" | "key">, lines: string[]) => {
     const body = withoutHome(lines.join("\n") + "\n")
     const file = note ? `${note.dir}/${note.name}.md` : "index.md"
-    files.push({ path: file, content: withoutHome(frontmatter({ ...meta, key: input.key, hash: bodyHash(body) })) + body })
+    // S9-09: generated frontmatter values (`aliases` holds the project name) get the same Templater break (N9-058).
+    const top = breakTemplater(withoutHome(frontmatter({ ...meta, key: input.key, hash: bodyHash(body) })))
+    files.push({ path: file, content: top + body })
   }
   const head = (untrusted: boolean | undefined) => [hubLink, "", L.banner, "", ...(untrusted ? [L.untrusted, ""] : [])]
   const section = (title: string, notes: readonly Note[]) => (notes.length ? ["", title, ...notes.map((n) => `- ${link(n)}`)] : [])
@@ -789,11 +808,14 @@ export type SyncCode = "VAULT_PATH_UNSAFE" | "VAULT_NOTE_FOREIGN"
 const foreignLogged = new Set<string>()
 
 /** Points in one write where a test hook can change the disk (SR8-12 swap test); never set in production. */
+/** @internal test seam */
 export type SyncStage = "temp" | "written" | "rename"
 
 /** The file system calls `sync` makes; tests pass a wrapped `fs/promises` to count or interfere. */
+/** @internal test seam */
 export type SyncIO = Pick<typeof fs, "lstat" | "realpath" | "mkdir" | "chmod" | "readdir" | "readFile" | "open" | "rename" | "unlink">
 
+/** @internal test seam */
 export interface SyncInput {
   /** The memory store key (`Memory.storeKey`); also names the folder with `directory`. */
   readonly key: string
@@ -814,6 +836,7 @@ export interface SyncInput {
   readonly log?: (entry: { readonly code: SyncCode; readonly path: string; readonly reason: string }) => void
 }
 
+/** @internal test seam */
 export interface SyncResult {
   /** ok; disabled; absent = no vault root; foreign-hub = `index.md` is the person's; unsafe = `VAULT_PATH_UNSAFE`. */
   readonly status: "ok" | "disabled" | "absent" | "foreign-hub" | "unsafe"
@@ -832,17 +855,6 @@ const HUB = "index.md"
 const SUBFOLDERS: readonly string[] = ["notes", "missions", "reports", "skills"]
 /** A temp file of an interrupted run: `.<name>.swarm-<pid>-<8 hex>.tmp`. */
 const TEMP_FILE = /^\.[a-z0-9][a-z0-9.-]{0,80}\.swarm-\d{1,10}-[0-9a-f]{8}\.tmp$/
-
-/** A log reason without absolute paths: the vault root becomes `<vault>`, any other absolute path `<path>`. */
-function withoutPaths(reason: string, rootReal: string) {
-  return reason
-    .split(rootReal)
-    .join("<vault>")
-    .replace(/'(?:[A-Za-z]:)?[\\/][^']*'/g, "'<path>'")
-    .replace(/(?:[A-Za-z]:)?[\\/][^\s'"`,;)]*/g, (match, offset: number, text: string) =>
-      offset > 0 && /[\w.~>-]/.test(text[offset - 1]!) ? match : "<path>",
-    )
-}
 
 class Unsafe extends Error {
   constructor(
@@ -950,7 +962,11 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
       : path.basename(at)
   }
   const unsafe = (at: string, reason: string) => {
-    input.log?.({ code: "VAULT_PATH_UNSAFE", path: shown(at), reason: withoutPaths(reason, rootReal) })
+    input.log?.({
+      code: "VAULT_PATH_UNSAFE",
+      path: shown(at),
+      reason: withoutPaths(reason, [{ path: rootReal, label: "<vault>" }]),
+    })
     return result("unsafe", notCopied)
   }
   if (path.dirname(folderPath) !== mirror || !Vault.contains(rootReal, folderPath)) return unsafe(folderPath, "folder name")
@@ -1151,10 +1167,11 @@ async function syncLocked(input: SyncInput, folder: string): Promise<SyncResult>
 // replaces any pending one (T2 index entry, T3 mission close). Two runs of one store are serialised by `sync`'s lock.
 
 /** N8-111: one mirror refresh per burst of store writes. */
+/** @internal test seam */
 export const MIRROR_DEBOUNCE_MS = 2000
 
 /** A scheduled run: returns the sync result, or undefined when nothing ran (memory off, store disabled, failure). */
-export type MirrorJob = () => Promise<SyncResult | undefined>
+type MirrorJob = () => Promise<SyncResult | undefined>
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 const listeners = new Set<(key: string, result: SyncResult) => void>()
@@ -1187,6 +1204,7 @@ export function schedule(key: string, job: MirrorJob, options: { readonly immedi
 }
 
 /** Called after every completed run (tests, diagnostics). Returns the unsubscribe function. */
+/** @internal test seam */
 export function onRun(listener: (key: string, result: SyncResult) => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
@@ -1201,6 +1219,7 @@ export function rememberLanguage(key: string, language: Language): void {
  * The project folder's hub as it is on disk: whether an owned hub exists and its `swarm-lang`. No write; a hub that is
  * missing, not a regular file, foreign or unreadable counts as absent.
  */
+/** @internal test seam */
 export async function hubState(directory: string, key: string): Promise<{ exists: boolean; language?: Language }> {
   const rootReal = await Vault.realRoot()
   if (!rootReal) return { exists: false }

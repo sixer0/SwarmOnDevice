@@ -11,7 +11,7 @@ import { described } from "./metadata"
 // agent's PUT/POST/DELETE under /skill (row 28, PERSON_ONLY_WRITES), and every write handler here needs the desktop
 // app's per-launch nonce, whoever calls (a server holding none refuses every caller).
 
-export const SkillPaths = {
+const SkillPaths = {
   skill: "/skill",
   source: "/skill/source",
   drafts: "/skill/drafts",
@@ -107,7 +107,7 @@ export const SkillSaved = Schema.Struct({
   }),
 }).annotate({ identifier: "SkillSaved" })
 
-export const SkillSavePayload = Schema.Struct({
+const SkillSavePayload = Schema.Struct({
   scope: WriteScope,
   name: Schema.String,
   content: Schema.String,
@@ -127,7 +127,7 @@ export const SkillDraft = Schema.Struct({
   replaces: Schema.Boolean,
 }).annotate({ identifier: "SkillDraft" })
 
-export const SkillDraftApprovePayload = Schema.Struct({
+const SkillDraftApprovePayload = Schema.Struct({
   scope: WriteScope,
   acceptCommands: Schema.optional(Schema.Boolean).annotate({
     description: "Set only after the person's second, explicit confirm; required when the draft runs shell commands",

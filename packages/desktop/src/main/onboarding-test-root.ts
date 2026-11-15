@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdirSync, rmSync, statSync } from "node:fs"
+import { mkdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { isAbsolute, join } from "node:path"
 
@@ -52,15 +52,4 @@ export function documentsDir() {
 export function defaultProjectDir() {
   const documents = documentsDir()
   return documents ? join(documents, DEFAULT_PROJECT_DIR) : undefined
-}
-
-/** The Default Project root only when it exists as a directory (what the sidecar may be told, AC-PROJa). */
-export function existingDefaultProjectDir() {
-  const dir = defaultProjectDir()
-  if (!dir || !isAbsolute(dir)) return undefined
-  try {
-    return statSync(dir).isDirectory() ? dir : undefined
-  } catch {
-    return undefined
-  }
 }

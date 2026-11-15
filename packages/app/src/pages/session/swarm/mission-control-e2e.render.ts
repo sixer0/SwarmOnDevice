@@ -79,6 +79,8 @@ type S = Record<string, any>
 type Manifest = {
   url: string
   token: string
+  /** 1.2.9 row 50c (C46, C51): the fixture host's per-launch Mission Control key (lifecycle.ts gives it to the client). */
+  missionControlKey: string
   project: string
   store: string
   missions: Array<{ id: string; type: string; title: string; docs: Array<{ documentId: string; docKey: string; verified: boolean; outputs: string[] }> }>
@@ -147,7 +149,7 @@ function buildBridge() {
   // The client's AbortSignal comes from happy-dom's AbortController here, so the timeout signal is dropped for the
   // native call; the 5 s timeout itself is row 127's (mission-client.test.ts).
   const nativeFetch = (u: string, init: S) => Bun.fetch(u, { method: init.method, headers: init.headers, body: init.body, redirect: init.redirect })
-  client = createMissionControlClient({ url: fx.url, token: fx.token, callerCwd: MC_CWD, running: () => child?.exitCode === null, fetch: nativeFetch })
+  client = createMissionControlClient({ url: fx.url, token: fx.token, missionControlKey: fx.missionControlKey, callerCwd: MC_CWD, running: () => child?.exitCode === null, fetch: nativeFetch })
   const handlers = new Map<string, (event: unknown, input: unknown) => Promise<S>>()
   const mainFrame = { url: RENDERER_URL }
   const sender = { mainFrame }
@@ -618,6 +620,7 @@ describe("row 134: four fixture missions from the real host, through the desktop
     expect(hostErr).not.toContain("FETCH_CALLED")
     expect(hostErr).not.toContain("MUTATION_NOT_APPLIED")
     expect(document.body.innerHTML).not.toContain(fx.token)
+    expect(document.body.innerHTML).not.toContain(fx.missionControlKey) // row 50c: the key never reaches the DOM either
     const errors = hostErr.split("\n").filter((l) => l.startsWith("HOST_ERROR"))
     quote("host error lines", errors.length)
   })

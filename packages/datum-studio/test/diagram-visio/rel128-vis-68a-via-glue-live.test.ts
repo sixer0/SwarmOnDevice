@@ -44,6 +44,9 @@ const CHECK: Record<string, string> = {
   frameOutside: "GEOM_FRAME_OUTSIDE",
   edgeOutside: "GEOM_EDGE_OUTSIDE",
   edgeEndOffNode: "GEOM_EDGE_END",
+  edgeAlongOutline: "GEOM_EDGE_ALONG", // Swarm 1.2.9 row 31 (AC-A09, INTENT): B1 TIDAK along Data E now fails FIGURE_FIT
+  edgeOverHeader: "GEOM_EDGE_HEADER", // Swarm 1.2.9 row 32 (AC-A10a, INTENT): B1 at 128 mm, the via leg over KOLAM X and LAJUR 2 now fails FIGURE_FIT
+  edgeDoublesBack: "GEOM_EDGE_DOUBLE_BACK", // Swarm 1.2.9 row 33 (AC-A10b, INTENT): B4 at 128 and 166 mm, the MASUK spur at the clamped via now fails FIGURE_FIT
 }
 
 // ── the preview a stored block gets ───────────────────────────────────────────────────────────────────────────────
@@ -259,5 +262,101 @@ describe("68a-5 the preview lists every defect FIGURE_FIT fails on", () => {
         expect(missing).toEqual([])
       })
     }
+  }
+})
+
+// ── 6. box ends head-on after a detour (Swarm 1.2.9 row 30, AC-A08, N9-107 box cases; C10(a): non-legacy flows only) ─
+/** Box-like nodes as drawn: `<rect data-node>` boxes [x0, y0, x1, y1] by node id. */
+function rectNodes(svg: string): Map<string, [number, number, number, number]> {
+  const out = new Map<string, [number, number, number, number]>()
+  for (const m of svg.matchAll(/<rect\b[^>]*data-node="([^"]+)"[^>]*>/g)) {
+    if (out.has(m[1])) continue
+    const x = Number(attr(m[0], "x")), y = Number(attr(m[0], "y"))
+    out.set(m[1], [x, y, x + Number(attr(m[0], "width")), y + Number(attr(m[0], "height"))])
+  }
+  return out
+}
+/**
+ * Every connector end that lands on a box side (within 0.5 mm of it, inside its span), with whether its last visible
+ * piece runs along that side's normal (into the box at the end, out of it at the start) — independent of the router.
+ */
+function boxEnds(svg: string): Array<{ link: number; node: string; side: string; normal: boolean }> {
+  const boxes = rectNodes(svg)
+  return [...links(svg)].flatMap(([i, l]) =>
+    [l.pts, [...l.pts].reverse()].flatMap((pts, k) => {
+      const e = pts[pts.length - 1]
+      const v = lastPiece(pts)
+      const len = Math.hypot(v[0], v[1])
+      if (len < 1e-9) return []
+      return [...boxes].flatMap(([id, b]) => {
+        const sides: Array<[string, number, Pt]> = [
+          ["left", Math.abs(e[0] - b[0]), [1, 0]],
+          ["right", Math.abs(e[0] - b[2]), [-1, 0]],
+          ["top", Math.abs(e[1] - b[1]), [0, 1]],
+          ["bottom", Math.abs(e[1] - b[3]), [0, -1]],
+        ]
+        const inSpan = e[0] >= b[0] - 0.5 && e[0] <= b[2] + 0.5 && e[1] >= b[1] - 0.5 && e[1] <= b[3] + 0.5
+        const near = sides.filter((s) => s[1] < 0.5).sort((p, q) => p[1] - q[1])[0]
+        if (!inSpan || !near) return []
+        // the inward normal for the end piece; a start piece (read backwards) also moves into the box when read this way
+        const n = near[2]
+        const normal = Math.abs(v[0] * n[1] - v[1] * n[0]) / len < 1e-3 && v[0] * n[0] + v[1] * n[1] > 0
+        return [{ link: i, node: id, side: `${near[0]}${k ? "@start" : "@end"}`, normal }]
+      })
+    }),
+  )
+}
+const ROW158 = (await import("../figure-capacity/fixtures")) as J
+const buildMod = (await import("../../vendor/src/lib/studio/engine/diagram/build")) as J
+const swimlane6 = (): string => buildMod.buildDiagramSvg(structuredClone(ROW158.AT_CAPACITY.swimlane6.spec), { release: true }).svg as string
+// Swarm 1.2.9 row 30b (C63): non-legacy `sld` parity figures whose link 2 (cb1 -> load, ups -> rak) ran along the box
+// side after the detour (arrowTangent 0 deg); red at BASE and at HEAD before the fix, green after.
+const PARITY = path.join(import.meta.dir, "..", "ported", "_fixtures", "tests", "parity", "fixtures")
+const parity = (file: string, ptr: Array<string | number> = []): J =>
+  ptr.reduce<J>((o, k) => o[k], JSON.parse(readFileSync(path.join(PARITY, file), "utf8")) as J)
+const SLD_SPECS: Array<[string, () => J]> = [
+  ["diagram/dg_sld_good.json", () => parity("diagram/dg_sld_good.json")],
+  ["diagram/garis_a/good_sld.json", () => parity("diagram/garis_a/good_sld.json")],
+  ["doc/doc_serah_handover.json ch1 s1 b1", () => parity("doc/doc_serah_handover.json", ["chapters", 1, "sections", 1, "blocks", 1, "spec"])],
+]
+const SLD: Array<[string, () => J, boolean]> = SLD_SPECS.flatMap(([n, spec]) =>
+  [true, false].map((release) => [`${n} @${release ? "rel" : "draft"}`, spec, release] as [string, () => J, boolean]),
+)
+
+describe("68a-6 a non-legacy box end enters (and leaves) its side head-on after a detour; arrowTangent never on a box end", () => {
+  const cases: Array<[string, () => Promise<string>]> = [
+    ...(["B1_carry_pools_phases", "C1_via"] as const).flatMap((n) => WIDTHS.map((w) => [`${n} @${w}`, async () => (await preview(n, w)).svg] as [string, () => Promise<string>])),
+    ["row158 swimlane6 @release", async () => swimlane6()],
+    ...SLD.map(([n, spec, release]) => [`sld ${n}`, async () => buildMod.buildDiagramSvg(spec(), { release }).svg as string] as [string, () => Promise<string>]),
+  ]
+  for (const [name, svgOf] of cases) {
+    test(`${name}: every box end on its normal; no arrowTangent on a box node`, async () => {
+      const svg = await svgOf()
+      const ends = boxEnds(svg)
+      expect(ends.length).toBeGreaterThan(0)
+      expect(ends.filter((x) => !x.normal)).toEqual([])
+      // the lint names the node by its id (`data-node`); a tangent on an outline shape (diamond, circle) is not a box end
+      const boxes = rectNodes(svg)
+      expect(kinds(svg).filter((d) => d.kind === "arrowTangent" && boxes.has(String(d.other)))).toEqual([])
+    })
+  }
+  // Known limit (C10(a), RN-12): a legacy flow (family `flow`, no `direction`) keeps its 1.2.5 route bytes, so a box end
+  // that runs along its side after a detour stays as it was. Pinned: B4's connector paths at both widths.
+  const B4_LINKS: Record<number, string> = {
+    128: "c21ad9a5deb8236d",
+    166: "0f967cc6cbaf80fb",
+  }
+  test("synthetic: the box-end check sees an end running along a box side (and passes the head-on twin)", () => {
+    const along = svgOf([box("a", 20, 5, 20, 10), link("M 30 15 L 30 30 L 70 30 L 70 50 L 50 50"), box("b", 40, 50, 20, 10)].join("\n"))
+    const head = svgOf([box("a", 20, 5, 20, 10), link("M 30 15 L 30 30 L 50 30 L 50 50"), box("b", 40, 50, 20, 10)].join("\n"))
+    expect(boxEnds(along).filter((x) => !x.normal).map((x) => `${x.node} ${x.side}`)).toEqual(["b top@end"])
+    expect(boxEnds(head).filter((x) => !x.normal)).toEqual([])
+  })
+  for (const w of WIDTHS) {
+    test(`B4_carry_flow @${w} (legacy flow): connector paths keep their bytes`, async () => {
+      const p = await preview("B4_carry_flow", w)
+      const d = [...p.svg.matchAll(/<path d="([^"]+)"[^>]*data-mark="link"[^>]*\/>/g)].map((m) => m[1]).join("\n")
+      expect(new Bun.CryptoHasher("sha256").update(d).digest("hex").slice(0, 16)).toBe(B4_LINKS[w])
+    })
   }
 })

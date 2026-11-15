@@ -407,3 +407,82 @@ describe("AC-SKd drafts and SR8-08", () => {
     expect((await listSkills(tmp.path)).some((item) => item.name === "hidden-draft")).toBe(false)
   })
 })
+
+// 1.2.9 row 48a (contributor to AC-B08; 01b AT-B08 "Server pin"; S9-08). A characterisation pin, green at BASE by
+// design: the server refuses an untrusted command-running draft with SKILL_SHELL_UNTRUSTED before it asks for the
+// second confirm (SKILL_SHELL_UNCONFIRMED), with or without `acceptCommands`, and without the desktop nonce the
+// approve is refused SKILL_PERSON_ONLY before any validation. No refusal writes anything, so the app's first approve
+// call (48b) has no side effect.
+describe("1.2.9 AC-B08 server order (48a, S9-08): SKILL_SHELL_UNTRUSTED before SKILL_SHELL_UNCONFIRMED", () => {
+  const runnerText = () => skillText("syn129-runner", "Runs a synthetic listing", "!`ls`")
+
+  // Every path under the project's `.swarm` folder, sorted: equal before and after means nothing was written. Taken
+  // after a first GET, because booting the instance writes `.swarm/.gitignore` on its own.
+  async function swarmListing(dir: string) {
+    const root = path.join(dir, ".swarm")
+    if (!existsSync(root)) return [] as string[]
+    const entries = await fs.readdir(root, { recursive: true })
+    return entries.map(String).sort()
+  }
+
+  async function draftListed(dir: string) {
+    const drafts = (await call(dir, "GET", "/skill/drafts", { nonce: null })).json() as any[]
+    return drafts.some((item) => item.name === "syn129-runner" && item.runsCommands === true)
+  }
+
+  test("untrusted project: approve without and with acceptCommands gives SKILL_SHELL_UNTRUSTED, not UNCONFIRMED; nothing written", async () => {
+    await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
+    const folder = await writeDraft(tmp.path, "syn129-runner", runnerText(), { untrusted: true })
+    ProjectTrust.assumeTrustedForTests(false)
+    expect(await draftListed(tmp.path)).toBe(true)
+    const before = await swarmListing(tmp.path)
+    for (const body of [{ scope: "project" }, { scope: "project", acceptCommands: true }]) {
+      const result = await call(tmp.path, "POST", "/skill/drafts/syn129-runner/approve", { body })
+      const label = `acceptCommands=${String((body as { acceptCommands?: boolean }).acceptCommands)}`
+      expect(`${label} ${result.status}`).toBe(`${label} 403`)
+      expect(result.text).toContain("SKILL_SHELL_UNTRUSTED")
+      expect(result.text).not.toContain("SKILL_SHELL_UNCONFIRMED")
+      expect(await draftListed(tmp.path)).toBe(true)
+      expect(await swarmListing(tmp.path)).toEqual(before)
+    }
+    expect(existsSync(path.join(tmp.path, ".swarm", "skills"))).toBe(false)
+    expect(readFileSync(path.join(folder, "SKILL.md"), "utf8")).toBe(runnerText())
+    expect(approvalLines()).toEqual([])
+  })
+
+  test("S9-08 no nonce: approve is refused SKILL_PERSON_ONLY before validation, nothing written", async () => {
+    await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
+    await writeDraft(tmp.path, "syn129-runner", runnerText(), { untrusted: true })
+    ProjectTrust.assumeTrustedForTests(false)
+    expect(await draftListed(tmp.path)).toBe(true)
+    const before = await swarmListing(tmp.path)
+    for (const nonce of [null, OTHER] as const) {
+      for (const body of [{ scope: "project" }, { scope: "project", acceptCommands: true }]) {
+        const result = await call(tmp.path, "POST", "/skill/drafts/syn129-runner/approve", { body, nonce })
+        const label = `nonce=${nonce === null ? "none" : "other"} acceptCommands=${String((body as { acceptCommands?: boolean }).acceptCommands)}`
+        expect(`${label} ${result.status}`).toBe(`${label} 403`)
+        expect(result.text).toContain("SKILL_PERSON_ONLY")
+        expect(result.text).not.toContain("SKILL_SHELL_UNTRUSTED")
+        expect(result.text).not.toContain("SKILL_SHELL_UNCONFIRMED")
+      }
+    }
+    expect(await draftListed(tmp.path)).toBe(true)
+    expect(await swarmListing(tmp.path)).toEqual(before)
+    expect(approvalLines()).toEqual([])
+  })
+
+  test("trusted project without acceptCommands: SKILL_SHELL_UNCONFIRMED, nothing written", async () => {
+    await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
+    await writeDraft(tmp.path, "syn129-runner", runnerText())
+    ProjectTrust.assumeTrustedForTests(true)
+    expect(await draftListed(tmp.path)).toBe(true)
+    const before = await swarmListing(tmp.path)
+    const result = await call(tmp.path, "POST", "/skill/drafts/syn129-runner/approve", { body: { scope: "project" } })
+    expect(result.status).toBe(400)
+    expect(result.text).toContain("SKILL_SHELL_UNCONFIRMED")
+    expect(result.text).not.toContain("SKILL_SHELL_UNTRUSTED")
+    expect(await draftListed(tmp.path)).toBe(true)
+    expect(await swarmListing(tmp.path)).toEqual(before)
+    expect(approvalLines()).toEqual([])
+  })
+})

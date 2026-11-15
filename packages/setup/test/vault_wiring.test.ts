@@ -404,6 +404,6 @@ describe("vaultSkillFacts — the source row 98 cites", () => {
     expect(f.readsUntrustedEnveloped).toBe(true)
     expect(f.maxNoteBytes).toBe(MAX_NOTE_BYTES)
     expect(f.refusalReasons).toBe(VAULT_REFUSAL_REASONS)
-    expect(VAULT_REFUSAL_REASONS.length).toBe(15)
+    expect(VAULT_REFUSAL_REASONS.length).toBe(16) // 1.2.9 row 40 (B01, INTENT): + classified_content
   })
 })

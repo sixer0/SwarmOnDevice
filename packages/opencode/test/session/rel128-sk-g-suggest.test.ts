@@ -216,7 +216,7 @@ describe("SK-g <suggested_skills> (N8-045)", () => {
 
 describe("OBS-g obsidian system line (N8-122, R20-C26)", () => {
   const LINE =
-    "notes: use swarm-web `vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory)."
+    "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory)."
   sys.instance("the line states the vault rule, only while swarm-web is connected", () =>
     Effect.gen(function* () {
       expect(SystemPrompt.installedTools(["obsidian"], ["swarm-web"])).toBe(

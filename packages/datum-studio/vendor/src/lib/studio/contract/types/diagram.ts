@@ -84,7 +84,7 @@ export interface DiagramEdge {
 }
 
 /** Swarm 1.2.8 row 52 (VIS-0a, N8-258): one bend point in lattice units (figure.lattice of the preview). */
-export interface DiagramViaPoint {
+interface DiagramViaPoint {
   col: number;
   row: number;
 }

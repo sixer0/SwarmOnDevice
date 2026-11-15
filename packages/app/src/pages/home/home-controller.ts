@@ -25,6 +25,7 @@ export type HomeControllerOptions = {
  * (../layout/folder-missing) before it is added. A folder that is gone gets the existing notice (Restore / Choose) and
  * is not added, selected or given a draft; Restore adds it once it is back. Without a notice (web, legacy Home) or on a
  * remote server each folder is added at once, as before. Resolves to whether each folder was added.
+ * @internal test seam
  */
 export function addCheckedProjectFolders(
   notice: FolderMissingNotice | undefined,

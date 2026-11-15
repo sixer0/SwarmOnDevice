@@ -78,7 +78,9 @@ export function refusal(tool: string, code: string, message: string, rawDetails:
     untrusted = untrustedFields(["error.details.deliverables.outputs.checks"])
   }
   // Row 188 (L47): every refusal ends with the next correct call and the skill that holds the sequence.
-  const next = nextCall(code)
+  // 1.2.9 row 50 (N9-003): the hint is tool-aware; create and update_row refused for a by: user decision or an owner
+  // message use the record_decision entry (no third key is registered).
+  const next = nextCall(code, tool === "studio_mission_create" || tool === "studio_mission_update_row" ? "studio_mission_record_decision" : tool)
   const error = { code, message, details, next, skill: MISSION_SKILL }
   return {
     content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(brief).slice(0, 4000)}${block ? `\nperiksa (per keluaran RENDER_UNVERIFIED(U24)):\n${block}` : ""}\nnext: ${next}` }],

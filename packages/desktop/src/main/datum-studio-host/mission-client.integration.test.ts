@@ -2,7 +2,7 @@
 // packages/datum-studio host server, streamable HTTP on 127.0.0.1, own bun process). Needs the command sandbox off
 // (binds an ephemeral port).
 //
-// Also C125: the host runs first with release "1.2.0", then with STUDIO_RELEASE (1.2.8) over the SAME store, as an
+// Also C125: the host runs first with release "1.2.0", then with STUDIO_RELEASE (1.2.9) over the SAME store, as an
 // upgraded app does; builtin templates must still pin and load (no TEMPLATE_BUILTIN_* line, same pinned versions).
 //
 // No model call: the fixture traps globalThis.fetch (FETCH_CALLED on stderr) and the four tools are store reads/writes.
@@ -30,7 +30,9 @@ const M = "2026-11-07_m127-bridge"
 const IT_SES = "ses_0127b0000001Row127Bridge01"
 const quote = (label: string, v: unknown) => console.log(`[row127] ${label}: ${JSON.stringify(v)}`)
 
-type Host = { child: ChildProcessWithoutNullStreams; url: string; token: string; stderr: () => string }
+// 1.2.9 row 50c (C46, INTENT): the fixture host has a per-launch Mission Control key, as lifecycle.ts gives the real
+// host and the real client; only the person's requests (the client under test, the person's U1) carry it.
+type Host = { child: ChildProcessWithoutNullStreams; url: string; token: string; key: string; stderr: () => string }
 
 async function startHost(release: string): Promise<Host> {
   const child = spawn(BUN, [FIXTURE], {
@@ -67,8 +69,8 @@ async function startHost(release: string): Promise<Host> {
       reject(new Error(`host exited ${code}: ${err.slice(-2000)}`))
     })
   })
-  const [, url, token] = ready.split(" ")
-  return { child, url: url!, token: token!, stderr: () => err }
+  const [, url, token, key] = ready.split(" ")
+  return { child, url: url!, token: token!, key: key!, stderr: () => err }
 }
 
 async function stopHost(h: Host | undefined) {
@@ -80,7 +82,7 @@ async function stopHost(h: Host | undefined) {
 }
 
 /** Test-only raw MCP caller for the fixture set-up (agent "claude", project cwd): NOT the client under test. */
-function raw(h: Host, agent = "claude", cwd = PROJECT) {
+function raw(h: Host, agent = "claude", cwd = PROJECT, key?: string, callerSession?: string) {
   let sid: string | undefined
   let id = 0
   const post = async (body: Record<string, unknown>) => {
@@ -90,6 +92,8 @@ function raw(h: Host, agent = "claude", cwd = PROJECT) {
       "x-studio-caller-cwd": encodeURIComponent(cwd),
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
+      ...(key !== undefined ? { "x-swarm-mission-control-key": key } : {}),
+      ...(callerSession !== undefined ? { "x-studio-caller-session": callerSession } : {}),
     }
     if (sid) headers["mcp-session-id"] = sid
     const r = await fetch(h.url, { method: "POST", headers, body: JSON.stringify(body) })
@@ -152,7 +156,7 @@ beforeAll(async () => {
   pinnedAt120 = pinnedVersions()
   // Run 2: the same store under this build's STUDIO_RELEASE.
   host = await startHost(STUDIO_RELEASE)
-  client = createMissionControlClient({ url: host.url, token: host.token, callerCwd: MC_CWD, running: () => host!.child.exitCode === null })
+  client = createMissionControlClient({ url: host.url, token: host.token, missionControlKey: host.key, callerCwd: MC_CWD, running: () => host!.child.exitCode === null })
 }, 180_000)
 
 afterAll(async () => {
@@ -162,7 +166,10 @@ afterAll(async () => {
 describe("row 127: mission bridge against the real host", () => {
   beforeAll(async () => {
     const call = raw(host!)
-    const created = await call("studio_mission_create", {
+    // The U1 "go" models the person: it is recorded from an attested (key-bearing) request.
+    // 1.2.9 row 52a (C03): mission.sessions links only the calling session, so the create comes from the swarm client with
+    // IT_SES as its caller session (the one case row 52 still links); the session-filtered list below keeps its meaning.
+    const created = await raw(host!, "swarm", PROJECT, host!.key, IT_SES)("studio_mission_create", {
       mission: { id: M, title: "Row 127 bridge mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, sessions: [{ client: "swarm", ref: IT_SES }], rows: [row("1"), row("2", ["1:B"])], decisions: [{ id: "U1", by: "user", date: "2026-11-07", text: "go" }] },
     })
     if (!created.ok) quote("mission create refused", created)
@@ -217,6 +224,8 @@ describe("row 127: mission bridge against the real host", () => {
     expect(again).toMatchObject({ ok: false, code: "DECISION_REQUEST_CLOSED" })
     const g = await raw(host!)("studio_mission_get", { mission: M, include: ["decisions", "requests", "events"] })
     expect(g.requests[0]).toMatchObject({ status: "answered", answer: { option: "B", by: "user", decision: "U2" } })
+    // 1.2.9 row 50 (AC-C01, S9-01): the real desktop client sends the key on every request; the answer is attested.
+    expect(g.requests[0].answer).toMatchObject({ via: "swarm", attested: true })
     const actors = (g.events as Array<{ actor?: string }>).map((e) => e.actor)
     expect(actors).toContain("mission-control")
   })
@@ -258,9 +267,9 @@ describe("row 127: mission bridge against the real host", () => {
   })
 })
 
-describe("C125: STUDIO_RELEASE 1.2.8 over a 1.2.0 store", () => {
+describe("C125: STUDIO_RELEASE 1.2.9 over a 1.2.0 store", () => {
   test("STUDIO_RELEASE follows the app release", () => {
-    expect(STUDIO_RELEASE).toBe("1.2.8")
+    expect(STUDIO_RELEASE).toBe("1.2.9")
   })
 
   test("builtin templates still list and load; no TEMPLATE_BUILTIN_* line; pinned versions unchanged", async () => {

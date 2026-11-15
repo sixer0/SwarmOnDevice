@@ -312,6 +312,7 @@ describe("answer id rule and session handling", () => {
 
 // 1.2.8 row 45c, contributor to AC-SEC05 (SR8-05). CHAR-MC INTENT: the initialize request now carries
 // `x-swarm-mission-control-key` (N8-459); no other request does. Host attestation itself is row 45b.
+// 1.2.9 row 50a (S9-01) supersedes "no other request": every request carries the key (two INTENT flips below).
 describe("SR8-05 per-launch Mission Control key (row 45c)", () => {
   const KEY = "a".repeat(64)
   const HEADER = "x-swarm-mission-control-key"
@@ -320,17 +321,27 @@ describe("SR8-05 per-launch Mission Control key (row 45c)", () => {
     expect((missionClientModule as Record<string, unknown>).MISSION_CONTROL_KEY_HEADER).toBe(HEADER)
   })
 
-  test("the key rides on every initialize (incl. the 404 re-initialise) and on no other request; never in a body", async () => {
+  // 1.2.9 row 50a (AC-C01, S9-01 High) INTENT: attestation is bound to each request, so the key rides on every request
+  // (initialize, notifications/initialized, tools/call, the 404 re-initialise), not only on initialize.
+  test("S9-01: the key rides on every request (incl. the 404 re-initialise); never in a body", async () => {
     const host = fakeHost(() => ({ ok: true, tool: "studio_mission_list", items: [] }), { status: (n, body) => (n === 3 && body.method === "tools/call" ? 404 : undefined) })
     const c = client(host.fetch, { missionControlKey: KEY } as Record<string, unknown>)
     await c.list({ directory: "/a", sessions: ["ses_abc123"] })
+    await c.get({ mission: MISSION })
     const inits = host.calls.filter((x) => x.body.method === "initialize")
     expect(inits).toHaveLength(2)
-    for (const call of host.calls) {
-      if (call.body.method === "initialize") expect(call.headers[HEADER]).toBe(KEY)
-      else expect(call.headers[HEADER]).toBeUndefined()
-      expect(JSON.stringify(call.body)).not.toContain(KEY)
-    }
+    const methods = new Set(host.calls.map((x) => x.body.method))
+    expect([...methods].sort()).toEqual(["initialize", "notifications/initialized", "tools/call"])
+    // Counts and booleans only, so a failure never prints the key.
+    expect(host.calls.filter((call) => call.headers[HEADER] !== KEY).length).toBe(0)
+    expect(host.calls.filter((call) => JSON.stringify(call.body).includes(KEY)).length).toBe(0)
+  })
+
+  test("S9-01: no key configured, no key header on any request", async () => {
+    const host = fakeHost(() => ({ ok: true, tool: "studio_mission_list", items: [] }))
+    await client(host.fetch).list({ directory: "/a", sessions: ["ses_abc123"] })
+    expect(host.calls.length).toBeGreaterThan(0)
+    expect(host.calls.filter((call) => HEADER in call.headers).length).toBe(0)
   })
 
   test("host text and logs never carry the key", async () => {
@@ -419,10 +430,11 @@ describe("SR8-05 per-launch Mission Control key (row 45c)", () => {
       }
       expect(keys[0]).not.toBe(keys[1])
       const key = keys[0] as string
-      // Sent by the mission client at initialize only.
+      // 1.2.9 row 50a (S9-01) INTENT: sent by the mission client on every request, not only at initialize.
       const inits = host.calls.filter((x) => x.body.method === "initialize")
       expect(inits.length).toBeGreaterThan(0)
-      for (const call of host.calls) expect(call.headers[HEADER]).toBe(call.body.method === "initialize" ? key : undefined)
+      expect(host.calls.some((x) => x.body.method === "tools/call")).toBe(true)
+      expect(host.calls.filter((call) => call.headers[HEADER] !== key).length).toBe(0)
       // Grep: never in the host env, the descriptor (datum-studio.env), the logs or the handle.
       const haystack = JSON.stringify(envs) + descriptor + JSON.stringify(logs) + JSON.stringify(Object.keys(first)) + JSON.stringify(process.env)
       for (const k of keys) expect(haystack).not.toContain(k as string)

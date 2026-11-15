@@ -297,7 +297,7 @@ describe("installed tools block: silence (row 236)", () => {
 })
 
 describe("installed tools block: swarm-web lines need `connected` (C76)", () => {
-  const webLines = ["swarm-web `search`", "swarm-web `fetch`", "swarm-web `vault_inbox`"]
+  const webLines = ["swarm-web `search`", "swarm-web `fetch`", "`swarm-web_vault_inbox`"]
 
   for (const [label, map] of [
     ["disabled", { "swarm-web": { status: "disabled" } }],

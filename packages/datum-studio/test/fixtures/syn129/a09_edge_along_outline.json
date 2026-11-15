@@ -1,0 +1,147 @@
+{
+ "$comment": "Swarm 1.2.9 row 23, register N9-152, used by row 31 (AC-A09, test N9-108) and the Q1 sweep. Swimlane, one pool, two lanes: the `tidak` connector (c -> f, `to_side: right`, edge index 1) runs along the right side of the `data_object` polygon `e` (Data E style). `clean_twin` is the same figure with `to_side: left`: the connector runs at x 42.67 and y 89.72, at least 10.66 mm from the `e` outline. Preview path at 128 and 166 mm. Measured at BASE d4282fcfd8 (RB): `figure` edge 1 `M 29.69 31.79 L 42.67 31.79 L 42.67 52.39 L 85.33 52.39 L 85.33 89.72 L 73.33 89.72`, the run at x 85.33 lies on the polygon side x 85.33 (y 59.55-71.44) for 11.89 mm at both widths, preview defects GEOM_EDGE_COLLINEAR only; `clean_twin` 0 mm along any outline, same preview defects. Synthetic labels only.",
+ "figure": {
+  "caption": "Alur sintetis konektor menyusuri garis tepi simpul.",
+  "source": "Sumber sintetis uji row 23 (Swarm 1.2.9).",
+  "spec": {
+   "family": "swimlane",
+   "labels_verified": true,
+   "lane_orientation": "vertical",
+   "jumps": "off",
+   "nodes": [
+    {
+     "id": "c",
+     "label": "Cek C",
+     "shape": "gateway_exclusive",
+     "class": {
+      "lane": "Lajur 1"
+     }
+    },
+    {
+     "id": "d",
+     "label": "Tugas D",
+     "shape": "task",
+     "class": {
+      "lane": "Lajur 2"
+     }
+    },
+    {
+     "id": "e",
+     "label": "Data E",
+     "shape": "data_object",
+     "class": {
+      "lane": "Lajur 2"
+     }
+    },
+    {
+     "id": "f",
+     "label": "Selesai F",
+     "shape": "event_end",
+     "class": {
+      "lane": "Lajur 2"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "c",
+     "to": "d",
+     "kind": "control",
+     "label": "ya"
+    },
+    {
+     "from": "c",
+     "to": "f",
+     "kind": "control",
+     "label": "tidak",
+     "to_side": "right"
+    },
+    {
+     "from": "d",
+     "to": "e",
+     "kind": "data",
+     "label": "simpan"
+    },
+    {
+     "from": "e",
+     "to": "f",
+     "kind": "data",
+     "label": "tutup",
+     "arrow_end": "none"
+    }
+   ]
+  }
+ },
+ "clean_twin": {
+  "caption": "Alur sintetis konektor menjauh dari garis tepi simpul.",
+  "source": "Sumber sintetis uji row 23 (Swarm 1.2.9).",
+  "spec": {
+   "family": "swimlane",
+   "labels_verified": true,
+   "lane_orientation": "vertical",
+   "jumps": "off",
+   "nodes": [
+    {
+     "id": "c",
+     "label": "Cek C",
+     "shape": "gateway_exclusive",
+     "class": {
+      "lane": "Lajur 1"
+     }
+    },
+    {
+     "id": "d",
+     "label": "Tugas D",
+     "shape": "task",
+     "class": {
+      "lane": "Lajur 2"
+     }
+    },
+    {
+     "id": "e",
+     "label": "Data E",
+     "shape": "data_object",
+     "class": {
+      "lane": "Lajur 2"
+     }
+    },
+    {
+     "id": "f",
+     "label": "Selesai F",
+     "shape": "event_end",
+     "class": {
+      "lane": "Lajur 2"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "c",
+     "to": "d",
+     "kind": "control",
+     "label": "ya"
+    },
+    {
+     "from": "c",
+     "to": "f",
+     "kind": "control",
+     "label": "tidak",
+     "to_side": "left"
+    },
+    {
+     "from": "d",
+     "to": "e",
+     "kind": "data",
+     "label": "simpan"
+    },
+    {
+     "from": "e",
+     "to": "f",
+     "kind": "data",
+     "label": "tutup",
+     "arrow_end": "none"
+    }
+   ]
+  }
+ }
+}

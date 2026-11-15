@@ -8,7 +8,7 @@
 // (sidecar.ts prepareSidecarEnv), and the Studio token stays in that 0600 file, never in this environment.
 
 import { lstatSync } from "node:fs"
-import { isAbsolute } from "node:path"
+import { dirname, isAbsolute } from "node:path"
 import { defaultProjectDir } from "./onboarding-test-root"
 
 export const RENDER_SOCKET_KEY = "DATUM_RENDER_SOCKET"
@@ -16,7 +16,7 @@ export const RENDER_SOCKET_KEY = "DATUM_RENDER_SOCKET"
  * N8-443 (AC-PROJa, 1.2.8 row 25): the absolute Default Project root, read by the server's re-home route on every call.
  * Not a secret. Row 68f: set also before the folder exists (first launch), see launchDefaultProjectDir.
  */
-export const DEFAULT_PROJECT_DIR_KEY = "SWARM_DEFAULT_PROJECT_DIR"
+const DEFAULT_PROJECT_DIR_KEY = "SWARM_DEFAULT_PROJECT_DIR"
 export const RENDER_TOKEN_KEY = "DATUM_RENDER_TOKEN"
 
 /**
@@ -26,10 +26,19 @@ export const RENDER_TOKEN_KEY = "DATUM_RENDER_TOKEN"
  * Only a non-folder at that path (a file, a link to a file) is not passed on.
  * Row 68h (S-21, C184): looked at with lstat, so a symlink there (to a folder elsewhere, or dangling so that a later
  * folder fills it) is not passed on either; the server would otherwise take a root outside Documents.
+ * 1.2.9 row 59 (AC-C10b, C7(d), C13 OP-15-3): the Documents folder itself (one level up, never further) is looked at
+ * with lstat too. A linked Documents, also a dangling one, is not passed on: the person then sees "Default Project not
+ * set up" rather than a root that lives somewhere else.
+ * @internal test seam
  */
 export function launchDefaultProjectDir() {
   const dir = defaultProjectDir()
   if (!dir || !isAbsolute(dir)) return undefined
+  try {
+    if (lstatSync(dirname(dir)).isSymbolicLink()) return undefined
+  } catch {
+    // A missing Documents keeps the 1.2.8 answer below (the leaf is ENOENT too, so the path is passed on).
+  }
   try {
     return lstatSync(dir).isDirectory() ? dir : undefined
   } catch (error) {

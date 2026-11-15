@@ -41,6 +41,7 @@ import { base64Encode, checksum } from "@opencode-ai/core/util/encode"
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
 import { ErrorPage } from "@/pages/error"
+import { FolderNoticeBoundary } from "@/pages/layout/folder-missing"
 import { CommentsProvider, useComments } from "@/context/comments"
 import { useCommand } from "@/context/command"
 import { DirectoryDataProvider } from "@/pages/directory-layout"
@@ -179,7 +180,12 @@ export function TargetSessionRouteContent() {
     // when session content falls back to the route error boundary.
     <TargetServerScopedProviders directory={directory} sessionID={() => params.id}>
       <TargetSessionSettingsCommand />
-      <SessionRouteErrorBoundary sessionID={params.id} serverKey={requireServerKey(params.serverKey)} padded>
+      <SessionRouteErrorBoundary
+        sessionID={params.id}
+        serverKey={requireServerKey(params.serverKey)}
+        directory={directory()}
+        padded
+      >
         <ResolvedTargetSessionRoute />
       </SessionRouteErrorBoundary>
     </TargetServerScopedProviders>
@@ -192,11 +198,21 @@ function TargetSessionSettingsCommand() {
 }
 
 export function SessionRouteErrorBoundary(
-  props: ParentProps<{ sessionID?: string; serverKey?: ServerConnection.Key; padded?: boolean }>,
+  props: ParentProps<{
+    sessionID?: string
+    serverKey?: ServerConnection.Key
+    padded?: boolean
+    /** The project directory this route renders for, when known (row 79a3). */
+    directory?: string
+  }>,
 ) {
   const settings = useSettings()
   return (
-    <ErrorBoundary
+    // 1.2.9 row 79a (LIVE-C07): a session read that failed with LOCATION_NOT_FOLDER (a file at the project path)
+    // shows no error page while the folder-missing notice is open; Restore / Recreate reset this boundary.
+    // Row 79a3 (C118): only a notice for this route's own directory hides it, so another folder's notice does not.
+    <FolderNoticeBoundary
+      directory={props.directory}
       fallback={(error) =>
         settings.general.newLayoutDesigns() ? (
           <SessionRouteFrame padded={props.padded}>
@@ -210,7 +226,7 @@ export function SessionRouteErrorBoundary(
       }
     >
       {props.children}
-    </ErrorBoundary>
+    </FolderNoticeBoundary>
   )
 }
 
@@ -1211,14 +1227,14 @@ export default function Page() {
     mapOpen: () => sessionMap.opened(),
     // 1.2.7 U-2: a macOS app bundle (`*.app`) is a folder; it is listed so the deliverable can be revealed (never run).
     // Symlinks are never listed (core FileSystem.list), so a link out of the project gets no line.
-    listFiles: (path) =>
+    // 1.2.9 row 56 (AC-C08a): the entries keep their type (mission-poll shows files and `.app` bundles and checks for
+    // the 11_deliverables folder), and each call names the folder deliverablesDir chose (the mission's folder).
+    listFiles: (path, directory) =>
       sdk()
-        .client.file.list({ path })
-        .then((result) =>
-          (result.data ?? [])
-            .filter((node) => node.type === "file" || (node.type === "directory" && /\.app$/i.test(node.name)))
-            .map((node) => node.name),
-        ),
+        .client.file.list({ path, directory })
+        .then((result) => (result.data ?? []).map((node) => ({ name: node.name, type: node.type }))),
+    // The folders the app already has open: each project root and its groups (the directory rule's allow list).
+    openFolders: () => layout.projects.list().flatMap((project) => [project.worktree, ...(project.sandboxes ?? [])]),
   })
   const missions: MissionControlMount | undefined = missionControl.available
     ? {
@@ -1232,6 +1248,8 @@ export default function Page() {
           >[0])
         },
         openFile: (path) => tabs().open(file.tab(path)),
+        // 1.2.9 row 56b: reveal (showItemInFolder only) for deliverables found outside this session's folder.
+        revealFile: platform.revealPath ? (abs) => void platform.revealPath?.(abs).catch(() => false) : undefined,
         // 1.2.8 row 46 (01d §4): placement join/new wait while a session linked to the mission works.
         sessionBusy: (ids) => ids.some((id) => (sync().data.session_status[id]?.type ?? "idle") !== "idle"),
       }

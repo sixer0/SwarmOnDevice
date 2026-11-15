@@ -99,6 +99,7 @@ function createNewLayoutFolderMissing() {
     stored: (directory) =>
       server.projects.last() === directory || layout.projects.list().some((project) => project.worktree === directory),
     t: (key, params) => language.t(key, params),
+    reload: (directory) => serverSync().reloadDirectory(directory),
     choose: () => {
       const conn = server.current
       if (!conn) return

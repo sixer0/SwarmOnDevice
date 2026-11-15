@@ -42,6 +42,7 @@ export async function paginate<T, R extends { nextCursor?: string }>(
  * client calls them; opencode never lists them to an agent, whatever the server. Other MCP clients still see them
  * (residual S-5; the host's attested-session check is row 45b, SR8-05).
  */
+/** @internal test seam */
 export const PERSON_ONLY_MCP_TOOLS: readonly string[] = ["studio_mission_place"]
 
 export function defs(client: Client, timeout?: number) {

@@ -34,6 +34,9 @@ const CHECK: Record<DiagramDefectKind, string> = {
   frameOutside: "GEOM_FRAME_OUTSIDE", // row 55c: new kind (INTENT, the record covers every kind)
   edgeOutside: "GEOM_EDGE_OUTSIDE", // row 68a: new kind (INTENT, the record covers every kind)
   edgeEndOffNode: "GEOM_EDGE_END", // row 68a: new kind (INTENT, the record covers every kind)
+  edgeAlongOutline: "GEOM_EDGE_ALONG", // Swarm 1.2.9 row 31 (AC-A09, INTENT): new kind, the record covers every kind
+  edgeOverHeader: "GEOM_EDGE_HEADER", // Swarm 1.2.9 row 32 (AC-A10a, INTENT): new kind, the record covers every kind
+  edgeDoublesBack: "GEOM_EDGE_DOUBLE_BACK", // Swarm 1.2.9 row 33 (AC-A10b, INTENT): new kind, the record covers every kind
 }
 const T03: readonly DiagramDefectKind[] = ["edgeEntryCollision", "stubSegment", "arrowTangent"]
 

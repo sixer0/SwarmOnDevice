@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, realpathSync } from "node:fs"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -65,7 +66,7 @@ async function start(missionGuard: boolean) {
   await resetEnvCache()
   store = await mod.openHostStore(STORE, { release: "1.2.1", logFile: LOG, missionGuard })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.1" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   c = new Client({ name: "row174-test", version: "0" })
   await c.connect(
     new StreamableHTTPClientTransport(new URL(host.url), {
@@ -145,7 +146,8 @@ beforeAll(async () => {
   delete process.env.INTERNAL_API_SECRET
   mod = (await import("../../src/mcp-host/index.ts")) as Mod
   await start(true)
-  const cr = await call("studio_mission_create", {
+  // 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request).
+  const cr = await personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })("studio_mission_create", {
     mission: { id: M, title: "Row 174 mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: ["1", "2"].map(row), decisions: [{ id: "U1", by: "user", date: "2026-11-08", text: "go" }] },
   })
   expect(cr.ok).toBe(true)

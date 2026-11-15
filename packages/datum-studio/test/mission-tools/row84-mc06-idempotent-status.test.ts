@@ -28,7 +28,7 @@ const U1 = { id: "U1", by: "user", date: "2026-11-12", text: "User approves the 
 const session = { sessionId: "mcp-84", agentId: "swarm", fileRoot: "/private/tmp/claude-501/row84" }
 
 async function missionAt(id: string, status: "running" | "paused") {
-  await store.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row84" }, rows: [row("1")], decisions: [U1] } as never))
+  await store.transaction(async (t) => M.create(t, { id, title: `Mission ${id}`, type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row84" }, rows: [row("1")], decisions: [U1] } as never, { attested: true })) // 1.2.9 row 50c (C46): U1 is the person's decision (attested request)
   await store.transaction(async (t) => M.approve(t, id, "U1"))
   await store.transaction(async (t) => M.setStatus(t, id, "running"))
   if (status === "paused") await store.transaction(async (t) => M.setStatus(t, id, "paused", { note: "owner pause" }))

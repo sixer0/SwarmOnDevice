@@ -164,8 +164,10 @@ export const toasterV2 = {
   },
   dismiss(toastId?: number) {
     if (toastId === undefined) {
+      const entries = [...activeToastV2ById.values()]
       activeToastV2ByKey.clear()
       activeToastV2ById.clear()
+      for (const entry of entries) entry.options.onDismiss?.()
     } else {
       releaseToastV2(activeToastV2ById.get(toastId))
     }
@@ -187,6 +189,8 @@ export interface ToastV2Options {
   duration?: number
   persistent?: boolean
   actions?: ToastV2Action[]
+  /** Called once when the toast goes away, whatever closed it: its X, an action button, or a dismiss call. */
+  onDismiss?: () => void
 }
 
 interface ActiveToastV2 {
@@ -282,8 +286,11 @@ function pulseToastV2(toastId: number) {
 
 function releaseToastV2(entry: ActiveToastV2 | undefined) {
   if (!entry) return
+  // 1.2.9 row 79a2: `onDismiss` runs once, on the release that removes the live entry.
+  const live = activeToastV2ById.get(entry.id) === entry
   if (activeToastV2ByKey.get(entry.key) === entry) activeToastV2ByKey.delete(entry.key)
-  if (activeToastV2ById.get(entry.id) === entry) activeToastV2ById.delete(entry.id)
+  if (live) activeToastV2ById.delete(entry.id)
+  if (live) entry.options.onDismiss?.()
 }
 
 export interface ToastV2PromiseOptions<T, U = unknown> {

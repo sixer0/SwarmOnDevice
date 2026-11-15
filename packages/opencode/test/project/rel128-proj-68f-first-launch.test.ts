@@ -21,6 +21,7 @@ import { Global } from "@opencode-ai/core/global"
 // The server first: its import graph settles the permission modules' load order (as in rel128-proj-i-rehome-refusals).
 import { Server } from "../../src/server/server"
 import { DesktopNonce } from "../../src/server/desktop-nonce"
+import { setRehomeDecisionForTests } from "../../src/server/routes/instance/httpapi/handlers/project"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances } from "../fixture/fixture"
 
@@ -71,9 +72,11 @@ beforeEach(async () => {
   await fs.mkdir(documents, { recursive: true })
   await fs.mkdir(memoryDir(), { recursive: true, mode: 0o700 })
   DesktopNonce.set(NONCE)
+  setRehomeDecisionForTests(async () => ({ ...APPROVED, proposal: approved }))
 })
 afterEach(async () => {
   DesktopNonce.set(undefined)
+  setRehomeDecisionForTests(undefined)
   await fs.rm(journalDir(), { recursive: true, force: true })
   await disposeAllInstances()
   await resetDatabase()
@@ -109,10 +112,26 @@ const body = (over: Body = {}): Body => ({
   to: path.join(R, GROUP),
   sessions: [],
   approvalRef: "D-1",
+  approvalMission: MISSION,
   ...over,
 })
 
+// 1.2.9 row 54 (AC-C06 INTENT, C13): a real move needs the person's answer bound to it. Through the route's test seam,
+// this fake answers as the person (attested) with a tidy list holding every {mission, group} this file posts; the
+// posts name approvalMission.
+const approved: { mission: string; group: string }[] = []
+const APPROVED = {
+  status: "answered",
+  topic: "project-tidy",
+  option: "approve",
+  by: "user",
+  attested: true,
+  group: undefined,
+} as const
+
 async function rehome(payload: Body, directory = documents) {
+  if (typeof payload.missionId === "string" && typeof payload.to === "string")
+    approved.push({ mission: payload.missionId, group: path.basename(payload.to) })
   const response = await app().request("/project/rehome", {
     method: "POST",
     headers: { "x-opencode-directory": directory, "content-type": "application/json", [HEADER]: NONCE },

@@ -1,7 +1,8 @@
 // Row 127 fixture: the REAL Studio host server (packages/datum-studio/src/mcp-host, read-only here) started in the
 // runner order of row 111 (openHostStore with missionGuard -> configureTemplateSource -> startStudioHostServer, default
 // extensions = template + mission tools), in its own bun process so env and module caches never leak into other tests.
-// Env (fixture paths only): MH_STORE, MH_HOME, MH_RES, MH_RELEASE. Prints `READY <url> <token>` (fixture token).
+// Env (fixture paths only): MH_STORE, MH_HOME, MH_RES, MH_RELEASE. Prints `READY <url> <token> <key>` (fixture token and per-launch Mission Control key).
+// 1.2.9 row 50c (C46): the host gets a Mission Control key, as desktop lifecycle.ts does at every launch.
 // globalThis.fetch is a trap: the host makes no outbound call (no model call, no network) - a call is logged as
 // FETCH_CALLED on stderr and fails the test that reads it.
 import { randomBytes } from "node:crypto"
@@ -24,11 +25,13 @@ globalThis.fetch = (async (input: unknown) => {
 
 const mod = await import(path.join(PKG, "src", "mcp-host", "index.ts"))
 const token = randomBytes(32).toString("hex")
+const missionControlKey = randomBytes(32).toString("hex")
 const handle = await mod.openHostStore(store, { release, logFile: path.join(store, "..", "store.jsonl"), missionGuard: true })
 mod.configureTemplateSource({ templatesDir: path.join(PKG, "templates"), assetRepoRoot: VENDOR, release })
 const server = await mod.startStudioHostServer({
   store: handle,
   token,
+  missionControlKey,
   hostname: "127.0.0.1",
   port: 0,
   log: (level: string, source: string, message: string, context?: Record<string, unknown>) => {
@@ -36,7 +39,7 @@ const server = await mod.startStudioHostServer({
   },
   facts: { home: process.env.MH_HOME!, resourcesPath: process.env.MH_RES!, execPath: process.execPath },
 })
-process.stdout.write(`READY ${server.url} ${token}\n`)
+process.stdout.write(`READY ${server.url} ${token} ${missionControlKey}\n`)
 
 const stop = async () => {
   await server.close()

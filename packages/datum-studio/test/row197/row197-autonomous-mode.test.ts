@@ -12,6 +12,7 @@ import os from "node:os"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -72,7 +73,7 @@ beforeAll(async () => {
   const log = () => undefined
   store = await mod.openHostStore(STORE, { release: "1.2.3", logFile: LOG, missionGuard: true })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.3" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   swarm = await client(host.url, "swarm")
   claude = await client(host.url, "claude")
 })
@@ -150,7 +151,8 @@ describe("row 197 (S194-01): autonomous: true needs Swarm's autonomous mode mark
   test("decisions without autonomous are untouched by the mode (user approval path still works without the mark)", async () => {
     const id = "2026-11-08_r197-user"
     await call("studio_mission_create", { mission: mission(id) })
-    expect((await call("studio_mission_record_decision", { mission: id, decision: { id: "U1", by: "user", date: "2026-11-08", text: "ok" } })).ok).toBe(true)
+    // 1.2.9 row 50c (C46): the person's U1 comes from an attested request (Mission Control key on the request).
+    expect((await personCaller({ url: host.url, token: TOKEN, cwd: PROJECT })("studio_mission_record_decision", { mission: id, decision: { id: "U1", by: "user", date: "2026-11-08", text: "ok" } })).ok).toBe(true)
     const a = await call("studio_mission_approve", { mission: id, decision: "U1" })
     expect(a.ok).toBe(true)
     // S194-02: the label says what the record says, not who pressed the button

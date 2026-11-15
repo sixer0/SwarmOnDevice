@@ -17,7 +17,14 @@
  * 1.2.8 row 45b (SR8-05, AC-SEC05): an initialize that also carries `x-swarm-mission-control-key` (N8-459) equal to the
  * per-launch Mission Control key (`missionControlKey`, from the desktop host start message only; timing-safe compare)
  * opens an ATTESTED session. A missing or wrong key opens an ordinary session (never a refusal); the key is never logged.
+ *
+ * 1.2.9 row 50b (S9-01 High, AC-C01): attestation is bound to each request, not to the session id. The key is checked
+ * (timing-safe) on EVERY request, and the result is handed to that request's tool calls through
+ * `requestCarriesMissionControlKey()`; a call on an attested session whose request lacks the key runs unattested
+ * (mcp-server.ts). The id of an attested session is never written to a log line: `session_open` and `session_closed`
+ * carry `attested: true` and no `sessionId`.
  */
+import { AsyncLocalStorage } from "node:async_hooks"
 import { randomUUID } from "node:crypto"
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http"
 import type { AddressInfo } from "node:net"
@@ -26,13 +33,18 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"
 import { MAX_MESSAGE_BYTES } from "../../vendor/scripts/studio/mcp/config"
 import { secretEquals } from "../../vendor/src/lib/studio/contract/auth"
+import { sessionLogRef } from "./tool-table.ts"
 
 export const MCP_PATH = "/mcp"
 export const CALLER_CWD_HEADER = "x-studio-caller-cwd"
 export const AGENT_HEADER = "x-studio-agent"
 /** Row 188 (L47): optional; the caller's own session ref (Swarm `ses_...`), linked to mission writes that omit `session`. */
 export const CALLER_SESSION_HEADER = "x-studio-caller-session"
-/** 1.2.8 row 45b (N8-459): the desktop mission client's per-launch Mission Control key, sent at initialize only. */
+/**
+ * 1.2.8 row 45b (N8-459): the desktop mission client's per-launch Mission Control key. 1.2.9 rows 50a/50b (S9-01): sent
+ * and checked on every request; initialize decides whether the session is attested, each later request whether its
+ * own calls are.
+ */
 export const MISSION_CONTROL_KEY_HEADER = "x-swarm-mission-control-key"
 /**
  * Row FX-4 (1.2.6, review M2 S2): the endpoint's node:http limits, explicit. The host runs in an Electron
@@ -113,12 +125,24 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer | "too-la
 }
 
 /**
- * 1.2.8 row 45b: true when the initialize header equals the per-launch key (HMAC digests + timingSafeEqual, as the
- * bearer token). No key configured, no header, an array header or an empty value -> false.
+ * 1.2.8 row 45b: true when the request's header (every request since 1.2.9 row 50b) equals the per-launch key (HMAC
+ * digests + timingSafeEqual, as the bearer token). No key configured, no header, an array header or an empty value -> false.
+ * @internal test seam
  */
 export function missionControlKeyOk(header: string | string[] | undefined, key: string | undefined): boolean {
   if (typeof key !== "string" || key.length === 0 || typeof header !== "string" || header.length === 0) return false
   return secretEquals(header, key)
+}
+
+/** Row 50b (S9-01): the key check of the HTTP request being served, for the code that request runs. */
+const requestKey = new AsyncLocalStorage<boolean>()
+
+/**
+ * Row 50b (S9-01): `true` when the HTTP request being served carried the per-launch Mission Control key (checked with
+ * `missionControlKeyOk`), `false` when it did not, `undefined` outside a request of this endpoint (in-process callers).
+ */
+export function requestCarriesMissionControlKey(): boolean | undefined {
+  return requestKey.getStore()
 }
 
 export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
@@ -172,12 +196,14 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
         return rpcError(res, 400, "Parse error", -32700)
       }
     }
+    // Row 50b (S9-01): the key is checked on every request (timing-safe); the session id alone never attests.
+    const keyOk = missionControlKeyOk(req.headers[MISSION_CONTROL_KEY_HEADER], opts.missionControlKey)
     const sidHeader = req.headers["mcp-session-id"]
     const sid = typeof sidHeader === "string" ? sidHeader : undefined
     if (sid !== undefined) {
       const entry = sessions.get(sid)
       if (!entry) return rpcError(res, 404, "Session not found")
-      await entry.transport.handleRequest(req, res, body)
+      await requestKey.run(keyOk, () => entry.transport.handleRequest(req, res, body))
       return
     }
     if (method !== "POST" || !isInitializeRequest(body)) return rpcError(res, 400, "Bad Request: no valid session id")
@@ -187,7 +213,9 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
     if (!AGENT_RE.test(agentId)) return rpcError(res, 400, "X-Studio-Agent is required (1..40 of A-Z a-z 0-9 _ . -)")
     const cwdRaw = req.headers[CALLER_CWD_HEADER]
     const sessionId = randomUUID()
-    const attested = missionControlKeyOk(req.headers[MISSION_CONTROL_KEY_HEADER], opts.missionControlKey)
+    const attested = keyOk
+    // Row 68b (S9-01): the shared host log helper; an attested session is `attested: true`, never its id.
+    const logRef = sessionLogRef({ sessionId, ...(attested ? { openedAttested: true as const } : {}) })
     let sessionHandle: SessionHandle
     try {
       const callerSessionRaw = req.headers[CALLER_SESSION_HEADER]
@@ -202,18 +230,18 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
       sessionIdGenerator: () => sessionId,
       onsessioninitialized: (id) => {
         sessions.set(id, { transport, handle: sessionHandle })
-        opts.log({ level: "info", event: "session_open", sessionId: id, agentId, attested })
+        opts.log({ level: "info", event: "session_open", ...logRef, agentId })
       },
       onsessionclosed: (id) => {
         sessions.delete(id)
       },
     })
     transport.onclose = () => {
-      if (sessions.delete(sessionId)) opts.log({ level: "info", event: "session_closed", sessionId })
+      if (sessions.delete(sessionId)) opts.log({ level: "info", event: "session_closed", ...logRef })
       void sessionHandle.close().catch(() => undefined)
     }
     await sessionHandle.server.connect(transport)
-    await transport.handleRequest(req, res, body)
+    await requestKey.run(keyOk, () => transport.handleRequest(req, res, body))
   }
 
   const http: HttpServer = createServer((req, res) => {

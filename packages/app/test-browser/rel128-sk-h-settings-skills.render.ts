@@ -391,21 +391,32 @@ for (const [label, module] of [
     })
   })
 
-  // SR8-08: the confirm UI.
+  // SR8-08: the confirm UI. 1.2.9 AC-B08 (INTENT, C14): Approve first asks the server without acceptCommands (refuse
+  // first); the fake answers SKILL_SHELL_UNCONFIRMED, which opens the confirm. acceptCommands is still sent only from
+  // the confirm button.
   describe(`Settings ${label} > Skills > a draft that runs commands`, () => {
-    test("global scope: Approve opens N8-430 and sends nothing; only its confirm sends acceptCommands", async () => {
+    test("global scope: Approve asks first without acceptCommands and opens N8-430; only its confirm sends acceptCommands", async () => {
+      const first = {
+        route: "draftApprove",
+        input: { name: "d-shell", scope: "global" },
+        headers: { "x-swarm-desktop-nonce": NONCE },
+      }
       await mount(module.DialogSettings)
       await click('[data-draft="d-shell"] [data-action="draft-approve"]')
-      expect(world.calls).toEqual([])
+      expect(world.calls).toEqual([first])
       expect($('[data-draft="d-shell"] [data-slot="skill-commands-confirm"]')?.textContent).toContain(
         text("settings.skills.drafts.confirmCommandsGlobal"),
       )
+      expect(has('[data-slot="skill-error"]')).toBe(false)
       await click('[data-draft="d-shell"] [data-action="skill-cancel"]')
       expect(has('[data-slot="skill-commands-confirm"]')).toBe(false)
-      expect(world.calls).toEqual([])
+      expect(world.calls).toEqual([first])
       await click('[data-draft="d-shell"] [data-action="draft-approve"]')
+      expect(world.calls).toEqual([first, first])
       await click('[data-draft="d-shell"] [data-action="draft-approve-commands"]')
       expect(world.calls).toEqual([
+        first,
+        first,
         {
           route: "draftApprove",
           input: { name: "d-shell", scope: "global", acceptCommands: true },
@@ -414,15 +425,18 @@ for (const [label, module] of [
       ])
     })
 
-    test("project scope shows N8-429; SKILL_SHELL_UNCONFIRMED maps to N8-431", async () => {
+    test("project scope asks first, shows N8-429; SKILL_SHELL_UNCONFIRMED on the confirm maps to N8-431", async () => {
       await mount(module.DialogSettings)
       await click('[data-draft="d-shell-p"] [data-action="draft-approve"]')
+      expect(world.calls.map((call) => call.input)).toEqual([{ name: "d-shell-p", scope: "project" }])
       const confirm = $('[data-draft="d-shell-p"] [data-slot="skill-commands-confirm"]')?.textContent ?? ""
       expect(confirm).toContain(text("settings.skills.drafts.confirmCommands"))
       expect(confirm).not.toContain(text("settings.skills.drafts.confirmCommandsGlobal"))
+      expect(has('[data-slot="skill-error"]')).toBe(false)
       world.forceUnconfirmed = true
       await click('[data-draft="d-shell-p"] [data-action="draft-approve-commands"]')
-      expect(routes()).toEqual(["draftApprove"])
+      expect(routes()).toEqual(["draftApprove", "draftApprove"])
+      expect(world.calls[1].input).toEqual({ name: "d-shell-p", scope: "project", acceptCommands: true })
       expect($('[data-slot="skill-error"]')?.textContent).toBe(text("settings.skills.error.shellUnconfirmed"))
     })
   })

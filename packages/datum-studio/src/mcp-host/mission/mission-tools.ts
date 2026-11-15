@@ -186,12 +186,23 @@ export function sessionOf(args: Record<string, unknown>, s: HostToolSession): Se
  * Row 188: session links inside a create's MissionDoc (`mission.sessions`) get the same rule: an entry of this agent
  * with a ref the store would refuse becomes the calling session (or is dropped); an invalid entry of another client
  * is dropped. Each change is noted. Entries that are not objects are left for the schema check.
+ * 1.2.9 row 52 (AC-C03, N9-010; C13 OP-15-2): a WELL-FORMED link-client ref is linked only when it is this agent's
+ * calling session (H-N12 per entry). Another ref of this agent is replaced by the calling session; with no calling
+ * session known, or for another link client, the entry is dropped (not refused). One SESSION_REF_IGNORED note per
+ * entry (refs and client ids only). Links are deduplicated by (client, ref) after replacement.
  */
 export function normalizeDocSessions(args: Record<string, unknown>, s: HostToolSession): void {
   const m = args.mission as Record<string, unknown> | undefined
   if (!m || typeof m !== "object" || !Array.isArray(m.sessions)) return
   const known = callerRef(s)
   const out: unknown[] = []
+  const linked = new Set<string>()
+  const push = (link: Record<string, unknown>, client: string) => {
+    const key = `${client}\u0000${String(link.ref)}`
+    if (linked.has(key)) return
+    linked.add(key)
+    out.push(link)
+  }
   for (const e of m.sessions as unknown[]) {
     if (!e || typeof e !== "object" || Array.isArray(e)) {
       out.push(e)
@@ -199,13 +210,23 @@ export function normalizeDocSessions(args: Record<string, unknown>, s: HostToolS
     }
     const link = e as Record<string, unknown>
     const client = typeof link.client === "string" ? link.client : s.agentId
-    if (!LINK_CLIENTS.has(client) || validSessionRef(client, link.ref)) {
+    if (!LINK_CLIENTS.has(client)) {
       out.push(e)
+      continue
+    }
+    if (validSessionRef(client, link.ref)) {
+      if (client !== s.agentId) note(args, `SESSION_REF_IGNORED: mission.sessions entry of client ${client} was dropped (only the calling session is linked)`)
+      else if (!known) note(args, `SESSION_REF_IGNORED: mission.sessions ref ${link.ref} cannot be checked (the calling session is unknown); that entry was dropped`)
+      else if (link.ref === known) push(link, client)
+      else {
+        note(args, `SESSION_REF_IGNORED: mission.sessions ref ${link.ref} is not the calling session; linked the calling session ${known} instead`)
+        push({ ...link, client, ref: known }, client)
+      }
       continue
     }
     if (client === s.agentId && known) {
       note(args, `mission.sessions: ref is not a ${client} session id; the calling session ${known} is linked instead`)
-      out.push({ ...link, client, ref: known })
+      push({ ...link, client, ref: known }, client)
     } else note(args, `mission.sessions: ref is not a ${client} session id; that entry was dropped (omit sessions; Swarm links the calling session)`)
   }
   m.sessions = out
@@ -223,14 +244,15 @@ export function autonomousModeOf(s: HostToolSession): boolean {
 export function writeOptions(args: Record<string, unknown>, s: HostToolSession): MissionWriteOptions {
   const actor = actorOf(args, s)
   const session = sessionOf(args, s)
-  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s), ...(s.memoryIndex ? { memoryIndex: s.memoryIndex } : {}) }
+  // 1.2.9 row 50 (S9-06): the request's attestation (per request, S9-01) goes to the store's decision sink.
+  return { ...(actor ? { actor } : {}), ...(session ? { session } : {}), autonomousMode: autonomousModeOf(s), ...(s.memoryIndex ? { memoryIndex: s.memoryIndex } : {}), attested: s.attested === true }
 }
 
 /** 1.2.8 row 39 (N8-014): text of the warning on a done close Swarm's memory did not check. */
-export const MEMORY_INDEX_UNCHECKED_TEXT = "no Swarm memory check on this call; if the mission has a final report, add its index entry"
+const MEMORY_INDEX_UNCHECKED_TEXT = "no Swarm memory check on this call; if the mission has a final report, add its index entry"
 
 /** 1.2.8 row 45 (01d §2.1 rules 1-4): `dir` is a real folder directly in its parent (no link) holding a valid `.swarm/group.json`. */
-export function groupMarkerOk(dir: string, nfs: NodeFs): boolean {
+function groupMarkerOk(dir: string, nfs: NodeFs): boolean {
   const file = path.join(dir, ".swarm", "group.json")
   try {
     if (nfs.lstat && [dir, path.dirname(file), file].some((p) => nfs.lstat!(p).isSymbolicLink)) return false
@@ -327,6 +349,17 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
   const dry = (a: Record<string, unknown>) => a.dryRun === true
   const dryNote = (a: Record<string, unknown>) => (dry(a) ? " (dryRun: checked and rolled back, nothing stored)" : "")
 
+  /**
+   * 1.2.9 row 50 (AC-C01, N9-001; C2(6), C7(b)(c), C13, S9-05): nothing is recorded as the person from a request that
+   * is not attested (Mission Control key on this request, S9-01). Refused before any write, dry runs too. The detail and
+   * the warn line are path-free and carry no session id and no decision or message text.
+   */
+  function refuseUnattested(name: string, s: HostToolSession, mission: string, request?: string): void {
+    if (s.attested === true) return
+    opts.log("warn", `datum-studio-host.mission.${name}`, "SESSION_NOT_ATTESTED", { mission, agent: s.agentId })
+    throw new MissionToolError("SESSION_NOT_ATTESTED", "only the person answers as the person, from Mission Control in the Swarm app (this request is not attested)", { mission, ...(request !== undefined ? { request } : {}), agent: s.agentId })
+  }
+
   return [
     tool(
       "studio_mission_create",
@@ -336,6 +369,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       async (a, s) => {
         defaultProjectDir(a.mission, s.fileRoot)
         const input = a.mission as Parameters<MissionStore["create"]>[1]
+        if ((input.decisions ?? []).some((d) => d?.by === "user")) refuseUnattested("studio_mission_create", s, input.id)
         const r = await write(dry(a), (tx) => M.create(tx, input, writeOptions(a, s)))
         return { text: `mission ${r.id} created as ${r.status}: ${r.rows} rows, ${r.waves.length} waves${dryNote(a)}`, data: { ...r, issues: [], dryRun: dry(a) } }
       },
@@ -343,7 +377,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_get",
       "Read a mission",
-      "Read one mission: the stored MissionDoc plus derived {phases (only the mission type's phases, U20), waves, ready, counts, progress, checkpoints, drift (rows added after approval with the decision id that justified each: {count, rows: [{row, timeCreated, decision}], dropped: [{row, timeDropped, decision}]}; empty when none)}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with the current revision's outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
+      "Read one mission: the MissionDoc plus derived {phases (U20), waves, ready, counts, progress, checkpoints, drift (rows added or dropped after approval, each with its decision id)}. include: rows, decisions, findings, locks, reports, events, snapshots, requests, checkpoints, messages, deliverables (the mission's Studio documents with current outputs: finalFileName, sha256, verified). messagesTail: N = the newest N messages.",
       true,
       async (a) => {
         const id = a.mission as string
@@ -447,7 +481,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_set_status",
       "Change mission status",
-      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision; optional supersededBy). done and cancelled are terminal; closing releases locks and withdraws open decision requests. Setting the current status again returns unchanged: true and writes nothing. done returns the decision register decisions {count, ids} (the store holds them; studio_mission_export renders decisions.md); closing is not refused for a missing export. A Swarm close is refused MEMORY_INDEX_MISSING until the project memory holds the mission's index entry; other callers get warning MEMORY_INDEX_UNCHECKED.",
+      "Mission status (§2.2): running, paused, done (all rows done or dropped) or cancelled (needs decision). done and cancelled are terminal; closing releases locks and withdraws open requests. done returns the decision register decisions {count, ids}; closing is not refused for a missing export. A Swarm close is refused MEMORY_INDEX_MISSING until the project memory holds the mission's index entry; other callers get warning MEMORY_INDEX_UNCHECKED.",
       false,
       async (a, s) => {
         const r = await write(dry(a), (tx) => {
@@ -482,13 +516,14 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_update_row",
       "Update mission rows",
-      `Row patches in order in one job (1-200): {id, add?, set?, status?, note?, decision?, acquire?, release?, retire?, checkpoint?{n, m, label?}} (§4.2-4.4, §5.4; C57 b). Status: ${ROW_RUNNING_DONE_RULE} (SCHEMA_INVALID field note otherwise); blocked and dropped need a note; done still passes the output gate (OUTPUT_UNVERIFIED). Each patch applies on its own: valid patches apply, a refused patch is rolled back alone and reported in results [{id, ok, code?, message?, noteSaved?}]; if no patch applies the call fails with the first code. A status refused for DEP_NOT_DONE still stores the patch's note (noteSaved: true). retire: [documentId] archives a superseded draft linked to the row (needs note), applied before status. messages[] (C57 c/d) are appended in the same job; an owner instruction is {from: owner, to: controller, kind: instruction} and is never executed. Returns changed rows, results, waves, ready.`,
+      `Row patches in one job: {id, add?, set?, status?, note?, decision?, acquire?, release?, retire?, checkpoint?}. Status: ${ROW_RUNNING_DONE_RULE}; blocked and dropped need a note; done still passes the output gate (OUTPUT_UNVERIFIED). Each patch applies or is refused on its own (results[]). An owner instruction in messages[] {from: owner, to: controller, kind: instruction} is never executed.`,
       false,
       async (a, s) => {
         const mission = a.mission as string
         const o = writeOptions(a, s)
         const patches = (Array.isArray(a.rows) ? a.rows : []) as Array<RowPatch & { checkpoint?: { n: number; m: number; label?: string } }>
         const messages = (Array.isArray(a.messages) ? a.messages : []) as NewMissionMessage[]
+        if (messages.some((m) => m.from === "owner")) refuseUnattested("studio_mission_update_row", s, mission)
         const r = await write(dry(a), (tx) => {
           let out: RowPatchJobResult = { changed: [], results: [], waves: [], ready: [] }
           const stripped = patches.map(({ checkpoint: _c, ...p }) => p)
@@ -518,6 +553,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       false,
       async (a, s) => {
         const decision = decisionWithAutonomous(a)
+        if (decision.by === "user") refuseUnattested("studio_mission_record_decision", s, a.mission as string)
         const r = await write(dry(a), (tx) => M.recordDecision(tx, a.mission as string, decision as never, writeOptions(a, s)))
         return { text: `decision ${r.id} recorded in ${String(a.mission)}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
       },
@@ -561,7 +597,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           const sha256 = createHash("sha256").update(bytes).digest("hex")
           return { path: path.join("docs", mission, rel), abs: path.join(base, rel), bytes: bytes.length, sha256, markdown: f.markdown, data: bytes }
         })
-        const backups = new Map<string, { backup: string | null; backupResidue: number }>()
+        // 1.2.9 row 38 (AC-A12b, N9-061): backupRemoved = old backups of the file that retention removed on this write.
+        const backups = new Map<string, { backup: string | null; backupResidue: number; backupRemoved: number }>()
         if (a.write === true) {
           const roots = [s.fileRoot]
           if (a.overwrite !== true) {
@@ -572,12 +609,13 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           for (const f of out) {
             // 1.2.6 row 89 (T-17 mission hunk, N-055/N-057): the guarded write keeps backups in <dir>/.bak/.
             const w = writeFileGuarded(f.abs, f.data, { roots, purpose: "write-report", overwrite: a.overwrite === true, nfs, now })
-            backups.set(f.path, { backup: w.backup ? path.relative(s.fileRoot, w.backup).split(path.sep).join("/") : null, backupResidue: w.backupResidue })
+            backups.set(f.path, { backup: w.backup ? path.relative(s.fileRoot, w.backup).split(path.sep).join("/") : null, backupResidue: w.backupResidue, backupRemoved: w.backupRemoved })
           }
         }
         const listed = out.map(({ path: p, bytes, sha256, markdown }) => ({ path: p, bytes, sha256, markdown, ...(backups.get(p) ?? {}) }))
         const residue = [...backups.values()].reduce((n, b) => n + b.backupResidue, 0)
-        const bakNote = a.write === true && a.overwrite === true ? `; backups in ${BACKUP_DIR_NAME}/, backupResidue ${residue}` : ""
+        const removed = [...backups.values()].reduce((n, b) => n + b.backupRemoved, 0)
+        const bakNote = a.write === true && a.overwrite === true ? `; backups in ${BACKUP_DIR_NAME}/, backupResidue ${residue}, backupRemoved ${removed}` : ""
         return { text: `${listed.length} files${a.write === true ? ` written under ${base}` : " (not written)"} (folders: ${folderLayout}): ${listed.map((f) => f.path).join(", ")}${bakNote}`, data: { files: listed, written: a.write === true, folderLayout } }
       },
     ),
@@ -610,8 +648,9 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         }
         const missing = ["option", "by", "decisionId"].filter((k) => a[k] === undefined)
         if (missing.length > 0) throw new MissionToolError("SCHEMA_INVALID", "an answer needs option, by and decisionId", { def: "studio_mission_answer_decision input", missing })
-        // 1.2.8 row 45b (SR8-05, N8-461): provenance from the session, never from the arguments. Unattested by: user
-        // answers are recorded (not refused; general refusal is 1.2.9 backlog RN-6) and shown with the N8-462 label.
+        // 1.2.9 row 50 (AC-C01 case a): an unattested by: user answer is refused (1.2.8 recorded it with the N8-462 label).
+        if (a.by === "user") refuseUnattested("studio_mission_answer_decision", s, mission, request)
+        // 1.2.8 row 45b (SR8-05, N8-461): provenance from the session, never from the arguments.
         const answer = { ...pick(a, ["option", "by", "decisionId", "date", "text"]), via: s.agentId, attested: s.attested === true } as never
         const r = await write(dry(a), (tx) => M.answerDecision(tx, mission, request, answer, o))
         return { text: `decision request ${request} answered ${String(a.option)} -> ${r.decision.id}; released ${r.released.join(", ") || "-"}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
@@ -628,7 +667,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const mission = a.mission as string
         const dir = a.projectDir as string
         if (s.attested !== true) {
-          opts.log("warn", "datum-studio-host.mission.studio_mission_place", "SESSION_NOT_ATTESTED", { mission, agent: s.agentId, sessionId: s.sessionId })
+          // 1.2.9 row 50 (S9-01, C36): no session id on this line; on a replay it would be the attested session's id.
+          opts.log("warn", "datum-studio-host.mission.studio_mission_place", "SESSION_NOT_ATTESTED", { mission, agent: s.agentId })
           throw new MissionToolError("SESSION_NOT_ATTESTED", "only Mission Control in the Swarm app places a mission (this MCP session is not attested)", { mission, agent: s.agentId })
         }
         const actor = actorOf(a, s)

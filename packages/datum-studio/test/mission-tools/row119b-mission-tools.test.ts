@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { PERSON_KEY } from "./_attested-person.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -99,6 +100,7 @@ let host: Awaited<ReturnType<Mod["startStudioHostServer"]>>
 let hostExp: Awaited<ReturnType<Mod["startStudioHostServer"]>>
 let swarm: Client
 let claude: Client
+let person: Client
 const logs: Array<{ level: string; source: string; message: string; context?: Record<string, unknown> }> = []
 const log = (level: "info" | "warn" | "error", source: string, message: string, context?: Record<string, unknown>) => logs.push({ level, source, message, ...(context ? { context } : {}) })
 const quoted: string[] = []
@@ -108,11 +110,14 @@ const quote = (label: string, v: unknown) => {
   console.log(`[row119b] ${line}`)
 }
 
-async function client(url: string, agent: string): Promise<Client> {
+// 1.2.9 row 50c (C46, INTENT): the person's by: user decisions, answers and owner messages come from an attested
+// request (Mission Control key on every request, S9-01); agents keep their unattested clients.
+const KEY = PERSON_KEY
+async function client(url: string, agent: string, key?: string): Promise<Client> {
   const c = new Client({ name: "row119b-test", version: "0" })
   const t = new StreamableHTTPClientTransport(new URL(url), {
     fetch: realFetch as never,
-    requestInit: { headers: { authorization: `Bearer ${TOKEN}`, "x-studio-agent": agent, "x-studio-caller-cwd": encodeURIComponent(PROJECT) } },
+    requestInit: { headers: { authorization: `Bearer ${TOKEN}`, "x-studio-agent": agent, "x-studio-caller-cwd": encodeURIComponent(PROJECT), ...(key !== undefined ? { "x-swarm-mission-control-key": key } : {}) } },
   })
   await c.connect(t)
   return c
@@ -189,15 +194,17 @@ beforeAll(async () => {
   // I-2: start.ts registers the mission tools by default (with row 120's renderer). A caller's own mission instance
   // replaces the default group: this host passes `exporter: null` (row 120 claim) so the "no renderer" case stays
   // provable; the second host passes the fake renderer.
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   // A second host with a fake /docs renderer (row 120 seam) to prove the export write rules.
   const exporter = async ({ mission, files }: { mission: string; files: readonly string[] }) => files.map((f) => ({ path: f === "blueprint" ? "identification/02_structured_rows.md" : `${f}.md`, markdown: `# ${f} of ${mission}\n` }))
   hostExp = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter }) })
   swarm = await client(host.url, "swarm")
   claude = await client(host.url, "claude")
+  person = await client(host.url, "swarm", KEY)
 })
 
 afterAll(async () => {
+  await person?.close().catch(() => undefined)
   await swarm?.close().catch(() => undefined)
   await claude?.close().catch(() => undefined)
   await hostExp?.close()
@@ -247,21 +254,22 @@ describe("row 119b: create, approve, sessions", () => {
         { id: "C1", by: "controller", date: "2026-11-07", text: "Controller note" },
       ],
     }
-    const dry = await call(swarm, "studio_mission_create", { mission: m1, dryRun: true })
+    // Row 50c: missions carrying the person's U decisions are created from the attested client (`person`).
+    const dry = await call(person, "studio_mission_create", { mission: m1, dryRun: true })
     expect(dry.ok).toBe(true)
     expect(dry.dryRun).toBe(true)
     expect(code(await call(swarm, "studio_mission_get", { mission: M1 }))).toBe("MISSION_NOT_FOUND")
-    const c1 = await call(swarm, "studio_mission_create", { mission: m1, session: { ref: SES, role: "controller" }, actor: "master-controller" }, CALLER)
+    const c1 = await call(person, "studio_mission_create", { mission: m1, session: { ref: SES, role: "controller" }, actor: "master-controller" }, CALLER)
     quote("create M1", { ok: c1.ok, id: c1.id, status: c1.status, rows: c1.rows, waves: c1.waves })
     expect(c1).toMatchObject({ ok: true, id: M1, status: "draft", rows: 4 })
-    const c2 = await call(swarm, "studio_mission_create", {
+    const c2 = await call(person, "studio_mission_create", {
       mission: { id: M2, title: "Row 119b research mission", type: "research", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1", "research", "research"), row("2", "synthesis", "synthesis", ["1:B"])], decisions: [{ id: "U1", by: "user", date: "2026-11-07", text: "go" }] },
       session: { ref: SES, role: "controller" },
     }, CALLER)
     expect(c2.ok).toBe(true)
-    const c0 = await call(swarm, "studio_mission_create", { mission: { id: M0, title: "Old mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1", "implementation", "implementation")], decisions: [{ id: "U1", by: "user", date: "2026-11-06", text: "go" }, { id: "U3", by: "user", date: "2026-11-06", text: "replaced by 119b feature" }] } })
+    const c0 = await call(person, "studio_mission_create", { mission: { id: M0, title: "Old mission", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row("1", "implementation", "implementation")], decisions: [{ id: "U1", by: "user", date: "2026-11-06", text: "go" }, { id: "U3", by: "user", date: "2026-11-06", text: "replaced by 119b feature" }] } })
     expect(c0.ok).toBe(true)
-    expect(code(await call(swarm, "studio_mission_create", { mission: { ...m1, rows: [] } }))).toBe("MISSION_ID_TAKEN")
+    expect(code(await call(person, "studio_mission_create", { mission: { ...m1, rows: [] } }))).toBe("MISSION_ID_TAKEN")
     const kind = await call(swarm, "studio_mission_create", { mission: { id: "2026-11-07_m119b-bad", title: "x", type: "research", owner: "x", project: { dir: PROJECT }, rows: [row("1", "synthesis", "implementation")] } })
     quote("research mission refuses implementation row", { code: kind.code, details: kind.error?.details })
     expect(code(kind)).toBe("KIND_NOT_ALLOWED")
@@ -433,10 +441,10 @@ describe("row 119b: paused, superseded, decisions, messages", () => {
     expect(code(blocked)).toBe("DECISION_PENDING")
     const chk = await call(swarm, "studio_report_check", { markdown: report({ mission: M1, taskRef: "3" }), row: "3", remote: false })
     expect(chk.missionIssues.map((i: S) => i.code)).toEqual(["DECISION_PENDING"])
-    const ans = await call(claude, "studio_mission_answer_decision", { mission: M1, request: "D-1", option: "A", by: "user", decisionId: "U2" })
+    const ans = await call(person, "studio_mission_answer_decision", { mission: M1, request: "D-1", option: "A", by: "user", decisionId: "U2" })
     quote("answer D-1", { decision: ans.decision, released: ans.released })
     expect(ans).toMatchObject({ ok: true, released: ["3"], decision: { id: "U2", by: "user" } })
-    expect(code(await call(swarm, "studio_mission_answer_decision", { mission: M1, request: "D-1", option: "B", by: "user", decisionId: "U3" }))).toBe("DECISION_REQUEST_CLOSED")
+    expect(code(await call(person, "studio_mission_answer_decision", { mission: M1, request: "D-1", option: "B", by: "user", decisionId: "U3" }))).toBe("DECISION_REQUEST_CLOSED")
     const g = await call(swarm, "studio_mission_get", { mission: M1, include: ["decisions", "requests"] })
     expect(g.mission.decisions.map((d: S) => d.id)).toContain("U2")
     expect(g.requests[0]).toMatchObject({ id: "D-1", status: "answered", answer: { option: "A", by: "user", decision: "U2" } })
@@ -444,7 +452,8 @@ describe("row 119b: paused, superseded, decisions, messages", () => {
   })
 
   test("owner instruction and messages are stored and read back; a checkpoint is separate from mission progress", async () => {
-    const r = await call(swarm, "studio_mission_update_row", {
+    // Row 50c: the batch carries the person's owner instruction, so it comes from the attested client.
+    const r = await call(person, "studio_mission_update_row", {
       mission: M1,
       rows: [{ id: "3", checkpoint: { n: 1, m: 4, label: "read inputs" } }],
       messages: [

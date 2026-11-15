@@ -61,10 +61,10 @@ import {
 import { diagramFitActive, diagramFitNote, diagramFitRoute } from "../fit/state";
 import { footLines } from "./footwrap";
 import { routeSequenceMessages, type SequenceLayout } from "../layout-b";
-import { flowSerialisedNote } from "../layout-a/flow";
+import { flowDirectionOf, flowSerialisedNote } from "../layout-a/flow";
 import { autoFitDiagram, type DiagramGeometryIssue } from "./autofit";
 import type { EdgeLabelPlan } from "../fit/labels";
-import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneGeom } from "./fitlabels";
+import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneClearOn, zoneGeom } from "./fitlabels";
 import { placeDiagram, type Placement } from "./place";
 import { poolFlowCrossesNotes, type SwimFrame, type SwimPool } from "../layout-b/swimlane";
 import { reorderPlaced } from "./order";
@@ -72,7 +72,7 @@ import { capacityRetry, isCapacityReject, withAction } from "./capacity";
 import { crossingHops, routePlaced, routeStyleOfPath, type HoppedEdge } from "./route";
 import { canonicalSymbolId } from "../../symbols";
 import { colourCountDetail, diagramColourSources } from "../core/colour"; // row 62 (T-06)
-import { edgeArrowsOfPaths, nodeShadowSvg, type EdgeArrows } from "../core/svg"; // row 57 (VIS-7); row 57b: shared path-edge matching; row 57c: node shadow
+import { edgeArrowsOfPaths, edgeLineDash, nodeShadowSvg, type EdgeArrows } from "../core/svg"; // row 57 (VIS-7); row 57b: shared path-edge matching; row 57c: node shadow; 1.2.9 row 27: edgeLineDash
 import { labelAtBaseline, runOrder, spotClear } from "../fit/labels"; // row 57b (VIS-9); row 57c: runOrder, spotClear
 import type { HeadSize } from "../fit/lint"; // row 57c
 import { ARROW_SIZES_MM } from "../core/tokens"; // row 57c
@@ -200,7 +200,7 @@ function midLabel(pts: RoutedEdge["points"]): [number, number] {
  * pilih yang pertama di luar kotak simpul mana pun (diperbesar setengah kotak
  * label); semua bertabrakan = titik tengah terpanjang.
  */
-function labelPos(pts: RoutedEdge["points"], nodes: readonly SheetNode[], lw: number, lh: number, heads?: LabelHeads): [number, number] {
+function labelPos(pts: RoutedEdge["points"], nodes: readonly SheetNode[], lw: number, lh: number, heads?: LabelHeads, dash?: readonly number[]): [number, number] {
   const segs = segsOf(pts);
   if (!segs.length) return [0.0, 0.0];
   const order = segs.map((_, i) => i).sort((a, b) => segLen(segs[b]) - segLen(segs[a]) || a - b);
@@ -229,9 +229,11 @@ function labelPos(pts: RoutedEdge["points"], nodes: readonly SheetNode[], lw: nu
     return [x - (lw + 1.6) / 2, base - rail * 1.15, x + (lw + 1.6) / 2, base + rail * 0.55];
   };
   // the band also stays 0.3 mm off every node box (the point test above only pads by half the label height)
+  // Swarm 1.2.9 row 27 (AC-A04): `dash` = the drawn pattern, so the first render leaves no dash fragment beside the band
+  // (the auto-fit path already passes it, build/fitlabels.ts); solid connectors pass none.
   const clear = (x: number, y: number) => {
     const b = band(x, y);
-    return spotClear(pts, heads, b) && !nodes.some((nd) => b[0] < nd.x + nd.w + 0.3 && b[2] > nd.x - 0.3 && b[1] < nd.y + nd.h + 0.3 && b[3] > nd.y - 0.3);
+    return spotClear(pts, heads, b, dash) && !nodes.some((nd) => b[0] < nd.x + nd.w + 0.3 && b[2] > nd.x - 0.3 && b[1] < nd.y + nd.h + 0.3 && b[3] > nd.y - 0.3);
   };
   if (clear(first[0], first[1])) return first;
   for (const run of runOrder(pts)) {
@@ -263,6 +265,19 @@ function headSizeOf(h: EdgeArrows["end"] | EdgeArrows["start"]): HeadSize | null
 /** Row 57c: the drawn heads of each routed connector, for `labelPos`. */
 function labelHeadsOf(s: StudioDiagramV1, paths: readonly RoutedEdge[]): LabelHeads[] {
   return edgeArrowsOfPaths(s.edges ?? [], paths).map((a) => ({ end: headSizeOf(a.end), start: headSizeOf(a.start) }));
+}
+
+/**
+ * Swarm 1.2.9 row 27 (AC-A04): the drawn dash pattern of each routed connector in mm, for `labelPos` (as
+ * build/fitlabels.ts builds it for auto-fit); undefined = solid. A legacy flow (family `flow` without `direction`) is
+ * frozen at its 1.2.5 bytes (01e A15, C10(a), C12): it gets no dash here, so its first render stays as before.
+ */
+function labelDashOf(s: StudioDiagramV1, paths: readonly RoutedEdge[]): Array<number[] | undefined> {
+  if (s.family === "flow" && !flowDirectionOf(s as StudioDiagramV1 & { direction?: unknown })) return paths.map(() => undefined);
+  return edgeArrowsOfPaths(s.edges ?? [], paths).map((a, i) => {
+    const dash = edgeLineDash(paths[i].kind, a.line)?.split(",").map(Number).filter((v) => Number.isFinite(v));
+    return dash?.length ? dash : undefined;
+  });
 }
 
 // ------------------------------------------------------- D-290 lembar graph
@@ -297,6 +312,7 @@ function graphFit(s: StudioDiagramV1, sheet: Sheet, paths: readonly RoutedEdge[]
   const railMm = pt2mm(role("evidence_rail").size);
   const fixedAt = edgeArrowsOfPaths(s.edges ?? [], paths).map((a) => a.labelAt); // row 57b (VIS-9)
   const heads = labelHeadsOf(s, paths); // row 57c
+  const dashes = labelDashOf(s, paths); // 1.2.9 row 27 (AC-A04)
   paths.forEach((p, i) => {
     for (const [, y] of p.points) ys.push(y);
     if (bands) {
@@ -306,7 +322,7 @@ function graphFit(s: StudioDiagramV1, sheet: Sheet, paths: readonly RoutedEdge[]
     // pita knockout `labelKnockoutSvg`: y = my - 1,15 size, tinggi 1,7 size; my = labelPos - pt2mm(1,2)
     // Row 57b (VIS-9): a `label_at` label sits at its fixed baseline (`labelAtBaseline`), no lift.
     const at = fixedAt[i];
-    const my = at ? labelAtBaseline(p.points, at)[1] : labelPos(p.points, nodes, estTextMm(p.label, "evidence_rail"), railMm * 1.4, heads[i])[1] - pt2mm(1.2);
+    const my = at ? labelAtBaseline(p.points, at)[1] : labelPos(p.points, nodes, estTextMm(p.label, "evidence_rail"), railMm * 1.4, heads[i], dashes[i])[1] - pt2mm(1.2);
     ys.push(my - railMm * 1.15, my - railMm * 1.15 + railMm * 1.7);
   });
   for (const z of s.zones ?? []) {
@@ -444,6 +460,7 @@ function straightRuns(pts: readonly PathPt[]): PathPt[] {
  * run (centre closer than the hop radius) moves along the run so the arc stays on the straight piece (still over the
  * crossing); a run shorter than the arc takes it at its middle. Paths without such vertices keep their hops byte for byte.
  */
+/** @internal test seam */
 export function jumpHops(paths: RoutedPaths): HoppedEdge[] {
   const runs = paths.map((p) => ({ ...p, points: straightRuns(p.points) }));
   const found = crossingHops(runs);
@@ -684,8 +701,9 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   const rail = pt2mm(role("evidence_rail").size);
   const origOf = (ps: readonly RoutedEdge[]): Array<[number, number]> => {
     const heads = labelHeadsOf(s, ps); // row 57c
+    const dashes = labelDashOf(s, ps); // 1.2.9 row 27 (AC-A04)
     return ps.map((p, i) => {
-      const [mx, my] = labelPos(p.points, [...sheet.nodes.values()], estTextMm(p.label, "evidence_rail"), rail * 1.4, heads[i]);
+      const [mx, my] = labelPos(p.points, [...sheet.nodes.values()], estTextMm(p.label, "evidence_rail"), rail * 1.4, heads[i], dashes[i]);
       return [mx, my - pt2mm(1.2)];
     });
   };
@@ -784,7 +802,8 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   for (const z of s.zones ?? []) {
     const members = (z.members ?? []).map((m) => sheet.nodes.get(m)).filter((m): m is SheetNode => m !== undefined);
     if (!members.length) throw new DiagramDefect(`zona '${String(z.id)}' tanpa anggota dikenal (P5 trust zone)`, { checkId: "P5-zone" });
-    const { x: zx, y: zy, w: zw, h: zh, lx, ly } = zoneGeom(z, members, sheet, fitOn); // P2-16: label dijepit saat fit
+    // P2-16: label dijepit saat fit. 1.2.9 row 29 (AC-A06): pads keep ZONE_CLEAR_MM off non-members (not legacy flows).
+    const { x: zx, y: zy, w: zw, h: zh, lx, ly } = zoneGeom(z, members, sheet, fitOn, zoneClearOn(s));
     // Swarm 1.2.8 row 55b (VIS-2b, 01f §1 Group, N8-252): style "group" = BPMN group, rounded (rx 1.6 mm) dashdot;
     // absent or "zone" = today's dashed rect, byte-identical.
     const group = (z as { style?: unknown }).style === "group";
@@ -822,6 +841,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     });
   } else {
     const heads = labelHeadsOf(s, hopped); // row 57c
+    const dashes = labelDashOf(s, hopped); // 1.2.9 row 27 (AC-A04)
     hopped.forEach((p, i) => {
       sheet.add(edgePathSvg(p.points, p.kind, { index: i, route: routeStyleOfPath(p), arrows: arrows[i] }));
       const lw = estTextMm(p.label, "evidence_rail");
@@ -832,7 +852,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
         labels.push([ax, ay, p.label, p.kind]);
         return;
       }
-      const [mx, my] = labelPos(p.points, nodes, lw, railMm * 1.4, heads[i]);
+      const [mx, my] = labelPos(p.points, nodes, lw, railMm * 1.4, heads[i], dashes[i]);
       labels.push([mx, my - pt2mm(1.2), p.label, p.kind]);
     });
     hopped.forEach((p, i) => p.hops.forEach(([hx, hy]) => sheet.add(hopSvg(hx, hy, p.kind, arrows[i])))); // row 57b: hop stroke = weight
@@ -841,7 +861,27 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
 
   // simpul + label + glif asal + tag
   // Row 165C (F113-9, CP-37): the sheet size lets nodeSvg keep every outline stroke inside the canvas.
-  nodes.forEach((nd, i) => sheet.addAll(nodeSvg(nd, { index: i, canvas, ...(shadows[i] ? { shadowDrawn: true } : {}) })));
+  // 1.2.9 row 66a (gate 66 F1): a marked circle gets the connector ends, so its mark stays off a connector's axis.
+  // `zoneClearOn` is false for a legacy flow (family `flow` without `direction`), frozen at its 1.2.5 bytes (C10(a), C12).
+  // Each end pairs with the nearest point that differs from it (a route can repeat a vertex), so the end has a direction.
+  const markEnds = zoneClearOn(s)
+    ? hopped.flatMap((p) =>
+        [p.points, [...p.points].reverse()].flatMap((pts) => {
+          const outer = pts.find((q) => Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]) > 1e-6);
+          return outer ? [[outer, pts[0]] as const] : [];
+        }),
+      )
+    : [];
+  nodes.forEach((nd, i) =>
+    sheet.addAll(
+      nodeSvg(nd, {
+        index: i,
+        canvas,
+        ...(shadows[i] ? { shadowDrawn: true } : {}),
+        ...(markEnds.length && nd.spec.mark && nd.spec.shape === "circle" ? { markEnds } : {}),
+      }),
+    ),
+  );
 
   // apparatus figure: SVG memikul caption, baris KUNCI dan SUMBER sendiri (P6)
   // D-288: baris KEY tidak digambar bila halaman mencetak baris KUNCI figur ini (satu aparatus).

@@ -18,7 +18,24 @@ import { MISSION_GUIDE_NAME, MISSION_GUIDE_URI, missionGuideText } from "./missi
 import { DIAGRAM_GUIDE_NAME, DIAGRAM_GUIDE_URI, DIAGRAM_VISIO_GUIDE_NAME, DIAGRAM_VISIO_GUIDE_URI, diagramGuideText, diagramVisioGuideText } from "./diagram-guide.ts"
 import { ASSET_TOOL_NAME, assetHostExtension } from "./asset-tool.ts"
 import { FIGURE_LOCK_TOOL, FIGURE_LOCKED, FIGURE_LOCKS, withFigureLock, type FigureLockRegistry } from "./figure-lock.ts"
-import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, sessionForCall, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
+import { requestCarriesMissionControlKey } from "./http-server.ts"
+import { HOST_DROPPED_TOOLS, HOST_EXTRA_TOOLSETS, HOST_KEPT_TOOLS, sessionForCall, sessionLogRef, type HostRememberedBasis, type HostToolExtension, type HostToolNext, type HostToolSession } from "./tool-table.ts"
+
+/** Row 50b (S9-01): the figure-lock holder label of an attested session (its id is never logged). */
+const ATTESTED_HOLDER = "attested-session"
+
+/**
+ * 1.2.9 row 50b (S9-01 High, AC-C01): attestation is bound to each request. A call on a session opened as attested keeps
+ * `attested` only when the HTTP request that carries it also carried the Mission Control key (http-server.ts checks it,
+ * timing-safe, on every request). A call over HTTP whose request lacked the key, or whose key result is unknown, runs
+ * unattested (fail closed). An in-process call (no HTTP request info, no endpoint context) keeps the session's value.
+ */
+function attestedForRequest(s: HostToolSession, overHttp: boolean, keyOnRequest: boolean | undefined): HostToolSession {
+  if (s.attested !== true) return s
+  if (keyOnRequest === true || (!overHttp && keyOnRequest === undefined)) return s
+  const { attested: _drop, ...rest } = s
+  return rest
+}
 
 export interface HostServerDeps {
   /** Session config (vendored loadConfig shape). `toolsets` = the host's active toolsets. */
@@ -81,8 +98,12 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
   const extensions = deps.extensions.some((e) => e.name === ASSET_TOOL_NAME) ? deps.extensions : [...deps.extensions, assetHostExtension()]
   const active = activeHostTools(config.toolsets, extensions)
   const toolDeps = { config: execConfig, fetchImpl: deps.fetchImpl, nfs: deps.nfs ?? REAL_NODE_FS, session: new McpSession(), ...(deps.now ? { now: deps.now } : {}) }
+  // Row 50b / 68b (S9-01): a line of an attested session carries `attested: true` and never the session id.
+  const sessionRef = sessionLogRef(deps.session)
+  // Row 68b: the opened attestation rides on every call session (log lines only), so a keyless replay still hides the id.
+  const opened = deps.session.attested === true ? { openedAttested: true as const } : {}
   const emit = (rec: Record<string, unknown>) =>
-    deps.log(redactSecret(JSON.stringify({ ts: new Date().toISOString(), source: "datum-studio-host.mcp", sessionId: deps.session.sessionId, agentId: deps.session.agentId, ...rec }), secret))
+    deps.log(redactSecret(JSON.stringify({ ts: new Date().toISOString(), source: "datum-studio-host.mcp", ...sessionRef, agentId: deps.session.agentId, ...rec }), secret))
 
   // Row 169: the MissionDoc guide resource, listed and readable while studio_mission_create is active. The vendored
   // resources/list and resources/read handlers stay as they are (vendor files unchanged): they are taken from the
@@ -124,27 +145,31 @@ export function createHostMcpServer(deps: HostServerDeps): Server {
     ],
   }))
 
-  server.setRequestHandler(CallToolRequestSchema, async (req): Promise<CallToolResult> => {
+  server.setRequestHandler(CallToolRequestSchema, async (req, extra): Promise<CallToolResult> => {
     const name = req.params.name
     const args = (req.params.arguments ?? {}) as Record<string, unknown>
-    const callSession = sessionForCall(deps.session, req.params._meta) // row 188: the caller's session, when it says it
+    // Row 50b (S9-01): attested only when this request carried the Mission Control key; row 188: the caller's session.
+    const callSession = { ...attestedForRequest(sessionForCall(deps.session, req.params._meta), extra?.requestInfo !== undefined, requestCarriesMissionControlKey()), ...opened }
+    // Row 50b: a call on an attested session that ran unattested is marked on its tool_call line (no id, no key).
+    const keyLine = deps.session.attested === true && callSession.attested !== true ? { requestAttested: false } : {}
     const ext = active.extensions.find((e) => e.name === name)
     if (ext) {
       const t0 = Date.now()
       try {
         const out = await ext.call(args, callSession)
-        emit({ level: out.isError ? "error" : "info", event: "tool_call", tool: name, ok: out.isError !== true, durationMs: Date.now() - t0 })
+        emit({ level: out.isError ? "error" : "info", event: "tool_call", tool: name, ok: out.isError !== true, durationMs: Date.now() - t0, ...keyLine })
         return out
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e))
-        emit({ level: "error", event: "tool_call", tool: name, ok: false, code: "INTERNAL_ERROR", stack_trace: err.stack })
+        emit({ level: "error", event: "tool_call", tool: name, ok: false, code: "INTERNAL_ERROR", stack_trace: err.stack, ...keyLine })
         throw new McpError(ErrorCode.InternalError, "galat internal")
       }
     }
     if (!active.vendored.some((t) => t.name === name)) throw new McpError(ErrorCode.InvalidParams, `alat tidak dikenal: ${name}`)
     // Row 57 (S-02, N-024): one figure_revise per {documentId, pid} at a time, across sessions; released in finally.
     if (name === FIGURE_LOCK_TOOL) {
-      const holder = { sessionId: deps.session.sessionId, agentId: deps.session.agentId, since: Date.now() }
+      // Row 50b (S9-01): the holder is logged by another session when it is refused; an attested id never is.
+      const holder = { sessionId: "sessionId" in sessionRef ? sessionRef.sessionId : ATTESTED_HOLDER, agentId: deps.session.agentId, since: Date.now() }
       return withFigureLock(deps.figureLocks ?? FIGURE_LOCKS, args, holder, newCallId, () => runKept(name, args, callSession), (k, by) =>
         emit({ level: "warn", event: "tool_call", tool: name, ok: false, code: FIGURE_LOCKED, documentId: k.documentId, [k.by]: k.figure, heldBySession: by.sessionId, heldForMs: Date.now() - by.since }),
       )

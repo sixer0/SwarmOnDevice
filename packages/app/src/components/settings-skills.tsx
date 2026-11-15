@@ -18,8 +18,8 @@ import { showToast } from "@/utils/toast"
 import { SettingsListV2 } from "./settings-v2/parts/list"
 import { SettingsRowV2 } from "./settings-v2/parts/row"
 
-export type SkillScope = "builtin" | "global" | "project" | "other"
-export type SkillRow = {
+type SkillScope = "builtin" | "global" | "project" | "other"
+type SkillRow = {
   name: string
   description?: string
   content: string
@@ -29,7 +29,7 @@ export type SkillRow = {
   hash?: string
   triggers?: { keywords: string[]; files: string[]; missionTypes: string[] }
 }
-export type SkillDraftRow = {
+type SkillDraftRow = {
   name: string
   scope: "global" | "project"
   content: string
@@ -64,7 +64,7 @@ const ERROR_TEXT: Record<string, [string, Record<string, number>?]> = {
   SKILL_SHELL_UNCONFIRMED: ["settings.skills.error.shellUnconfirmed"],
 }
 
-export function skillErrorCode(error: unknown): string | undefined {
+function skillErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== "object") return
   const data = (error as { data?: { code?: unknown } }).data
   return typeof data?.code === "string" ? data.code : undefined
@@ -80,7 +80,7 @@ export function frontmatterName(content: string): string {
 const NEW_TEMPLATE = "---\nname: \ndescription: \n---\n\n"
 
 // The folder the open session, draft or new-session page works in; undefined on Home.
-export function useSettingsDirectory(): Accessor<string | undefined> {
+function useSettingsDirectory(): Accessor<string | undefined> {
   const layout = useLayout()
   const tabs = useTabs()
   const serverSync = useServerSync()
@@ -250,16 +250,21 @@ export const SettingsSkills: Component<{ v2?: boolean; directory?: Accessor<stri
     })
 
   // SR8-08: a draft that runs commands is approved only from its second confirm, which alone sets acceptCommands.
+  // 1.2.9 AC-B08 (N9-011, C8): refuse first, without asking. The first click sends approve WITHOUT acceptCommands,
+  // which the server refuses with no write: SKILL_SHELL_UNTRUSTED (untrusted project) shows its text and no confirm;
+  // only SKILL_SHELL_UNCONFIRMED opens the second confirm.
   const approve = (draft: SkillDraftRow, confirmed: boolean) => {
-    if (draft.runsCommands && !confirmed) {
-      setState({ error: undefined, confirm: { kind: "commands", key: keyOf(draft.scope, draft.name) } })
-      return
-    }
+    const first = draft.runsCommands && !confirmed
+    if (first) setState({ confirm: undefined })
     return run(async () => {
       const result = await client().skill.draftApprove(
         { name: draft.name, scope: draft.scope, ...(draft.runsCommands && confirmed ? { acceptCommands: true } : {}) },
         await headers(),
       )
+      if (first && result.error && skillErrorCode(result.error) === "SKILL_SHELL_UNCONFIRMED") {
+        setState({ confirm: { kind: "commands", key: keyOf(draft.scope, draft.name) } })
+        return {}
+      }
       if (!result.error) {
         setState({ confirm: undefined })
         saved(result.data)

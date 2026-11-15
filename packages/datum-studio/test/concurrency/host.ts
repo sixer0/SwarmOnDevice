@@ -16,6 +16,7 @@
 // Output on stdout, one line: `READY <port> <pid>` or `ERROR <code> <json details>` (then exit 2).
 import { randomBytes } from "node:crypto"
 import path from "node:path"
+import { PERSON_KEY } from "../mission-tools/_attested-person.ts"
 
 // Runtime neutral (bun from source, or Electron's Node with ELECTRON_RUN_AS_NODE=1 from a Bun.build bundle): no bun API,
 // no import.meta.dir; the package path comes in through R44_PKG.
@@ -67,6 +68,8 @@ const hostLog: string[] = []
 const server = await mod.startStudioHostServer({
   store: handle,
   token,
+  // 1.2.9 row 50c (C46): a Mission Control key, so the test's person request (the U1 in the set-up) can be attested.
+  missionControlKey: PERSON_KEY,
   hostname: "127.0.0.1",
   port: 0,
   log: (level, source, message, context) => {

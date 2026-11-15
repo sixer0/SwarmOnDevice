@@ -7,9 +7,33 @@ import { Location } from "@opencode-ai/core/location"
 import { AbsolutePath, RelativePath } from "@opencode-ai/core/schema"
 import { Effect, Layer, Option } from "effect"
 import ignore from "ignore"
+import { lstat } from "fs/promises"
 import path from "path"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
+
+/** N9-057: folders per process whose "path not found" line is logged once; further missing folders are not logged. */
+const FILE_LIST_MISSING_LOG_MAX = 256
+const missingListLogged = new Set<string>()
+
+/**
+ * AC-C08b / S9-16: whether `target` (lexically inside `directory`) is missing, by an `lstat` walk below `directory`
+ * that never follows a link. "missing" only when a component is absent before any link; a link, a file or any other
+ * error answers "other", so the caller keeps today's realPath containment (core `FileSystem.list`).
+ */
+const missingInside = (directory: string, target: string) =>
+  Effect.promise(async () => {
+    let current = directory
+    for (const part of path.relative(directory, target).split(path.sep).filter(Boolean)) {
+      current = path.join(current, part)
+      const state = await lstat(current).then(
+        (info) => (info.isDirectory() ? "dir" : "other"),
+        (error: NodeJS.ErrnoException) => (error?.code === "ENOENT" ? "missing" : "other"),
+      )
+      if (state !== "dir") return state === "missing"
+    }
+    return false
+  })
 
 export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handlers) =>
   Effect.gen(function* () {
@@ -70,6 +94,18 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
           const fs = yield* FileSystem.Service
           const raw = yield* FSUtil.Service
           const location = yield* Location.Service
+          // AC-C08b: a folder that is not there (yet) inside the location is an empty listing, not a defect. An
+          // escaping path or a link falls through to `fs.list`, which keeps today's refusal and containment.
+          const target = path.resolve(location.directory, ctx.query.path)
+          if (FSUtil.contains(location.directory, target) && (yield* missingInside(location.directory, target))) {
+            if (!missingListLogged.has(target) && missingListLogged.size < FILE_LIST_MISSING_LOG_MAX) {
+              missingListLogged.add(target)
+              yield* Effect.logWarning("file.list: path not found", {
+                path: path.relative(location.directory, target),
+              })
+            }
+            return []
+          }
           const ignored = ignore()
           const gitignore = yield* raw
             .readFileString(path.join(location.project.directory, ".gitignore"))

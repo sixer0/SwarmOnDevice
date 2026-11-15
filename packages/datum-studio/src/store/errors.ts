@@ -85,6 +85,8 @@ export const STORE_ERROR_CODES = [
   "MEMORY_INDEX_MISSING",
   // 1.2.8 row 45 (PROJ-b, N8-145): studio_mission_place / setProjectDir without an answered placement or tidy decision.
   "PLACE_DECISION_UNANSWERED",
+  // 1.2.9 row 50 (AC-C01, S9-06, N9-001): insertDecision refuses a by: user decision without an attested request.
+  "SESSION_NOT_ATTESTED",
 ] as const
 
 export type StoreErrorCode = (typeof STORE_ERROR_CODES)[number]

@@ -820,6 +820,9 @@ export class MissionStore {
 
   private insertDecision(tx: StoreTx, mission: string, d: MissionDecision, actor: string, opts?: MissionWriteOptions): void {
     assertMissionSchema("Decision", d, `decision ${String(d?.id)}`)
+    // 1.2.9 row 50 (AC-C01, S9-06): the one sink of every decision refuses a by: user decision that no attested
+    // Mission Control request carries, whoever calls it (create, record, answer); path-free detail.
+    if (d.by === "user" && opts?.attested !== true) throw err("SESSION_NOT_ATTESTED", "a by: user decision is stored only from Mission Control in the Swarm app (attested session)", { mission, decision: d.id })
     if (d.autonomous === true && opts?.autonomousMode === false) throw autonomousModeOff(mission, d.id)
     if (this.hasDecision(tx, mission, d.id)) throw err("DECISION_ID_TAKEN", "decision id exists", { mission, decision: d.id })
     for (const s of d.supersedes ?? []) if (!this.hasDecision(tx, mission, s)) throw err("DECISION_UNKNOWN", "superseded decision is not recorded", { mission, decision: d.id, supersedes: s })
@@ -1041,7 +1044,8 @@ export class MissionStore {
     // code without a session leaves both NULL (no label). An attestation without a session is not recorded.
     const via = typeof answer.via === "string" && VIA_RE.test(answer.via) ? answer.via : null
     const attested = via === null ? null : answer.attested === true ? 1 : 0
-    this.insertDecision(tx, mission, decision, actor)
+    // 1.2.9 row 50 (S9-06): the sink sees the request's attestation (opts.attested), not the answer's arguments.
+    this.insertDecision(tx, mission, decision, actor, { attested: opts?.attested === true })
     tx.run("UPDATE mission_decision_request SET status = 'answered', answer_option = ?, answered_by = ?, answer_decision_id = ?, time_closed = ?, answered_via = ?, answered_attested = ? WHERE mission_id = ? AND request_id = ?", [
       option.id,
       answer.by,

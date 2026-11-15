@@ -85,6 +85,21 @@ export interface HostToolSession {
    * without it (SESSION_NOT_ATTESTED, N8-460); decision answers record it (N8-461).
    */
   attested?: true
+  /**
+   * 1.2.9 row 68b (S9-01, gate 68 F2): `true` when the MCP session was OPENED attested, set by the host from the
+   * session (mcp-server.ts), never from a call's `_meta` or arguments. Unlike `attested`, it survives the per-request
+   * strip of a keyless replay. For log lines only (`sessionLogRef`), never for access.
+   */
+  openedAttested?: true
+}
+
+/**
+ * 1.2.9 row 68b (S9-01): the one way a host log line names its session. A session opened attested is `attested: true`
+ * and never its id (a keyless replay included: `openedAttested` survives the per-request strip); any other session
+ * keeps `sessionId` (debuggable, not a secret).
+ */
+export function sessionLogRef(s: Pick<HostToolSession, "sessionId" | "attested" | "openedAttested">): { sessionId: string } | { attested: true } {
+  return s.openedAttested === true || s.attested === true ? { attested: true } : { sessionId: s.sessionId }
 }
 
 /** Row 188: `_meta` key of a tools/call that names the caller's session. */
@@ -100,7 +115,7 @@ export const MEMORY_INDEX_META = "studio/memoryIndex"
 const MEMORY_INDEX_MISSION_RE = /^\d{4}-\d{2}-\d{2}[_-][a-z0-9][a-z0-9_-]{0,80}$/
 
 /** Row 39: a well-formed `studio/memoryIndex` value, from Swarm only; undefined otherwise (ignored, never refused). */
-export function memoryIndexOf(agentId: string, raw: unknown): HostToolSession["memoryIndex"] {
+function memoryIndexOf(agentId: string, raw: unknown): HostToolSession["memoryIndex"] {
   if (agentId !== "swarm" || raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined
   const { missionId, present } = raw as Record<string, unknown>
   if (typeof missionId !== "string" || !MEMORY_INDEX_MISSION_RE.test(missionId) || typeof present !== "boolean") return undefined

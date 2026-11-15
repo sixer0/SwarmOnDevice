@@ -102,6 +102,7 @@ export const OWN_API_PERSON_ONLY_TEXT =
  * 1.2.8 row 36d (C59): X `own_api` with reason `auto_approve_run`, an agent's shell starting a nested `swarm run` or TUI
  * with `--auto`, `--yolo` or `--dangerously-skip-permissions` (that run would approve its own permission prompts).
  */
+/** @internal test seam */
 export const OWN_API_AUTO_APPROVE_RUN_TEXT =
   "This call did not run. An agent may not start Swarm with --auto, --yolo or --dangerously-skip-permissions: that run would approve its own permission prompts, past what the person allowed this session. Do the work with the tools you were given, or start the run without that flag, and list anything that needs the person in your final message."
 

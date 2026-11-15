@@ -312,11 +312,11 @@ interface Attach {
  * Swarm 1.2.8 row 32 (H-N13, N8-207): pagar ber-info `diagram`, atau `json` yang objek puncaknya
  * `"type": "diagram"`, menjadi blok `DiagramV2`; caption dan sumber dari baris sesudahnya.
  */
-export const DIAGRAM_FENCE_INFOS = ["diagram", "json"] as const;
+const DIAGRAM_FENCE_INFOS = ["diagram", "json"] as const;
 /** N8-208: pagar yang tampak diagram tetapi ditolak validator v2; tetap `monoBlock`. */
-export const DIAGRAM_FENCE_INVALID = "DIAGRAM_FENCE_INVALID";
+const DIAGRAM_FENCE_INVALID = "DIAGRAM_FENCE_INVALID";
 /** N8-209: pagar `json` dengan `type` selain `diagram`; tetap kode dan disebut di ringkasan. */
-export const FENCE_KEPT_AS_CODE = "FENCE_KEPT_AS_CODE";
+const FENCE_KEPT_AS_CODE = "FENCE_KEPT_AS_CODE";
 const FENCE_TYPE_TOKEN_RE = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
 const DIAGRAM_FENCE_MAX_MESSAGES = 5;
 

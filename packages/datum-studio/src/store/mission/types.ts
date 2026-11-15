@@ -271,11 +271,11 @@ export interface DecisionOption {
 }
 
 /** 1.2.8 row 45 (N8-146, N8-147): a decision request about where missions live (01d §3.3). */
-export type DecisionTopic = "project-placement" | "project-tidy"
+type DecisionTopic = "project-placement" | "project-tidy"
 /** 1.2.8 row 45 (N8-149): product, institution or research theme (U1). */
 export type GroupKind = "product" | "institution" | "theme"
 /** 1.2.8 row 45 (N8-148): one tidy proposal line; `group: null` = the mission stays at the root. */
-export interface TidyProposalItem {
+interface TidyProposalItem {
   mission: string
   group: string | null
   groupKind?: GroupKind
@@ -368,6 +368,12 @@ export interface MissionWriteOptions {
    * close of mission `missionId` with `present: false` is refused MEMORY_INDEX_MISSING. `undefined` = not checked.
    */
   memoryIndex?: { missionId: string; present: boolean }
+  /**
+   * 1.2.9 row 50 (AC-C01, S9-06): whether this request came from an attested Mission Control session (the host sets it
+   * per request; never from the arguments). A `by: "user"` decision is stored only when it is `true`; anything else is
+   * refused SESSION_NOT_ATTESTED at the one decision sink (`insertDecision`).
+   */
+  attested?: boolean
 }
 
 export interface RowPatch {

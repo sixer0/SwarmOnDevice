@@ -31,6 +31,9 @@ const CHECK: Record<DiagramDefectKind, string> = {
   frameOutside: "GEOM_FRAME_OUTSIDE", // Swarm 1.2.8 row 55c (C133)
   edgeOutside: "GEOM_EDGE_OUTSIDE", // Swarm 1.2.8 row 68a (C166)
   edgeEndOffNode: "GEOM_EDGE_END", // Swarm 1.2.8 row 68a (C166)
+  edgeAlongOutline: "GEOM_EDGE_ALONG", // Swarm 1.2.9 row 31 (AC-A09, N9-021: the Q1 sweep found 0 unintended flips)
+  edgeOverHeader: "GEOM_EDGE_HEADER", // Swarm 1.2.9 row 32 (AC-A10a, N9-027: the Q1 sweep found 0 unintended flips)
+  edgeDoublesBack: "GEOM_EDGE_DOUBLE_BACK", // Swarm 1.2.9 row 33 (AC-A10b, N9-032: the Q1 sweep found 0 unintended flips)
 };
 
 const WHAT: Record<DiagramDefectKind, string> = {
@@ -49,6 +52,9 @@ const WHAT: Record<DiagramDefectKind, string> = {
   frameOutside: "bingkai wadah (kolam, lajur, fase, zona, grup) keluar batas gambar",
   edgeOutside: "konektor keluar batas gambar",
   edgeEndOffNode: "ujung konektor tidak pada garis tepi simpul (mis. pada bingkai zona)",
+  edgeAlongOutline: "garis menyusuri tepi simpul lain",
+  edgeOverHeader: "garis melintasi teks judul kolam/lajur",
+  edgeDoublesBack: "garis berbalik arah di tepi gambar",
 };
 
 const SUGGEST: Record<DiagramDefectKind, string> = {
@@ -72,6 +78,12 @@ const SUGGEST: Record<DiagramDefectKind, string> = {
   // Swarm 1.2.8 row 68a: the route, not the labels, needs to change.
   edgeOutside: "pindahkan titik via ke dalam gambar atau pakai sisi simpul lain (from_side/to_side)",
   edgeEndOffNode: "hapus from_side/to_side/via konektor itu agar router memilih sisi, atau ubah urutan simpul",
+  // Swarm 1.2.9 row 31 (AC-A09, N9-025): the run must leave the other node's side.
+  edgeAlongOutline: "geser simpul atau atur via agar garis tidak menempel di tepi simpul lain",
+  // Swarm 1.2.9 row 32 (AC-A10a, N9-030): the run must pass outside the header band.
+  edgeOverHeader: "atur via agar garis lewat di luar pita judul kolam/lajur",
+  // Swarm 1.2.9 row 33 (AC-A10b, N9-034): the clamped via must go, or the connector must leave by another side.
+  edgeDoublesBack: "hapus via di tepi gambar atau pilih sisi lain",
 };
 
 /** Isu REPORT per jenis cacat tersisa, dengan contoh teks dan `suggest`. */

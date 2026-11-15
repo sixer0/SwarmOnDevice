@@ -560,6 +560,12 @@ const CHAR_INTENT: Record<string, [string, string]> = {
     ["AC-VIS-56c", "83825ace228e8e9e 411292684f467f10 83825ace228e8e9e 411292684f467f10 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[R1]"],
   "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec":
     ["AC-VIS-56c", "83825ace228e8e9e 411292684f467f10 83825ace228e8e9e 411292684f467f10 | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[] | V[] I[] G[GEOM_ARROW_TANGENT:REPORT] E[R1]"],
+  // Swarm 1.2.9 row 31 (AC-A09, INTENT): at 166 mm m1 runs 7.1 mm down Sumber 0's right side and Tujuan's left side;
+  // the new kind reports it (GEOM_EDGE_ALONG, eye-checked in the Q1 sweep). Bytes unchanged.
+  // Swarm 1.2.9 row 33 (AC-A10b, INTENT): the same m1 leaves Sumber 0 to x 36.76 and turns straight back (a 4.76 mm
+  // spur); GEOM_EDGE_DOUBLE_BACK reports it too (eye-checked in the row 33 Q1 sweep). Bytes unchanged.
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/6/spec":
+    ["AC-A09, AC-A10b", "f6b91b24aa6af503 eea8450c80a2d003 f6b91b24aa6af503 eea8450c80a2d003 | V[] I[] G[GEOM_EDGE_ALONG:REPORT,GEOM_EDGE_DOUBLE_BACK:REPORT] E[] | V[] I[] G[GEOM_EDGE_ALONG:REPORT,GEOM_EDGE_DOUBLE_BACK:REPORT] E[R2]"],
 }
 /**
  * Swarm 1.2.8 row 56c (C51, C75, C101; user item 7): intended changes of the bytes outside <marker>, key -> [reason,
@@ -650,6 +656,39 @@ const CHAR_JOG_INTENT: Record<string, [string, string, string]> = {
   "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec": [JOG_56D, "ac8c1dbc22b0a5c2", "ac8c1dbc22b0a5c2"],
   "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec": [JOG_56D, "ac8c1dbc22b0a5c2", "ac8c1dbc22b0a5c2"],
 }
+/**
+ * Swarm 1.2.9 row 26 (AC-A02, INTENT; C12): link paths of non-legacy figures no longer repeat a vertex (a repeated
+ * point draws nothing; every other byte, the markers and the verdicts unchanged; the PNGs are pixel-identical). Key ->
+ * [AC line, HEAD sync hash, HEAD auto hash]; replaces the BASE, 56c, 57c and 56d values. Legacy flows keep their bytes.
+ * Generated with REL128_VIS0_CHAR_PRINT=1 on the row 26 engine (scratch clone of HEAD 0552f875f8 + the row 26 files).
+ */
+const CHAR_A02_INTENT: Record<string, [string, string, string]> = {
+  "engine-rev-a/svg/fixtures/case04.studio.json#": ["AC-A02", "d09309c43d10f8d7", "d09309c43d10f8d7"],
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json#": ["AC-A02", "8f93bae416f193d9", "8f93bae416f193d9"],
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec": ["AC-A02", "1487fd9747fc27e9", "1487fd9747fc27e9"],
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#": ["AC-A02", "0e93add1660c4656", "28e3b2983ce685e1"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/1/spec": ["AC-A02", "f89823a7648f0338", "f89823a7648f0338"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/4/spec": ["AC-A02", "448bde9827606685", "448bde9827606685"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/6/spec": ["AC-A02", "ba103e7454844e3f", "ba103e7454844e3f"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/7/spec": ["AC-A02", "e7b955c18483d103", "e7b955c18483d103"],
+  "fixtures/syn127/n7_autofit_t03_rest.json#/spec": ["AC-A02", "03948be68a8e7e86", "03948be68a8e7e86"],
+  "fixtures/syn128/hnb_fit_to_zero.json#/spec": ["AC-A02", "d776a251b4e285eb", "d776a251b4e285eb"],
+  "fixtures/syn128/r18g_lr_166.json#/spec": ["AC-A02", "e7c979dc83dc3cd4", "e7c979dc83dc3cd4"],
+}
+/**
+ * Swarm 1.2.9 row 27 (AC-A04, INTENT): the first render places a label on a dashed connector with the drawn dash
+ * pattern, so its knockout band leaves no dash fragment; one label per key moves along its own run (case04/v2/05
+ * "230 V · 492,6 W" 2.38 mm down; row162 "KENDALI" 0.25 mm left / 2.13 mm up). Markers and verdicts unchanged; legacy
+ * flows keep their bytes. Key -> [AC line, HEAD sync hash, HEAD auto hash]; replaces the BASE, 56c, 57c, 56d and A02
+ * values. Generated with REL128_VIS0_CHAR_PRINT=1 on the row 27 engine (scratch clone of HEAD 2e8d469653 + row 27 svg.ts).
+ */
+const CHAR_A04_INTENT: Record<string, [string, string, string]> = {
+  "engine-rev-a/svg/fixtures/case04.studio.json#": ["AC-A04", "c0bc18b0ed87f111", "c0bc18b0ed87f111"],
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json#": ["AC-A04", "cb2eb7d068181a0c", "cb2eb7d068181a0c"],
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec": ["AC-A04", "31c7431a15105086", "31c7431a15105086"],
+  "engine-rev-a/svg/fixtures/row162_elk_not_better.json#": ["AC-A04", "d28c780630c5ebf5", "d28c780630c5ebf5"],
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#": ["AC-A04", "f6f41d1b018b6e74", "d68c762bbc8a354e"],
+}
 describe("char", () => {
   let corpus: CharEntry[] = []
   const now: Record<string, string> = {}
@@ -670,7 +709,7 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      const route = CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d INTENT: listed HEAD hashes replace BASE's
+      const route = CHAR_A04_INTENT[c.key] ?? CHAR_A02_INTENT[c.key] ?? CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d / 1.2.9 rows 26, 27 INTENT: listed HEAD hashes replace BASE's
       expect([n.so, n.ao], c.key).toEqual(route ? [route[1], route[2]] : [b.so, b.ao])
     }
   })
@@ -696,9 +735,9 @@ describe("char", () => {
   test("explicit-default twins render byte-equal to the spec without the fields, verdicts equal (§3.6 clause 2)", async () => {
     const has = schemaTwinFields()
     console.log(`[rel128-vis0 char] twin fields in the schema: ${has.size} of ${TWIN_FIELDS.length}`)
-    // All or none: BASE has no 1.2.8 field; HEAD (row 52 on) has every one. A partial set means a schema regression.
-    expect([0, TWIN_FIELDS.length]).toContain(has.size)
-    if (has.size === 0) return
+    // The 1.2.9 base (d4282fcfd8) already has every twin field, so the premise must hold: an empty or partial set is a
+    // schema regression and fails here instead of skipping the loop (AC-B07b; the 1.2.8 BASE/HEAD dual mode is gone).
+    expect(has.size).toBe(TWIN_FIELDS.length)
     let twins = 0
     for (const c of corpus) {
       const twin = explicitDefaults(c.v1, has)

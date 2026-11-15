@@ -130,10 +130,15 @@ export const LIMITS = {
 } as const;
 
 /** Swarm 1.2.8 row 52 (VIS-0a): exported aliases of the LIMITS keys above (register names). */
+/** @internal test seam */
 export const LINE_STYLE_MAX = LIMITS.max_line_styles;
+/** @internal test seam */
 export const LINE_STYLE_MAX_WITH_MARK = LIMITS.max_line_styles_with_mark;
+/** @internal test seam */
 export const PHASES_MAX = LIMITS.max_phases;
+/** @internal test seam */
 export const POOLS_MAX = LIMITS.max_pools;
+/** @internal test seam */
 export const VIA_MAX = LIMITS.max_via;
 export const CURVE_SAMPLES = LIMITS.curve_samples;
 export const ARROW_SIZES_MM = LIMITS.arrow_sizes_mm;
@@ -142,6 +147,7 @@ export const ARROW_SIZES_MM = LIMITS.arrow_sizes_mm;
  * Heads are drawn in `markerUnits="userSpaceOnUse"` mm (core/svg.ts), so every size of `ARROW_SIZES_MM` is a printed
  * length; the smallest (`s`) equals this floor.
  */
+/** @internal test seam */
 export const ARROW_HEAD_MIN_MM = 2.5;
 export const WEIGHT_MM = LIMITS.weight_mm;
 export const SHAPE_GLYPH_MM = LIMITS.shape_glyph_mm;

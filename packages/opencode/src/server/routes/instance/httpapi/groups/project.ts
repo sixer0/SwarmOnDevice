@@ -22,7 +22,7 @@ const TrustPayload = Schema.Struct({ decision: ProjectTrust.Decision })
 // 1.2.8 row 44b (F-PROJ PROJ-i, 01d section 6, N8-130, N8-448): move one mission folder from the Default Project root
 // into a group. Person-only twice: the autonomy table refuses an agent's call (row 28, PERSON_ONLY_ROUTES), and the
 // handler needs the desktop app's per-launch nonce, whoever calls (a server holding none refuses every caller).
-export const RehomePath = `${root}/rehome`
+const RehomePath = `${root}/rehome`
 
 export const RehomePayload = Schema.Struct({
   missionId: Schema.String,
@@ -47,7 +47,15 @@ export const RehomePayload = Schema.Struct({
 
 const RehomeMoved = Schema.Struct({
   journalId: Schema.String,
-  moved: Schema.Struct({ folder: Schema.Boolean, notes: Schema.Number, sessions: Schema.Number }),
+  moved: Schema.Struct({
+    folder: Schema.Boolean,
+    notes: Schema.Number,
+    sessions: Schema.Number,
+    // 1.2.9 row 43 (AC-B04, N9-065): rehome.ts reports it; undeclared, the encoder dropped it from the answer.
+    renamed: Schema.optional(Schema.Record(Schema.String, Schema.String)).annotate({
+      description: "old note id -> new id, only when ids collided",
+    }),
+  }),
   replayed: Schema.optional(Schema.Boolean),
 }).annotate({ identifier: "ProjectRehomeMoved" })
 
@@ -60,7 +68,7 @@ const RehomePlanned = Schema.Struct({
   }),
 }).annotate({ identifier: "ProjectRehomePlanned" })
 
-export const RehomeCodes = [
+const RehomeCodes = [
   "REHOME_SOURCE_MISSING",
   "REHOME_TARGET_EXISTS",
   "REHOME_OUTSIDE_ROOT",

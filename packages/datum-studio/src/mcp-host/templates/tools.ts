@@ -42,7 +42,7 @@ import {
   type TemplateVersionListItem,
   type UserTemplateSaveResult,
 } from "../../../vendor/src/lib/studio/services/templates/service"
-import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
+import { sessionLogRef, type HostToolExtension, type HostToolSession } from "../tool-table.ts"
 import { TEMPLATE_TOOL_NAMES, TEMPLATE_TOOL_SCHEMAS, type TemplateToolName } from "./schemas.ts"
 
 type Rec = Record<string, unknown>
@@ -460,7 +460,7 @@ export function templateHostExtension(opts: TemplateHostExtensionOptions = {}): 
     async call(raw: Record<string, unknown>, session: HostToolSession): Promise<CallToolResult> {
       const cid = randomUUID()
       const t0 = Date.now()
-      const ctx = { correlationId: cid, tool: name, agentId: session.agentId, sessionId: session.sessionId, args: argSummary(name, raw ?? {}) }
+      const ctx = { correlationId: cid, tool: name, agentId: session.agentId, ...sessionLogRef(session), args: argSummary(name, raw ?? {}) }
       try {
         const args = validateArgs(name, (raw ?? {}) as Rec)
         const out = await BODIES[name](args, session, cid)

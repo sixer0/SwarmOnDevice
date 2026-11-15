@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { realBridgeRunnable, startRealBridge, type RealBridge } from "../verify-gate-e2e/real-bridge"
+import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
 
 const E2E = process.env.ROW143A_E2E === "1"
 const e2e = E2E ? describe : describe.skip
@@ -137,7 +138,7 @@ beforeAll(async () => {
   resetRenderRateLimiter()
   store = await mod.openHostStore(STORE, { release: "1.2.1", logFile: LOG, missionGuard: true })
   mod.configureTemplateSource({ templatesDir: TEMPLATES, assetRepoRoot: VENDOR, release: "1.2.1" })
-  host = await mod.startStudioHostServer({ store, token: TOKEN, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
+  host = await mod.startStudioHostServer({ store, token: TOKEN, missionControlKey: PERSON_KEY, hostname: "127.0.0.1", port: 0, log, facts: FACTS, extensions: mod.missionHostExtension(store, { log, exporter: null }) })
   const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
   const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
   c = new Client({ name: "row143a-test", version: "0" })
@@ -148,7 +149,8 @@ beforeAll(async () => {
     }),
   )
   const row = { id: "1", phase: "implementation", kind: "implementation", title: "Row 1", agent: "coder-execution", model: { tier: "thinker" }, deps: [], size: "S", status: "pending", output: "implementation/1.md", verification: "tests pass", review: "gate" }
-  const cr = await call("studio_mission_create", { mission: { id: M, title: "Row 143a cases", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-08", text: "go" }] } })
+  // 1.2.9 row 50d (C46, C72): the person's U1 comes from an attested request (Mission Control key on the request).
+  const cr = await personCaller({ url: host.url, token: TOKEN, cwd: PROJECT, fetchImpl: realFetch })("studio_mission_create", { mission: { id: M, title: "Row 143a cases", type: "feature-release", owner: "master-controller", project: { dir: PROJECT }, rows: [row], decisions: [{ id: "U1", by: "user", date: "2026-11-08", text: "go" }] } })
   expect(ok(cr)).toBe(true)
   expect(ok(await call("studio_mission_approve", { mission: M, decision: "U1" }))).toBe(true)
   expect(ok(await call("studio_mission_set_status", { mission: M, to: "running" }))).toBe(true)

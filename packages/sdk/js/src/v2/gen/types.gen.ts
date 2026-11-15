@@ -3160,6 +3160,9 @@ export type ProjectRehomeMoved = {
     folder: boolean
     notes: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     sessions: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    renamed?: {
+      [key: string]: string
+    }
   }
   replayed?: boolean
 }

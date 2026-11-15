@@ -38,7 +38,7 @@ import { DASH_PATTERNS, DiagramDefect, EDGE_KINDS, SHAPES, Sheet, type SheetNode
 import { placeDiagram } from "../../diagram/build/place";
 import { routePlaced } from "../../diagram/build/route";
 import { layoutFlow } from "../../diagram/layout-a";
-import { ANNOTATION_BRACKET_MM, dataFoldMm, isLabelBelow, LABEL_BELOW_GAP_MM, labelBelowOutline, SHAPE_GLYPH_MM, taskRadiusMm } from "../../diagram/fit/text";
+import { ANNOTATION_BRACKET_MM, dataFoldMm, isLabelBelow, isLabelBeside, LABEL_BELOW_GAP_MM, LABEL_BESIDE_GAP_MM, labelBelowOutline, SHAPE_GLYPH_MM, taskRadiusMm } from "../../diagram/fit/text";
 import { defect, figureGrid } from "../core/guards";
 import { kindKey } from "../core/palette";
 import { escAttr, num, ptToMm, textWidthMm } from "../core/svg";
@@ -80,6 +80,11 @@ export function renderFlowchart(spec: StudioChartV1, canvas: ChartCanvas, tpl: R
     s = { ...s, family: "flow" };
   }
   if (!Array.isArray(s.nodes) || s.nodes.length === 0) throw defect("DC-G1", `${ctx.fid} — flowchart tanpa langkah`, { code: "G-04" });
+  // Swarm 1.2.9 row 35 (AC-A11b, N9-077): a chart with a label-below BPMN shape and no `direction` is laid out by rank
+  // along its edges with `direction: "TB"` (the guide's advice for serial flows), so `layoutFlow` uses the engine's
+  // ranked layout instead of the legacy list. Specs with `direction` and charts without such a shape are unchanged
+  // (g04 byte-identical, C10(f)).
+  if (s.direction == null && s.nodes.some((n) => isLabelBelow(n?.shape))) s = { ...s, direction: "TB" };
 
   const maxSteps = kindInt(ctx, "maxSteps", 10);
   ran(ctx, kindKey("G-04", "maxSteps"));
@@ -161,6 +166,10 @@ export function renderFlowchart(spec: StudioChartV1, canvas: ChartCanvas, tpl: R
   let sy = area.h / bh;
   if (sx > sy * 2.5) sx = sy * 2.5;
   if (sy > sx * 1.5) sy = sx * 1.5;
+  // Swarm 1.2.9 row 34 (AC-A11a, N9-077): a chart with a label-below BPMN shape maps with one uniform scale, centred,
+  // so event outlines stay circles and the connector ends `routePlaced` glued onto them stay on their rims. Charts
+  // without such a shape keep the two-axis scale above (g04 byte-identical, C10(f)).
+  if (nodes.some((n) => isLabelBelow(n.spec.shape))) sx = sy = Math.min(sx, sy);
   const ox = area.x + (area.w - bw * sx) / 2;
   const oy = area.y + (area.h - bh * sy) / 2;
   const map = (x: number, y: number): Pt => ({ x: ox + (x - bx) * sx, y: oy + (y - by) * sy });
@@ -168,21 +177,27 @@ export function renderFlowchart(spec: StudioChartV1, canvas: ChartCanvas, tpl: R
   const T = TYPE_PT[style];
   const edgeW = style === "gallery" ? 0.3 : 0.35;
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  routes.forEach((e, i) => {
+  const drawn = routes.map((e) => {
     const pts = simplify(e.points);
     clipToDiamond(pts, byId.get(e.from), 0);
     clipToDiamond(pts, byId.get(e.to), pts.length - 1);
-    drawEdge(ctx, { ...e, points: pts }, i, map, edgeW, T.edge);
+    return { ...e, points: pts };
   });
+  spreadHeads(drawn, byId, sx);
+  drawn.forEach((e, i) => drawEdge(ctx, e, i, map, edgeW, T.edge));
 
   const nodeW = style === "gallery" ? 0.45 : 0.35;
   let overflow = 0;
-  nodes.forEach((n, i) => {
+  const boxes = nodes.map((n) => {
     const p = map(n.x, n.y);
-    const box = { x: p.x, y: p.y, w: n.w * sx, h: n.h * sy };
+    return { x: p.x, y: p.y, w: n.w * sx, h: n.h * sy };
+  });
+  nodes.forEach((n, i) => {
+    const box = boxes[i];
     let token = accentIds.has(n.id) ? "signal" : nodeStrokeToken(n);
     if (style === "gallery" && token === "ink700") token = "ink900";
-    if (!drawNode(ctx, n, box, i, tokenHex(pal, token), nodeW, T.node)) overflow++;
+    const others = boxes.filter((_, j) => j !== i);
+    if (!drawNode(ctx, n, box, i, tokenHex(pal, token), nodeW, T.node, { right: area.x + area.w, others })) overflow++;
   });
   if (overflow) report(ctx, "G-04.labelFit", `${overflow} label simpul melebihi bentuknya pada lantai ${ctx.minFontPt} pt`);
   return endChart(ctx);
@@ -253,7 +268,13 @@ export function fitLines(ctx: Pick<GCtx, "minFontPt">, label: string, room: { w:
   return { lines: best, size: ctx.minFontPt, fits: false };
 }
 
-function drawNode(ctx: GCtx, n: SheetNode, b: Box, index: number, stroke: string, strokeW: number, basePt: number): boolean {
+/** Row 35: room for a label drawn beside an event: the drawing area's right edge and the other node boxes (chart mm). */
+interface BesideRoom {
+  right: number;
+  others: readonly Box[];
+}
+
+function drawNode(ctx: GCtx, n: SheetNode, b: Box, index: number, stroke: string, strokeW: number, basePt: number, room?: BesideRoom): boolean {
   const { doc, pal } = ctx;
   const shape: DiagramShape = n.spec.shape ?? "box";
   const mark = { mark: "node" as const, series: "langkah", index };
@@ -365,7 +386,7 @@ function drawNode(ctx: GCtx, n: SheetNode, b: Box, index: number, stroke: string
     case "gateway_parallel":
     case "gateway_inclusive":
     case "gateway_complex":
-      return drawLabelBelow(ctx, n, b, o, stroke, strokeW, basePt);
+      return drawLabelBelow(ctx, n, b, o, stroke, strokeW, basePt, room);
     default:
       doc.rect(x, y, w, h, pal.paper, o);
   }
@@ -381,9 +402,9 @@ function drawNode(ctx: GCtx, n: SheetNode, b: Box, index: number, stroke: string
 /**
  * Swarm 1.2.8 row 54b (VIS-3b, C12 OP-18-4): a BPMN event or gateway in the chart flowchart. The outline is the diagram
  * engine's outline (fixed size at the top centre of the layout cell) mapped to the chart scale, so the routed connector
- * ends (glued onto that outline by `routePlaced`) touch it; the marker is centred in it and the label sits below it.
+ * ends (glued onto that outline by `routePlaced`) touch it; the marker is centred in it and the label sits below it (1.2.9 row 35: beside it when the engine marks it so).
  */
-function drawLabelBelow(ctx: GCtx, n: SheetNode, b: Box, o: { mark: { mark: "node"; series: string; index: number }; stroke: string; strokeWidthMm: number; attrs: string }, stroke: string, strokeW: number, basePt: number): boolean {
+function drawLabelBelow(ctx: GCtx, n: SheetNode, b: Box, o: { mark: { mark: "node"; series: string; index: number }; stroke: string; strokeWidthMm: number; attrs: string }, stroke: string, strokeW: number, basePt: number, room?: BesideRoom): boolean {
   const { doc, pal } = ctx;
   const shape = n.spec.shape ?? "box";
   const sx = b.w / n.w;
@@ -413,6 +434,23 @@ function drawLabelBelow(ctx: GCtx, n: SheetNode, b: Box, o: { mark: { mark: "nod
     doc.path(ellipseD(cx, cy, ow / 2, oh / 2), pal.paper, { ...o, strokeWidthMm: w });
     if (shape === "event_intermediate") doc.path(ellipseD(cx, cy, ow / 2 - 0.6 * sx, oh / 2 - 0.6 * sy), "none", line);
   }
+  // Swarm 1.2.9 row 35 (AC-A11b eye): `routePlaced` marks an event left downward with room on its right as labelled
+  // beside (row 57c) and starts its bottom connector on the circle; the label then goes beside the circle, vertically
+  // centred, as in the diagram engine, so the connector does not run through it. If it does not fit in the room up to
+  // the next node or the drawing edge at the chart's physical type size, it stays below.
+  if (room && isLabelBeside(n)) {
+    const x0 = ox + ow + strokeW / 2 + LABEL_BESIDE_GAP_MM;
+    const band = { lo: oy - LABEL_BESIDE_GAP_MM, hi: oy + oh + LABEL_BESIDE_GAP_MM };
+    const limit = Math.min(room.right, ...room.others.filter((r) => r.x + r.w > x0 && r.y < band.hi && r.y + r.h > band.lo).map((r) => r.x - LABEL_BESIDE_GAP_MM / 2));
+    const fit = fitLines(ctx, n.spec.label ?? n.id, { w: limit - x0, h: oh + 2 * LABEL_BESIDE_GAP_MM }, basePt);
+    if (fit.fits) {
+      const size = ptToMm(fit.size);
+      const lh = size * 1.2;
+      const top = cy - (size + (fit.lines.length - 1) * lh) / 2;
+      fit.lines.forEach((l, k) => doc.text(x0, top + size * 0.75 + k * lh, l, { sizePt: fit.size, fill: pal.ink900, anchor: "start" }));
+      return true;
+    }
+  }
   const top = oy + oh + strokeW + LABEL_BELOW_GAP_MM;
   const fit = fitLines(ctx, n.spec.label ?? n.id, { w: b.w * 0.88, h: Math.max(b.y + b.h - top, ptToMm(ctx.minFontPt) * 1.2) }, basePt);
   const lh = ptToMm(fit.size) * 1.2;
@@ -420,7 +458,7 @@ function drawLabelBelow(ctx: GCtx, n: SheetNode, b: Box, o: { mark: { mark: "nod
   return fit.fits;
 }
 
-/** Row 54b: closed ellipse as two arcs (chart outlines may be curved; the chart scale is not uniform). */
+/** Row 54b: closed ellipse as two arcs. 1.2.9 row 34: with a label-below shape the chart scale is uniform, so rx = ry. */
 function ellipseD(cx: number, cy: number, rx: number, ry: number): string {
   return `M${num(cx - rx)} ${num(cy)}A${num(rx)} ${num(ry)} 0 1 0 ${num(cx + rx)} ${num(cy)}A${num(rx)} ${num(ry)} 0 1 0 ${num(cx - rx)} ${num(cy)}Z`;
 }
@@ -477,6 +515,69 @@ export function simplify(points: ReadonlyArray<XY>): XY[] {
   });
 }
 
+/** Arrowhead length at full size (chart mm); its full width is `HEAD_MM * 0.9` (`drawEdge`). */
+const HEAD_MM = 1.4;
+/** Row 66b: clear space between two spread arrowheads (chart mm), so their base corners do not touch. */
+const HEAD_GAP_MM = 0.3;
+
+/**
+ * Swarm 1.2.9 row 66b (gate 66 F2, C77). The engine fans several ends into one side of a BPMN event or gateway over the
+ * middle of its fixed outline (`route-ends.ts` `anchor`, on the sheet); the chart scale shrinks that fan while the
+ * arrowheads keep their physical size, so two heads into one event could sit ~0.58 mm apart and read as one doubled head.
+ * When the tips of two such ends are closer than one head width in the chart, the ends are spread symmetrically about
+ * the outline's centre, one head width plus a gap apart, and put back on the outline (circle or diamond); the last
+ * segment moves with its tip, so the route stays orthogonal. If that spread does not fit in the middle 80 % of the
+ * outline, the ends meet at its centre instead and their heads merge into one. Only label-below BPMN targets are
+ * touched; every other chart (g04 and the parity charts) keeps its bytes. `scale` is chart mm per sheet mm.
+ */
+function spreadHeads(edges: Array<RoutedEdge & { points: XY[] }>, byId: ReadonlyMap<string, SheetNode>, scale: number): void {
+  const groups = new Map<string, { n: SheetNode; side: "top" | "bottom" | "left" | "right"; edges: Array<{ points: XY[] }> }>();
+  for (const e of edges) {
+    const n = byId.get(e.to);
+    const k = e.points.length;
+    if (!n || !isLabelBelow(n.spec.shape) || k < 2) continue;
+    const [a, t] = [e.points[k - 2], e.points[k - 1]];
+    const vertical = Math.abs(a[0] - t[0]) < 1e-6;
+    if (!vertical && Math.abs(a[1] - t[1]) >= 1e-6) continue;
+    const side = vertical ? (t[1] > a[1] ? "top" : "bottom") : t[0] > a[0] ? "left" : "right";
+    const g = groups.get(`${n.id}\u0000${side}`) ?? { n, side, edges: [] };
+    g.edges.push(e);
+    groups.set(`${n.id}\u0000${side}`, g);
+  }
+  for (const g of groups.values()) {
+    if (g.edges.length < 2) continue;
+    const along = g.side === "top" || g.side === "bottom" ? 0 : 1;
+    const tipU = (e: { points: XY[] }) => e.points[e.points.length - 1][along];
+    const sorted = [...g.edges].sort((p, q) => tipU(p) - tipU(q));
+    const headW = HEAD_MM * 0.9;
+    if (sorted.every((e, i) => i === 0 || (tipU(e) - tipU(sorted[i - 1])) * scale >= headW)) continue;
+    const ol = labelBelowOutline(g.n);
+    const half = along === 0 ? ol.w / 2 : ol.h / 2;
+    const across = along === 0 ? ol.h / 2 : ol.w / 2;
+    const centre = along === 0 ? ol.x + ol.w / 2 : ol.y + ol.h / 2;
+    const middle = along === 0 ? ol.y + ol.h / 2 : ol.x + ol.w / 2;
+    const step0 = (headW + HEAD_GAP_MM) / scale;
+    const step = ((sorted.length - 1) / 2) * step0 <= half * 0.8 ? step0 : 0;
+    const sign = g.side === "top" || g.side === "left" ? -1 : 1;
+    sorted.forEach((e, i) => {
+      const pts = e.points;
+      const k = pts.length;
+      const u = centre + (i - (sorted.length - 1) / 2) * step;
+      const f = Math.abs(u - centre) / half;
+      // the rim of the outline at `u` (a bottom end stays where the engine put it, under the label block)
+      const v = g.side === "bottom" ? pts[k - 1][1 - along] : middle + sign * across * (g.n.spec.shape?.startsWith("gateway_") ? 1 - f : Math.sqrt(1 - f * f));
+      const at = (uu: number, vv: number): XY => (along === 0 ? [uu, vv] : [vv, uu]);
+      if (k === 2) {
+        const mid = (pts[0][1 - along] + pts[1][1 - along]) / 2;
+        pts.splice(1, 0, at(pts[0][along], mid), at(u, mid));
+      } else {
+        pts[k - 2] = at(u, pts[k - 2][1 - along]);
+      }
+      pts[pts.length - 1] = at(u, v);
+    });
+  }
+}
+
 function drawEdge(ctx: GCtx, e: RoutedEdge, index: number, map: (x: number, y: number) => Pt, w: number, labelPt: number): void {
   const { doc, pal } = ctx;
   const kind = EDGE_KINDS[e.kind] ?? EDGE_KINDS.data;
@@ -489,7 +590,7 @@ function drawEdge(ctx: GCtx, e: RoutedEdge, index: number, map: (x: number, y: n
   const segL = Math.hypot(tip.x - a.x, tip.y - a.y) || 1;
   const ux = (tip.x - a.x) / segL;
   const uy = (tip.y - a.y) / segL;
-  const headL = Math.min(1.4, segL * 0.6);
+  const headL = Math.min(HEAD_MM, segL * 0.6);
   const headW = headL * 0.45;
   const base = { x: tip.x - ux * headL, y: tip.y - uy * headL };
   const line = kind.head === "solid" ? [...pts.slice(0, -1), base] : pts;

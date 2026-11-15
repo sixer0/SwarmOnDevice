@@ -218,15 +218,15 @@ function outlineD(pts: readonly OutlinePt[]): string {
  * shows only beside and below the node. `doubled`: the inner divider lies in the free band between the text block's
  * ink bottom and the inner rectangle's bottom line, centred in it, at least `DOUBLED_DIVIDER_CLEAR_MM` from both.
  */
-export const DOUBLED_DIVIDER_CLEAR_MM = 0.4;
+const DOUBLED_DIVIDER_CLEAR_MM = 0.4;
 const DOUBLED_INSET_MM = 1.2;
 
-export function shadowUnderlaySvg(x: number, y: number, w: number, h: number): string {
+function shadowUnderlaySvg(x: number, y: number, w: number, h: number): string {
   return shadowRectSvg(x, y, w, h) + `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" fill="${PAPER}"/>`;
 }
 
 /** Row 57c (C123 item 1): the offset shadow rectangle alone (the first element of `shadowUnderlaySvg`). */
-export function shadowRectSvg(x: number, y: number, w: number, h: number): string {
+function shadowRectSvg(x: number, y: number, w: number, h: number): string {
   const off = snap(LATTICE_Y / 2, 0.1);
   return `<rect x="${r2(x + off)}" y="${r2(y + off)}" width="${r2(w)}" height="${r2(h)}" fill="none" stroke="${colourOf("ink200")}" stroke-width="${r2(STROKE_HAIR)}"/>`;
 }
@@ -243,7 +243,7 @@ export function nodeShadowSvg(nd: SheetNode, canvas?: NodeSvgOptions["canvas"]):
 }
 
 /** Row 53b: y of the doubled divider below a text block whose ink ends at `textBottom`, or null when no band fits. */
-export function doubledDividerY(y: number, h: number, textBottom: number): number | null {
+function doubledDividerY(y: number, h: number, textBottom: number): number | null {
   const innerBottom = y + h - DOUBLED_INSET_MM;
   if (innerBottom - textBottom < 2 * DOUBLED_DIVIDER_CLEAR_MM) return null;
   return (textBottom + innerBottom) / 2;
@@ -617,6 +617,62 @@ function curvedGlyphAnchor(
 }
 
 /**
+ * Swarm 1.2.9 row 66a (gate 66 finding F1, C77): a circle's mark is moved off the axis of every connector end that
+ * meets the circle; a glyph on that axis just inside the rim reads as a junction dot (dg_topology s1 under the ETHERNET
+ * connector after row 28). `ends` holds [outer point, end point] of each connector end (build/svg.ts passes them for
+ * non-legacy figures only); an end within `need` of the rim has an axis: its end segment continued 2 r into the circle.
+ * When the ink of `at` (the row 28 / 61b inside-circle anchor) comes within 1.5 pt of such an axis, the glyph moves
+ * sideways until its ink clears that axis by 1.5 pt, right of it first, then left, lowered only as far as the rim
+ * needs. A place is taken only when its ink stays inside the rim by the row 61b clearance (so within a lattice step
+ * of the outline), clears every axis and stays above the label by 1.5 pt; otherwise `at` is kept. A node with a tag
+ * keeps `at`. Nothing changes for a circle whose mark is already clear of every axis.
+ */
+function markOffAxis(
+  nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">,
+  at: { x: number; y: number },
+  ends: ReadonlyArray<readonly [GlyphPt, GlyphPt]>,
+  pad: number,
+  capMm: number,
+): { x: number; y: number } {
+  if (nd.spec.tag !== undefined && nd.spec.tag !== null && nd.spec.tag !== "") return at;
+  const ink = glyphInk(nd.spec.mark);
+  const r = Math.min(nd.w, nd.h) / 2;
+  const cx = nd.x + nd.w / 2;
+  const cy = nd.y + nd.h / 2;
+  const need = pad + STROKE_PRIMARY / 2;
+  const rIn = r - need;
+  const inkBox = (ax: number, ay: number) => [ax - ink.w, ay - ink.asc, ax, ay + ink.desc] as const;
+  const axes: [GlyphPt, GlyphPt][] = [];
+  for (const [o, e] of ends) {
+    const L = Math.hypot(e[0] - o[0], e[1] - o[1]);
+    if (!(L > 1e-6) || Math.abs(Math.hypot(e[0] - cx, e[1] - cy) - r) > need) continue;
+    axes.push([o, [e[0] + ((e[0] - o[0]) / L) * 2 * r, e[1] + ((e[1] - o[1]) / L) * 2 * r]]);
+  }
+  const clear = (ax: number, ay: number) => axes.every(([a, c]) => boxSegDist(inkBox(ax, ay), a, c) >= pad - 1e-9);
+  const farOf = (ax: number, ay: number) => {
+    const b = inkBox(ax, ay);
+    return Math.max(...[[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]].map(([px, py]) => Math.hypot(px - cx, py - cy)));
+  };
+  const inside = (ax: number, ay: number) => farOf(ax, ay) <= rIn + 1e-9 && r - farOf(ax, ay) <= LATTICE_Y;
+  // Only a glyph inside the rim moves; row 61b keeps a glyph outside it only in a square slot's corner, off the circle.
+  if (clear(at.x, at.y) || !(farOf(at.x, at.y) < r)) return at;
+  const fit = diagramFitActive() ? nodeTextLayout(nd as SheetNode) : null; // as nodeSvg draws a circle's label
+  const labelTop = (fit ? fit.label.y : cy) - FONT_ASCENT_EM * capMm;
+  const blocking = axes.filter(([a, c]) => boxSegDist(inkBox(at.x, at.y), a, c) < pad - 1e-9);
+  const xs = [
+    ...blocking.map(([a, c]) => Math.max(a[0], c[0]) + pad + ink.w),
+    ...blocking.map(([a, c]) => Math.min(a[0], c[0]) - pad),
+  ];
+  for (const ax of xs) {
+    const dx = Math.max(Math.abs(ax - ink.w - cx), Math.abs(ax - cx));
+    if (dx >= rIn) continue;
+    const ay = Math.max(at.y, cy - Math.sqrt(rIn * rIn - dx * dx) + ink.asc);
+    if (inside(ax, ay) && clear(ax, ay) && ay + ink.desc + pad <= labelTop) return { x: ax, y: ay };
+  }
+  return at;
+}
+
+/**
  * Swarm 1.2.6 row 61 (T-05, rev 183/184 GEOM_TEXT_NODE): anchor (text-anchor="end" x, baseline y) of the
  * provenance glyph. Every shape keeps the box anchor (right edge - 1.5 pt, top + caption size), except the two
  * shapes whose top-right corner is cut by a slanted side, where the glyph's ink touched the outline:
@@ -625,7 +681,10 @@ function curvedGlyphAnchor(
  * - diamond: the glyph stays in the top-right corner of the box, outside the outline, and rises (never drops)
  *   until its bottom-left corner clears the upper-right side by the same perpendicular 1.5 pt.
  */
-export function markGlyphAnchor(nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">): { x: number; y: number } {
+export function markGlyphAnchor(
+  nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">,
+  ends?: ReadonlyArray<readonly [GlyphPt, GlyphPt]>,
+): { x: number; y: number } {
   const pad = pt2mm(1.5);
   const capMm = pt2mm(role("caption").size);
   const boxX = nd.x + nd.w - pad;
@@ -639,6 +698,18 @@ export function markGlyphAnchor(nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spe
   }
   // Swarm 1.2.8 row 53 (VIS-1b): on a predefined process the glyph sits inside the right side bar.
   if (shape === "predefined") return { x: boxX - PREDEFINED_BAR_MM, y: boxY };
+  if (shape === "circle" && nd.w > 0 && nd.h > 0) {
+    // Swarm 1.2.9 row 28 (AC-A05, B9-A05): a circle is drawn in the middle of its slot, so the slot's top-right corner
+    // can lie far from the circle (dg_topology s1: slot 74.44 mm wide, mark 29.55 mm right of the rim). The box anchor
+    // is taken from the circle's own square; the slot anchor is kept only when it lies inside that square (a square
+    // slot: unchanged bytes). `curvedGlyphAnchor` then moves the glyph inside the rim when its ink touches it.
+    const r = Math.min(nd.w, nd.h) / 2;
+    const cx = nd.x + nd.w / 2;
+    const cy = nd.y + nd.h / 2;
+    const inSquare = boxX >= cx - r && boxX <= cx + r && boxY >= cy - r && boxY <= cy + r;
+    const at = curvedGlyphAnchor(nd, shape, inSquare ? boxX : cx + r - pad, inSquare ? boxY : cy - r + capMm, pad, capMm);
+    return ends?.length ? markOffAxis(nd, at, ends, pad, capMm) : at; // 1.2.9 row 66a
+  }
   if (shape === "hexagon" || shape === "cylinder" || shape === "circle" || shape === "bus") {
     return curvedGlyphAnchor(nd, shape, boxX, boxY, pad, capMm);
   }
@@ -663,11 +734,11 @@ export function markGlyphAnchor(nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spe
 }
 
 /** Glif asal (mono; pitfall warisan: jangan tukar wajah). Row 124: warna per tanda (Tabel 7.1). */
-export function markGlyphSvg(nd: SheetNode): string {
+export function markGlyphSvg(nd: SheetNode, ends?: ReadonlyArray<readonly [GlyphPt, GlyphPt]>): string {
   const mk = nd.spec.mark;
   const glyph = mk ? MARKS[mk] : "";
   const fill = colourOf(mk ? (MARK_COLOUR_TOKENS[mk] ?? "signal") : "signal");
-  const at = markGlyphAnchor(nd);
+  const at = markGlyphAnchor(nd, ends); // 1.2.9 row 66a: connector ends of a circle (non-legacy figures)
   return (
     `<text x="${r2(at.x)}" y="${r2(at.y)}" ` +
     `font-family="${escAttr(FACES.mono)}" font-size="${pyNum(pt2mm(role("register_block").size), 3)}" ` +
@@ -852,6 +923,7 @@ export function insetForStroke<T extends Pick<SheetNode, "x" | "y" | "w" | "h">>
  * the label block. Shapes not listed (box, shadowed, document, offpage, bus and the BPMN tokens until row 54 draws
  * them) keep the fixed inset; the bus tag stays at the top-left of its box, above the rail (OP-18-10, row 53).
  */
+/** @internal test seam */
 export const TAG_INSET_MM = {
   fixed: pt2mm(1.5),
   bar: PREDEFINED_BAR_MM,
@@ -860,6 +932,7 @@ export const TAG_INSET_MM = {
 } as const;
 
 /** Row 53 (H-TAG): anchor of the tag text of a node (x, baseline, text-anchor), from the shape and the label layout. */
+/** @internal test seam */
 export function tagAnchor(
   nd: Pick<SheetNode, "x" | "y" | "w" | "h" | "spec">,
   fit: ReturnType<typeof nodeTextLayout>,
@@ -936,6 +1009,7 @@ export function nodeTextGroundSvg(
   g: Pick<SheetNode, "x" | "y" | "w" | "h">,
   fit: ReturnType<typeof nodeTextLayout>,
   clipId: string | null,
+  ends?: ReadonlyArray<readonly [GlyphPt, GlyphPt]>,
 ): string {
   const n = nd.spec;
   const cx = nd.x + nd.w / 2.0;
@@ -953,7 +1027,7 @@ export function nodeTextGroundSvg(
   }
   if (n.mark) {
     const glyph = MARKS[n.mark] ?? "";
-    const at = markGlyphAnchor(nd);
+    const at = markGlyphAnchor(nd, ends);
     lines.push({ x: at.x, y: at.y, s: glyph, role: "register_block", anchor: "end", face: "data" });
   }
   if (n.tag) {
@@ -1008,13 +1082,19 @@ export interface NodeSvgOptions extends SvgMarkOptions {
   canvas?: { widthMm: number; heightMm: number };
   /** Row 57c (C123): the sheet drew this node's shadow already (`nodeShadowSvg`); only the paper interior is drawn here. */
   shadowDrawn?: boolean;
+  /**
+   * Swarm 1.2.9 row 66a (gate 66 F1): [outer point, end point] of each connector end of the figure, so a circle's mark
+   * stays off the axis of a connector that meets the circle (`markGlyphAnchor`). build/svg.ts passes it for a marked
+   * circle of a non-legacy figure only; absent = the anchor as before.
+   */
+  markEnds?: ReadonlyArray<readonly [readonly [number, number], readonly [number, number]]>;
 }
 
 export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
   if (isLabelBelow(nd.spec.shape)) return labelBelowNodeSvg(nd, opts);
   const n = nd.spec;
   // Row 165C (F113-9/F113-10): outline inset at the sheet edge; hatch drawn as vector lines under the outline.
-  const { canvas, shadowDrawn, ...markOpts } = opts;
+  const { canvas, shadowDrawn, markEnds, ...markOpts } = opts;
   const g = insetForStroke(nd, canvas, STROKE_PRIMARY);
   const angle = (n.shape ?? "box") === "bus" ? null : nodeHatchAngle(nd);
   const out: string[] = [];
@@ -1035,7 +1115,7 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
       out.push(hatch);
       // Row 165J (F165H-2): a paper ground behind every text line of a hatched node, so no hatch line runs through
       // a glyph (the sub-label and the ID were the hatch colour, ink400). Drawn after the hatch and before the outline.
-      const ground = nodeTextGroundSvg(nd, g, fit, clipShape !== null ? clipId : null);
+      const ground = nodeTextGroundSvg(nd, g, fit, clipShape !== null ? clipId : null, markEnds);
       if (ground) out.push(ground);
     }
   }
@@ -1050,7 +1130,7 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
     out.push(svgText(cx, cy, n.label, { role: "caption", colourToken: "ink900" }));
     if (n.sub) out.push(svgText(cx, cy + capMm, n.sub, { role: "source_line" }));
   }
-  if (n.mark) out.push(markGlyphSvg(nd));
+  if (n.mark) out.push(markGlyphSvg(nd, markEnds));
   if (n.tag) {
     const at = tagAnchor(nd, fit); // row 53 (H-TAG, N8-218): inset per shape, from the drawn outline (F113-9 sheet-edge inset)
     out.push(svgText(at.x, at.y, n.tag, { role: "table_header", colourToken: "ink400", anchor: at.anchor }));
@@ -1111,6 +1191,31 @@ export function polylineD(pts: ReadonlyArray<readonly [number, number]>): string
   return `M ${pts.map(([px, py]) => `${r2(px)} ${r2(py)}`).join(" L ")}`;
 }
 
+/**
+ * Swarm 1.2.9 row 26 (AC-A02, C12): point lists whose link path keeps its repeated vertices. `routePlaced` marks the
+ * routes of a legacy flow (family `flow` without `direction`), whose bytes are frozen at 1.2.5 (01e A15).
+ */
+const KEEP_REPEATS = new WeakSet<object>();
+
+/** Swarm 1.2.9 row 26 (AC-A02, C12): draw this point list as it is, repeated vertices included (legacy flows). */
+export function keepLinkRepeats(pts: ReadonlyArray<readonly [number, number]>): void {
+  KEEP_REPEATS.add(pts);
+}
+
+/**
+ * Swarm 1.2.9 row 26 (AC-A02): `polylineD` without a vertex equal (after rounding) to the one before it. A repeated
+ * vertex draws nothing, so the drawn length and the dash phase stay; the last non-zero piece keeps the marker's
+ * direction. A path that would keep fewer than two vertices is drawn as before.
+ */
+function linkPathD(pts: ReadonlyArray<readonly [number, number]>): string {
+  const out: string[] = [];
+  for (const [px, py] of pts) {
+    const v = `${r2(px)} ${r2(py)}`;
+    if (v !== out[out.length - 1]) out.push(v);
+  }
+  return out.length >= 2 ? `M ${out.join(" L ")}` : polylineD(pts);
+}
+
 /** Jalur konektor (6 jenis, pola garis ISO 128-2, kepala panah per jenis). */
 export function edgePathSvg(
   pts: ReadonlyArray<readonly [number, number]>,
@@ -1134,11 +1239,13 @@ export function edgePathSvg(
   const tStart = arrows.start ? headTrimMm(kind, arrows.start, arrows.line) : 0;
   if (tEnd > 0) drawn = trimPolyline(drawn, tEnd);
   if (tStart > 0) drawn = trimPolyline([...drawn].reverse(), tStart).reverse();
-  return `<path d="${polylineD(drawn)}" ${attrs}${start}${end}${markAttrs("link", opts, kind)}${route}/>`;
+  // Swarm 1.2.9 row 26 (AC-A02): repeated vertices are dropped, except on a legacy flow's route (C12).
+  const d = KEEP_REPEATS.has(pts) ? polylineD(drawn) : linkPathD(drawn);
+  return `<path d="${d}" ${attrs}${start}${end}${markAttrs("link", opts, kind)}${route}/>`;
 }
 
 /** Swarm 1.2.8 row 57 (VIS-7, D-V4, 01f §5.2): one drawn arrowhead (type other than `none`, size key). */
-export interface EdgeHead {
+interface EdgeHead {
   type: Exclude<DiagramArrowType, "none">;
   size: DiagramArrowSize;
 }
@@ -1149,7 +1256,7 @@ export interface EdgeHead {
  * non-accent kind is the absent field; `normal` on `accent` draws 0.45 mm instead of 0.72 mm), so the explicit default
  * renders byte-identical to the absent field (01f §3.2.2).
  */
-export interface EdgeLine {
+interface EdgeLine {
   dash?: DashPatternName;
   weight?: DiagramEdgeWeight;
 }
@@ -1168,7 +1275,7 @@ export interface EdgeArrows {
 }
 
 /** Row 57b (VIS-8): stroke width (mm) of a connector: `WEIGHT_MM[weight]` when set, else the kind width. */
-export function edgeLineWidth(kind: DiagramEdgeKind, line?: EdgeLine): number {
+function edgeLineWidth(kind: DiagramEdgeKind, line?: EdgeLine): number {
   return line?.weight ? WEIGHT_MM[line.weight] : edgeStrokeWidth(kind);
 }
 
@@ -1181,7 +1288,7 @@ export function edgeLineDash(kind: DiagramEdgeKind, line?: EdgeLine): string | n
 const DEFAULT_ARROWS: EdgeArrows = { start: null, end: "kind" };
 
 /** Row 57: the end-head type a kind draws when `arrow_end` is absent (EDGE_KINDS head: solid = triangle, open). */
-export function kindHeadType(kind: DiagramEdgeKind): EdgeHead["type"] {
+function kindHeadType(kind: DiagramEdgeKind): EdgeHead["type"] {
   return EDGE_KINDS[kind].head === "solid" ? "triangle" : "open";
 }
 
@@ -1190,7 +1297,7 @@ export function kindHeadType(kind: DiagramEdgeKind): EdgeHead["type"] {
  * equal to the kind's default type at size `m` is the kind head (`head-<kind>`), so a spec that writes the defaults
  * renders byte-identical to one that omits them.
  */
-export function edgeArrowsOf(
+function edgeArrowsOf(
   e: Pick<DiagramEdge, "kind" | "arrow_start" | "arrow_end" | "arrow_start_size" | "arrow_end_size"> &
     Partial<Pick<DiagramEdge, "dash" | "weight" | "label_at">>,
 ): EdgeArrows {
@@ -1234,6 +1341,7 @@ export function edgeArrowsOfPaths(
  * line wider than STROKE_PRIMARY (accent 0.72 mm, weight thick 0.70 mm); 0 otherwise, so other figures keep their bytes.
  * The head's refX moves back by the same amount (`arrowMarkerSvg`), so the tip does not move.
  */
+/** @internal test seam */
 export function headTrimMm(kind: DiagramEdgeKind, head: EdgeHead | "kind", line?: EdgeLine): number {
   const type = head === "kind" ? kindHeadType(kind) : head.type;
   const sw = edgeLineWidth(kind, line);
@@ -1261,7 +1369,7 @@ function trimPolyline(pts: ReadonlyArray<readonly [number, number]>, d: number):
 }
 
 /** Row 57b (VIS-8): the non-default line style of an edge (`EdgeLine`); undefined = the kind's dash and width. */
-export function edgeLineOf(e: Pick<DiagramEdge, "kind"> & Partial<Pick<DiagramEdge, "dash" | "weight">>): EdgeLine | undefined {
+function edgeLineOf(e: Pick<DiagramEdge, "kind"> & Partial<Pick<DiagramEdge, "dash" | "weight">>): EdgeLine | undefined {
   const line: EdgeLine = {};
   if (e.dash !== undefined && e.dash !== EDGE_KINDS[e.kind].pattern) line.dash = e.dash;
   if (e.weight !== undefined && !(e.weight === "normal" && e.kind !== "accent")) line.weight = e.weight;
@@ -1274,7 +1382,7 @@ export function edgeLineOf(e: Pick<DiagramEdge, "kind"> & Partial<Pick<DiagramEd
  * `arrow-end-open-m-control-thin`), because the head's stroke follows the line width; a thick edge never reuses the
  * normal head. `dash` does not enter the id (heads are drawn solid).
  */
-export function edgeMarkerId(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
+function edgeMarkerId(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
   const w = line?.weight ? `-${line.weight}` : "";
   if (head === "kind") return `head-${kind}${w}`;
   return `arrow-${at}-${head.type}-${head.size}-${kind}${w}`;
@@ -1298,7 +1406,7 @@ export function edgeMarkerSvg(kind: DiagramEdgeKind): string {
  * separate definitions with the shape mirrored (tip towards the source); `orient="auto-start-reverse"` is not used
  * (support in the DOCX/PDF chain unverified, 01f risk R3).
  */
-export function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
+function arrowMarkerSvg(kind: DiagramEdgeKind, head: EdgeHead | "kind", at: "start" | "end", line?: EdgeLine): string {
   const type = head === "kind" ? kindHeadType(kind) : head.type;
   const L = ARROW_SIZES_MM[head === "kind" ? "m" : head.size];
   const W = 0.89 * L;

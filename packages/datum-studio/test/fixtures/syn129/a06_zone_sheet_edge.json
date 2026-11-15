@@ -1,0 +1,89 @@
+{
+ "$comment": "Swarm 1.2.9 row 23, register N9-151 (folder N9-150 syn129), used by row 29 (AC-A06, test N9-105). Topology, two tiers plus one: zone `z1` (members `srv`, `arsip`) on tier 0 with member `srv` laid out at the left sheet edge; non-member Sakelar nodes `swa`, `swb` one tier below. Render through the preview path (compose.mapBlock -> renderFigure, `diagram.widthMm`) at 128 and 166 mm. Measured at BASE d4282fcfd8 (RB): zone frame x 0.10, member `srv` x 0.23 (gap 0.13 mm); frame bottom y 33.34 on the tops of `swa`/`swb` y 33.34 (gap 0.00 mm), at both widths. Synthetic labels only.",
+ "figure": {
+  "caption": "Topologi sintetis zona di tepi lembar.",
+  "source": "Sumber sintetis uji row 23 (Swarm 1.2.9).",
+  "spec": {
+   "family": "topology",
+   "labels_verified": true,
+   "nodes": [
+    {
+     "id": "srv",
+     "label": "Server Alfa",
+     "shape": "box",
+     "class": {
+      "tier": 0
+     }
+    },
+    {
+     "id": "arsip",
+     "label": "Arsip Bravo",
+     "shape": "cylinder",
+     "class": {
+      "tier": 0
+     }
+    },
+    {
+     "id": "swa",
+     "label": "Sakelar A",
+     "shape": "box",
+     "class": {
+      "tier": 1
+     }
+    },
+    {
+     "id": "swb",
+     "label": "Sakelar B",
+     "shape": "box",
+     "class": {
+      "tier": 1
+     }
+    },
+    {
+     "id": "s1",
+     "label": "Sensor Charlie",
+     "shape": "circle",
+     "class": {
+      "tier": 2
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "srv",
+     "to": "arsip",
+     "kind": "sync",
+     "label": "salin"
+    },
+    {
+     "from": "swa",
+     "to": "srv",
+     "kind": "data",
+     "label": "jalur A"
+    },
+    {
+     "from": "swb",
+     "to": "srv",
+     "kind": "data",
+     "label": "jalur B"
+    },
+    {
+     "from": "s1",
+     "to": "swa",
+     "kind": "data",
+     "label": "kabel"
+    }
+   ],
+   "zones": [
+    {
+     "id": "z1",
+     "label": "Ruang Alfa",
+     "members": [
+      "srv",
+      "arsip"
+     ]
+    }
+   ]
+  }
+ }
+}

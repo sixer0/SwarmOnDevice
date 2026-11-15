@@ -48,7 +48,7 @@ export { SKILL_TRIGGERS_INVALID }
 /** N8-406: the file next to a draft's SKILL.md. */
 export const DRAFT_FILE = "draft.json"
 /** N8-407: one line per save, approve and delete, under the data folder. */
-export const APPROVALS_FILE = "skill-approvals.jsonl"
+const APPROVALS_FILE = "skill-approvals.jsonl"
 
 // 01b section 5.1 step 3: route segments, and the built-in names rows 47 and 58 add (N8-059..N8-062), are never taken
 // by a saved skill, whether or not the built-in exists yet.
@@ -56,7 +56,7 @@ const ROUTE_SEGMENTS = new Set(["drafts", "source"])
 const COMING_BUILT_INS = new Set(["skill-authoring", "obsidian-memory", "project-folders", "diagram-flow"])
 
 export type Refusal = { readonly ok: false; readonly code: string; readonly message: string }
-export type Checked = {
+type Checked = {
   readonly ok: true
   readonly description: string
   readonly triggers?: Triggers

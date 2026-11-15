@@ -84,7 +84,7 @@ export const LABEL_LIFT_MM = (): number => pt2mm(1.2);
 const HARD_EPS = 0.05;
 
 /** Row 57b (VIS-9): the point at fraction `f` (0..1) of a polyline's length (first point for an empty length). */
-export function pointAtFraction(points: ReadonlyArray<Pt>, f: number): [number, number] {
+function pointAtFraction(points: ReadonlyArray<Pt>, f: number): [number, number] {
   if (!points.length) return [0, 0];
   let total = 0;
   for (let i = 0; i + 1 < points.length; i++) total += Math.hypot(points[i + 1][0] - points[i][0], points[i + 1][1] - points[i][1]);
