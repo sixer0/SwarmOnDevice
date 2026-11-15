@@ -201,6 +201,52 @@ describe("1.2.8 row 46 AC-PROJf: mission-control:place in main", () => {
     expect(tools.includes("project-tidy")).toBe(true)
     expect(read("app", "src", "pages", "session", "swarm", "mission-model.ts").includes('"project-placement"')).toBe(true)
   })
+
+  // 1.3.0 row 72 (AC-B1010, N10-200): the rehome topic and option literals are read from the code, not matched by
+  // substring (a comment or a stale literal elsewhere no longer satisfies the pin). Each extraction asserts a
+  // non-empty result first, so a reshaped source fails loudly instead of passing.
+  test("1.3.0 B10-10 drift: rehome.ts topics and options and the host validate.ts topic literals equal the desktop constants", () => {
+    const read = (...parts: string[]) => readFileSync(join(import.meta.dir, "..", "..", "..", "..", ...parts), "utf8")
+    const rehome = read("opencode", "src", "project", "rehome.ts")
+    const validate = read("datum-studio", "src", "store", "mission", "validate.ts")
+    const literals = (text: string, re: RegExp) => [...text.matchAll(re)].map((m) => m[1] as string)
+    const uniq = (list: string[]) => [...new Set(list)].sort()
+    const topics = [ipc.PLACEMENT_TOPIC as string, ipc.TIDY_TOPIC as string]
+
+    // (1) Topics read by the rehome decision check.
+    const readTopics = literals(rehome, /\bread\.topic\s*===\s*"([^"]+)"/g)
+    expect(readTopics.length).toBeGreaterThan(0)
+    expect(uniq(readTopics)).toEqual(uniq(topics))
+
+    // Host ids: the allowed option id lists per topic, from `ids !== "..."` in validate.ts.
+    const hostIds = literals(validate, /\bids\s*!==\s*"([^"]+)"/g).map((s) => s.split(","))
+    expect(hostIds.length).toBeGreaterThan(0)
+    const placementIds = uniq(hostIds.filter((list) => list.includes("join") || list.includes("root")).flat()).filter((id) => id !== "root")
+    const tidyIds = uniq(hostIds.filter((list) => list.includes("approve") || list.includes("decline")).flat())
+    expect(placementIds.length).toBeGreaterThan(0)
+    expect(tidyIds.length).toBeGreaterThan(0)
+
+    // (2) Options per topic: the branch of each topic, cut at the next topic branch.
+    const at = (topic: string) => rehome.indexOf(`read.topic === "${topic}"`)
+    const placementAt = at(ipc.PLACEMENT_TOPIC)
+    const tidyAt = at(ipc.TIDY_TOPIC)
+    expect(placementAt).toBeGreaterThan(-1)
+    expect(tidyAt).toBeGreaterThan(placementAt)
+    const placementBranch = rehome.slice(placementAt, tidyAt)
+    const tidyBranch = rehome.slice(tidyAt, rehome.indexOf("\n}\n", tidyAt))
+    const placementOptions = literals(placementBranch, /\bread\.option\s*===\s*"([^"]+)"/g)
+    const tidyOptions = literals(tidyBranch, /\bread\.option\s*===\s*"([^"]+)"/g)
+    expect(placementOptions.length).toBeGreaterThan(0)
+    expect(tidyOptions.length).toBeGreaterThan(0)
+    expect(uniq(placementOptions)).toEqual(placementIds)
+    for (const id of tidyOptions) expect(`${id} ${tidyIds.includes(id)}`).toBe(`${id} true`)
+
+    // (3) Host code only: topic comparisons in validate.ts name only the two desktop topics, and both occur.
+    const hostTopics = literals(validate, /\br\??\.topic\s*[!=]==\s*"([^"]+)"/g)
+    expect(hostTopics.length).toBeGreaterThan(0)
+    for (const topic of hostTopics) expect(`${topic} ${topics.includes(topic)}`).toBe(`${topic} true`)
+    for (const topic of topics) expect(`${topic} ${hostTopics.includes(topic)}`).toBe(`${topic} true`)
+  })
 })
 
 describe("1.2.8 row 46: the rehome caller (nonce header, local server only)", () => {
