@@ -33,7 +33,7 @@ const translate = i18n.translator(() => i18n.flatten({ ...dict, ...uiDict }), i1
 const realLanguage = await import("@/context/language")
 mock.module("@/context/language", () => ({ ...realLanguage, useLanguage: () => ({ t: translate, locale: () => "en" }) }))
 
-type Result = "opened" | "missing" | "outside" | "no-app" | "failed"
+type Result = "opened" | "missing" | "outside" | "no-app" | "failed" | "registered" | "close-obsidian" | "not-registered"
 const state: {
   exists: boolean
   ipc?: Result

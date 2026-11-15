@@ -242,6 +242,9 @@ export function DialogProjectMemory() {
     "no-app": "memory.obsidian.noApp",
     outside: "memory.obsidian.failed",
     failed: "memory.obsidian.failed",
+    // 1.3.0 P1-d (01a §3.6-3.7): the desktop refused to add the vault to Obsidian's list; nothing was launched.
+    "close-obsidian": "memory.obsidian.closeObsidian",
+    "not-registered": "memory.obsidian.notRegistered",
   } as const
   const openObsidian = async () => {
     const open = platform?.openObsidianNote
@@ -258,6 +261,9 @@ export function DialogProjectMemory() {
       .catch(() => "failed" as const)
       .finally(() => setOpening(false))
     if (result === "opened") return
+    // Only the press that added the vault to Obsidian's list says so; later presses are "opened" (no stored flag).
+    if (result === "registered")
+      return showToast({ variant: "success", title: language.t("memory.obsidian.registered") })
     showToast({ variant: "error", title: language.t(obsidianText[result]) })
   }
 
