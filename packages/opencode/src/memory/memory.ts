@@ -91,6 +91,10 @@ export interface Interface {
     id: string,
     input: {
       text?: string
+      /**
+       * Only with `personAttested` (S10-04, 1.3.0 row 53x): without it nothing changes, the text included, and `{}` is
+       * returned, also for the current value.
+       */
       deviceOnly?: boolean
       /**
        * 1.2.10 (N10-061, 01d §3.3 step 2): true lets this device-only note into the vault copy, false undoes it. Only
@@ -472,6 +476,10 @@ export const layer = Layer.effect(
           if (outcome.wrote) yield* publish(undefined)
           return outcome.result
         }
+        // S10-04 store-level guard (1.3.0 row 53x), behind the route's nonce check: whether a note may leave this device
+        // is the person's call, so a `deviceOnly` key without the attestation (also its current value) writes nothing,
+        // text included. Agent paths (add, addIndex, lessons, consolidation, roll-up) only ever OR it.
+        if (input.deviceOnly !== undefined && input.personAttested !== true) return {}
         const text = input.text === undefined ? undefined : input.text.replace(/\s+/g, " ").trim()
         if (text !== undefined) {
           const current = (yield* read(target)).items.find((item) => item.id === id)

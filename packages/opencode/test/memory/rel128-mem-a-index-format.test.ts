@@ -283,7 +283,7 @@ describe("AC-MEMa index entry", () => {
         )
         const changed = yield* memory.update(entry.id, { text: line({ outcome: "released, checked" }) })
         expect(changed.item).toMatchObject({ kind: "index", missionId: ID, text: line({ outcome: "released, checked" }) })
-        expect((yield* memory.update(entry.id, { deviceOnly: true })).item?.deviceOnly).toBe(true)
+        expect((yield* memory.update(entry.id, { deviceOnly: true, personAttested: true })).item?.deviceOnly).toBe(true)
 
         yield* memory.add({ text: "anchor-mem-a-rollup", source: "user" })
         const target = yield* storeFile("anchor-mem-a-rollup")
@@ -300,7 +300,7 @@ describe("AC-MEMa index entry", () => {
           await fs.writeFile(target, JSON.stringify(store, null, 2) + "\n", { mode: 0o600 })
         })
         expect((yield* memory.update("r00002", { text: "rewritten" })).refused).toBe("index_format")
-        expect((yield* memory.update("r00002", { deviceOnly: true })).item?.deviceOnly).toBe(true)
+        expect((yield* memory.update("r00002", { deviceOnly: true, personAttested: true })).item?.deviceOnly).toBe(true)
       }),
     ),
   )

@@ -15,9 +15,9 @@ const HUB = "index.md"
 type DesktopNonceHeaders = { readonly [DesktopNonce.HEADER]?: string | undefined }
 type KeptReason = "device" | "secret" | "classified" | "unsafe"
 
-// The mirror's own id rule (`vault-mirror.ts` ITEM_ID): an id it cannot write as a link label is kept out as "unsafe".
+// The mirror's own id rule (`VaultMirror.ITEM_ID`): an id it cannot write as a link label is kept out as "unsafe".
 // The audit line logs an id only when it passes the same rule, so a caller-chosen id can never put a path in the log.
-const ITEM_ID = /^[0-9A-Za-z_-]{1,64}$/
+const ITEM_ID = VaultMirror.ITEM_ID
 
 /**
  * 1.2.10 row 54 (S10-11(P4), 01d §3.3 step 4): one audit line per person-only decision. Only the route, the note id

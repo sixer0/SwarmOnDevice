@@ -187,10 +187,13 @@ const LABELS = {
 const NAME_MAX = 60
 const REPORT_SUFFIX = "-report"
 const HEX6 = /^[0-9a-f]{6}$/
-// Item ids are 6 hex today (`randomBytes(3)`); store-written ids (roll-ups) and older stores may differ, so any id made
-// of these characters is accepted. It is never joined into a path (the file name is folded), but it is written as the
-// link label and `swarm-id`, so nothing that could end a wikilink or a YAML string may pass.
-const ITEM_ID = /^[0-9A-Za-z_-]{1,64}$/
+/**
+ * The mirror's note-id check. Item ids are 6 hex today (`randomBytes(3)`); store-written ids (roll-ups) and older
+ * stores may differ, so any id made of these characters is accepted. It is never joined into a path (the file name is
+ * folded), but it is written as the link label and `swarm-id`, so nothing that could end a wikilink or a YAML string
+ * may pass. Also the memory route's rule for `unsafe` in the kept list and for the id in its audit line (1.3.0 row 53x).
+ */
+export const ITEM_ID = /^[0-9A-Za-z_-]{1,64}$/
 const FOLDER = /^[a-z0-9][a-z0-9-]{0,80}$/
 const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/
 // SK-f (N8-046): `Skill <name> (<scope>): <description>. Triggers: …`

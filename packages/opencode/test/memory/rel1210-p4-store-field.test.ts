@@ -318,7 +318,7 @@ describe("AC-P4-store S-5: setting and clearing the flag (01d §3.3 step 2)", ()
     ),
   )
 
-  it.live("refusals in order: archived, not device-only, classified, secret; each leaves the file unchanged", () =>
+  it.live("refusals in order: archived > classified > secret > not_device_only; each leaves the file unchanged", () =>
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const memory = yield* Memory.Service
@@ -642,4 +642,86 @@ describe("U-1 (CHAR, 01d §5): a 1.2.10 store decodes under the running build's 
     console.log(`U-1 decoder declares vaultAllowed: ${declared}; decoded items carrying it: ${kept}`)
     expect(kept).toBe(declared ? 3 : 0)
   })
+})
+
+// 1.3.0 row 53x (C58(a), C80): the store-level half of S10-04. The route (row 54) refuses an unattested deviceOnly
+// change before the store; the store refuses it too, so no other caller can flip the scope. Red at 57684e9b38: the
+// store applied an unattested deviceOnly change.
+describe("S10-04 store-level guard: an unattested deviceOnly change writes nothing (row 53x)", () => {
+  it.live("unattested flip on, flip off and same value: {} and the store file unchanged (red at 57684e9b38)", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const memory = yield* Memory.Service
+        const target = yield* seed("exported.json", "anchor-p4s-scope-guard")
+        const before = yield* fileSha(target)
+        const cases: [string, UpdateInput][] = [
+          // flip on: an any-model note made device-only
+          ["p4e-006", { deviceOnly: true }],
+          ["p4e-006", { deviceOnly: true, personAttested: false }],
+          // flip off: a device-only note, exported or not, made any-model
+          ["p4e-005", { deviceOnly: false }],
+          ["p4e-001", { deviceOnly: false, personAttested: false }],
+          // same value
+          ["p4e-001", { deviceOnly: true }],
+          ["p4e-006", { deviceOnly: false }],
+          // with a text change in the same call: the text is not applied either
+          ["p4e-005", { text: "Zorvex audit notes move to the plimbo folder.", deviceOnly: false }],
+        ]
+        for (const [id, input] of cases) {
+          expect(yield* update(memory, id, input)).toEqual({})
+          expect(yield* fileSha(target)).toBe(before)
+        }
+        const stored = yield* readStore(target)
+        expect(byId(stored, "p4e-005")).toMatchObject({ deviceOnly: true, text: "Zorvex audit notes stay with the vestrel folder." })
+        expect(byId(stored, "p4e-001")).toMatchObject({ deviceOnly: true, vaultAllowed: true })
+        expect(byId(stored, "p4e-006").deviceOnly).toBe(false)
+      }),
+    ),
+  )
+
+  it.live("the attested change still applies; an unattested text-only edit is unchanged by the guard", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const memory = yield* Memory.Service
+        const target = yield* seed("exported.json", "anchor-p4s-scope-attested")
+        expect((yield* update(memory, "p4e-005", { deviceOnly: false, personAttested: true })).item?.deviceOnly).toBe(false)
+        expect((yield* update(memory, "p4e-006", { deviceOnly: true, personAttested: true })).item?.deviceOnly).toBe(true)
+        const text = yield* update(memory, "p4e-002", { text: "Nimbard grids are checked three times." })
+        expect(text.item).toMatchObject({ deviceOnly: true, text: "Nimbard grids are checked three times." })
+        const stored = yield* readStore(target)
+        expect(byId(stored, "p4e-005").deviceOnly).toBe(false)
+        expect(byId(stored, "p4e-006").deviceOnly).toBe(true)
+      }),
+    ),
+  )
+
+  it.live("agent paths (remember's add, a learned lesson, consolidation) never clear deviceOnly", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const memory = yield* Memory.Service
+        const target = yield* seed("exported.json", "anchor-p4s-agent-paths")
+        const deviceOnlyIds = (yield* readStore(target)).items.filter((item) => item.deviceOnly).map((item) => item.id)
+        expect(deviceOnlyIds.length).toBeGreaterThan(0)
+        // remember from a cloud model: the same text as a device-only note, sent with deviceOnly false.
+        const same = yield* memory.add({ text: "Zorvex audit notes stay with the vestrel folder.", source: "agent", deviceOnly: false })
+        expect(same.item).toMatchObject({ id: "p4e-005", deviceOnly: true })
+        // a learned lesson from a cloud model
+        const cloud = { providerID: "anthropic", api: { url: "https://api.anthropic.com/v1" } } as unknown as Provider.Model
+        yield* memory.observeCommand({ sessionID: "s53x", command: "npm test", exit: 1, output: "npm error Missing script: test", model: cloud })
+        yield* memory.observeCommand({ sessionID: "s53x", command: "bun test", exit: 0, output: "", model: cloud })
+        const stored = yield* readStore(target)
+        for (const id of deviceOnlyIds) expect(byId(stored, id).deviceOnly).toBe(true)
+        // consolidation of the stored notes with an any-model duplicate of a device-only note
+        const out = Memory.consolidate(
+          [...stored.items, { id: "dup-005", text: "Zorvex audit notes stay with the vestrel folder", source: "agent", deviceOnly: false, time: 1 }],
+          { stale: () => false },
+        )
+        for (const id of deviceOnlyIds) {
+          const kept = out.items.find((item) => item.id === id)
+          if (kept) expect(kept.deviceOnly).toBe(true)
+        }
+        expect(out.items.filter((item) => /^Zorvex audit notes stay/.test(item.text)).every((item) => item.deviceOnly)).toBe(true)
+      }),
+    ),
+  )
 })
