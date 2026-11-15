@@ -932,7 +932,7 @@ const fileVerifyTool: ToolDef = {
     {
       fileId: { type: "string", pattern: ID_PATTERN, description: "outputs[].id hasil render." },
       expectedSha256: { type: "string", pattern: "^[0-9a-f]{64}$" },
-      downloadDir: { type: "string", minLength: 1, maxLength: 1024, description: "Folder unduhan di akar." },
+      downloadDir: { type: "string", minLength: 1, maxLength: 1024, description: "Folder unduhan di folder sesi ini." },
       overwrite: S.overwrite,
     },
     ["fileId"],

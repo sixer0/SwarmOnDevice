@@ -2,7 +2,7 @@
 // The PATH_OUTSIDE_ROOTS refusal names the session folder (the host passes the session folder as the only file
 // root, C114) instead of the env var STUDIO_MCP_FILE_ROOTS. F1 (row 78): the text and, per S10-41, the host
 // tool_call log line of the refused call carries neither the root nor the refused path (result text only).
-// F2 (row 78): after a rehome the refusal names the NEW session folder, not the old one. F3: row 79 (downloadDir).
+// F2 (row 78): after a rehome the refusal names the NEW session folder, not the old one. F3 (row 79): the two downloadDir descriptions.
 // Only public entry points (resolveAllowedPath, createHostMcpServer), so the BASE run reaches the assertions.
 import { useStudioEnv } from "../_env"
 useStudioEnv()
@@ -13,7 +13,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { loadConfig } from "../../../vendor/scripts/studio/mcp/config"
 import { resolveAllowedPath } from "../../../vendor/scripts/studio/mcp/safety"
 import { createHostMcpServer } from "../../../src/mcp-host/mcp-server.ts"
-import { BASE, memNodeFs, ROOT, SECRET } from "./mcp-harness"
+import { BASE, connect, memNodeFs, ROOT, SECRET } from "./mcp-harness"
 
 const VENDOR = path.resolve(import.meta.dir, "..", "..", "..", "vendor")
 const AGENT = "cod-row78"
@@ -93,5 +93,23 @@ describe("AC-B1014 F2: a rehomed session (roots [OLD] then [NEW]) names the NEW 
     expect(named?.[1]).not.toContain(OLD + path.sep)
     expect(named?.[1] === OLD).toBe(false)
     expect(r.message).toContain("setelah proyek dipindah ke grup, folder sesi ikut pindah")
+  })
+})
+
+describe("AC-B1014 F3 (row 79): the downloadDir descriptions name the session folder", () => {
+  test("studio_figure_preview and studio_file_verify downloadDir descriptions, read from the tool definitions; vendor tools/list < 30,000 B", async () => {
+    const c = await connect({ env: { STUDIO_MCP_TOOLSETS: "reports,documents,query" } })
+    const list = await c.client.listTools()
+    const desc = (name: string): string | undefined => {
+      const t = list.tools.find((x) => x.name === name)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- inputSchema properties are free-form JSON Schema
+      return (t?.inputSchema.properties as any)?.downloadDir?.description
+    }
+    expect(desc("studio_figure_preview")).toBe("Folder di folder sesi ini.")
+    expect(desc("studio_file_verify")).toBe("Folder unduhan di folder sesi ini.")
+    const bytes = Buffer.byteLength(JSON.stringify(list))
+    console.log(`row79 vendor tools/list: ${bytes} B`)
+    expect(bytes).toBeLessThan(30_000)
+    await c.client.close()
   })
 })
