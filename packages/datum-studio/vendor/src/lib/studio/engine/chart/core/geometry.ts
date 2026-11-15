@@ -25,6 +25,7 @@
  * translate/scale/rotate) — bukan parser SVG umum.
  */
 import type { LintIssue } from "../../../contract";
+import { EDGE_ALONG_MIN_MM, EDGE_ALONG_TOL_MM } from "../../diagram/fit/lint";
 import { intentSupport, orientationTarget } from "./intent";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure } from "./textfit";
 import {
@@ -387,6 +388,151 @@ export function lintChartGeometry(svg: string, opts: Readonly<LintOptions> = {})
   const counts = { textOverlap: 0, textOutside: 0, textStraddleMark: 0, lineThroughText: 0 };
   for (const d of defects) counts[d.kind]++;
   return { widthMm: W, heightMm: H, nText, counts, defects, score: defects.length };
+}
+
+// ── Konektor menyusuri tepi simpul (report only) ────────────────────────────
+
+/** One connector or node outline of `chartLinksAlongNodes`: points in SVG mm, half stroke, closed ring or not. */
+interface AlongShape {
+  id: string;
+  pts: Pt[][];
+  half: number;
+}
+
+/**
+ * Connectors (first `data-mark="link"` element of each `data-index`, the stroked line drawn before its head) and
+ * straight node outlines (`data-node` rect or path). A curved outline (circle, ellipse, a path with an arc or curve
+ * command) is left out: a straight step cannot run along it. Same tokenizer and transform handling as
+ * `scanSvgGeometry`; text bodies and `<defs>` are skipped.
+ */
+function scanLinksAndNodes(svg: string): { links: AlongShape[]; nodes: AlongShape[] } {
+  const links: AlongShape[] = [];
+  const seen = new Set<string>();
+  const nodes: AlongShape[] = [];
+  const stack: Mat[] = [IDENTITY];
+  let inDefs = 0;
+  const re = /<text\b([^>]*)>([\s\S]*?)<\/text>|<(\/?)([a-zA-Z]+)\b([^>]*?)(\/?)>/g;
+  for (let k = re.exec(svg); k; k = re.exec(svg)) {
+    if (k[1] !== undefined) continue;
+    const top = stack[stack.length - 1];
+    const tag = k[4];
+    const selfClose = k[6] === "/";
+    if (k[3] === "/") {
+      if (tag === "g" || tag === "svg") stack.pop();
+      if (tag === "defs") inDefs = Math.max(0, inDefs - 1);
+      continue;
+    }
+    if (tag === "defs" && !selfClose) {
+      inDefs++;
+      continue;
+    }
+    const a = attrsOf(k[5]);
+    if (tag === "g" || tag === "svg") {
+      if (!selfClose) stack.push(tag === "g" ? mul(top, parseTransform(a.transform)) : top);
+      continue;
+    }
+    if (inDefs) continue;
+    const isLink = a["data-mark"] === "link" && a["data-index"] !== undefined;
+    const nodeId = a["data-node"];
+    if (!isLink && nodeId === undefined) continue;
+    if (isLink && seen.has(a["data-index"])) continue;
+    const m = mul(top, parseTransform(a.transform));
+    const half = ((Number(a["stroke-width"] ?? 0) || 0) * Math.hypot(m[0], m[1])) / 2;
+    let pts: Pt[][] = [];
+    if (tag === "path") {
+      const d = a.d ?? "";
+      if (!isLink && /[AaCcQqSsTt]/.test(d)) continue;
+      pts = pathPolylines(d).map((p) => p.map(([x, y]) => apply(m, x, y)));
+    } else if (tag === "line" || tag === "polyline") {
+      if (!isLink) continue;
+      if (tag === "line") pts = [[apply(m, Number(a.x1 ?? 0), Number(a.y1 ?? 0)), apply(m, Number(a.x2 ?? 0), Number(a.y2 ?? 0))]];
+      else {
+        const v = (a.points ?? "").trim().split(/[\s,]+/).map(Number);
+        const pl: Pt[] = [];
+        for (let i = 0; i + 1 < v.length; i += 2) pl.push(apply(m, v[i], v[i + 1]));
+        pts = [pl];
+      }
+    } else if (tag === "rect" && !isLink) {
+      const x = Number(a.x ?? 0);
+      const y = Number(a.y ?? 0);
+      const w = Number(a.width ?? 0);
+      const h = Number(a.height ?? 0);
+      if (!(w > 0 && h > 0)) continue;
+      pts = [[apply(m, x, y), apply(m, x + w, y), apply(m, x + w, y + h), apply(m, x, y + h)]];
+    } else continue;
+    if (isLink) {
+      seen.add(a["data-index"]);
+      links.push({ id: a["data-index"], pts, half });
+    } else {
+      // A node outline is a closed ring: close every subpath that does not already end on its start.
+      const rings = pts
+        .filter((p) => p.length >= 2)
+        .map((p) => {
+          const f = p[0];
+          const l = p[p.length - 1];
+          return Math.hypot(f[0] - l[0], f[1] - l[1]) > 1e-6 ? [...p, f] : p;
+        });
+      if (rings.length) nodes.push({ id: nodeId as string, pts: rings, half });
+    }
+  }
+  return { links, nodes };
+}
+
+/**
+ * Swarm 1.2.10 row 65a (AC-B1002a, register N10-108; decisions C11, C19 D-2, C24). Chart connectors that run along a
+ * node outline: for every connector (`data-mark="link"`, the first element of each `data-index`; the arrow head that
+ * follows it is never measured) every straight step (zero-length steps dropped) is measured against every edge of
+ * every straight `data-node` outline, the link's own start and end node included (unlike the diagram's
+ * `edgesAlongOutlines`, which skips them: the chart's g04 runs are on its own end nodes). A run is a step parallel to
+ * an outline edge, at most half the link stroke + half the node stroke + `EDGE_ALONG_TOL_MM` from it, whose projection
+ * overlaps the edge over at least `EDGE_ALONG_MIN_MM`. One entry per (link, node) with the summed overlap in mm
+ * (rounded to 0.01), sorted by link index (numeric) then node id. Report data only: never part of
+ * `GeometryLint.defects`, `counts` or `score` (a score above 0 would send the render into auto-fit and move bytes).
+ * @internal test seam
+ */
+export function chartLinksAlongNodes(svg: string): Array<{ link: string; node: string; mm: number }> {
+  const { links, nodes } = scanLinksAndNodes(svg);
+  const out: Array<{ link: string; node: string; mm: number }> = [];
+  for (const l of links) {
+    const steps: [Pt, Pt][] = [];
+    for (const raw of l.pts) {
+      const pl: Pt[] = [];
+      for (const p of raw) {
+        const q = pl[pl.length - 1];
+        if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6) pl.push(p);
+      }
+      for (let i = 0; i + 1 < pl.length; i++) steps.push([pl[i], pl[i + 1]]);
+    }
+    for (const n of nodes) {
+      const tol = l.half + n.half + EDGE_ALONG_TOL_MM;
+      let sum = 0;
+      for (const [a, b] of steps) {
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const ux = (b[0] - a[0]) / L;
+        const uy = (b[1] - a[1]) / L;
+        for (const ring of n.pts) {
+          for (let e = 0; e + 1 < ring.length; e++) {
+            const c = ring[e];
+            const d = ring[e + 1];
+            const M = Math.hypot(d[0] - c[0], d[1] - c[1]);
+            if (M < 1e-6) continue;
+            // parallel: sine of the angle between step and edge at most 1e-3 (the 0.01 mm output grid)
+            if (Math.abs(ux * (d[1] - c[1]) - uy * (d[0] - c[0])) / M > 1e-3) continue;
+            // perpendicular distance of both edge ends from the step's line
+            const dc = Math.abs(ux * (c[1] - a[1]) - uy * (c[0] - a[0]));
+            const dd = Math.abs(ux * (d[1] - a[1]) - uy * (d[0] - a[0]));
+            if (Math.max(dc, dd) > tol + 1e-9) continue;
+            const tc = (c[0] - a[0]) * ux + (c[1] - a[1]) * uy;
+            const td = (d[0] - a[0]) * ux + (d[1] - a[1]) * uy;
+            const over = Math.min(L, Math.max(tc, td)) - Math.max(0, Math.min(tc, td));
+            if (over >= EDGE_ALONG_MIN_MM - 1e-9) sum += over;
+          }
+        }
+      }
+      if (sum > 0) out.push({ link: l.id, node: n.id, mm: Math.round(sum * 100) / 100 });
+    }
+  }
+  return out.sort((p, q) => Number(p.link) - Number(q.link) || (p.link < q.link ? -1 : p.link > q.link ? 1 : 0) || (p.node < q.node ? -1 : p.node > q.node ? 1 : 0));
 }
 
 // ── REPORT + saran ──────────────────────────────────────────────────────────

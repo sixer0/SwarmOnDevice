@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 610,
-  "copied": 399,
-  "patched": 167,
+  "copied": 398,
+  "patched": 168,
   "replaced": 12,
   "added": 32,
-  "bytes": 10295283
+  "bytes": 10302193
  },
  "files": [
   {
@@ -1610,10 +1610,11 @@
   },
   {
    "path": "src/lib/studio/engine/chart/core/geometry.ts",
-   "status": "copied",
-   "bytes": 23382,
+   "status": "patched",
+   "bytes": 30292,
    "source_sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8",
-   "sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8"
+   "sha256": "3567db2098c156f78e9248f0cb86e69d8c0dd399998def5eed246ee7c2eaf632",
+   "patch_row1210-65a": {"id": "1210-65a-b1002-chart-link-along", "row": "65a", "decision": "1.2.10 AC-B1002a (spec 01f AT-B1002a; register N10-108, N10-109; C11, C19 D-2, C24)", "summary": "NEW exported chartLinksAlongNodes (report data only, marked @internal test seam until row 65b adds its readers): chart connectors running along a straight data-node outline, own start/end nodes included; thresholds imported from diagram/fit/lint.ts (EDGE_ALONG_MIN_MM, EDGE_ALONG_TOL_MM). Additions only: lintChartGeometry, GeometryDefect and scanSvgGeometry unchanged; every chart parity render and lint result byte-identical", "diff_base": "sha256 before this row", "before_sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8", "after_sha256": "3567db2098c156f78e9248f0cb86e69d8c0dd399998def5eed246ee7c2eaf632", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/65a_row65a_diffs/engine_chart_core_geometry.ts.diff", "diff_sha256": "8e8bd43fba06b8ac53d5d32a5cae26456b52db339e73bdba4e6890dda114f14e"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/guards.ts",
@@ -6461,6 +6462,7 @@
   "129-66b-bpmn-arrowheads",
   "129-66a-a05-mark-off-axis",
   "129-61-a03",
-  "129-66q-whitespace"
+  "129-66q-whitespace",
+  "1210-65a-b1002-chart-link-along"
  ]
 }
