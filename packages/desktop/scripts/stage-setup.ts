@@ -30,9 +30,9 @@ function fail(message: string): never {
   throw new StageFail(message)
 }
 
-async function compile(entry: string, outfile: string) {
+async function compile(entry: string, outfile: string, defines: string[] = []) {
   const result =
-    await $`${process.execPath} build --compile ${`--target=${TARGET}`} --outfile ${outfile} ${join(SETUP, entry)}`
+    await $`${process.execPath} build --compile ${`--target=${TARGET}`} ${defines} --outfile ${outfile} ${join(SETUP, entry)}`
       .cwd(SETUP)
       .nothrow()
   if (result.exitCode !== 0) fail(`compile ${entry} exit ${result.exitCode}`)
@@ -53,10 +53,23 @@ async function main() {
   const lockBytes = await readFile(lockPath)
   if (sha256(lockBytes) !== before) fail("genlock changed packages/setup/tools.lock.json; commit the setup lock first")
 
+  // The proxy reports `<SwarmRelease>+<commit10>` in its MCP initialize answer (SWARM_PROXY_BUILD, N13-372, AC-S6c),
+  // so a staged copy can be told apart from the bundled one. The value is a JSON string literal: an unquoted define
+  // would be parsed as code. Loaded here so check-setup-stage, which imports FILES, never loads the builder config.
+  const { SWARM_RELEASE } = await import("../electron-builder.config")
+  const head = await $`git rev-parse HEAD`.cwd(SETUP).quiet().nothrow()
+  const commit = head.stdout.toString().trim().slice(0, 10)
+  if (head.exitCode !== 0 || !/^[0-9a-f]{10}$/.test(commit)) fail("cannot read the commit for the proxy build id")
+  const build = `${SWARM_RELEASE}+${commit}`
+  if (!/^\d+\.\d+\.\d+\+[0-9a-f]{10}$/.test(build)) fail(`proxy build id "${build}" is not <release>+<commit10>`)
+
   const work = await mkdtemp(join(RESOURCES, ".swarm-setup-stage-"))
   try {
     await compile("src/index.ts", join(work, "swarm-setup"))
-    await compile("src/mcpproxy/main.ts", join(work, PROXY_BINARY_NAME))
+    await compile("src/mcpproxy/main.ts", join(work, PROXY_BINARY_NAME), [
+      "--define",
+      `SWARM_PROXY_BUILD=${JSON.stringify(build)}`,
+    ])
     await writeFile(join(work, "tools.lock.json"), lockBytes)
 
     const names = (await readdir(work)).sort()
