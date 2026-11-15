@@ -249,11 +249,34 @@ export interface MissionDerived {
  * 1.2.6 row 87 (MC-09, register N-066): what changed in the row set after approval, read from mission_event after
  * the approve event. `count` and `rows` are the rows added after approval (`count === rows.length`); `dropped` lists
  * the rows moved to dropped after approval. Empty (`count: 0`) for a draft or an unchanged mission.
+ * 1.2.10 row 49 (P3, N10-051): `changed` (always present, `[]` when none) lists one entry per `row-change` event after
+ * approval that changed an approved blueprint field (deps, agent, phase, kind, size, model tier, output, verification).
  */
 export interface MissionDrift {
   count: number
   rows: Array<{ row: string; timeCreated: string; decision: string | null }>
   dropped: Array<{ row: string; timeDropped: string; decision: string | null }>
+  changed: MissionDriftChange[]
+}
+
+/**
+ * 1.2.10 row 49 (P3, N10-051, N10-052): one post-approval row change. `fields` in DRIFT_FIELDS order. `changes` is
+ * absent for an event written before 1.2.10 (names only). Structured fields carry `from`/`to`; the free-text `output`
+ * and `verification` carry the field name only (C30, S10-30), so no old value is kept.
+ */
+export interface MissionDriftChange {
+  row: string
+  timeChanged: string
+  decision: string | null
+  fields: string[]
+  changes?: RowFieldChange[]
+}
+
+/** 1.2.10 row 49 (N10-052): one changed field of a `row-change` event (`from`/`to` only for structured fields). */
+export interface RowFieldChange {
+  field: string
+  from?: unknown
+  to?: unknown
 }
 
 // ── C57 entities (not part of studio.mission/v1; validated in code, spec §6.1 change rule) ──────────

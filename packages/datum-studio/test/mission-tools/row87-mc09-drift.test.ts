@@ -42,14 +42,15 @@ describe("row 87 MC-09: drift in studio_mission_get", () => {
     const MI = "2026-11-12_mc09-none"
     await approvedMission(MI)
     const d = M.get(MI)!.derived as S
-    expect(d.drift).toEqual({ count: 0, rows: [], dropped: [] })
+    // 1.2.10 row 49 (INTENT N10-172, D-P3-8): `changed` is always present
+    expect(d.drift).toEqual({ count: 0, rows: [], dropped: [], changed: [] })
   })
 
   test("store: a draft mission has an empty drift", async () => {
     const MI = "2026-11-12_mc09-draft"
     await store.transaction(async (t) => M.create(t, { id: MI, title: "Draft", type: "feature-release", owner: "master-controller", project: { dir: "/private/tmp/claude-501/row87" }, rows: [row("1")], decisions: [dec("U1", "x")] } as never, PERSON))
     await store.transaction(async (t) => M.updateRows(t, MI, [{ id: "2", add: row("2") } as never]))
-    expect((M.get(MI)!.derived as S).drift).toEqual({ count: 0, rows: [], dropped: [] })
+    expect((M.get(MI)!.derived as S).drift).toEqual({ count: 0, rows: [], dropped: [], changed: [] })
   })
 
   test("store: rows added after approval are listed with their decision ids; dropped rows too", async () => {

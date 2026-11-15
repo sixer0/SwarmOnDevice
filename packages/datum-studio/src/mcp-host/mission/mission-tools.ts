@@ -419,10 +419,12 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           `  progress ${d.progress.done}/${d.progress.total} rows done; ready: ${d.ready.join(", ") || "-"}`,
           ...d.phases.map((p) => `  ${p.order}. ${p.id}: ${p.rows.join(", ") || "-"}`),
           // 1.2.6 row 87 (MC-09): one drift line, only when rows were added or dropped after approval.
-          ...(d.drift.count > 0 || d.drift.dropped.length > 0
+          // 1.2.10 row 49 (P3, N10-054): also when a row's approved fields changed; names only, never values.
+          ...(d.drift.count > 0 || d.drift.dropped.length > 0 || d.drift.changed.length > 0
             ? [
                 `  drift: ${d.drift.count} row${d.drift.count === 1 ? "" : "s"} added after approval (${d.drift.rows.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ") || "-"})` +
-                  (d.drift.dropped.length > 0 ? `; dropped: ${d.drift.dropped.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ")}` : ""),
+                  (d.drift.dropped.length > 0 ? `; dropped: ${d.drift.dropped.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ")}` : "") +
+                  (d.drift.changed.length > 0 ? `; changed: ${d.drift.changed.map((c) => `${c.row} by ${c.decision ?? "-"} (${c.fields.join(", ")})`).join(", ")}` : ""),
               ]
             : []),
           // 1.2.8 row 31 (H-N14, N8-204): detail: true lists every row with its reports.
