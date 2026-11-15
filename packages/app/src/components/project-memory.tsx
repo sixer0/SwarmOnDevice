@@ -13,6 +13,7 @@ import { createEffect, createResource, createSignal, For, onCleanup, Show } from
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
+import { desktopNonce, nonceHeader } from "@/pages/session/map/session-map-model"
 import { showToast } from "@/utils/toast"
 
 const MAX_RETRIES = 3
@@ -31,6 +32,20 @@ const INDEX_LIMITS = ProjectMemory.INDEX_LIMITS
 type Item = MemoryItem & Pick<ProjectMemory.Item, "kind" | "missionId" | "rolledInto">
 
 const isIndex = (item: Item) => item.kind === "index" || item.kind === "index_rollup"
+
+/** The desktop nonce header for one person-only call (1.2.10 P4-view, N10-072); empty without the desktop app. */
+type NonceHeaders = ReturnType<typeof nonceHeader>
+
+/**
+ * 1.2.10 P4-view (01d §3.7, S10-12(P4)): the final report of a mission index entry, by its last path segment only, for
+ * the copy confirmation. A roll-up names no report (S10-08(P4)).
+ */
+function reportName(item: Item) {
+  if (item.kind !== "index") return undefined
+  const ref = item.refs?.[0]
+  const path = ProjectMemory.INDEX_TEXT_PATTERN.exec(item.text)?.[5] ?? (ref && !("symbol" in ref) ? ref.path : undefined)
+  return path?.split(/[\\/]/).filter(Boolean).at(-1)
+}
 
 /**
  * 1.2.10 P4-b (01d §3.7): the label a note gets for why it stays out of the Obsidian vault copy. Typed against the
@@ -169,11 +184,16 @@ export function DialogProjectMemory() {
   const groups = () => memoryGroups((memory.current()?.items ?? []) as Item[])
 
   /** Runs a change and reports why it did not take, in place. Returns whether it did. */
-  const save = async (change: () => Promise<{ data?: MemoryResult | boolean | unknown }>) => {
+  const save = async (
+    change: () => Promise<{ data?: MemoryResult | boolean | unknown; error?: unknown; response?: { status: number } }>,
+  ) => {
     setProblem(undefined)
     const response = await change().catch(() => undefined)
     if (!response?.data && response?.data !== false) {
-      setProblem(language.t("memory.saveFailed"))
+      // 1.2.10 P4-view (01d §3.4): copy, remove, the scope toggle and a text edit are person-only; a refusal says so.
+      const code = (response?.error as { data?: { code?: unknown } } | undefined)?.data?.code
+      const personOnly = code === "MEMORY_PERSON_ONLY" || response?.response?.status === 403
+      setProblem(language.t(personOnly ? "memory.vault.personOnly" : "memory.saveFailed"))
       return false
     }
     const why = (response.data as MemoryResult).refused
@@ -196,6 +216,21 @@ export function DialogProjectMemory() {
     async () => (await client().vault()).data?.kept,
   )
   const reason = (id: string) => (vault.error ? undefined : vault.latest)?.find((entry) => entry.id === id)?.reason
+
+  // 1.2.10 P4-view (C18 D-6): asked once when the view opens, and only whether there is one; the nonce itself is
+  // asked for again by each person-only click and never kept. Without it (web build, `swarm serve`) there is no copy
+  // or remove action and the scope is plain text. Unknown until answered, so nothing person-only shows early.
+  const [desktop] = createResource(async () => Boolean(await desktopNonce()))
+  const atDesktop = () => !desktop.error && desktop.latest === true
+  // The calls behind a row's buttons. The row adds the nonce header itself, per click (S10-12(P4)).
+  const rowActions = (item: Item) => ({
+    onDelete: () => save(() => client().remove({ id: item.id })),
+    onText: (text: string, headers: NonceHeaders) => save(() => client().update({ id: item.id, text, ...headers })),
+    onScope: (headers: NonceHeaders) =>
+      save(() => client().update({ id: item.id, deviceOnly: !item.deviceOnly, ...headers })),
+    onVault: (allowed: boolean, headers: NonceHeaders) =>
+      save(() => client().allowVault({ id: item.id, allowed, ...headers })),
+  })
 
   // 1.2.8 OBS-f (01c §7.1, N8-114..N8-121): ask the server where the hub note is, then hand only that path to the
   // desktop, which checks it and opens Obsidian. No hub yet -> say so and never call the desktop.
@@ -300,14 +335,13 @@ export function DialogProjectMemory() {
                       <MemoryRow
                         item={item}
                         reason={reason(item.id)}
+                        desktop={atDesktop()}
                         members={
                           item.kind === "index_rollup"
                             ? groups().archived.filter((member) => member.rolledInto === item.id)
                             : undefined
                         }
-                        onDelete={() => save(() => client().remove({ id: item.id }))}
-                        onText={(text) => save(() => client().update({ id: item.id, text }))}
-                        onScope={() => save(() => client().update({ id: item.id, deviceOnly: !item.deviceOnly }))}
+                        {...rowActions(item)}
                       />
                     )}
                   </For>
@@ -326,13 +360,7 @@ export function DialogProjectMemory() {
             <ul class="flex flex-col">
               <For each={groups().notes}>
                 {(item) => (
-                  <MemoryRow
-                    item={item}
-                    reason={reason(item.id)}
-                    onDelete={() => save(() => client().remove({ id: item.id }))}
-                    onText={(text) => save(() => client().update({ id: item.id, text }))}
-                    onScope={() => save(() => client().update({ id: item.id, deviceOnly: !item.deviceOnly }))}
-                  />
+                  <MemoryRow item={item} reason={reason(item.id)} desktop={atDesktop()} {...rowActions(item)} />
                 )}
               </For>
             </ul>
@@ -398,18 +426,48 @@ function MemoryRow(props: {
   item: Item
   /** Why the note stays out of the vault copy (1.2.10 P4-b), from the server's `kept` list; none when it is copied. */
   reason?: MemoryKeptReason
+  /** Whether the view runs in the desktop app with its nonce (1.2.10 P4-view, C18 D-6): person-only actions show. */
+  desktop: boolean
   /** A roll-up's archived members (01e §7): listed read-only inside its detail, never editable. */
   members?: Item[]
   onDelete: () => void
-  onText: (text: string) => Promise<boolean>
-  onScope: () => void
+  onText: (text: string, headers: NonceHeaders) => Promise<boolean>
+  onScope: (headers: NonceHeaders) => Promise<boolean>
+  onVault: (allowed: boolean, headers: NonceHeaders) => Promise<boolean>
 }) {
   const language = useLanguage()
   const [editing, setEditing] = createSignal(false)
+  const [confirming, setConfirming] = createSignal(false)
+  const [pending, setPending] = createSignal(false)
   const rollup = () => props.item.kind === "index_rollup"
+
+  // 1.2.10 P4-view (01d §3.7, S10-12(P4)): the four person-only calls of a row. Each asks for the desktop nonce when the
+  // person clicks or presses Enter and attaches it to that one call; nothing else in this file attaches it.
   const finish = async (text: string) => {
     if (text.trim() === props.item.text) return setEditing(false)
-    if (await props.onText(text)) setEditing(false)
+    if (await props.onText(text, nonceHeader(await desktopNonce()))) setEditing(false)
+  }
+  const toggleScope = async () => props.onScope(nonceHeader(await desktopNonce()))
+  const once = async (call: () => Promise<boolean>) => {
+    if (pending()) return
+    setPending(true)
+    await call().finally(() => setPending(false))
+  }
+  const copy = () => {
+    setConfirming(false)
+    return once(async () => props.onVault(true, nonceHeader(await desktopNonce())))
+  }
+  const remove = () => once(async () => props.onVault(false, nonceHeader(await desktopNonce())))
+
+  /**
+   * `copy` for a live device-only note the server keeps out for that reason only; `remove` for a note the person
+   * copied, also once it turned secret or classified (undo is always safe). Archived members never get an action.
+   */
+  const vaultAction = () => {
+    if (!props.desktop || props.item.rolledInto) return undefined
+    if (props.item.vaultAllowed === true) return "remove" as const
+    if (props.item.deviceOnly && props.reason === "device") return "copy" as const
+    return undefined
   }
   const hook = () => {
     const line = rollup() ? ROLLUP_LINE.exec(props.item.text) : null
@@ -474,15 +532,25 @@ function MemoryRow(props: {
           </Show>
           <span>{language.t(`memory.source.${props.item.source}`)}</span>
           <span aria-hidden="true">·</span>
-          <button
-            type="button"
-            data-memory-scope
-            title={language.t("memory.scope.toggle")}
-            class="rounded-[4px] underline-offset-2 hover:text-v2-text-text-base hover:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-v2-border-border-focus"
-            onClick={props.onScope}
+          {/* Without the desktop app the scope change is refused (C18 D-6), so it shows as plain text. */}
+          <Show
+            when={props.desktop}
+            fallback={
+              <span data-memory-scope>
+                {language.t(props.item.deviceOnly ? "memory.scope.device" : "memory.scope.any")}
+              </span>
+            }
           >
-            {language.t(props.item.deviceOnly ? "memory.scope.device" : "memory.scope.any")}
-          </button>
+            <button
+              type="button"
+              data-memory-scope
+              title={language.t("memory.scope.toggle")}
+              class="rounded-[4px] underline-offset-2 hover:text-v2-text-text-base hover:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-v2-border-border-focus"
+              onClick={() => void toggleScope()}
+            >
+              {language.t(props.item.deviceOnly ? "memory.scope.device" : "memory.scope.any")}
+            </button>
+          </Show>
           <Show when={props.reason && VAULT_REASON[props.reason]}>
             {(key) => (
               <>
@@ -491,7 +559,49 @@ function MemoryRow(props: {
               </>
             )}
           </Show>
+          {/* 1.2.10 P4-view (N10-071): the person's own copy to the vault, or its undo; same line, no new panel. */}
+          <Show when={vaultAction()}>
+            {(kind) => (
+              <>
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  data-memory-vault={kind()}
+                  disabled={pending()}
+                  class="rounded-[4px] underline-offset-2 hover:text-v2-text-text-base hover:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-v2-border-border-focus"
+                  onClick={() => (kind() === "copy" ? setConfirming((value) => !value) : void remove())}
+                >
+                  {language.t(kind() === "copy" ? "memory.vault.copy" : "memory.vault.remove")}
+                </button>
+              </>
+            )}
+          </Show>
         </div>
+        {/* Copy asks first, in this row (C18 D-2): who can read the copy, and for a mission entry its final report. */}
+        <Show when={confirming() && vaultAction() === "copy"}>
+          <div
+            role="group"
+            class="flex flex-col gap-1.5 text-[12px] leading-[18px] text-v2-text-text-base"
+            // Focus starts on Cancel. Escape is the dialog's own (window capture): it closes the view, and the
+            // confirmation with it, before anything is sent.
+            ref={(element) => setTimeout(() => element.querySelector<HTMLElement>("button:last-of-type")?.focus())}
+          >
+            <p>
+              {language.t("memory.vault.confirmText")}
+              <Show when={reportName(props.item)}>
+                {(report) => <> {language.t("memory.vault.confirmTextIndex", { report: report() })}</>}
+              </Show>
+            </p>
+            <div class="flex gap-1.5">
+              <ButtonV2 type="button" size="small" variant="neutral" onClick={() => void copy()}>
+                {language.t("memory.vault.confirmCopy")}
+              </ButtonV2>
+              <ButtonV2 type="button" size="small" variant="ghost" onClick={() => setConfirming(false)}>
+                {language.t("memory.vault.confirmCancel")}
+              </ButtonV2>
+            </div>
+          </div>
+        </Show>
       </div>
       <div class="flex shrink-0 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
         {/* A roll-up's line is written by the store and stays as written (01e §2.3): no edit, delete stays. */}
