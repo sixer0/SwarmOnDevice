@@ -93,7 +93,7 @@ describe("AC-P1a: Obsidian registry read and containing-vault check (N10-160)", 
     })
   }
 
-  test("a4 registryUnregistered + closed runner, no lock -> not stopped at the check (runner called once)", async () => {
+  test("a4 registryUnregistered + closed runner, no lock -> not stopped at the check (runner called twice: closed check 1 and 2)", async () => {
     const fixture = keep(registryUnregistered())
     const { step, calls } = await check(fixture)
     expect(calls).toBe(2)
@@ -101,7 +101,7 @@ describe("AC-P1a: Obsidian registry read and containing-vault check (N10-160)", 
     expect(step.reason).not.toBe("registry-malformed")
   })
 
-  test("a5 registryMissingFile + closed runner -> not stopped at the check (runner called once)", async () => {
+  test("a5 registryMissingFile + closed runner -> not stopped at the check (runner called twice: closed check 1 and 2)", async () => {
     const fixture = keep(registryMissingFile())
     const { step, calls } = await check(fixture)
     expect(calls).toBe(2)
@@ -141,7 +141,7 @@ describe("AC-P1a: Obsidian registry read and containing-vault check (N10-160)", 
     expect(fileState(fixture)).toEqual(before)
   })
 
-  test("a12 prefix siblings (<root>2, and <root> minus its last letter) are not containing vaults -> proceeds (runner called once)", async () => {
+  test("a12 prefix siblings (<root>2, and <root> minus its last letter) are not containing vaults -> proceeds (runner called twice: closed check 1 and 2)", async () => {
     const fixture = keep(fakeObsidianHome())
     const sibling = fixture.vaultRoot + "2"
     // A text prefix of the hub path that is not a folder boundary: a bare startsWith would take it as the vault.

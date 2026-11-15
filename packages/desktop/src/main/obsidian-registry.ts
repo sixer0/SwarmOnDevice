@@ -437,8 +437,7 @@ function listedConflict(listed: string[], root: string, hub: string): ObsidianRe
  * error (spawn error, non-zero exit, timeout, signal, output over the cap) or any stderr text gives
  * `{ code: -1, stdout: "" }`, which the caller reads as unsure (S10-08(P1)). It never logs or returns stderr, and
  * never reads an error's fields.
- * Production reader: `ipc.ts` (row 45). Until that row lands only the P1 tests read it (C44).
- * @internal test seam
+ * Production reader: `ipc.ts` (row 45; C44 marker removed there).
  */
 export function makeLsappinfoRunner(execFileImpl: LsappinfoExecFile): () => Promise<LsappinfoResult> {
   return () =>
@@ -562,9 +561,7 @@ let queue: Promise<unknown> = Promise.resolve()
 /**
  * N10-024: the registry step of "Open graph in Obsidian". Returns `in-vault` when a listed vault already contains
  * the hub note; otherwise the later steps decide. Any unexpected error is `not-registered` / `registry-write`.
- * Production reader: `external-url.ts` (row 45). Until that row lands only the P1 tests read it, so the export guard
- * reads it through the marker below; the marker stops counting once the production reader exists.
- * @internal test seam
+ * Production reader: `external-url.ts` (row 45; C44 marker removed there).
  */
 export function ensureObsidianVault(input: ObsidianRegistryInput): Promise<ObsidianRegistryStep> {
   const step = queue.then(() => withDeadline(input)).catch((): ObsidianRegistryStep => notRegistered("registry-write"))

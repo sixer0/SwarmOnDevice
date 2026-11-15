@@ -29,6 +29,7 @@ import { createDesktopDraftStore } from "./draft-store"
 import { nativeT } from "./native-translations"
 import { getLogger, write as writeLog } from "./logging"
 import { obsidianVaultRoot, registerOpenObsidianNoteHandler } from "./external-url"
+import { makeLsappinfoRunner } from "./obsidian-registry"
 import { isSetupToolsOfferPending, markSetupToolsOffered } from "./onboarding"
 import { createSetupRunner, resolveSetupHome, setupDir, type SetupRunner } from "./setup-runner"
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
@@ -45,6 +46,9 @@ const pickerFilters = (ext?: string[]) => {
 }
 
 const pickedFiles = createPickedFileAuthorizations()
+
+/** N10-141 (1.3.0 row 45): Obsidian's data folder under the home folder; the only place that knows the real path. */
+const OBSIDIAN_DATA_DIR_SEGMENTS = ["Library", "Application Support", "obsidian"] as const
 
 type Deps = {
   killSidecar: () => Promise<void> | void
@@ -367,6 +371,14 @@ export function registerIpcHandlers(deps: Deps) {
           err ? reject(err) : resolve({ stdout: String(stdout), stderr: String(stderr) }),
         ),
       ),
+    // 1.3.0 row 45 (AC-P1d, N10-028, N10-141; C12, C17): before the launch, add the Swarm vault to Obsidian's vault
+    // list when it is missing and Obsidian is closed. macOS only; elsewhere the deps are absent (BASE behaviour).
+    ...(process.platform === "darwin"
+      ? {
+          obsidianConfigDir: () => join(app.getPath("home"), ...OBSIDIAN_DATA_DIR_SEGMENTS),
+          runLsappinfo: makeLsappinfoRunner(execFile),
+        }
+      : {}),
   })
 
   // 1.2.7 row 25 (U-2, SR7-11): only a path inside this window's roots and outside Swarm's and the credential places;
