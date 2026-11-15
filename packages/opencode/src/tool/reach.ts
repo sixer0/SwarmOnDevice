@@ -13,7 +13,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { containsPath, type InstanceContext } from "../project/instance-context"
 import { Risk } from "./risk"
 import { Secrets } from "./secrets"
-import { SKILL_FOLDER_HELD_TEXT, VAULT_MIRROR_REFUSED_TEXT } from "../permission/autonomy-texts"
+import { SKILL_FOLDER_HELD_TEXT, VAULT_INBOX_TOOL_ONLY_TEXT, VAULT_MIRROR_REFUSED_TEXT } from "../permission/autonomy-texts"
 
 const git = promisify(execFile)
 // Asking whether Undo can help must not itself run what the repository says to.
@@ -684,13 +684,24 @@ export class SkillFolderRefused extends Error {
  * tests). Independent of the `.swarm` segment rule (`risk.ts`).
  */
 function vaultMirrorRoots() {
-  const roots = [Vault.mirrorDir()]
+  return vaultFolderRoots(Vault.VAULT_MIRROR_DIR)
+}
+
+/**
+ * The folder `sub` of the vault, by every spelling `vaultMirrorRoots` knows: under `Vault.root()` as spelled, under the
+ * real vault root, and (without SWARM_VAULT_DIR) under `~/.swarm/vault` for each home.
+ */
+function vaultFolderRoots(sub: string) {
+  const roots = [path.join(Vault.root(), sub)]
   const root = real(Vault.root())
-  if (root) roots.push(path.join(root, Vault.VAULT_MIRROR_DIR))
+  if (root) roots.push(path.join(root, sub))
   if (!process.env.SWARM_VAULT_DIR?.trim())
-    for (const home of homes()) roots.push(path.join(home, Vault.VAULT_DEFAULT_DIR, Vault.VAULT_MIRROR_DIR))
+    for (const home of homes()) roots.push(path.join(home, Vault.VAULT_DEFAULT_DIR, sub))
   return [...new Set(roots.flatMap((dir) => [path.resolve(dir), real(dir) ?? path.resolve(dir)]))]
 }
+
+// 1.3.0 row 147 (AC-S6-INBOX): the vault folder the swarm-web_vault_inbox tool writes notes into (setup `resolveVault`).
+const VAULT_INBOX_DIR = "inbox"
 
 // File names on macOS and Windows ignore case by default, so `Swarm-Memory` is the same folder there.
 const foldCase = process.platform === "darwin" || process.platform === "win32"
@@ -721,6 +732,30 @@ export class VaultMirrorRefused extends Error {
   }
 }
 
+/**
+ * 1.3.0 row 147 (AC-S6-INBOX, C95 S13-07, F8, N13-409): a write here would land in the vault inbox `<vault>/inbox/**` (or
+ * replace that folder itself), by the name as given or where it really lands; the same roots and case rule as
+ * `vaultMirror`. Notes reach the inbox only through swarm-web_vault_inbox, whose proxy checks classification words and
+ * writes with fs itself, outside the agent's tools. Reads are not judged here; the rest of the vault is not covered.
+ */
+export function vaultInbox(file: string, instance: InstanceContext) {
+  const given = path.resolve(instance.directory, file)
+  const target = real(given) ?? given
+  return vaultFolderRoots(VAULT_INBOX_DIR).some((root) => [given, target].some((name) => under(fold(root), fold(name))))
+}
+
+/**
+ * 1.3.0 row 147 (AC-S6-INBOX, N13-408, N13-409): an edit tool's write into the vault inbox. Refused before anything is
+ * asked, with autonomous mode on or off and whatever "always" rule a person gave, as `VaultMirrorRefused` is.
+ */
+export class VaultInboxRefused extends Error {
+  readonly editClass = "vault_inbox" as const
+  constructor() {
+    super(`This write is not allowed. ${VAULT_INBOX_TOOL_ONLY_TEXT}`)
+    this.name = "VaultInboxRefused"
+  }
+}
+
 /** What to tell the permission layer about an edit to these files. */
 export const editTrust = Effect.fn("Reach.editTrust")(function* (
   ctx: { trust?: { canUndo: boolean } },
@@ -738,6 +773,8 @@ export const editTrust = Effect.fn("Reach.editTrust")(function* (
   if (files.some((file) => skillFolder(file, instance))) throw new SkillFolderRefused()
   // 1.2.8 row 40f (AC-SEC11): the vault mirror folder, refused before Undo, outside or sensitive checks can ask.
   if (files.some((file) => vaultMirror(file, instance))) throw new VaultMirrorRefused()
+  // 1.3.0 row 147 (AC-S6-INBOX): the vault inbox likewise.
+  if (files.some((file) => vaultInbox(file, instance))) throw new VaultInboxRefused()
   if (!ctx.trust?.canUndo) return { harmless: false, editClass: "no_undo" as const }
   if (files.some((file) => !inside(file, instance)))
     return { harmless: false, risk: "irreversible" as const, editClass: "no_undo" as const }

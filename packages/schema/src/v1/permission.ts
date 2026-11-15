@@ -66,6 +66,7 @@ export type Approval = typeof Approval.Type
 
 // 1.2.8 row 40e (SK-e, N8-411): `skill_folder`, a write into a skill folder, refused in every mode.
 // 1.2.8 row 40f (AC-SEC11, N8-441): `vault_mirror`, a write into the vault mirror folder, refused in every mode.
+// 1.3.0 row 147 (AC-S6-INBOX, N13-409): `vault_inbox`, an agent's own write into the vault inbox, refused in every mode.
 export const EditClass = Schema.Literals([
   "ordinary",
   "not_ordinary",
@@ -74,6 +75,7 @@ export const EditClass = Schema.Literals([
   "secret",
   "skill_folder",
   "vault_mirror",
+  "vault_inbox",
 ]).annotate({
   identifier: "PermissionEditClass",
 })
@@ -126,6 +128,10 @@ export const DeferredCategory = Schema.Literals([
   // X (1.2.8 row 40f, AC-SEC11, SR8-11, N8-441): an agent's write into the vault mirror folder <vault>/swarm-memory/, by
   // an edit tool or the shell. Refused in every mode and never opened by a consent item: Swarm generates that folder.
   "vault_mirror",
+  // X (1.3.0 row 147, AC-S6-INBOX, C95 S13-07, N13-409): an agent's own write into the vault inbox <vault>/inbox/, by an
+  // edit tool or the shell. Refused in every mode and never opened by a consent item: notes go through
+  // swarm-web_vault_inbox, which checks classification words.
+  "vault_inbox",
 ]).annotate({ identifier: "PermissionDeferredCategory" })
 export type DeferredCategory = typeof DeferredCategory.Type
 

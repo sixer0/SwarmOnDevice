@@ -355,12 +355,14 @@ describe("SEC11 the edit tools: refused without asking (mode off), with an \"alw
     }),
   )
 
-  it.instance("a write into <vault>/inbox still gets its outside-folder prompt (unchanged)", () =>
+  // 1.3.0 row 147 (AC-S6-INBOX, INTENT): `<vault>/inbox` is now refused as `vault_inbox` (N13-343 block "inbox"), so the
+  // unchanged rest of the vault is shown by the person's own notes folder.
+  it.instance("a write into <vault>/notes still gets its outside-folder prompt (unchanged)", () =>
     Effect.gen(function* () {
       const asked: string[] = []
       const write = yield* (yield* WriteTool).init()
       const exit = yield* write
-        .execute({ filePath: path.join(vault, "inbox/n.md"), content: "new\n" }, context(asked) as never)
+        .execute({ filePath: path.join(vault, "notes/n.md"), content: "new\n" }, context(asked) as never)
         .pipe(Effect.exit)
       expect(failure(exit)).not.toContain(N8_442)
       expect(asked[0]).toBe("external_directory")
