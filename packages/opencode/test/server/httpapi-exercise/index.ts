@@ -734,6 +734,8 @@ const scenarios: Scenario[] = [
     .patch("/memory", "memory.settings")
     .at((ctx) => ({ path: "/memory", headers: ctx.headers(), body: { enabled: true } }))
     .json(200, object),
+  // 1.2.10 row 54 (AC-P4f, N10-073; C10): the runner holds no desktop nonce, so a scope change is refused person-only
+  // before the store is called, and so is every vault export or undo.
   http.protected
     .patch("/memory/{id}", "memory.update")
     .at((ctx) => ({
@@ -741,7 +743,29 @@ const scenarios: Scenario[] = [
       headers: ctx.headers(),
       body: { deviceOnly: true },
     }))
-    .json(200, object),
+    .json(
+      403,
+      (value) => {
+        object(value)
+        check(value.name === "MemoryPersonOnlyError", "a scope change without the desktop nonce is refused")
+      },
+      "status",
+    ),
+  http.protected
+    .post("/memory/{id}/vault", "memory.allowVault")
+    .at((ctx) => ({
+      path: route("/memory/{id}/vault", { id: "missing" }),
+      headers: ctx.headers(),
+      body: { allowed: true },
+    }))
+    .json(
+      403,
+      (value) => {
+        object(value)
+        check(value.name === "MemoryPersonOnlyError", "a vault export without the desktop nonce is refused")
+      },
+      "status",
+    ),
   http.protected
     .delete("/memory/{id}", "memory.remove")
     .at((ctx) => ({ path: route("/memory/{id}", { id: "missing" }), headers: ctx.headers() }))

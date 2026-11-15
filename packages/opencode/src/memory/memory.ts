@@ -702,13 +702,17 @@ function keepExport(found: Item, next: Item, attested: boolean): Item {
   return exportFlag(next, keep)
 }
 
-/** 01d §3.3 step 2, in this order: archived, not device-only, classified, secret. */
+/**
+ * 01d §3.3 step 2 in the register order (N10-003, RA-25, S10-09): archived, classified, secret, not device-only. The
+ * never-exportable reasons come first, so the person is never told to change the scope of a note that would still be
+ * kept out.
+ */
 function exportRefusal(item: Item): ProjectMemory.Refusal | undefined {
   if (item.rolledInto !== undefined) return "archived"
-  if (item.deviceOnly !== true) return "not_device_only"
   // 01d §3.2 single decision point (C58(b)): the mirror's own exclusion, classified before secret.
   const excluded = VaultMirror.mirrorExclusion(item)
   if (excluded === "classified" || excluded === "secret") return excluded
+  if (item.deviceOnly !== true) return "not_device_only"
 }
 
 /**
