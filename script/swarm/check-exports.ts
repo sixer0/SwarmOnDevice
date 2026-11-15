@@ -9,8 +9,9 @@
  *       `@internal test seam` inside the export's own doc block (C91 OP-60-3, both forms accepted);
  *   (b) it is listed in the shrink-only baseline `check-exports.baseline.json` (N9-085; pre-1.2.9 names only);
  *   (c) it lives in the generated SDK `packages/sdk/js/src/v2/gen/**` (C10(g)).
- * Everything else is UNEXPLAINED. A baseline entry that is no longer an unmarked export without a production reader is
- * STALE and must be deleted (`--prune-stale` deletes stale entries; nothing ever adds one).
+ * Everything else is UNEXPLAINED. A baseline entry is STALE and must be deleted (`--prune-stale` deletes stale entries;
+ * nothing ever adds one) when it is no longer an unmarked export of its file, or when a production file reads it through
+ * an import binding (1.2.10 row 71, B10-09: a same-named local elsewhere no longer makes an entry stale).
  *
  * Method (01b / row 60 `exports.cjs`): TypeScript compiler API; a reader is an identifier token with the export's name
  * in another tracked file (comments and strings do not count). Matching is by name, not by resolved import, so the
@@ -397,7 +398,13 @@ function runGuard(opts: {
     }
     unexplained.push({ file: r.file, line: r.line, name: r.name, testReaders: r.testReaders })
   }
-  const stale = opts.baseline.filter((b) => !unmarkedOpen.has(key(b.file, b.name)))
+  // B10-09 (row 71, N10-115): a baseline entry stays held while it is an unmarked export that no production file binds
+  // by import, so a same-named local in an unrelated file no longer makes it stale. It is stale when it is no longer an
+  // unmarked export of its file, or when it gained an import-binding production reader. An entry with no production
+  // reader at all stays held (`unmarkedOpen`), so pruning a stale entry never turns it into an unexplained export.
+  const held = new Set(unmarkedOpen)
+  for (const r of rows) if (!r.generated && !r.marked && r.prodBindings === 0) held.add(key(r.file, r.name))
+  const stale = opts.baseline.filter((b) => !held.has(key(b.file, b.name)))
   unexplained.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name))
   // B10-05 (report-only, C19 D-1): production readers exist, but none of them binds the export by import.
   const nameOnly: NameOnly[] = rows
@@ -453,6 +460,8 @@ if (import.meta.main) {
     for (const u of result.unexplained)
       console.log(`unexplained ${u.file}:${u.line} ${u.name} (${u.testReaders ? `test readers ${u.testReaders}` : "no outside reader"})`)
     for (const s of result.stale) console.log(`stale ${s.file} ${s.name}`)
+    // N10-116 (row 71): only after at least one stale line.
+    if (result.stale.length > 0) console.log("--prune-stale removes these stale entries (the baseline only shrinks).")
   }
   const pruned = args.has("--prune-stale") ? 0 : result.stale.length
   process.exit(result.unexplained.length > 0 || pruned > 0 ? 1 : 0)
