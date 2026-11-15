@@ -166,6 +166,9 @@ describe("AC-B1002b LINK_ALONG_NODE in the render report, the preview notices an
       expect(sha256(p.svg!), `preview g04 @${style} bytes equal the pin`).toBe(G04_SHA[style])
       expect(p.notices.filter((i) => i.checkId === "LINK_ALONG_NODE").map((i) => i.detail)).toEqual(G04_ALONG.map((e) => detailId(e.node, e.mm)))
       expect(p.defects.map((i) => i.checkId)).not.toContain("LINK_ALONG_NODE")
+      // Row 65c (C66 F-65b-1): report-only = not a layout issue; the two notices stay listed.
+      expect(p.layoutIssueCount, `g04 @${style} layoutIssueCount`).toBe(0)
+      expect(p.notices.filter((i) => i.checkId === "LINK_ALONG_NODE")).toHaveLength(2)
     }
   })
 
