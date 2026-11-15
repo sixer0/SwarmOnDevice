@@ -182,11 +182,13 @@ describe("AC-OBSc OBS-c-2 masking and no new exposure", () => {
     const all = result.files.map((f) => f.path + f.content).join("\n")
     for (const id of ["aa0001", "aa0002", "aa0003"]) expect(all).not.toContain(id)
     expect(all).not.toContain("sk-live")
+    // INTENT 1.3.0 row 57 (AC-P4a, N10-065): per-class counts, then the export hint because one note is device-only.
+    expect(result.notCopiedByClass).toEqual({ device: 1, secret: 1, classified: 1, unsafe: 0 })
     expect(byPath(result)["index.md"]).toContain(
-      "\n3 catatan tidak disalin ke sini: hanya di perangkat ini, tampak berisi rahasia, atau ditandai sebagai dokumen berklasifikasi.\n",
+      "\n3 catatan tidak disalin ke sini: 1 hanya di perangkat ini, 1 tampak berisi rahasia, 1 ditandai sebagai dokumen berklasifikasi.\n\nAnda dapat menyalin catatan yang hanya di perangkat ini ke vault di tampilan memori Swarm (Salin ke vault). Catatan yang tampak berisi rahasia atau berklasifikasi tidak pernah disalin.\n",
     )
     expect(byPath(VaultMirror.render(base({ items, language: "en" })))["index.md"]).toContain(
-      "\n3 notes are not copied here: kept on this device only, secret-looking, or marked as classified.\n",
+      "\n3 notes are not copied here: 1 kept on this device only, 1 secret-looking, 1 marked as classified.\n\nYou can copy a note kept on this device to the vault in Swarm's memory view (Copy to vault). Secret-looking and classified notes are never copied.\n",
     )
   })
 
@@ -363,7 +365,9 @@ describe("AC-OBSc SR8-14 every non-public classification", () => {
     const reports = { [REPORT_PATH]: { status: "ok" as const, text: "# Report\n\nDistribution: restricted\n" } }
     const files = byPath(VaultMirror.render(base({ items, reports, language: "en" })))
     expect(Object.values(files).join("\n")).not.toContain("cc0001")
-    expect(files["index.md"]).toContain("1 notes are not copied here: kept on this device only, secret-looking, or marked as classified.")
+    // INTENT 1.3.0 row 57 (AC-P4a, N10-065): only the classified class is counted, and no export hint (device = 0).
+    expect(files["index.md"]).toContain("\n1 notes are not copied here: 1 marked as classified.\n")
+    expect(files["index.md"]).not.toContain("Copy to vault")
     expect(files["reports/2026-11-13-kajian-tarif-report-8504b0.md"]).toContain("This report is marked as classified and is not copied here.")
     expect(files["reports/2026-11-13-kajian-tarif-report-8504b0.md"]).not.toContain("Distribution")
   })

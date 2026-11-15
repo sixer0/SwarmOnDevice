@@ -116,6 +116,9 @@ interface RenderedFile {
   readonly content: string
 }
 
+/** N10-064 (01d §3.6): the not-copied count per class, in the hub's order (module-local; export guard). */
+type NotCopiedByClass = { device: number; secret: number; classified: number; unsafe: number }
+
 export interface RenderResult {
   /** Sorted by path. */
   readonly files: readonly RenderedFile[]
@@ -123,10 +126,20 @@ export interface RenderResult {
   readonly notCopied: number
   /** Of those, the items skipped for an id or name that failed its pattern (`VAULT_PATH_UNSAFE`). */
   readonly unsafe: number
+  /** N10-064: `notCopied` per class; the classes sum to `notCopied`; its `unsafe` is the `unsafe` above. */
+  readonly notCopiedByClass: Readonly<NotCopiedByClass>
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Labels (01c §4.5 with N8-435). Generated text only: memory content is never translated.
+
+const CLASS_ORDER = ["device", "secret", "classified", "unsafe"] as const
+
+/** `{count} {label}` for each non-zero class in `CLASS_ORDER`, joined with ", " (01d §3.6). */
+const classParts = (counts: NotCopiedByClass, labels: Record<keyof NotCopiedByClass, string>) =>
+  CLASS_ORDER.filter((key) => counts[key] > 0)
+    .map((key) => `${counts[key]} ${labels[key]}`)
+    .join(", ")
 
 const LABELS = {
   en: {
@@ -136,8 +149,16 @@ const LABELS = {
     missions: "## Missions",
     notes: "## Notes",
     skills: "## Skills",
-    notCopied: (n: number) =>
-      `${n} notes are not copied here: kept on this device only, secret-looking, or marked as classified.`,
+    // N10-065 (01d §3.6): counts only, non-zero classes in the order device, secret, classified, unsafe.
+    notCopied: (n: number, c: NotCopiedByClass) =>
+      `${n} notes are not copied here: ${classParts(c, {
+        device: "kept on this device only",
+        secret: "secret-looking",
+        classified: "marked as classified",
+        unsafe: "with a name Swarm cannot use",
+      })}.`,
+    exportHint:
+      "You can copy a note kept on this device to the vault in Swarm's memory view (Copy to vault). Secret-looking and classified notes are never copied.",
     related: "## Related",
     untrusted:
       "> [!warning] Written after the session read web, MCP, Studio or files outside the project. Check before relying on it.",
@@ -161,8 +182,15 @@ const LABELS = {
     missions: "## Misi",
     notes: "## Catatan",
     skills: "## Keahlian",
-    notCopied: (n: number) =>
-      `${n} catatan tidak disalin ke sini: hanya di perangkat ini, tampak berisi rahasia, atau ditandai sebagai dokumen berklasifikasi.`,
+    notCopied: (n: number, c: NotCopiedByClass) =>
+      `${n} catatan tidak disalin ke sini: ${classParts(c, {
+        device: "hanya di perangkat ini",
+        secret: "tampak berisi rahasia",
+        classified: "ditandai sebagai dokumen berklasifikasi",
+        unsafe: "dengan nama yang tidak dapat dipakai Swarm",
+      })}.`,
+    exportHint:
+      "Anda dapat menyalin catatan yang hanya di perangkat ini ke vault di tampilan memori Swarm (Salin ke vault). Catatan yang tampak berisi rahasia atau berklasifikasi tidak pernah disalin.",
     related: "## Terkait",
     untrusted:
       "> [!warning] Ditulis setelah sesi membaca web, MCP, Studio, atau berkas di luar proyek. Periksa sebelum mengandalkannya.",
@@ -600,7 +628,10 @@ const newestFirst = (a: { time: number; id: string }, b: { time: number; id: str
 const RELATED_MAX = 10
 
 export function render(input: RenderInput): RenderResult {
-  if (!FOLDER.test(input.folder)) return { files: [], notCopied: input.items.length, unsafe: input.items.length }
+  if (!FOLDER.test(input.folder)) {
+    const n = input.items.length
+    return { files: [], notCopied: n, unsafe: n, notCopiedByClass: { device: 0, secret: 0, classified: 0, unsafe: n } }
+  }
   const lang: Language = input.language ?? "id"
   const L = LABELS[lang]
   const base = `swarm-memory/${input.folder}`
@@ -608,11 +639,9 @@ export function render(input: RenderInput): RenderResult {
   const projectLabel = linkLabel(input.projectName, input.folder)
   const hubLink = `**${L.project}**: [[${base}/index|${projectLabel}]]`
 
-  let notCopied = 0
-  let unsafe = 0
-  const skip = (isUnsafe: boolean) => {
-    notCopied++
-    if (isUnsafe) unsafe++
+  const byClass: NotCopiedByClass = { device: 0, secret: 0, classified: 0, unsafe: 0 }
+  const skip = (why: keyof NotCopiedByClass) => {
+    byClass[why]++
   }
 
   // Classify the items. Archived index entries (rolledInto) are represented by their roll-up and add nothing.
@@ -626,12 +655,13 @@ export function render(input: RenderInput): RenderResult {
 
   for (const item of input.items) {
     if (item.rolledInto !== undefined && item.kind !== "index_rollup") continue
-    if (mirrorExclusion(item) !== undefined) {
-      skip(false)
+    const excluded = mirrorExclusion(item)
+    if (excluded !== undefined) {
+      skip(excluded)
       continue
     }
     if (!ITEM_ID.test(item.id)) {
-      skip(true)
+      skip("unsafe")
       continue
     }
     if (item.kind === "index") {
@@ -639,7 +669,7 @@ export function render(input: RenderInput): RenderResult {
       const missionName = missionId && missionIdOk(missionId) ? noteName("mission", missionId) : undefined
       const reportName = missionId && missionName ? noteName("report", missionId) : undefined
       if (!missionId || !missionName || !reportName || missions.has(missionId)) {
-        skip(true)
+        skip("unsafe")
         continue
       }
       missions.set(missionId, {
@@ -657,7 +687,7 @@ export function render(input: RenderInput): RenderResult {
     if (skillMatch && SKILL_NAME.test(skillMatch[1]!)) {
       const name = noteName("skill", skillMatch[1]!)
       if (!name) {
-        skip(true)
+        skip("unsafe")
         continue
       }
       skills.push({ item, skill: skillMatch[1]!, note: { dir: "skills", name: name.slice(0, -3), id: skillMatch[1]!, time: item.time } })
@@ -665,7 +695,7 @@ export function render(input: RenderInput): RenderResult {
     }
     const name = noteName("note", item.id, item.text)
     if (!name) {
-      skip(true)
+      skip("unsafe")
       continue
     }
     const note: Note = { dir: "notes", name: name.slice(0, -3), id: item.id, time: item.time }
@@ -793,7 +823,8 @@ export function render(input: RenderInput): RenderResult {
     )
   }
 
-  // The hub (01c §4.6): every mission, report, note and skill of the folder, then the not-copied count.
+  // The hub (01c §4.6): every mission, report, note and skill of the folder, then the not-copied counts per class.
+  const notCopied = CLASS_ORDER.reduce((sum, key) => sum + byClass[key], 0)
   const firstLine = (text: string) => escapeText(text.split(/\r?\n/)[0]!)
   const byId = <T extends { note: Note }>(list: readonly T[]) => [...list].sort((a, b) => (a.note.id < b.note.id ? -1 : 1))
   const noteLines = byId([...plain, ...rollups]).map((entry) => `- ${link(entry.note)} ${firstLine(entry.item.text)}`)
@@ -805,11 +836,13 @@ export function render(input: RenderInput): RenderResult {
     ...section(L.reports, missionList.flatMap((m) => (m.report ? [m.report.note] : []))),
     ...(noteLines.length ? ["", L.notes, ...noteLines] : []),
     ...section(L.skills, byId(skills).map((s) => s.note)),
-    ...(notCopied ? ["", L.notCopied(notCopied)] : []),
+    ...(notCopied ? ["", L.notCopied(notCopied, byClass)] : []),
+    // The export hint only when a device-only note could be copied by the person (01d §3.6).
+    ...(byClass.device ? ["", L.exportHint] : []),
   ])
 
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-  return { files, notCopied, unsafe }
+  return { files, notCopied, unsafe: byClass.unsafe, notCopiedByClass: { ...byClass } }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
