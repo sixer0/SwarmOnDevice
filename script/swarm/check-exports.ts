@@ -9,20 +9,38 @@
  *       `@internal test seam` inside the export's own doc block (C91 OP-60-3, both forms accepted);
  *   (b) it is listed in the shrink-only baseline `check-exports.baseline.json` (N9-085; pre-1.2.9 names only);
  *   (c) it lives in the generated SDK `packages/sdk/js/src/v2/gen/**` (C10(g)).
- * Everything else is UNEXPLAINED. A baseline entry that is no longer an unmarked export without a production reader is
- * STALE and must be deleted (`--prune-stale` deletes stale entries; nothing ever adds one).
+ * Everything else is UNEXPLAINED. A baseline entry is STALE and must be deleted (`--prune-stale` deletes stale entries;
+ * nothing ever adds one) when it is no longer an unmarked export of its file, or when a production file reads it through
+ * an import binding (1.2.10 row 71, B10-09: a same-named local elsewhere no longer makes an entry stale).
  *
  * Method (01b / row 60 `exports.cjs`): TypeScript compiler API; a reader is an identifier token with the export's name
  * in another tracked file (comments and strings do not count). Matching is by name, not by resolved import, so the
  * check can only under-report. Test files are readers, never declarers.
  *
- * Usage: `bun script/swarm/check-exports.ts [--json] [--prune-stale]`. Exit 0 = no unexplained export and no stale
- * baseline entry; exit 1 otherwise. Deterministic output order; no clock, no network.
+ * Name-only readers (1.2.10 row 68, B10-05, N10-115): each file's import bindings are collected too (`import { A }`,
+ * `import { A as B }` counts A, `import type { A }`, `export { A } from`, and `ns.A` / `ns["A"]` after
+ * `import * as ns`, after `export * as ns` + `import { ns }`, and after `import ns = require()`; no module resolution,
+ * so barrels count by name). Dynamic `import()` / `require()` bind when destructured, assigned to a namespace local or
+ * read by one property; a file with any other dynamic shape (or a bare `typeof import("…")`) keeps name matching: all
+ * its identifiers count as bindings. An unmarked, non-generated, non-baselined export whose production readers are by
+ * name only is listed in `nameOnly`. Report-only in 1.2.10 (C19 D-1): it does not change the classification above or
+ * the exit code.
+ *
+ * Harness imports (1.2.10 row 77, B10-13, S10-40, N10-117): every specifier a production file loads (static imports and
+ * re-exports, `import x = require()`, `import("…")` types, `import()` / `require()` with a string-literal argument) is
+ * resolved, relative or through a package's `@/` alias from its tracked `tsconfig.json`, to a `git ls-files` path (as
+ * written, with an extension, `.js` -> `.ts`, or `index`). One that lands on a harness (`isHarness`: anything
+ * `readsAsTest` accepts, `test-harness*`, `*.mock.*`, `*.fake.*`, `*.stub.*`, `mocks/`, `__mocks__/`, `fakes/`,
+ * `stubs/`) is listed in `harnessImports` and fails the guard. `packages/storybook/` is neither importer nor target.
+ * Unresolved and non-literal specifiers are counted, never guessed; package specifiers are not repo paths.
+ *
+ * Usage: `bun script/swarm/check-exports.ts [--json] [--prune-stale]`. Exit 0 = no unexplained export, no stale
+ * baseline entry and no harness import; exit 1 otherwise. Deterministic output order; no clock, no network.
  */
 
 import ts from "typescript"
 import { spawnSync } from "node:child_process"
-import { readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 const MARKER = "@internal test seam"
@@ -30,17 +48,43 @@ const GENERATED = /^packages\/sdk\/js\/src\/v2\/gen\//
 const SOURCE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
 const BASELINE_FILE = "script/swarm/check-exports.baseline.json"
 
-// Named so it shares no identifier with a baselined export (this file is scanned too: a shared name would read as a
-// production reader of that export and make its baseline entry stale).
-// Row 74a (C104, review F1): browser harnesses are tests too: `test-browser/`, `*.render.*` (the render half of an app
-// browser test) and `*.fixture.*` (their data). Before, a reader there made a test-only export look production-read.
-function readsAsTest(file: string): boolean {
+/**
+ * True when a tracked path is a test file: its readers never make an export production-read, and it never declares one.
+ * Named so it shares no identifier with a baselined export (this file is scanned too: a shared name would read as a
+ * production reader of that export and make its baseline entry stale).
+ * Row 74a (C104, review F1): browser harnesses are tests too: `test-browser/`, `*.render.*` (the render half of an app
+ * browser test) and `*.fixture.*` (their data). Before, a reader there made a test-only export look production-read.
+ * @internal test seam
+ */
+export function readsAsTest(file: string): boolean {
   return (
     /(^|\/)(test|tests|__tests__|e2e|test-fixtures|fixtures|test-browser)\//.test(file) ||
     /\.(test|spec|render|fixture)\.[a-z]+$/.test(file) ||
     /\/(test-utils?|testing)\.[a-z]+$/.test(file)
   )
 }
+
+// B10-13 (row 77, N10-117, S10-40): what a production file must not import. Every test file `readsAsTest` accepts, plus
+// test harnesses that do not read as tests for the export scan (kept apart so the export classification is unchanged).
+function isHarness(file: string): boolean {
+  return (
+    readsAsTest(file) ||
+    /(^|\/)test-harness[^/]*$/.test(file) ||
+    /\.(mock|fake|stub)\.[a-z]+$/.test(file) ||
+    /(^|\/)(mocks|__mocks__|fakes|stubs)\//.test(file)
+  )
+}
+
+/** Storybook files are neither production importers nor reported harnesses (its `mocks/` replace app modules). */
+const STORYBOOK = /^packages\/storybook\//
+// C92 (row 77 PROBE ruling R1): the one allowed production -> harness import, exact file and exact specifier only.
+// `packages/opencode/script/httpapi-exercise.ts` is the dev-only launcher of the package script `test:httpapi`; it is
+// not shipped in the app bundle. Any other import from that file, or this import from any other file, still fails.
+const HARNESS_IMPORT_EXCEPTION = {
+  file: "packages/opencode/script/httpapi-exercise.ts",
+  specifier: "../test/server/httpapi-exercise/index",
+}
+const RESOLVE_EXT =[".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".d.ts", ".json"]
 
 interface Declared {
   readonly name: string
@@ -54,6 +98,8 @@ interface ExportRow extends Declared {
   readonly prodReaders: number
   /** Other tracked test files holding the name as an identifier. */
   readonly testReaders: number
+  /** Other tracked non-test files reading the name through an import binding (or keeping name matching). */
+  readonly prodBindings: number
   readonly generated: boolean
 }
 
@@ -69,6 +115,14 @@ interface Unexplained {
   readonly testReaders: number
 }
 
+interface NameOnly {
+  readonly file: string
+  readonly line: number
+  readonly name: string
+  /** Other tracked non-test files holding the name as an identifier (none of them through an import binding). */
+  readonly prodReaders: number
+}
+
 interface CheckResult {
   readonly files: number
   readonly exports: number
@@ -79,6 +133,15 @@ interface CheckResult {
   readonly explainedByGenerated: number
   readonly unexplained: Unexplained[]
   readonly stale: BaselineEntry[]
+  /** N10-115: unmarked, non-generated, non-baselined exports read in production by name only. Report-only (C19 D-1). */
+  readonly nameOnly: NameOnly[]
+  /** N10-117: production files importing a harness (`isHarness`), by specifier as written. Any entry fails the guard. */
+  readonly harnessImports: HarnessImport[]
+}
+
+interface HarnessImport {
+  readonly file: string
+  readonly specifier: string
 }
 
 function scriptKind(file: string): ts.ScriptKind {
@@ -137,20 +200,212 @@ export function exportedNames(file: string, src: string): Set<string> {
   return new Set(declaredExports(file, src).exports.map((e) => e.name))
 }
 
-function trackedSourceFiles(repo: string): string[] {
+/**
+ * Export names one source reads through an import binding (B10-05): `import { A }` / `import { A as B }` /
+ * `import type { A }` (A), `export { A } from` / `export { A as B } from` (A), and `ns.A`, `ns["A"]` or the type
+ * `ns.A` after `import * as ns`. The self-namespace form (`export * as Ns from "./mod"` in one file, `import { Ns }`
+ * and `Ns.A` in another) is the same read: `members` lists every `X.A` on a named import X, and the scan counts it
+ * when some file declares `export * as X` (`namespaceExports`). `keepsNameMatching` is true when the file has a
+ * dynamic `import()`, an import type `import("…")`, a `require()` call or `import x = require()`: such a file can read
+ * any export without a static binding, so its identifiers keep counting by name.
+ */
+function importBindings(sf: ts.SourceFile): {
+  names: Set<string>
+  members: Map<string, Set<string>>
+  namespaceExports: string[]
+  keepsNameMatching: boolean
+} {
+  const names = new Set<string>()
+  const namespaces = new Set<string>()
+  const namedLocals = new Map<string, string>() // local name -> imported export name
+  const members = new Map<string, Set<string>>() // imported export name -> members read on it
+  const namespaceExports: string[] = []
+  let keepsNameMatching = false
+  for (const st of sf.statements) {
+    if (ts.isImportDeclaration(st)) {
+      const bound = st.importClause?.namedBindings
+      if (bound && ts.isNamespaceImport(bound)) namespaces.add(bound.name.text)
+      else if (bound)
+        for (const spec of bound.elements) {
+          names.add((spec.propertyName ?? spec.name).text)
+          namedLocals.set(spec.name.text, (spec.propertyName ?? spec.name).text)
+        }
+    } else if (ts.isExportDeclaration(st) && st.moduleSpecifier && st.exportClause) {
+      if (ts.isNamespaceExport(st.exportClause)) namespaceExports.push(st.exportClause.name.text)
+      else for (const spec of st.exportClause.elements) names.add((spec.propertyName ?? spec.name).text)
+    }
+  }
+  // `X.A` / `X["A"]` / type `X.A`: A is bound when X is a namespace import; recorded as a member when X is a named one.
+  const read = (target: ts.Node, member: string) => {
+    if (!ts.isIdentifier(target)) return
+    if (namespaces.has(target.text)) names.add(member)
+    const from = namedLocals.get(target.text)
+    if (from === undefined) return
+    const set = members.get(from)
+    if (set) set.add(member)
+    else members.set(from, new Set([member]))
+  }
+  // First pass: dynamic module reads. The common shapes bind like their static forms; any other shape keeps name
+  // matching for the whole file.
+  const dynamic = (n: ts.Node): void => {
+    if (ts.isCallExpression(n)) {
+      const callee = n.expression
+      if (callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === "require"))
+        if (!dynamicRead(n)) keepsNameMatching = true
+    } else if (ts.isImportTypeNode(n)) {
+      // `import("…").A.B` reads A; a bare `typeof import("…")` can read anything.
+      let q = n.qualifier
+      while (q && ts.isQualifiedName(q)) q = q.left
+      if (q) names.add(q.text)
+      else keepsNameMatching = true
+    } else if (ts.isExternalModuleReference(n)) {
+      // `import ns = require("…")`: ns reads like a namespace import.
+      if (ts.isImportEqualsDeclaration(n.parent)) namespaces.add(n.parent.name.text)
+      else keepsNameMatching = true
+    }
+    ts.forEachChild(n, dynamic)
+  }
+  /** `const { A, B: c } = await import(…)`, `const ns = await import(…)`, `(await import(…)).A`, the same for `require(…)`, or a bare side-effect call. */
+  const dynamicRead = (call: ts.CallExpression): boolean => {
+    let at: ts.Node = ts.isAwaitExpression(call.parent) ? call.parent : call
+    while (ts.isParenthesizedExpression(at.parent)) at = at.parent
+    const use = at.parent
+    if (ts.isExpressionStatement(use)) return true
+    // An un-awaited `import()` is a promise: `.then(…)` and friends read nothing by name here.
+    if (call.expression.kind === ts.SyntaxKind.ImportKeyword && !ts.isAwaitExpression(call.parent)) return false
+    if (ts.isPropertyAccessExpression(use) && use.expression === at) return !!names.add(use.name.text)
+    if (ts.isElementAccessExpression(use) && use.expression === at && ts.isStringLiteralLike(use.argumentExpression))
+      return !!names.add(use.argumentExpression.text)
+    if (!ts.isVariableDeclaration(use) || use.initializer !== at) return false
+    if (ts.isIdentifier(use.name)) return !!namespaces.add(use.name.text)
+    if (!ts.isObjectBindingPattern(use.name)) return false
+    for (const el of use.name.elements) {
+      const prop = el.propertyName ?? el.name
+      if (el.dotDotDotToken || !(ts.isIdentifier(prop) || ts.isStringLiteralLike(prop))) return false
+      names.add(prop.text)
+    }
+    return true
+  }
+  const walk = (n: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(n)) read(n.expression, n.name.text)
+    else if (ts.isQualifiedName(n)) read(n.left, n.right.text)
+    else if (ts.isElementAccessExpression(n) && ts.isStringLiteralLike(n.argumentExpression))
+      read(n.expression, n.argumentExpression.text)
+    ts.forEachChild(n, walk)
+  }
+  dynamic(sf)
+  walk(sf)
+  return { names, members, namespaceExports, keepsNameMatching }
+}
+
+/**
+ * Module specifiers one source loads (B10-13): static imports (type-only included) and re-exports, `import x =
+ * require()`, `import("…")` types, and `import()` / `require()` calls whose argument is a string literal. A call with
+ * any other argument is only counted (`nonLiteral`); its target is never guessed.
+ */
+function moduleSpecifiers(sf: ts.SourceFile): { literal: string[]; nonLiteral: number } {
+  const literal: string[] = []
+  let nonLiteral = 0
+  const visit = (n: ts.Node): void => {
+    if ((ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) && n.moduleSpecifier) {
+      if (ts.isStringLiteralLike(n.moduleSpecifier)) literal.push(n.moduleSpecifier.text)
+    } else if (ts.isExternalModuleReference(n)) {
+      if (ts.isStringLiteralLike(n.expression)) literal.push(n.expression.text)
+      else nonLiteral++
+    } else if (ts.isImportTypeNode(n)) {
+      if (ts.isLiteralTypeNode(n.argument) && ts.isStringLiteralLike(n.argument.literal)) literal.push(n.argument.literal.text)
+    } else if (ts.isCallExpression(n)) {
+      const callee = n.expression
+      if (callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === "require")) {
+        const arg = n.arguments[0]
+        if (arg && ts.isStringLiteralLike(arg)) literal.push(arg.text)
+        else if (arg) nonLiteral++
+      }
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return { literal, nonLiteral }
+}
+
+/** `@/*` path aliases of tracked `tsconfig.json` files: the folder they apply to and the folder `@/` stands for. */
+function pathAliases(repo: string, tracked: readonly string[]): { dir: string; target: string }[] {
+  const out: { dir: string; target: string }[] = []
+  for (const file of tracked) {
+    if (path.posix.basename(file) !== "tsconfig.json" || !existsSync(path.join(repo, file))) continue
+    const parsed = ts.parseConfigFileTextToJson(file, readFileSync(path.join(repo, file), "utf8")).config as
+      | { compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> } }
+      | undefined
+    const first = parsed?.compilerOptions?.paths?.["@/*"]?.[0]
+    if (!first?.endsWith("/*")) continue
+    const dir = path.posix.dirname(file)
+    const base = path.posix.join(dir, parsed?.compilerOptions?.baseUrl ?? ".")
+    out.push({ dir: dir === "." ? "" : `${dir}/`, target: path.posix.join(base, first.slice(0, -1)) })
+  }
+  // The deepest folder wins for nested packages.
+  return out.sort((a, b) => b.dir.length - a.dir.length)
+}
+
+/**
+ * The tracked file a specifier of `from` loads: relative or `@/` alias, as written, with an added extension, a `.js`
+ * family extension swapped for its TypeScript one, or an `index` file. `"bare"` for a package specifier (not a repo
+ * path, not checked); `undefined` when nothing tracked matches (counted, never guessed).
+ */
+function resolveSpecifier(
+  from: string,
+  specifier: string,
+  tracked: ReadonlySet<string>,
+  aliases: readonly { dir: string; target: string }[],
+): string | undefined {
+  const spec = specifier.replace(/[?#].*$/, "")
+  const alias = spec.startsWith("@/") ? aliases.find((a) => from.startsWith(a.dir)) : undefined
+  const relative = spec === "." || spec === ".." || spec.startsWith("./") || spec.startsWith("../")
+  if (!relative && !spec.startsWith("@/")) return "bare"
+  if (!relative && !alias) return undefined
+  const base = alias ? path.posix.join(alias.target, spec.slice(2)) : path.posix.join(path.posix.dirname(from), spec)
+  if (base.startsWith("../")) return undefined
+  const swapped = /\.(js|jsx|mjs|cjs)$/.test(base)
+    ? [base.replace(/\.js$/, ".ts").replace(/\.jsx$/, ".tsx").replace(/\.mjs$/, ".mts").replace(/\.cjs$/, ".cts")]
+    : []
+  if (base.endsWith(".js")) swapped.push(base.replace(/\.js$/, ".tsx"))
+  const candidates = [
+    base,
+    ...swapped,
+    ...RESOLVE_EXT.map((ext) => `${base}${ext}`),
+    ...RESOLVE_EXT.map((ext) => `${base}/index${ext}`),
+  ]
+  return candidates.find((c) => tracked.has(c))
+}
+
+function trackedFiles(repo: string): string[] {
   const out = spawnSync("git", ["ls-files", "-z"], { cwd: repo, encoding: "utf8", maxBuffer: 1 << 28 })
   if (out.status !== 0) throw new Error(`git ls-files failed (${out.status}): ${out.stderr}`)
   return out.stdout
     .split("\0")
-    .filter((f) => SOURCE.test(f) && !/(^|\/)node_modules\//.test(f))
+    .filter((f) => f !== "" && !/(^|\/)node_modules\//.test(f))
     .sort()
 }
 
-function scan(repo: string, replace: Readonly<Record<string, string>>): { files: number; rows: ExportRow[] } {
-  const files = trackedSourceFiles(repo)
+function scan(
+  repo: string,
+  replace: Readonly<Record<string, string>>,
+): { files: number; rows: ExportRow[]; keptByName: number; harnessImports: HarnessImport[]; unresolved: number } {
+  const tracked = trackedFiles(repo)
+  const files = tracked.filter((f) => SOURCE.test(f))
+  const loads: { file: string; specifiers: string[] }[] = [] // production importers only (B10-13)
+  let unresolved = 0
   const readers = new Map<string, string[]>() // identifier -> files holding it (each file once)
+  const binders = new Map<string, Set<string>>() // export name -> production files binding it
+  const bind = (id: string, file: string) => {
+    const set = binders.get(id)
+    if (set) set.add(file)
+    else binders.set(id, new Set([file]))
+  }
+  const namespaceExports = new Set<string>() // `export * as X from` names, any production file
+  const memberReads: { file: string; members: Map<string, Set<string>> }[] = []
   const declared: { file: string; exports: Declared[] }[] = []
   let scanned = 0
+  let keptByName = 0
   for (const file of files) {
     let src: string
     try {
@@ -171,8 +426,24 @@ function scan(repo: string, replace: Readonly<Record<string, string>>): { files:
       if (list) list.push(file)
       else readers.set(id, [file])
     }
+    if (!readsAsTest(file)) {
+      // Only production bindings matter for `nameOnly`; test files never make an export production-read.
+      const bound = importBindings(sf)
+      if (bound.keepsNameMatching) keptByName++
+      for (const id of bound.keepsNameMatching ? seen : bound.names) bind(id, file)
+      for (const ns of bound.namespaceExports) namespaceExports.add(ns)
+      if (bound.members.size > 0) memberReads.push({ file, members: bound.members })
+    }
+    if (!isHarness(file) && !STORYBOOK.test(file)) {
+      const specs = moduleSpecifiers(sf)
+      unresolved += specs.nonLiteral
+      if (specs.literal.length > 0) loads.push({ file, specifiers: specs.literal })
+    }
     if (!readsAsTest(file) && exports.length > 0) declared.push({ file, exports })
   }
+  // No module resolution: `X.A` on a named import X binds A when any file declares `export * as X`.
+  for (const { file, members } of memberReads)
+    for (const [ns, set] of members) if (namespaceExports.has(ns)) for (const member of set) bind(member, file)
   const rows: ExportRow[] = []
   for (const { file, exports } of declared) {
     const once = new Set<string>()
@@ -186,10 +457,34 @@ function scan(repo: string, replace: Readonly<Record<string, string>>): { files:
         if (readsAsTest(other)) testReaders++
         else prodReaders++
       }
-      rows.push({ ...e, marked: exports.some((x) => x.name === e.name && x.marked), file, prodReaders, testReaders, generated: GENERATED.test(file) })
+      const prodBindings = [...(binders.get(e.name) ?? [])].filter((other) => other !== file).length
+      rows.push({
+        ...e,
+        marked: exports.some((x) => x.name === e.name && x.marked),
+        file,
+        prodReaders,
+        testReaders,
+        prodBindings,
+        generated: GENERATED.test(file),
+      })
     }
   }
-  return { files: scanned, rows }
+  // B10-13: only `git ls-files` candidates count, so nothing outside the repo is read or loaded.
+  const trackedSet = new Set(tracked)
+  const aliases = pathAliases(repo, tracked)
+  const harness = new Map<string, HarnessImport>()
+  for (const { file, specifiers } of loads)
+    for (const specifier of specifiers) {
+      if (file === HARNESS_IMPORT_EXCEPTION.file && specifier === HARNESS_IMPORT_EXCEPTION.specifier) continue
+      const target = resolveSpecifier(file, specifier, trackedSet, aliases)
+      if (target === undefined) unresolved++
+      else if (target !== "bare" && isHarness(target) && !STORYBOOK.test(target))
+        harness.set(key(file, specifier), { file, specifier })
+    }
+  const harnessImports = [...harness.values()].sort((a, b) =>
+    a.file === b.file ? (a.specifier < b.specifier ? -1 : 1) : a.file < b.file ? -1 : 1,
+  )
+  return { files: scanned, rows, keptByName, harnessImports, unresolved }
 }
 
 const key = (file: string, name: string) => `${file}\0${name}`
@@ -213,7 +508,19 @@ export function checkExports(opts: {
   baseline: readonly BaselineEntry[]
   replace?: Readonly<Record<string, string>>
 }): CheckResult {
-  const { files, rows } = scan(opts.repo, opts.replace ?? {})
+  return runGuard(opts).result
+}
+
+/**
+ * `checkExports` plus the number of production files that keep name matching (console line of N10-115) and the number
+ * of import specifiers the harness check could not resolve (console line of N10-117).
+ */
+function runGuard(opts: {
+  repo: string
+  baseline: readonly BaselineEntry[]
+  replace?: Readonly<Record<string, string>>
+}): { result: CheckResult; keptByName: number; unresolved: number } {
+  const { files, rows, keptByName, harnessImports, unresolved } = scan(opts.repo, opts.replace ?? {})
   const listed = new Set(opts.baseline.map((b) => key(b.file, b.name)))
   const open = rows.filter((r) => r.prodReaders === 0)
   let byMarker = 0
@@ -237,17 +544,35 @@ export function checkExports(opts: {
     }
     unexplained.push({ file: r.file, line: r.line, name: r.name, testReaders: r.testReaders })
   }
-  const stale = opts.baseline.filter((b) => !unmarkedOpen.has(key(b.file, b.name)))
+  // B10-09 (row 71, N10-115): a baseline entry stays held while it is an unmarked export that no production file binds
+  // by import, so a same-named local in an unrelated file no longer makes it stale. It is stale when it is no longer an
+  // unmarked export of its file, or when it gained an import-binding production reader. An entry with no production
+  // reader at all stays held (`unmarkedOpen`), so pruning a stale entry never turns it into an unexplained export.
+  const held = new Set(unmarkedOpen)
+  for (const r of rows) if (!r.generated && !r.marked && r.prodBindings === 0) held.add(key(r.file, r.name))
+  const stale = opts.baseline.filter((b) => !held.has(key(b.file, b.name)))
   unexplained.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name))
+  // B10-05 (report-only, C19 D-1): production readers exist, but none of them binds the export by import.
+  const nameOnly: NameOnly[] = rows
+    .filter((r) => r.prodReaders > 0 && r.prodBindings === 0 && !r.generated && !r.marked)
+    .filter((r) => !listed.has(key(r.file, r.name)))
+    .map((r) => ({ file: r.file, line: r.line, name: r.name, prodReaders: r.prodReaders }))
+    .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name))
   return {
-    files,
-    exports: rows.length,
-    withoutProdReader: open.length,
-    explainedByMarker: byMarker,
-    explainedByBaseline: byBaseline,
-    explainedByGenerated: byGenerated,
-    unexplained,
-    stale,
+    result: {
+      files,
+      exports: rows.length,
+      withoutProdReader: open.length,
+      explainedByMarker: byMarker,
+      explainedByBaseline: byBaseline,
+      explainedByGenerated: byGenerated,
+      unexplained,
+      stale,
+      nameOnly,
+      harnessImports,
+    },
+    keptByName,
+    unresolved,
   }
 }
 
@@ -260,7 +585,7 @@ if (import.meta.main) {
   const repo = path.resolve(import.meta.dir, "../..")
   const args = new Set(process.argv.slice(2))
   const baseline = loadBaseline(repo)
-  const result = checkExports({ repo, baseline })
+  const { result, keptByName, unresolved } = runGuard({ repo, baseline })
   if (args.has("--prune-stale") && result.stale.length > 0) {
     // Shrink only: the kept entries are a subset of the file's own entries, in the file's own order.
     const drop = new Set(result.stale.map((s) => key(s.file, s.name)))
@@ -275,10 +600,20 @@ if (import.meta.main) {
         `marker ${result.explainedByMarker}, baseline ${result.explainedByBaseline}, generated sdk ${result.explainedByGenerated}, ` +
         `unexplained ${result.unexplained.length}; stale baseline entries ${result.stale.length}`,
     )
+    console.log(
+      `read by name only ${result.nameOnly.length} exports (reported, not failing; ` +
+        `name matching kept for ${keptByName} files with dynamic import or require)`,
+    )
+    for (const n of result.nameOnly) console.log(`read by name only ${n.file}:${n.line} ${n.name}`)
     for (const u of result.unexplained)
       console.log(`unexplained ${u.file}:${u.line} ${u.name} (${u.testReaders ? `test readers ${u.testReaders}` : "no outside reader"})`)
     for (const s of result.stale) console.log(`stale ${s.file} ${s.name}`)
+    // N10-116 (row 71): only after at least one stale line.
+    if (result.stale.length > 0) console.log("--prune-stale removes these stale entries (the baseline only shrinks).")
+    // N10-117 (row 77, B10-13).
+    for (const h of result.harnessImports) console.log(`production file imports a harness ${h.file} -> ${h.specifier}`)
+    console.log(`import specifiers not resolved ${unresolved} (not checked)`)
   }
   const pruned = args.has("--prune-stale") ? 0 : result.stale.length
-  process.exit(result.unexplained.length > 0 || pruned > 0 ? 1 : 0)
+  process.exit(result.unexplained.length > 0 || pruned > 0 || result.harnessImports.length > 0 ? 1 : 0)
 }

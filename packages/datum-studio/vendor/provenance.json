@@ -121,11 +121,11 @@
  },
  "counts": {
   "files": 610,
-  "copied": 399,
-  "patched": 167,
+  "copied": 398,
+  "patched": 168,
   "replaced": 12,
   "added": 32,
-  "bytes": 10295283
+  "bytes": 10303951
  },
  "files": [
   {
@@ -315,9 +315,10 @@
   {
    "path": "scripts/studio/mcp/figure-tools.ts",
    "status": "patched",
-   "bytes": 31548,
+   "bytes": 31559,
    "source_sha256": "b7b2658186c53d9fe1f9dac50cc6eba76df2abfe815c232ee793e5d64dc5b463",
-   "sha256": "0181e5c890de1274345dd9052bdff5d9330301f86c4c3caced4ff976c08d39c1",
+   "sha256": "bffc579eff0372a606af001491e0cf1326f6b5f23b2d25608a51053927a74e72",
+   "patch_row1210-79": {"id": "1210-79-b1014-downloaddir-figure", "row": "79", "decision": "1.2.10 AC-B1014 (spec 01g AT-B1014 F3; register N10-011, N10-204; C27)", "summary": "studio_figure_preview inputSchema downloadDir description: 'Folder di akar.' -> 'Folder di folder sesi ini.' (+11 B; the host passes the session folder as the only root, C114). Description text only; code unchanged", "diff_base": "sha256 before this row", "before_sha256": "0181e5c890de1274345dd9052bdff5d9330301f86c4c3caced4ff976c08d39c1", "after_sha256": "bffc579eff0372a606af001491e0cf1326f6b5f23b2d25608a51053927a74e72", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/79_row79_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "5ddcd496712523349ae9741456384d76c7b07d65acda8fa6c400df7979aef507"},
    "patch_row129-37": {"id": "129-37-a12a-preview-backup", "row": "37", "decision": "1.2.9 AC-A12a (B9-A12; N9-061, N9-062 ships per C12 D-5)", "summary": "studio_figure_preview downloadDir: result data carries backupResidue and backupRemoved of the SVG write and separate pngBackupResidue and pngBackupRemoved of the PNG write (the counts writeFileGuarded returned); the saved SVG/PNG line names the backup as (backupResidue N di .bak/; backupRemoved M), the wording of studio_report_refresh; tool description and inputSchema unchanged (vendor tools/list 29997 B before and after)", "diff_base": "sha256 before this row", "before_sha256": "f596d8923db2b308335d8bd3977bb62a9a9f6ed650f5a6379cf8d60b21b6609c", "after_sha256": "0181e5c890de1274345dd9052bdff5d9330301f86c4c3caced4ff976c08d39c1", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/37_row37_diffs/scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "4f0c297f9f6c787c48b4311e47e52f3580b71dfc042c52fd3004e1dc64439c73"},
    "patch_row39": {"id": "127-39-T11", "row": "39", "decision": "1.2.7 C8 / D-14 (T-11 + SF-2, AC-T11), P-8 (AC-N9), P-13 (T-12 text line for 36b)", "summary": "mergeFigurePatch: a merged spec with $schema is checked against diagram.schema required (unchanged), one without against INLINE_V2_DIAGRAM_REQUIRED = [family, nodes] (N7-071, = v2 DiagramSpecV2 required), so {spec:{direction:\"LR\"}} and nodes-only/edges-only patches on inline v2 diagrams work; top-level direction refusal adds the spec route; studio_figure_preview description: png only with standalone: true and downloadDir (N7-070); studio_figure_revise description: Arah alur sentence (N7-072); standalone preview text prints perabot KUNCI/SUMBER/tinggi when the server sends standalone.furniture (N7-068); block and adoptExisting property descriptions dropped and wording shortened for the tools/list budget (29974 -> 29960 B)", "before_sha256": "74e00d1295e1c6f6a85a65291e7fffe90b6965124aabbb1f6572a9f566a1b183", "after_sha256": "f596d8923db2b308335d8bd3977bb62a9a9f6ed650f5a6379cf8d60b21b6609c", "diff": "docs/2026-11-13_swarm_1_2_7_patch/implementation/39_row39_diffs/figure-tools.ts.diff", "diff_sha256": "f564487e9f8f3903596697656918d96d42e5983a8cd8112175fd5028e9e8b53e"},
    "patch_rowFX10": {"id": "fx-10-guide-fixes", "row": "FX-10", "decision": "1.2.6 review wave F, C19a (M4 F6), gate 04 F8/F12", "summary": "studio_figure_preview description: the shared figure-gate sentence replaces \"Gerbang = pratinjau inline\" (C19a/F6); preview/revise wording shortened to keep the default tools/list under 30 000 B (includeSvg description folded into the tool text, revise preview documented as default true, topN/orientation left to \"...\"); no behaviour change", "before_sha256": "061ac38875a510df4d13fbe89e1c17b8a7f0c6f4a2437c88c94091fc3deb333e", "after_sha256": "74e00d1295e1c6f6a85a65291e7fffe90b6965124aabbb1f6572a9f566a1b183", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/fx10_diffs/FX-10_scripts_studio_mcp_figure-tools.ts.diff", "diff_sha256": "13df80da19b5fb868766a14a0f2eb079f4b0efcc8e11194db986b9529fab4e73"},
@@ -362,9 +363,10 @@
   {
    "path": "scripts/studio/mcp/safety.ts",
    "status": "patched",
-   "bytes": 24782,
+   "bytes": 25099,
    "source_sha256": "b04720fc51e015a6ba41ddb153d183306763971f423e00b9963842b1108a0d0a",
-   "sha256": "dce72f3b8fb2ff96eb8195ce0638d047907667b347bb99e3eec5fac56d6f3830",
+   "sha256": "4d3abd5ae27354ebd09c5175fb3d86a74fdef1063f8843c687496257e277a091",
+   "patch_row1210-78": {"id": "1210-78-b1014-refusal-folder", "row": "78", "decision": "1.2.10 AC-B1014 (spec 01g AT-B1014; register N10-010, N10-204, N10-243; C27, C30 S10-41)", "summary": "resolveAllowedPath: the PATH_OUTSIDE_ROOTS refusal names the session folder (the host passes it as the only root, C114) instead of the env var STUDIO_MCP_FILE_ROOTS: 'path <p> di luar akar yang diizinkan, yaitu folder sesi ini (<roots>). Simpan di dalam folder itu; setelah proyek dipindah ke grup, folder sesi ikut pindah.' Keeps 'di luar akar'; the roots were already in the text (no new path exposure); result text only, never on a log line (S10-41). Code, checks and order unchanged", "diff_base": "sha256 before this row", "before_sha256": "dce72f3b8fb2ff96eb8195ce0638d047907667b347bb99e3eec5fac56d6f3830", "after_sha256": "4d3abd5ae27354ebd09c5175fb3d86a74fdef1063f8843c687496257e277a091", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/78_row78_diffs/scripts_studio_mcp_safety.ts.diff", "diff_sha256": "c9433f830d3a32b1712506a878025aedb203dff50f85cc37bc269998f89be715"},
    "patch_row71": {"id": "row71-t17-retention", "row": "71", "decision": "1.2.6 patch T-17 retention (U5; register N-056 BACKUP_KEEP, N-057 backupResidue)", "summary": "writeFileGuarded: after an overwrite backup and a successful write, only the newest BACKUP_KEEP = 5 backups <name>.bak-<stamp>[-n] of THAT file stay in .bak/ (order: stamp, then numeric -n); older ones of the same file are unlinked, regular files only (lstat; links never followed or deleted), the new backup is never deleted, an unlink failure does not fail the write (logged). Result gains backupRemoved (count removed by this write; 0 for fresh/unchanged writes). The -n suffix now starts after the highest existing suffix for that stamp so freed names are not reused. Optional NodeFs.lstat and NodeFs.unlink (fakes without them: no retention, removed 0)", "before_sha256": "09e5cbdcddbe3465b4e3d17ae0817f31558101cfaab99be850a73f35972a7aef", "after_sha256": "dce72f3b8fb2ff96eb8195ce0638d047907667b347bb99e3eec5fac56d6f3830", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/71_row71_diffs/scripts_studio_mcp_safety.ts.diff", "diff_sha256": "e7b70ff5b36b26d35d7ffa410def088889168e7a77761a9cbfa7820b09ac32e9"},
    "patch_row70": {"id": "row70-t17-bak-folder", "row": "70", "decision": "1.2.6 patch T-17 vendor part (U5; register N-055, N-057, E-22; P-8)", "summary": "writeFileGuarded: overwrite backups go to <dir>/.bak/ (BACKUP_DIR_NAME, N-055; created 0700, validated as a folder inside the roots before and after creation, before the target is touched) with the unchanged basename <name>.bak-<stamp> (E-22); result gains backupResidue (N-057, backups of that file in .bak/); NodeFs.mkdirp(p, mode?) and optional NodeFs.readdir; OUT_EXISTS text names .bak/", "before_sha256": "fc36cb950e377822bf5270d9ceb11cb03f06b79d8285d6e062bcc76befc28474", "after_sha256": "09e5cbdcddbe3465b4e3d17ae0817f31558101cfaab99be850a73f35972a7aef", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/scripts_studio_mcp_safety.ts.diff", "diff_sha256": "1516e9bdca7804a87e8788f71b9a55a51d2db9b49df4e06c078c82e1258d4a75"},
    "patch_row50b": {"id": "row50b-w13-read-asset", "row": "50b", "decision": "1.2.6 W-13 (01f §3.3 R1-R7, register N-167; C6)", "summary": "PathPurpose += \"read-asset\": lexical + inside-root (lexical and realpath), ext .png/.jpg/.jpeg (PATH_INVALID), exists and regular file (FILE_UNREADABLE), stat size > maxBytes -> ASSET_TOO_LARGE before any read; returns the real path; protected-name check not applied to reads (R9); other purposes unchanged", "before_sha256": "af9ff9336450deaf811797361fd73472fd120c57a9a68152d4c77c6d14834ee1", "after_sha256": "fc36cb950e377822bf5270d9ceb11cb03f06b79d8285d6e062bcc76befc28474", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/50b_row50b_diffs/safety.ts.diff"},
@@ -419,9 +421,10 @@
   {
    "path": "scripts/studio/mcp/tools.ts",
    "status": "patched",
-   "bytes": 81695,
+   "bytes": 81706,
    "source_sha256": "afe82e84205ea4167feb0d0afafc81bf7a168e25213ed5fbbfbfd19e5d71e154",
-   "sha256": "0696fae950afeeb5b98fa8c965d4db41bd77702248440200115a4688aeb27a40",
+   "sha256": "83cb5bd4a254eecfb844415e22dfe26a9715423825c747984d6d4c8b35fde89b",
+   "patch_row1210-79": {"id": "1210-79-b1014-downloaddir-verify", "row": "79", "decision": "1.2.10 AC-B1014 (spec 01g AT-B1014 F3; register N10-011, N10-204; C27)", "summary": "studio_file_verify inputSchema downloadDir description: 'Folder unduhan di akar.' -> 'Folder unduhan di folder sesi ini.' (+11 B; the host passes the session folder as the only root, C114). Description text only; code unchanged", "diff_base": "sha256 before this row", "before_sha256": "0696fae950afeeb5b98fa8c965d4db41bd77702248440200115a4688aeb27a40", "after_sha256": "83cb5bd4a254eecfb844415e22dfe26a9715423825c747984d6d4c8b35fde89b", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/79_row79_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "15cc0c811a52b7e7ef1c435b46f58835447bfa4ed7157b56dbc8e129360c6ece"},
    "patch_row129-39": {"id": "129-39-a13-render-desc", "row": "39", "decision": "1.2.9 AC-A13 (B9-A13; C10(c), N9-052, N9-053, S9-17)", "summary": "studio_render description trimmed so the host description (vendored text + RENDER_VERIFY_DESCRIPTION_SUFFIX, unchanged) is <= 450 characters (570 -> 449): dropped 'chapter/slot = draf' and the formats/pdf clause 'Tanpa formats: laporan -> HTML; klien beri mis. [docx, html]; pdf dapat 503 PDF_ENGINE_UNAVAILABLE' (both stay in MCP_DOC_RECIPE, studio://resep/dokumen-klien: steps table row 7 and the Render paragraph; the report recipe MCP_RECIPE step 4 names the HTML render); kept 540 s, COMPLETE (409 DOCUMENT_INCOMPLETE), FILE_VERIFIED(sha256), the waktu habis ... studio_document_status lalu studio_file_verify clause and jangan render ulang buta; schema and behaviour unchanged (vendor default tools/list 29997 -> 29876 B)", "diff_base": "sha256 before this row", "before_sha256": "5622a0e8de3fc6695ef72fc032c03fbebe2a5d7152258de0b6692b686a0230c7", "after_sha256": "0696fae950afeeb5b98fa8c965d4db41bd77702248440200115a4688aeb27a40", "diff": "docs/2026-11-14_swarm_1_2_9_patch/implementation/39_row39_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "24b006ed5e3a919eeae6b01cbee4ef1d12fc40911c7329c4595191e13ceabf7d"},
    "patch_row99": {"id": "row99-g06-tool-descriptions", "row": "99", "decision": "1.2.6 G-06 (U5; M-06, W-09, W-14, T-14, T-16)", "summary": "studio_render description: up to 540 s, on timeout studio_document_status then studio_file_verify, no blind re-render, FILE_VERIFIED(sha256) (W-09, M-07); trimmed texts of studio_registry, studio_report_submit, studio_report_refresh, studio_contracts_query, studio_document_get, studio_file_verify and 4 param descriptions (tools/list budget); studio_report_refresh/studio_file_verify print and return backupRemoved when > 0 (row 71 retention, controller add-on); no schema type or other behaviour change", "before_sha256": "36155d016a82945be547c06800ea0df2b62178ad720128eb9a38f52d82815461", "after_sha256": "0c8dd9c479b0e51b699513d79b4e2e088d82cf29459a34270a6ca12091785639", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/99_row99_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "6a6790c93f194e8e22cc51f0a1de022876aa60756c804a227db10975ff688061"},
    "patch_row70": {"id": "row70-t17-bak-folder", "row": "70", "decision": "1.2.6 patch T-17 vendor part (U5; register N-055, N-057, E-22; P-8)", "summary": "studio_report_refresh and studio_file_verify carry backupResidue in structuredContent and print '(backupResidue N di .bak/)' after the backup path; OUT_EXISTS text names .bak/; schema and description unchanged", "before_sha256": "5aabf6be173897f9e3d9c9dfc39679c86dd784b057f6786a1fbec6b81719094f", "after_sha256": "36155d016a82945be547c06800ea0df2b62178ad720128eb9a38f52d82815461", "diff": "docs/2026-11-12_swarm_1_2_6_patch/implementation/70_row70_diffs/scripts_studio_mcp_tools.ts.diff", "diff_sha256": "6e4964a0e88032fa8add3434dc6f98645fee3dd988747471c235d98ed3c9f963"},
@@ -1610,10 +1613,12 @@
   },
   {
    "path": "src/lib/studio/engine/chart/core/geometry.ts",
-   "status": "copied",
-   "bytes": 23382,
+   "status": "patched",
+   "bytes": 30269,
    "source_sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8",
-   "sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8"
+   "sha256": "34f80d6999762ccb77030ab62685bc4c0fceef298acb5284c9f431ee421929c8",
+   "patch_row1210-65a": {"id": "1210-65a-b1002-chart-link-along", "row": "65a", "decision": "1.2.10 AC-B1002a (spec 01f AT-B1002a; register N10-108, N10-109; C11, C19 D-2, C24)", "summary": "NEW exported chartLinksAlongNodes (report data only, marked @internal test seam until row 65b adds its readers): chart connectors running along a straight data-node outline, own start/end nodes included; thresholds imported from diagram/fit/lint.ts (EDGE_ALONG_MIN_MM, EDGE_ALONG_TOL_MM). Additions only: lintChartGeometry, GeometryDefect and scanSvgGeometry unchanged; every chart parity render and lint result byte-identical", "diff_base": "sha256 before this row", "before_sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8", "after_sha256": "3567db2098c156f78e9248f0cb86e69d8c0dd399998def5eed246ee7c2eaf632", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/65a_row65a_diffs/engine_chart_core_geometry.ts.diff", "diff_sha256": "8e8bd43fba06b8ac53d5d32a5cae26456b52db339e73bdba4e6890dda114f14e"},
+   "patch_row1210-65b": {"id": "1210-65b-b1002-chart-link-report", "row": "65b", "decision": "1.2.10 AC-B1002b (spec 01f AT-B1002b; register N10-013, N10-108; C24, C43)", "summary": "chartLinksAlongNodes now has production readers (chart/core/render.ts, host verify/static-checks.ts): the ' * @internal test seam' doc line is removed (-23 B); no code change", "diff_base": "sha256 before this row", "before_sha256": "3567db2098c156f78e9248f0cb86e69d8c0dd399998def5eed246ee7c2eaf632", "after_sha256": "34f80d6999762ccb77030ab62685bc4c0fceef298acb5284c9f431ee421929c8", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/65b_row65b_diffs/engine_chart_core_geometry.ts.diff", "diff_sha256": "938305ded9d188cd718b234227e42b59feea900247879b7eaeaa0adb58cf142c"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/guards.ts",
@@ -1704,9 +1709,9 @@
   {
    "path": "src/lib/studio/engine/chart/core/render.ts",
    "status": "patched",
-   "bytes": 10076,
+   "bytes": 11518,
    "source_sha256": "0cbae90e4cfe4dc2db0effc18b9c1f72fb8a6784dbac56f9647e66038d0d6c9b",
-   "sha256": "27b69d71df6f1a597994e10e8bbc567eac2d0ac261c548b4d04fbc687c6a9b11",
+   "sha256": "949ab7058b87a17cdec6c31ecb29be16ea85fba003a6cebf1a240ee9c4a3e630",
    "patch": {
     "id": "row158-chart-over-capacity",
     "row": 158,
@@ -1716,7 +1721,8 @@
     "after_sha256": "27b69d71df6f1a597994e10e8bbc567eac2d0ac261c548b4d04fbc687c6a9b11",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/112_row158_diffs/engine__chart__core__render.ts.diff",
     "diff_sha256": "0e5b6799c0563b68180650bcce4c2022caa9e4d69fe7268aa21934317b85de31"
-   }
+   },
+   "patch_row1210-65b": {"id": "1210-65b-b1002-chart-link-report", "row": "65b", "decision": "1.2.10 AC-B1002b (spec 01f AT-B1002b; register N10-013, N10-108; C24, C43)", "summary": "renderPreset: one REPORT LINK_ALONG_NODE issue per chartLinksAlongNodes run of the returned SVG, on the score-0 return (mergeReports) and after autoFitChart (appended after its extra); detail 'garis menyusuri tepi kotak <node> sepanjang <mm> mm (hanya dilaporkan, bukan cacat)'. Empty list = previous object unchanged; no SVG byte moves (g04 pins; 45 other parity charts' reports byte-equal). autofit.ts unchanged (the fit-path issues are appended in render.ts)", "diff_base": "sha256 before this row", "before_sha256": "27b69d71df6f1a597994e10e8bbc567eac2d0ac261c548b4d04fbc687c6a9b11", "after_sha256": "949ab7058b87a17cdec6c31ecb29be16ea85fba003a6cebf1a240ee9c4a3e630", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/65b_row65b_diffs/engine_chart_core_render.ts.diff", "diff_sha256": "f2130ef3376df74fa90d662e88896d668fa92a8239e7142a98e45fc40017777a"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/scale.ts",
@@ -6461,6 +6467,11 @@
   "129-66b-bpmn-arrowheads",
   "129-66a-a05-mark-off-axis",
   "129-61-a03",
-  "129-66q-whitespace"
+  "129-66q-whitespace",
+  "1210-65a-b1002-chart-link-along",
+  "1210-78-b1014-refusal-folder",
+  "1210-79-b1014-downloaddir-figure",
+  "1210-79-b1014-downloaddir-verify",
+  "1210-65b-b1002-chart-link-report"
  ]
 }

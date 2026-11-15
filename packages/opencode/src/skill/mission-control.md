@@ -74,7 +74,7 @@ Decisions live in the mission store: it is the one decision record. Record each 
 studio_mission_record_decision {"mission":"2026-11-08_example-mission","decision":{"id":"C2","by":"controller","date":"2026-11-08","text":"Add a docs check; row 3 is covered by row 2.","rows":["3","4"]}}
 studio_mission_update_row {"mission":"2026-11-08_example-mission","rows":[{"id":"4","decision":"C2","add":{"id":"4","phase":"verification","kind":"test","title":"Check the docs","agent":"verifier","model":{"tier":"thinker"},"deps":["2:B"],"size":"S","status":"pending","output":"07_test/02_docs_check.md","verification":"links resolve"}},{"id":"3","decision":"C2","status":"dropped","note":"covered by row 2"}]}
 
-Rows added or dropped after approval show in studio_mission_get as derived.drift, each with its decision id. docs/<mission>/09_decisions/decisions.md is an export of that register (studio_mission_export), never a second place to write decisions.
+Rows added or dropped after approval, and changes to a row's deps, agent, phase, kind, size, model tier, output or verification, show in studio_mission_get as derived.drift, each with its decision id. docs/<mission>/09_decisions/decisions.md is an export of that register (studio_mission_export), never a second place to write decisions.
 
 An open issue found on the way is a finding: studio_mission_record_finding {"mission":"2026-11-08_example-mission","finding":{"id":"F1","severity":"medium","title":"Docs link check is manual","sourceRow":"2","ownerRow":"4","status":"open"}}. An open finding names the row that owns the fix (ownerRow); accepted or deferred needs a decision.
 

@@ -14,7 +14,8 @@
 //     Recreate refuses all of that and, in addition, the home folder and its ancestors and `recreateExcluded`
 //     (Swarm's data and cache folders)
 //   3 no `stat` at all on UNC, `/net/...` or `/Network/...` paths (autofs / SMB would open a network connection)
-//   4 recreate accepts only a path for which check answered "missing" for the SAME sender in this run
+//   4 recreate accepts only a path for which check answered "missing" for the SAME sender in this run (since 1.2.10
+//     row 84 also when "missing" was answered for a non-directory at the path; rule 1 still refuses while it is there)
 // Answers of the check: "exists" (a directory), "missing" (ENOENT / ENOTDIR, or a non-directory at the path),
 // "refused" (the check was not allowed to look, or the look failed for another reason such as EACCES). The app shows
 // the missing-folder notice for "missing" only and opens "exists" and "refused" exactly as 1.2.6 did.
@@ -154,17 +155,24 @@ export function registerMissingDirectoryHandlers(deps: MissingDirectoryDeps) {
         log("info", "check-directory-exists did not look at a refused place", { source: "missing-directory.check" })
         return "refused"
       }
+      // Rule 4 input: this window found the path missing, so a later Recreate may create it.
+      const record = (code: string) => {
+        const set = missing.get(event.sender) ?? new Set<string>()
+        set.add(key(normal))
+        missing.set(event.sender, set)
+        log("info", "check-directory-exists: project folder missing", { source: "missing-directory.check", code })
+      }
       try {
-        // a non-directory at the path is not the project folder: missing, but never recorded for Recreate (rule 1
-        // would refuse it anyway, since something is at the leaf)
-        return (await stat(normal)).isDirectory() ? "exists" : "missing"
+        // 1.2.10 row 84 (B10-17, S10-42): a non-directory at the path (a file, or a symlink to one) is not the project
+        // folder: missing, and the path is recorded so the first Recreate after the file is removed works. Rule 1
+        // still refuses Recreate while anything (file, directory, dangling link) is at the leaf.
+        if ((await stat(normal)).isDirectory()) return "exists"
+        record("NOT_A_FOLDER")
+        return "missing"
       } catch (error) {
         const code = errorCode(error)
         if (code === "ENOENT" || code === "ENOTDIR") {
-          const set = missing.get(event.sender) ?? new Set<string>()
-          set.add(key(normal))
-          missing.set(event.sender, set)
-          log("info", "check-directory-exists: project folder missing", { source: "missing-directory.check", code })
+          record(code)
           return "missing"
         }
         // EACCES, EPERM, ELOOP, ...: the check could not look, so the app opens the folder as 1.2.6 did

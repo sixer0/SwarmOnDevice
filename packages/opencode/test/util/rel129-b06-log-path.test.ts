@@ -68,8 +68,9 @@ const TABLE: [string, string, Roots | undefined, string][] = [
 
 // S9-07 rows (01_specs AC-B06) and the home-root forms of rows 1, 5 and 11, with HOME=/Users/x.
 const HOME_ROWS: [string, string, Roots | undefined, string][] = [
-  ["S9-07a", "a -/Users/x/y", undefined, "a -~/y"],
-  ["S9-07b", "git -C/Users/x/repo", undefined, "git -C~/repo"],
+  // 1.2.10 row 67 INTENT (B10-04 (3), C20 D1): a glued path under home keeps no folder name: was "a -~/y", "git -C~/repo".
+  ["S9-07a", "a -/Users/x/y", undefined, "a -~/<path>"],
+  ["S9-07b", "git -C/Users/x/repo", undefined, "git -C~/<path>"],
   // 67b INTENT (C79): was "open ~/y.md failed" (row 45); a path under home is a path, so `<path>` as in 1.2.8.
   ["1h", "open /Users/x/y.md failed", undefined, "open <path> failed"],
   // 67b (gate 67 finding 2): a folder name under home inside a quoted mkdir never reaches the line.
@@ -87,7 +88,8 @@ const HOME_ROWS: [string, string, Roots | undefined, string][] = [
   // 45a (C61): the home folder is replaced only at a path boundary.
   ["45a-sibling", "a -/Users/xy/z", undefined, "a -/Users/xy/z"],
   ["45a-end", "a -/Users/x", undefined, "a -~"],
-  ["45a-slash", "a -/Users/x/z", undefined, "a -~/z"],
+  // 1.2.10 row 67 INTENT (B10-04 (3)): was "a -~/z".
+  ["45a-slash", "a -/Users/x/z", undefined, "a -~/<path>"],
   // 67b INTENT (C79): was "at '~'" (row 45a); a quoted path is `'<path>'` whatever it holds.
   ["45a-quote", "at '/Users/x'", undefined, "at '<path>'"],
   // 67d (gate 67 finding 4): `.`, `@` and `+` after the home folder continue a segment, so it is not the home folder.
@@ -130,13 +132,15 @@ describe("S9-07 the home folder is always the last root, label ~ (HOME=/Users/x)
   test("67d: the home folder comes from Global.Path.home (OPENCODE_TEST_HOME), not os.homedir", async () => {
     const withoutPaths = await load()
     home("/Users/x", NOT_A_PREFIX)
-    expect(withoutPaths("a -/Users/x/y")).toBe("a -~/y")
+    // 1.2.10 row 67 INTENT (B10-04 (3)): was "a -~/y".
+    expect(withoutPaths("a -/Users/x/y")).toBe("a -~/<path>")
   })
 
   test("a Windows home folder is replaced the same way", async () => {
     const withoutPaths = await load()
     home("C:\\Users\\x")
-    expect(withoutPaths("a -C:\\Users\\x\\y")).toBe("a -~\\y")
+    // 1.2.10 row 67 INTENT (B10-04 (3)): was "a -~\\y".
+    expect(withoutPaths("a -C:\\Users\\x\\y")).toBe("a -~\\<path>")
   })
 
   test("a home folder of '/' or '' is ignored (no split on every character)", async () => {

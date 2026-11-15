@@ -79,7 +79,7 @@ describe("project memory", () => {
         expect(yield* memory.onDevice(cloud)).toBe(false)
         expect(yield* memory.prompt(cloud)).toBeUndefined()
         expect(yield* memory.prompt(local)).toContain("customer ids live in vault")
-        yield* memory.update(added.item!.id, { deviceOnly: false })
+        yield* memory.update(added.item!.id, { deviceOnly: false, personAttested: true })
         expect(yield* memory.prompt(cloud)).toContain("customer ids live in vault")
       }),
     ),

@@ -23,6 +23,7 @@ import type {
   MissionDerived,
   MissionDoc,
   MissionDrift,
+  MissionDriftChange,
   MissionEventRecord,
   MissionFinding,
   MissionListFilter,
@@ -42,6 +43,7 @@ import type {
   ReportRef,
   ReportStatus,
   RowCheckpoint,
+  RowFieldChange,
   RowPatch,
   RowStatus,
   SessionLink,
@@ -92,6 +94,41 @@ export const ROW_RUNNING_DONE_RULE = "running -> done needs a note (the check an
 
 /** §4.4: fields whose change after approval needs a decision. */
 const STRUCTURAL_FIELDS = ["phase", "kind", "deps", "agent", "title", "output", "verification", "ownership", "size", "model"] as const
+/**
+ * 1.2.10 row 49 (P3, N10-050, C16 D-P3-1): the approved blueprint fields whose post-approval change is drift
+ * (derived.drift.changed). Not title or ownership (D-P3-1). `output` and `verification` are free text: their change
+ * is recorded by name only, never a value (C30, S10-30).
+ */
+const DRIFT_FIELDS = ["deps", "agent", "phase", "kind", "size", "model", "output", "verification"] as const
+const DRIFT_NAME_ONLY: ReadonlySet<string> = new Set(["output", "verification"])
+
+/** 1.2.10 row 49 (N10-052): the DRIFT_FIELDS of `set` whose value really changed from `cur` to `next` (spec 01c §3.2). */
+function rowFieldChanges(cur: MissionRow, next: MissionRowInput, set: Record<string, unknown>): RowFieldChange[] {
+  const out: RowFieldChange[] = []
+  for (const f of DRIFT_FIELDS) {
+    if (set[f] === undefined) continue
+    let from: unknown
+    let to: unknown
+    if (f === "deps") {
+      const a = [...cur.deps]
+      const b = [...(next.deps ?? [])]
+      const sa = new Set(a)
+      if (sa.size === new Set(b).size && b.every((x) => sa.has(x))) continue // a reorder is not drift (D-P3-9)
+      ;[from, to] = [a, b]
+    } else if (f === "model") {
+      if (cur.model.tier === next.model.tier) continue // tier only (D-P3-2)
+      ;[from, to] = [cur.model.tier, next.model.tier]
+    } else if (f === "size") {
+      ;[from, to] = [cur.size ?? null, next.size ?? null]
+      if (from === to) continue
+    } else {
+      ;[from, to] = [(cur as unknown as Record<string, unknown>)[f], (next as unknown as Record<string, unknown>)[f]]
+      if (from === to) continue
+    }
+    out.push(DRIFT_NAME_ONLY.has(f) ? { field: f } : { field: f, from, to })
+  }
+  return out
+}
 const MISSION_HOST_FIELDS = ["createdAt", "updatedAt", "approvedAt", "approvalDecision", "closedAt", "locks"] as const
 const ROW_HOST_FIELDS = ["createdAt", "updatedAt", "startedAt", "finishedAt", "reports"] as const
 const OPEN_STATUSES: readonly MissionStatus[] = ["draft", "approved", "running", "paused"]
@@ -645,6 +682,8 @@ export class MissionStore {
     if (d && structural.length > 0) next.decision = d
     assertMissionSchema("Row", next, `row ${rowId}`)
     if (set.phase !== undefined || set.kind !== undefined) this.checkPhaseKind(type, next)
+    // 1.2.10 row 49 (P3): what really changed, compared before the UPDATE; a refused patch writes nothing (savepoint).
+    const changes = rowFieldChanges(cur, next, set as Record<string, unknown>)
     tx.run(
       `UPDATE mission_row SET phase_id = ?, kind = ?, title = ?, agent = ?, model_tier = ?, model_reason = ?, size = ?, output = ?, verification = ?,
          ownership_text = ?, ownership_paths = ?, resources = ?, checks = ?, review = ?, note = ?, decision_id = ?, time_updated = ?
@@ -675,7 +714,7 @@ export class MissionStore {
       this.writeDeps(tx, m.id, rowId, set.deps, cur.status)
       this.assertNoCycle(tx, m.id)
     }
-    this.event(tx, { mission: m.id, verb: "row-change", actor, row: rowId, decision: d, detail: { fields: Object.keys(set) } })
+    this.event(tx, { mission: m.id, verb: "row-change", actor, row: rowId, decision: d, detail: { fields: Object.keys(set), changes } })
   }
 
   /**
@@ -1303,20 +1342,37 @@ export class MissionStore {
    * 1.2.6 row 87 (MC-09, N-066): rows added (`row-add`) and dropped (`row-status` to dropped) after the approve event,
    * each with the decision id its event carries. Ordered by event seq, not time, so a change in the approving
    * millisecond is still placed correctly; a draft mission (no approve event) has an empty drift.
+   * 1.2.10 row 49 (P3, N10-053): `changed` lists the `row-change` events after approval that changed a DRIFT_FIELDS
+   * value: a 1.2.10 event by its recorded `changes` (no entry when empty), an older event by name only
+   * (`DRIFT_FIELDS ∩ detail.fields`, no `changes` key).
    */
   private driftOf(q: MissionReader, mission: string): MissionDrift {
-    const drift: MissionDrift = { count: 0, rows: [], dropped: [] }
+    const drift: MissionDrift = { count: 0, rows: [], dropped: [], changed: [] }
     const approved = q.get<{ s: number | null }>("SELECT min(seq) AS s FROM mission_event WHERE mission_id = ? AND verb = 'approve'", [mission])?.s
     if (approved === null || approved === undefined) return drift
-    const events = q.all<{ row_id: string; verb: string; decision_id: string | null; time_created: number }>(
-      `SELECT row_id, verb, decision_id, time_created FROM mission_event
-        WHERE mission_id = ? AND seq > ? AND row_id IS NOT NULL AND (verb = 'row-add' OR (verb = 'row-status' AND to_status = 'dropped'))
+    const events = q.all<{ row_id: string; verb: string; decision_id: string | null; detail: string | null; time_created: number }>(
+      `SELECT row_id, verb, decision_id, detail, time_created FROM mission_event
+        WHERE mission_id = ? AND seq > ? AND row_id IS NOT NULL AND (verb = 'row-add' OR verb = 'row-change' OR (verb = 'row-status' AND to_status = 'dropped'))
         ORDER BY seq`,
       [mission, approved],
     )
     for (const e of events) {
       if (e.verb === "row-add") drift.rows.push({ row: e.row_id, timeCreated: iso(e.time_created)!, decision: e.decision_id ?? null })
-      else drift.dropped.push({ row: e.row_id, timeDropped: iso(e.time_created)!, decision: e.decision_id ?? null })
+      else if (e.verb === "row-status") drift.dropped.push({ row: e.row_id, timeDropped: iso(e.time_created)!, decision: e.decision_id ?? null })
+      else {
+        const detail = (e.detail ? JSON.parse(e.detail) : {}) as { fields?: unknown; changes?: unknown }
+        const entry: MissionDriftChange = { row: e.row_id, timeChanged: iso(e.time_created)!, decision: e.decision_id ?? null, fields: [] }
+        if (Array.isArray(detail.changes)) {
+          if (detail.changes.length === 0) continue
+          entry.changes = detail.changes as RowFieldChange[]
+          entry.fields = entry.changes.map((c) => c.field)
+        } else {
+          const names = Array.isArray(detail.fields) ? (detail.fields as unknown[]) : []
+          entry.fields = DRIFT_FIELDS.filter((f) => names.includes(f))
+          if (entry.fields.length === 0) continue
+        }
+        drift.changed.push(entry)
+      }
     }
     drift.count = drift.rows.length
     return drift

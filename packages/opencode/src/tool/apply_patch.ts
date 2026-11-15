@@ -108,6 +108,8 @@ export const ApplyPatchTool = Tool.define(
       if (targets.some((file) => Reach.skillFolder(file, instance))) return yield* Effect.fail(new Reach.SkillFolderRefused())
       // 1.2.8 row 40f (AC-SEC11): the vault mirror folder likewise, before any prompt, mode on and off.
       if (targets.some((file) => Reach.vaultMirror(file, instance))) return yield* Effect.fail(new Reach.VaultMirrorRefused())
+      // 1.3.0 row 147 (AC-S6-INBOX): the vault inbox likewise; notes go through swarm-web_vault_inbox.
+      if (targets.some((file) => Reach.vaultInbox(file, instance))) return yield* Effect.fail(new Reach.VaultInboxRefused())
       const outside: Parameters<Tool.Context["ask"]>[0][] = []
       const scout: Tool.Context = { ...ctx, ask: (request) => Effect.sync(() => void outside.push(request)) }
       for (const target of targets) yield* assertExternalDirectoryEffect(scout, target)

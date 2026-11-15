@@ -9,10 +9,18 @@ spec and use their names exactly.
 - studio://skema/diagram-visio: the three shape sets, the container fields and the connector fields with their
   values and defaults. An absent field draws exactly as before; an explicit default draws the same as absent.
 
+The diagram engine is part of DATUM Studio: it runs inside the Studio host, so the host must be running and
+connected. There is no separate diagram engine, app or canvas to start. Two tools work on a figure:
+studio_figure_preview checks it and studio_figure_revise changes part of it; the document tools of section 6 save
+it. The two resources above are listed only while studio_figure_preview is in your session. Swarm lists every
+Studio tool with the datum-studio prefix. If neither figure tool is in your session, Studio is not available to
+you: tell the person; do not start Studio or reach it another way.
+
 ## 1. Pick a shape set and a family
-- Basic flowchart (basic-flowchart): family flow, with direction "LR" or "TB" when a decision branches, or graph
-  with class.col and class.row when you place nodes yourself. The resource maps each Visio shape (start/end,
-  process, decision, subprocess, document, data, page references, preparation, database) to its token.
+- Basic flowchart (basic-flowchart): family flow with direction "LR" or "TB" (set it on every new flow, section 8),
+  or graph with class.col and class.row when you place nodes yourself or need bend points. The resource maps each
+  Visio shape (start/end, process, decision, subprocess, document, data, page references, preparation, database)
+  to its token.
 - Cross-functional (cross-functional): family swimlane. Each node's class.lane names its lane; lanes appear in
   the order the nodes first use them, so moving a lane = reordering nodes. Phases and lane_orientation: section 2.
 - BPMN basic (bpmn-basic): family flow or swimlane; pools for participants (section 2).
@@ -42,9 +50,11 @@ style fields below change one thing each. Line styles (kind + dash + weight) are
 - Glue: from_side / to_side pin an end to one side; from_slot / to_slot (a fraction along that side) need the
   side (P1-edge-style). Two ends on one side closer than 1.5 mm are GEOM_ENTRY_COLLISION. No explicit side on a
   bus node.
-- Bend points: via is a list of lattice points {col, row}, only in flow without direction, graph and swimlane
-  (P3-via-family), at most 8 (P1-via). Take them from structuredContent.figure.lattice of the preview (cell size
-  col_mm / row_mm, sheet size cols / rows, each node's [col0, row0, col1, row1]) for the same template width:
+- Bend points: via is a list of lattice points {col, row}, at most 8 (P1-via). Graph and swimlane take via; a flow
+  takes it only without direction, and a flow with direction refuses it (P3-via-family) and its preview has no
+  figure.lattice. For bend points together with the section 8 fixes use graph or swimlane. Take them from
+  structuredContent.figure.lattice of the preview (cell size col_mm / row_mm, sheet size cols / rows, each node's
+  [col0, row0, col1, row1]) for the same template width:
   the lattice is centred per width, so a via chosen at 128 mm can land elsewhere at 166 mm. The lattice is the
   first layout; when the preview reports AUTO_FIT, preview again and re-check. Put via points in the free gap
   between node boxes. A point outside the sheet is refused BY_CONSTRUCTION_FAILED with checkId P1-via.
@@ -101,7 +111,8 @@ Connector styling on a graph (glue, bend point, heads, dash, fixed label):
 - DATUM-25L: too many line styles. Reuse kind, dash and weight combinations.
 - P1-edge-style: slot without side, size without head type, curved with via, explicit side on a bus.
 - P1-via: malformed point, more than 8, or outside the sheet. Re-read figure.lattice.
-- P3-via-family: via in a family that places lines itself. Use flow without direction, graph or swimlane.
+- P3-via-family: via in a family that places lines itself, or in a flow with direction. Use graph or swimlane, or
+  drop via. Removing direction instead puts the flow back on the frozen legacy layout (section 8).
 - P1-containers: phases, pools or lane_orientation outside swimlane, a duplicate or unknown id, or a node
   without class.phase / class.pool while the others have one.
 - P1-event_type: event_type on a shape that is not an event.
@@ -109,5 +120,33 @@ Connector styling on a graph (glue, bend point, heads, dash, fixed label):
 - DATUM-37 (FIGURE_OVER_CAPACITY): too wide. Fewer lanes, phases or columns, vertical pools, or two diagrams.
 - GEOM_* defects (GEOM_LABEL_COLLISION, GEOM_EDGE_NODE, GEOM_ARROW_TANGENT, GEOM_STUB_SEGMENT ...): the
   message names the node or label; move nodes, change a side, shorten a label, or drop label_at.
+- GEOM_EDGE_ALONG, GEOM_EDGE_HEADER, GEOM_EDGE_DOUBLE_BACK: the 1.2.9 connector checks, in every family; see
+  section 8.
 - LABEL_LEADER: the label had no room on its line; widen the gap or shorten the label.
 - POOL_FLOW_CROSSES (notice): a sequence flow leaves its pool; use a message flow.
+
+## 8. What 1.2.8 and 1.2.9 changed, and the legacy flow
+- 1.2.8 added the Visio-minimum set described in sections 1 to 4: the three shape sets, containers, glue, bend
+  points, arrowheads at both ends, dash, weight, label position and line jumps.
+- Legacy flow: a flow without direction. Its layout is frozen at the 1.2.5 drawing so that stored documents never
+  change, and the 1.2.9 drawing fixes below do not reach it. Parallel branches in a legacy flow are drawn one after
+  another in one column and the preview reports FLOW_SERIALISED.
+- Opting in: set direction "TB" or "LR" on the flow. The flow is then ranked by its edges and gets every 1.2.9
+  fix, but it takes no via. Adding direction to a stored flow can move its nodes: preview it again and look at the
+  PNG. Graph and swimlane are never legacy: they get every fix and take via.
+- 1.2.9 drawing fixes (every figure except a legacy flow): after a turn a connector enters a box head-on, at a
+  right angle to its side; zone frames keep clear of node outlines where there is room; a provenance mark such as
+  TERUKUR sits beside its circle and moves aside when a connector enters from its side (small or tagged circles
+  keep the old place); connector paths carry no zero-length points; a short label is not cut by a dashed line on
+  first render.
+- 1.2.9 connector checks, in every family including legacy flows. Each one fails FIGURE_FIT and the preview lists
+  it as a defect. A stored document with one of them fails FIGURE_FIT when it is rendered again, until the figure
+  is fixed.
+  - GEOM_EDGE_ALONG: a connector runs along the outline of another node. Move that node or change a side.
+  - GEOM_EDGE_HEADER: a connector crosses or touches the header text of a pool, lane, phase or group. Move the
+    node or the bend point.
+  - GEOM_EDGE_DOUBLE_BACK: a route turns back on itself, usually a via held at the figure edge. Move the via
+    inward.
+- Charts, not diagram blocks: the flowchart chart G-04 draws BPMN events as circles; a G-04 chart with a BPMN event
+  or gateway and no direction is ranked as if direction were "TB"; arrowheads that meet at one event or gateway are
+  spread or merged so they never read as one doubled head.

@@ -157,7 +157,7 @@ const figurePreviewTool: ToolDef = {
       // Row 165E (C192, tools/list < 30 KB): the meaning of standalone/png lives in the tool description and the guide.
       standalone: { type: "boolean" },
       png: { type: "boolean" },
-      downloadDir: { type: "string", minLength: 1, maxLength: 1024, description: "Folder di akar." },
+      downloadDir: { type: "string", minLength: 1, maxLength: 1024, description: "Folder di folder sesi ini." },
       overwrite: { type: "boolean" },
       agentId: S.agentId,
     },

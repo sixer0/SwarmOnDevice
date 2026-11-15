@@ -58,6 +58,11 @@ const sentry =
 
 export default defineConfig({
   main: {
+    // 1.3.0 row 132 (C110): the launch proxy refresh bundles the real setup stager; tsc reads
+    // src/main/setup-proxy-stage.d.ts through tsconfig `paths` instead.
+    resolve: {
+      alias: { "@swarm-setup/proxy-stage": path.resolve("../setup/src/wiring/proxy_stage.ts") },
+    },
     define: {
       "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel),
       "import.meta.env.SWARM_BUILD_DATE": JSON.stringify(buildDate),

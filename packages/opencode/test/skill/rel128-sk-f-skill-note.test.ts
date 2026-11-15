@@ -100,7 +100,11 @@ describe("AC-SKf one memory note per saved skill", () => {
   test("approve -> exactly one note, source agent, the draft's untrusted flag, N8-046 text, Path and trigger lists, refs = [location]", async () => {
     await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
     await writeDraft(tmp.path, "invoice-check", TRIGGERED("Checks invoices"), true)
-    const approved = await call(tmp.path, "POST", "/skill/drafts/invoice-check/approve", { scope: "project" })
+    // 1.2.10 row 70a (C40, INTENT): every approve sends the draft's time as listed by GET /skill/drafts.
+    const draftTime = ((await call(tmp.path, "GET", "/skill/drafts")).json() as any[]).find(
+      (item) => item.name === "invoice-check",
+    ).time
+    const approved = await call(tmp.path, "POST", "/skill/drafts/invoice-check/approve", { scope: "project", draftTime })
     expect(approved.status).toBe(200)
     expect(approved.json().note).toBe("added")
     const location = path.join(tmp.path, ".swarm", "skills", "invoice-check", "SKILL.md")

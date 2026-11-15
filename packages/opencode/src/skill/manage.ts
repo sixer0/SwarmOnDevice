@@ -285,7 +285,10 @@ export async function readDraft(scope: WriteScope, name: string, place: Place): 
     name,
     scope,
     content,
-    time: typeof record.time === "number" ? record.time : stat.mtimeMs,
+    // 1.2.10 row 70a (S10-37): the later of draft.json's time and SKILL.md's mtime (the lstat above), so the listed
+    // time, which the approve route checks (draftTime), moves whenever either file is rewritten.
+    // A non-finite time (draft.json "1e999") counts as absent, so the listed time always round-trips through JSON.
+    time: Math.max(Number.isFinite(record.time) ? (record.time as number) : stat.mtimeMs, stat.mtimeMs),
     ...(typeof record.sessionID === "string" ? { sessionID: record.sessionID } : {}),
     untrusted: record.untrusted !== false,
     runsCommands: !ProjectTrust.isTextSkill(content),

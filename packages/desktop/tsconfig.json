@@ -15,7 +15,10 @@
     "noEmit": true,
     "emitDeclarationOnly": false,
     "outDir": "node_modules/.ts-dist",
-    "types": ["vite/client", "node", "electron"]
+    "types": ["vite/client", "node", "electron"],
+    "paths": {
+      "@swarm-setup/proxy-stage": ["./src/main/setup-proxy-stage", "../setup/src/wiring/proxy_stage.ts"]
+    }
   },
   "references": [{ "path": "../app" }],
   "include": ["src", "package.json"],

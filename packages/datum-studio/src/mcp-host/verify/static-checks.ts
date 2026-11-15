@@ -24,7 +24,7 @@ import {
   type RenderLintLimits,
 } from "../../../vendor/src/lib/studio/engine/lint/render/index"
 import { lintDiagramGeometry, type DiagramDefectKind } from "../../../vendor/src/lib/studio/engine/diagram/fit/lint"
-import { CHART_LINT_OPTIONS, lintChartGeometry } from "../../../vendor/src/lib/studio/engine/chart/core/geometry"
+import { CHART_LINT_OPTIONS, chartLinksAlongNodes, lintChartGeometry } from "../../../vendor/src/lib/studio/engine/chart/core/geometry"
 import { CAPTION_GUIDE_MAX_CHARS } from "../../../vendor/src/lib/studio/contract/schema/figure-bounds"
 import {
   clip,
@@ -429,6 +429,17 @@ function geometryOf(f: FigureSvg, b: CheckBuilder): void {
             label: f.label,
             detail: `${d.kind}: ${d.text}${d.other ? ` / ${d.other}` : ""}`,
             amount: d.amount,
+          }),
+        )
+      }
+      // Swarm 1.2.10 row 65b (AC-B1002b, N10-014): a connector running along a box is a note, never b.fail (status
+      // unchanged); one note per run of chartLinksAlongNodes (N10-108).
+      for (const e of chartLinksAlongNodes(f.svg)) {
+        b.note(
+          finding("FIG_GEOMETRY", {
+            address: f.address,
+            label: f.label,
+            detail: `LINK_ALONG_NODE: chart connector runs along box ${e.node} for ${e.mm.toFixed(2)} mm (reported only, not a defect)`,
           }),
         )
       }

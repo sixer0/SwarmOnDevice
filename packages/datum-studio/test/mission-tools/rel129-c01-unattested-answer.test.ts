@@ -307,6 +307,23 @@ function expectRefused(r: S, why: string, tool: string, mission: string, request
   expect(r.tool, why).toBe(tool)
 }
 
+/**
+ * 1.2.10 row 74 INTENT (B10-11, N10-006, N10-008): the owner-message variant of expectRefused; the message and the hint
+ * are the owner wording, the detail and the S9-02 word rules stay.
+ */
+const OWNER_ONLY =
+  "owner messages come only from the person, in Mission Control in the Swarm app: send yours as from: agent or from: controller, and ask the person with studio_mission_request_decision when you need an answer"
+function expectOwnerRefused(r: S, why: string, mission: string) {
+  expect(r.ok, why).toBe(false)
+  expect(r.code, why).toBe("SESSION_NOT_ATTESTED")
+  expect(r.error.details, why).toEqual({ mission, agent: "claude" })
+  expect(r.error.message, why).toBe("only the person writes an owner message, from Mission Control in the Swarm app (this request is not attested)")
+  expect(r.next, why).toBe(`${OWNER_ONLY} (skill: mission-control)`)
+  expect(r.next.includes("by: user"), why).toBe(false)
+  expect(r.next.includes("answer as yourself"), why).toBe(false)
+  expect(r.tool, why).toBe("studio_mission_update_row")
+}
+
 let replaySid = ""
 let replayPv = ""
 
@@ -364,6 +381,7 @@ describe("N9-128 AC-C01 row 50: unattested by: user answers, decisions, create d
       expect([cr.ok, cr.code]).toEqual([false, "SESSION_NOT_ATTESTED"])
       const own = await rawCall(replaySid, replayPv, "studio_mission_update_row", { mission: M50, messages: [{ from: "owner", to: "controller", kind: "instruction", text: "stop" }] }, key)
       expect([own.ok, own.code]).toEqual([false, "SESSION_NOT_ATTESTED"])
+      expect(own.next, "replay owner hint").toBe(`${OWNER_ONLY} (skill: mission-control)`)
     }
     expect(await snapshot()).toEqual(before)
   })
@@ -377,7 +395,7 @@ describe("N9-128 AC-C01 row 50: unattested by: user answers, decisions, create d
     ]) {
       for (const dryRun of [false, true]) {
         const r = await call(c, "studio_mission_update_row", { mission: M50, messages: [{ from: "agent", to: "controller", kind: "report", text: "ok" }, msg], ...(dryRun ? { dryRun } : {}) })
-        expectRefused(r, `owner ${msg.kind} dryRun=${dryRun}`, "studio_mission_update_row", M50)
+        expectOwnerRefused(r, `owner ${msg.kind} dryRun=${dryRun}`, M50)
       }
     }
     expect(await snapshot()).toEqual(before)

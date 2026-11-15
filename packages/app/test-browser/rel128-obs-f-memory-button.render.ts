@@ -33,7 +33,7 @@ const translate = i18n.translator(() => i18n.flatten({ ...dict, ...uiDict }), i1
 const realLanguage = await import("@/context/language")
 mock.module("@/context/language", () => ({ ...realLanguage, useLanguage: () => ({ t: translate, locale: () => "en" }) }))
 
-type Result = "opened" | "missing" | "outside" | "no-app" | "failed"
+type Result = "opened" | "missing" | "outside" | "no-app" | "failed" | "registered" | "close-obsidian" | "not-registered"
 const state: {
   exists: boolean
   ipc?: Result
@@ -140,8 +140,8 @@ describe("the Obsidian action", () => {
     const before = dialogs()
     ;(buttons()[0] as HTMLElement).click()
     await tick(20)
-    expect(state.vaultCalls.length).toBe(1)
-    expect(JSON.stringify(state.vaultCalls[0])).toBe(JSON.stringify({ language: "en" }))
+    const languageCalls = state.vaultCalls.filter((c) => typeof c === "object" && c !== null && "language" in c)
+    expect(JSON.stringify(languageCalls)).toBe(JSON.stringify([{ language: "en" }]))
     expect(state.ipcCalls.length).toBe(1)
     expect(state.ipcCalls[0] === HUB).toBe(true)
     expect(state.toasts.length).toBe(0)

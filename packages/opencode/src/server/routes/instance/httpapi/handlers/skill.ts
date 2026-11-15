@@ -278,7 +278,7 @@ export const skillHandlers = HttpApiBuilder.group(InstanceHttpApi, "skill", (han
     const draftApprove = Effect.fn("SkillHttpApi.draftApprove")(function* (ctx: {
       params: { name: string }
       headers: DesktopNonceHeaders
-      payload: { scope: WriteScope; acceptCommands?: boolean }
+      payload: { scope: WriteScope; acceptCommands?: boolean; draftTime?: number }
     }) {
       yield* personOnly(ctx.headers)
       const where = yield* place()
@@ -287,6 +287,12 @@ export const skillHandlers = HttpApiBuilder.group(InstanceHttpApi, "skill", (han
       if (!Skill.SKILL_NAME_PATTERN.test(name)) return yield* badName()
       const draft = yield* Effect.promise(() => SkillManage.readDraft(scope, name, where))
       if (!draft) return yield* missing("SKILL_DRAFT_MISSING", "That draft is no longer there.")
+      // 1.2.10 row 70a (AC-B1007s, N10-004, N10-005; S10-38 fail closed): the approve is bound to the draft the person
+      // was shown. A request without draftTime, or with a time that is not the time of the draft just read, is refused
+      // before anything is written; the draft stays. What is saved below is `draft.content`, the text read here.
+      const { draftTime } = ctx.payload
+      if (draftTime === undefined || draftTime !== draft.time)
+        return yield* fail(SkillManage.SKILL_CHANGED, "That draft changed after it was shown. Review it again.")
       // The person was shown "replaces" (RA-13): approving overwrites the saved skill of that name.
       const current = yield* saved(scope, name, where)
       const baseHash = current

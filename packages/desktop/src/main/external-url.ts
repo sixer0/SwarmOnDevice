@@ -5,6 +5,7 @@ import { homedir } from "node:os"
 import { isAbsolute, join, normalize, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { BrowserWindow, IpcMain, IpcMainInvokeEvent, WebContents } from "electron"
+import { ensureObsidianVault } from "./obsidian-registry"
 
 export function resolveExternalURL(value: string) {
   if (!URL.canParse(value)) return undefined
@@ -32,8 +33,8 @@ export function resolveLocalFilePath(value: string) {
 /** N8-115: the dedicated IPC channel. */
 const OPEN_OBSIDIAN_NOTE_IPC = "open-obsidian-note"
 
-/** N8-115 / N8-116 result union (R20-C24: with "failed"). */
-type ObsidianNoteResult = "opened" | "missing" | "outside" | "no-app" | "failed"
+/** N8-115 / N8-116 result union (R20-C24: with "failed"); 1.3.0 row 45 (N10-020..N10-023): the three registry outcomes. */
+type ObsidianNoteResult = "opened" | "missing" | "outside" | "no-app" | "failed" | "registered" | "close-obsidian" | "not-registered"
 
 // Same rule as core Vault.root() and setup's VAULT_ROOT (drift test core/test/rel128-obs-a-vault-root.test.ts).
 const VAULT_DEFAULT_DIR = ".swarm/vault"
@@ -182,6 +183,35 @@ type ObsidianNoteIpcDeps = {
   /** Row 42d/42e: child_process.execFile (no shell); called only as ("/usr/bin/codesign", [...]) and
    *  ("/usr/bin/open", ["-a", app, url]). Resolves with stdout/stderr. */
   execFile?: (file: string, args: string[]) => Promise<ExecFileOutput | void>
+  /** 1.3.0 row 45 (N10-028): Obsidian's data folder holding obsidian.json; passed by ipc.ts on darwin only. */
+  obsidianConfigDir?: () => string
+  /** 1.3.0 row 45 (N10-028): the keyed closed-check runner (makeLsappinfoRunner); passed on darwin only. */
+  runLsappinfo?: () => Promise<{ code: number; stdout: string }>
+}
+
+/** What the registry step lets the launch report: the launch outcome, or a refusal already logged. */
+type RegistryGate = { launch: "opened" | "registered" } | { refused: "close-obsidian" | "not-registered" }
+
+/**
+ * 1.3.0 row 45 (AC-P1d, 01a §3.5-§3.6): runs after the launcher decision and only when both registry deps are
+ * present (absent = the BASE behaviour). `in-vault` -> launch -> "opened"; `registered` -> launch -> "registered";
+ * `close-obsidian` and `not-registered` -> logged with the reason only, no launch. `appPresent` is true because a
+ * launcher was already found. Any error here is `not-registered` / `registry-write`.
+ */
+async function obsidianRegistryGate(
+  deps: ObsidianNoteIpcDeps,
+  vaultRoot: string,
+  hubPath: string,
+  refuse: <T extends ObsidianNoteResult>(reason: string, result: T) => T,
+): Promise<RegistryGate> {
+  if (!deps.obsidianConfigDir || !deps.runLsappinfo) return { launch: "opened" }
+  const runLsappinfo = deps.runLsappinfo
+  const step = await Promise.resolve()
+    .then(() => ensureObsidianVault({ configDir: deps.obsidianConfigDir!(), vaultRoot, hubPath, appPresent: true, runLsappinfo }))
+    .catch(() => ({ result: "not-registered" as const, reason: "registry-write" as const }))
+  if (step.result === "in-vault") return { launch: "opened" }
+  if (step.result === "registered") return { launch: "registered" }
+  return { refused: refuse(step.reason ?? "registry-write", step.result) }
 }
 
 // SR8-15: the mission-ipc.ts / desktop-nonce.ts sender rule: the main frame of a live window main created, on the
@@ -205,8 +235,11 @@ export function registerOpenObsidianNoteHandler(deps: ObsidianNoteIpcDeps) {
   }
   deps.ipcMain.handle(OPEN_OBSIDIAN_NOTE_IPC, async (event: IpcMainInvokeEvent, hubPath: unknown) => {
     if (!obsidianSenderOk(deps, event)) return refuse("sender", "outside")
-    const resolved = await resolveObsidianNoteURL(hubPath, deps.vaultRoot())
+    const vaultRoot = deps.vaultRoot()
+    const resolved = await resolveObsidianNoteURL(hubPath, vaultRoot)
     if ("reason" in resolved) return refuse(resolved.reason, resolved.reason)
+    // resolveObsidianNoteURL returns a URL only for an absolute `.md` string path.
+    const hub = hubPath as string
     if (!deps.protocolApp("obsidian://open")) {
       // Row 42d: no registered handler -> the verified Install-tools staged app, else "no-app".
       if (!deps.setupHome || !deps.execFile) return refuse("no-app", "no-app")
@@ -214,13 +247,19 @@ export function registerOpenObsidianNoteHandler(deps: ObsidianNoteIpcDeps) {
       if ("reason" in staged) return staged.reason === "absent" ? refuse("no-app", "no-app") : refuse(staged.reason, "failed")
       // Row 42e (S-14): signature + pinned team before launch.
       if (!(await verifyStagedObsidianSignature(staged.app, deps.execFile))) return refuse("staged-signature", "failed")
+      // Row 45: the registry step, after the launcher decision (no app or a failed signature never reads the list).
+      const gate = await obsidianRegistryGate(deps, vaultRoot, hub, refuse)
+      if ("refused" in gate) return gate.refused
       return deps.execFile("/usr/bin/open", ["-a", staged.app, resolved.url]).then(
-        () => "opened" as const,
+        () => gate.launch,
         () => refuse("staged-launch", "failed"),
       )
     }
+    const gate = await obsidianRegistryGate(deps, vaultRoot, hub, refuse)
+    if ("refused" in gate) return gate.refused
+    // A failed launch after a write is "failed"; the entry stays and the next press finds it (N10-020).
     return deps.openExternal(resolved.url).then(
-      () => "opened" as const,
+      () => gate.launch,
       () => refuse("failed", "failed"),
     )
   })

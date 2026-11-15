@@ -215,6 +215,8 @@ export const EditTool = Tool.define(
           if ([filePath, target.landing].some((file) => Reach.skillFolder(file, instance))) throw new Reach.SkillFolderRefused()
           // 1.2.8 row 40f (AC-SEC11): the vault mirror folder likewise, before any prompt, mode on and off.
           if ([filePath, target.landing].some((file) => Reach.vaultMirror(file, instance))) throw new Reach.VaultMirrorRefused()
+          // 1.3.0 row 147 (AC-S6-INBOX): the vault inbox likewise; notes go through swarm-web_vault_inbox.
+          if ([filePath, target.landing].some((file) => Reach.vaultInbox(file, instance))) throw new Reach.VaultInboxRefused()
           yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), filePath)
           if (target.landing !== filePath) yield* assertExternalDirectoryEffect(followedByEdit(ctx, [label]), target.landing)
 

@@ -30,6 +30,16 @@ export const Item = Schema.Struct({
   deviceOnly: Schema.Boolean.annotate({
     description: "Never sent to a model that runs off this device",
   }),
+  // 1.2.10 row 52 (N10-061): stored only as true; clearing deletes the key. Implies deviceOnly (I-1), enforced by the store.
+  vaultAllowed: Schema.optional(Schema.Boolean).annotate({
+    description:
+      "The person allowed this device-only note into the Obsidian vault mirror. Set only from the Swarm desktop app. Does not change deviceOnly: the note is still never sent to a model off this device.",
+  }),
+  // 1.2.10 row 52 (N10-074): stored and cleared together with vaultAllowed, on an exported index entry only.
+  vaultReportSha256: Schema.optional(Schema.String).annotate({
+    description:
+      "Lowercase sha256 of the final report the person confirmed when exporting this index entry. Stored and cleared with vaultAllowed.",
+  }),
   time: Schema.Number,
   sessionID: Schema.optional(Schema.String),
   failed: Schema.optional(Schema.String),
@@ -98,6 +108,10 @@ export const Refusal = Schema.Literals([
   "index_body_long",
   "index_format",
   "index_full",
+  // 1.2.10 row 52 (N10-003): returned by the person-only vault route.
+  "classified",
+  "not_device_only",
+  "archived",
 ]).annotate({ identifier: "MemoryRefusal" })
 export type Refusal = typeof Refusal.Type
 

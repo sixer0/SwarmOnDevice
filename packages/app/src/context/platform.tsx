@@ -50,7 +50,7 @@ type PlatformBase = {
   revealPath?(path: string): Promise<boolean>
 
   /** Open the project's vault hub note in Obsidian; main checks the path and builds the URL (desktop only, N8-116) */
-  openObsidianNote?(hubPath: string): Promise<"opened" | "missing" | "outside" | "no-app" | "failed">
+  openObsidianNote?(hubPath: string): Promise<"opened" | "missing" | "outside" | "no-app" | "failed" | "registered" | "close-obsidian" | "not-registered">
 
   /** Restart the app  */
   restart(): Promise<void>

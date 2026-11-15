@@ -626,7 +626,7 @@ export const dict = {
   "toast.project.folderMissing.restore": "Restore",
   "toast.project.folderMissing.recreate": "Recreate",
   "toast.project.folderMissing.choose": "Choose folder",
-  "toast.project.folderMissing.recreateFailed": "{{path}} could not be recreated because its parent folder is missing too. Choose another folder.",
+  "toast.project.folderMissing.recreateFailed": "{{path}} could not be recreated: its parent folder is missing or something else is at that path. Choose another folder.",
 
   "toast.update.title": "Update available",
   "toast.update.description": "A new version of Swarm ({{version}}) is now available to install.",
@@ -906,6 +906,9 @@ export const dict = {
   "session.mission.approval.autonomous": "Self-approved (autonomous): Swarm approved this mission itself in autonomous mode.",
   "session.mission.line.paused": "Mission paused - steps are on hold. Answer decisions here, or ask Swarm to resume.",
   "session.mission.line.drift": "{{count}} steps added after approval.",
+  // 1.2.10 row 41 (N10-083/084): the changed-after-approval count, plural forms.
+  "session.mission.line.driftChanged.one": "{{count}} step changed after approval.",
+  "session.mission.line.driftChanged.other": "{{count}} steps changed after approval.",
   "session.mission.emptySession": "No missions in this session. A mission started in another session shows in that session's window.",
   "session.mission.type.research": "Research",
   "session.mission.type.debug": "Debug",
@@ -1668,6 +1671,30 @@ export const dict = {
   "memory.obsidian.notYet": "No vault notes yet. They appear after the next memory change.",
   "memory.obsidian.noApp": "Obsidian is not installed. Install it from Swarm setup, then try again.",
   "memory.obsidian.failed": "Could not open Obsidian.",
+  // 1.2.10 row 41 (N10-080..N10-082): the three new outcomes of Open graph in Obsidian (registered, close-obsidian, not-registered).
+  // 1.3.1 row H1 (B13-49): {{vault}} is the configured vault folder, never a fixed ~/.swarm/vault.
+  "memory.obsidian.registered": "Swarm added the Swarm vault ({{vault}}) to Obsidian's vault list.",
+  "memory.obsidian.closeObsidian":
+    "Close Obsidian, then press Open graph in Obsidian again. If Obsidian is already closed, open it once and quit it normally. Or add the folder yourself: in Obsidian choose Open folder as vault and pick {{vault}}.",
+  "memory.obsidian.notRegistered":
+    "Swarm could not add the Swarm vault to Obsidian's vault list safely, so it changed nothing. Add it yourself: in Obsidian choose Open folder as vault and pick {{vault}}.",
+  // 1.2.10 row 41 (N10-085..N10-097, N10-102): copy a kept note to the Obsidian vault, its confirmation, rule and refusals.
+  "memory.vault.copy": "Copy to vault",
+  "memory.vault.remove": "In vault: remove",
+  "memory.vault.confirmText":
+    "Copy this note to the Obsidian vault? Obsidian, its plugins, any sync you turn on, and agents allowed to read outside the project (for example in autonomous mode) can read the copy. Swarm still gives the note only to on-device models. You can remove it from the vault later.",
+  "memory.vault.confirmTextIndex": "Its final report {{report}} is copied with it, under the existing report rules.",
+  "memory.vault.confirmCopy": "Copy",
+  "memory.vault.confirmCancel": "Cancel",
+  "memory.vault.rule":
+    "Notes kept on this device, secret-looking notes and notes marked as classified are not copied to the Obsidian vault. Notes for any model are copied. You can copy a note kept on this device yourself.",
+  "memory.vault.reason.device": "Kept on this device",
+  "memory.vault.reason.secret": "Looks secret: never copied",
+  "memory.vault.reason.classified": "Marked as classified: never copied",
+  "memory.vault.personOnly": "Only in the Swarm desktop app.",
+  "memory.refused.classified": "This note is marked as classified, so it is never copied to the vault.",
+  "memory.refused.notDeviceOnly": "This note is already copied to the vault because any model may receive it.",
+  "memory.refused.archived": "This entry is part of a summary. Copy the summary instead.",
   "session.mission.placement.title": "Where should this mission live?",
   "session.mission.placement.join": "Join {{group}}",
   "session.mission.placement.new": "New group {{group}}",

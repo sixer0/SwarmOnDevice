@@ -62,7 +62,8 @@ export interface PreviewIssue {
  * maksud tidak berlaku untuk kode itu: agen perlu membuangnya).
  */
 // Row 163b: VEGA_ENGINE = which Vega engine drew the chart (informative, not a layout issue).
-export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMITS_DEFAULT", "PARAM_ALIAS", "AUTO_FIT", "INTENT_APPLIED", "CAPACITY_ADAPT", "VEGA_ENGINE"]);
+// Row 65c (C66 F-65b-1): LINK_ALONG_NODE is report-only (C24), so it is not a layout issue either (g04 layoutIssueCount 0).
+export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMITS_DEFAULT", "PARAM_ALIAS", "AUTO_FIT", "INTENT_APPLIED", "CAPACITY_ADAPT", "VEGA_ENGINE", "LINK_ALONG_NODE"]);
 
 /**
  * Swarm 1.2.6 row 73 (W-03, register N-020): class of a preview issue. A notice = the engine already adapted the
@@ -88,6 +89,9 @@ export const PREVIEW_ISSUE_CLASS: Readonly<Record<string, "notice" | "defect">> 
   LABEL_HALO: "notice",
   // Swarm 1.2.8 row 55b (C12 OP-18-5, N8-481): sequence flow across pools is a warning, never a defect.
   POOL_FLOW_CROSSES: "notice",
+  // Swarm 1.2.10 row 65b (AC-B1002b, F-S1, N10-013): a chart connector running along a box is reported only; without
+  // this entry the unknown REPORT code would default to "defect" (g04's legacy layout is frozen and cannot be fixed).
+  LINK_ALONG_NODE: "notice",
   CAPTION_WRAP: "defect",
   CAPTION_TRUNCATED: "defect",
   LABEL_LEADER: "defect",

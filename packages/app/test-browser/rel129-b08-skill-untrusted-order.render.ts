@@ -69,12 +69,30 @@ const fresh = () => {
       name: "syn129-plain",
       scope: "project",
       content: "plain draft",
+      time: 2001,
       untrusted: false,
       runsCommands: false,
       replaces: false,
     },
-    { name: "syn129-shell-p", scope: "project", content: "!`pwd`", untrusted: true, runsCommands: true, replaces: false },
-    { name: "syn129-shell-g", scope: "global", content: "!`ls`", untrusted: false, runsCommands: true, replaces: false },
+    // 1.2.10 AC-B1007a (INTENT, row 70): drafts are listed with their `time`; every approve echoes it as `draftTime`.
+    {
+      name: "syn129-shell-p",
+      scope: "project",
+      content: "!`pwd`",
+      time: 2002,
+      untrusted: true,
+      runsCommands: true,
+      replaces: false,
+    },
+    {
+      name: "syn129-shell-g",
+      scope: "global",
+      content: "!`ls`",
+      time: 2003,
+      untrusted: false,
+      runsCommands: true,
+      replaces: false,
+    },
   ]
 }
 fresh()
@@ -182,7 +200,7 @@ for (const [label, module] of [
         confirmShown: false,
         approveCalls: 1,
       })
-      expect(approves()[0].input).toEqual({ name: "syn129-shell-p", scope: "project" })
+      expect(approves()[0].input).toEqual({ name: "syn129-shell-p", scope: "project", draftTime: 2002 })
       expect("acceptCommands" in approves()[0].input).toBe(false)
       expect(approves()[0].headers).toEqual({ "x-swarm-desktop-nonce": NONCE })
       expect(errorText()).toBe(text("settings.skills.error.untrusted"))
@@ -194,13 +212,18 @@ for (const [label, module] of [
       await mount(module.DialogSettings)
       await click('[data-draft="syn129-shell-p"] [data-action="draft-approve"]')
       expect(approves().length).toBe(1)
-      expect(approves()[0].input).toEqual({ name: "syn129-shell-p", scope: "project" })
+      expect(approves()[0].input).toEqual({ name: "syn129-shell-p", scope: "project", draftTime: 2002 })
       expect(confirmShown()).toBe(true)
       expect(has('[data-draft="syn129-shell-p"] [data-slot="skill-commands-confirm"]')).toBe(true)
       expect(has('[data-slot="skill-error"]')).toBe(false)
       await click('[data-draft="syn129-shell-p"] [data-action="draft-approve-commands"]')
       expect(approves().length).toBe(2)
-      expect(approves()[1].input).toEqual({ name: "syn129-shell-p", scope: "project", acceptCommands: true })
+      expect(approves()[1].input).toEqual({
+        name: "syn129-shell-p",
+        scope: "project",
+        draftTime: 2002,
+        acceptCommands: true,
+      })
       expect(approves()[1].headers).toEqual({ "x-swarm-desktop-nonce": NONCE })
       expect(has('[data-slot="skill-error"]')).toBe(false)
       expect(confirmShown()).toBe(false)
@@ -212,12 +235,17 @@ for (const [label, module] of [
       await mount(module.DialogSettings)
       await click('[data-draft="syn129-shell-g"] [data-action="draft-approve"]')
       expect(approves().length).toBe(1)
-      expect(approves()[0].input).toEqual({ name: "syn129-shell-g", scope: "global" })
+      expect(approves()[0].input).toEqual({ name: "syn129-shell-g", scope: "global", draftTime: 2003 })
       expect(has('[data-draft="syn129-shell-g"] [data-slot="skill-commands-confirm"]')).toBe(true)
       expect(has('[data-slot="skill-error"]')).toBe(false)
       await click('[data-draft="syn129-shell-g"] [data-action="draft-approve-commands"]')
       expect(approves().length).toBe(2)
-      expect(approves()[1].input).toEqual({ name: "syn129-shell-g", scope: "global", acceptCommands: true })
+      expect(approves()[1].input).toEqual({
+        name: "syn129-shell-g",
+        scope: "global",
+        draftTime: 2003,
+        acceptCommands: true,
+      })
       expect(has('[data-slot="skill-error"]')).toBe(false)
     })
 
@@ -226,7 +254,7 @@ for (const [label, module] of [
       await mount(module.DialogSettings)
       await click('[data-draft="syn129-plain"] [data-action="draft-approve"]')
       expect(approves().length).toBe(1)
-      expect(approves()[0].input).toEqual({ name: "syn129-plain", scope: "project" })
+      expect(approves()[0].input).toEqual({ name: "syn129-plain", scope: "project", draftTime: 2001 })
       expect(confirmShown()).toBe(false)
       expect(has('[data-slot="skill-error"]')).toBe(false)
       expect(world.toasts).toEqual([text("settings.skills.savedNoNote")])

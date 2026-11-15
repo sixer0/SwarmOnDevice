@@ -45,6 +45,46 @@ const MCP_RESOURCE_TOOLS = {
 const MAX_MCP_RESOURCE_BLOB_BYTES = 10 * 1024 * 1024
 /** The swarm-web vault inbox tool (setup mcpproxy wiring); the close nudge is added only when the session has it. */
 const VAULT_INBOX_TOOL = "swarm-web_vault_inbox"
+// AC-S6b (N13-373): the proxy's own refusal texts (`setup/src/mcpproxy/proxy.ts`, refuseClassified and the name-shape
+// refusal of runVault), reused word for word so the agent reads the same answer from either check.
+const VAULT_CLASSIFIED_TEXT = (word: string) =>
+  `BLOCKED_BY_POLICY: classified_content: the note holds the classification word ${word}; nothing was written. For classified work write only the mission id, date, status and links, without the word.`
+const VAULT_SHAPE_TEXT =
+  "BLOCKED_BY_POLICY: name must be a safe basename inside the inbox (no traversal, absolute paths, NUL, newlines, or symlink escapes)."
+
+/**
+ * N13-418: the vault inbox note slug, a copy of `setup/src/vault/classified.ts` slugify (this package must not import
+ * setup). test/memory/rel129-b01-classified-words-drift.test.ts pins the two equal.
+ * @internal test seam
+ */
+export function slugify(name: string): string {
+  const s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+  return s === "" ? "note" : s
+}
+
+/** The list entry (capitals) the text holds as a whole word, by the mirror's matcher, or undefined. */
+function vaultClassificationWord(text: string): string | undefined {
+  if (!VaultMirror.classified(text)) return undefined
+  return VaultMirror.MIRROR_CLASSIFIED_WORDS.find((word) => new RegExp(`\\b${word}\\b`, "i").test(text))
+}
+
+/**
+ * AC-S6b (F7, S13-06): the refusal text for a vault inbox call that must not reach the server, or undefined. Every
+ * action except exactly "list" and "read" counts as a write (so "WRITE" or no action is checked). The name as given,
+ * its slug and the content are tested, in that order; a name or content that is not a string is refused.
+ */
+function vaultInboxRefusal(args: Record<string, unknown>): string | undefined {
+  if (args.action === "list" || args.action === "read") return undefined
+  const { name, content } = args
+  if (typeof name !== "string" || typeof content !== "string") return VAULT_SHAPE_TEXT
+  const word =
+    vaultClassificationWord(name) ?? vaultClassificationWord(slugify(name)) ?? vaultClassificationWord(content)
+  return word === undefined ? undefined : VAULT_CLASSIFIED_TEXT(word)
+}
 const SUPPORTED_MCP_RESOURCE_ATTACHMENT_MIMES = new Set([
   "application/pdf",
   "image/gif",
@@ -537,11 +577,19 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
 
   // N8-437: whether the closed mission has an index entry in this project's memory, so the close nudge can name its
   // vault notes. Memory off, a disabled store or a failed lookup give the nudge without links (logged).
+  // N10-070 (C18 D-9): only an entry the mirror copies counts (`mirrorExclusion`), so the nudge never links notes that
+  // are not in the vault: a device-only entry the person has not exported, or a secret-looking or classified one.
   const missionIndexed = (missionId: string): Effect.Effect<boolean> =>
     Effect.gen(function* () {
       if (!memory || process.env.SWARM_DISABLE_MEMORY) return false
       const store = yield* memory.get()
-      return store.enabled && store.items.some((item) => item.kind === "index" && item.missionId === missionId)
+      return (
+        store.enabled &&
+        store.items.some(
+          (item) =>
+            item.kind === "index" && item.missionId === missionId && VaultMirror.mirrorExclusion(item) === undefined,
+        )
+      )
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logError("mission index lookup failed", {
@@ -572,16 +620,41 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     const schema = yield* Effect.promise(() => Promise.resolve(asSchema(item.inputSchema).jsonSchema))
     const transformed = ProviderTransform.schema(input.model, { ...schema, properties: schema.properties ?? {} })
     item.inputSchema = jsonSchema(transformed)
+    // AC-S6b (F7): the swarm-web vault inbox, matched by the tool's own name too, so a renamed server is checked.
+    const vaultInbox = key === VAULT_INBOX_TOOL || entry.def.name === "vault_inbox"
     item.execute = (args, opts) =>
       run.promise(
         Effect.gen(function* () {
           const ctx = context(args, opts)
-          yield* plugin.trigger(
+          const before = yield* plugin.trigger(
             "tool.execute.before",
             { tool: key, sessionID: ctx.sessionID, callID: opts.toolCallId },
             { args },
           )
+          // AC-S6b (F7, S13-06): a vault inbox write is checked after the plugin hook, on a clone of the final args, and
+          // that clone is what is asked about and sent, so nothing can change the note between the check and the call.
+          // Args that cannot be cloned are refused.
+          let callArgs = args
+          let refusal: string | undefined
+          if (vaultInbox) {
+            try {
+              callArgs = structuredClone(toRecord(before.args))
+              refusal = vaultInboxRefusal(callArgs)
+            } catch {
+              refusal = VAULT_SHAPE_TEXT
+            }
+          }
           const result: Awaited<ReturnType<NonNullable<typeof execute>>> = yield* Effect.gen(function* () {
+            if (refusal !== undefined) {
+              // The log names the reason only: never the note's name, content or the word.
+              yield* Effect.logWarning("vault inbox write refused before the ask", {
+                source: "SessionTools.vaultInbox",
+                sessionID: ctx.sessionID,
+                callID: opts.toolCallId,
+                reason: refusal === VAULT_SHAPE_TEXT ? "shape" : "classified_content",
+              })
+              return { content: [{ type: "text" as const, text: refusal }], isError: true }
+            }
             // Rule 5 reads server, transport and origin from here; a tool without a known source counts as project.
             const mcp: MCP.Source | { origin: "project" } = entry.source ?? { origin: "project" }
             // SEC-21 remainder (1.2.6 row 40): a stopped session ends the wait for an answer too, and the call never runs.
@@ -591,11 +664,11 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
                 metadata: { mcp },
                 patterns: ["*"],
                 always: ["*"],
-                call: { tool: key, args },
+                call: { tool: key, args: callArgs },
               }),
               opts.abortSignal,
             )
-            return yield* Effect.promise(() => execute(args, opts))
+            return yield* Effect.promise(() => execute(callArgs, opts))
           }).pipe(
             Effect.withSpan("Tool.execute", {
               attributes: {
@@ -608,7 +681,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
           )
           yield* plugin.trigger(
             "tool.execute.after",
-            { tool: key, sessionID: ctx.sessionID, callID: opts.toolCallId, args },
+            { tool: key, sessionID: ctx.sessionID, callID: opts.toolCallId, args: callArgs },
             result,
           )
 

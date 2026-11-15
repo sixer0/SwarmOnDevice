@@ -315,11 +315,13 @@ export const SYSTEM_BIN: readonly string[] = ["/bin", "/usr/bin", "/usr/local/bi
  * files by name anywhere; this list adds what they do not name: places under the home folder that hold keys or tokens
  * under ordinary names (a keychain, `gh`'s token file, the patch signing key), Swarm's own credential files, and the
  * system's folders. Relative entries are under the home folder. Read and write: never opened.
+ * C115 (S13-05): `.swarm/setup` holds the installed setup tools, among them `bin/swarm-web-proxy`, which every session
+ * starts; an agent write there (also under the consent) would replace a program Swarm runs later.
  */
 export const PROTECTED_HOME: readonly string[] = [
   ".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".netrc", ".git-credentials", ".password-store", ".pgpass",
   ".swarm-patch-key", ".config/gh", ".config/gcloud", ".config/op", ".local/share/keyrings", "Library/Keychains",
-  "Library/Cookies",
+  "Library/Cookies", ".swarm/setup",
 ]
 /** Row 202: Swarm's own credential files, under its data folder (`Global.Path.data`). Read and write: never opened. */
 export const PROTECTED_APP_FILES: readonly string[] = ["auth.json", "mcp-auth.json"]

@@ -31,6 +31,11 @@ import { appendAudit, type AuditOptions, type AuditRecord } from "./audit.ts"
 import { classifiedNote, slugify } from "../vault/classified.ts"
 import { ENV_NAMES, MCP_SERVER_NAME, VAULT_INBOX } from "./register.ts"
 
+// Build id `<SwarmRelease>+<commit10>` (N13-372, AC-S6c), inlined at compile time by
+// packages/desktop/scripts/stage-setup.ts (`--define SWARM_PROXY_BUILD="…"`). Undefined in a run
+// without the define (dev, `bun run`, unit tests); `typeof` keeps that a value, not a ReferenceError.
+declare const SWARM_PROXY_BUILD: string | undefined
+
 // --- transport seam -------------------------------------------------------------------
 
 export interface TransportRequest {
@@ -176,7 +181,11 @@ export async function handleRpc(req: RpcRequest, deps: ProxyDeps): Promise<RpcRe
       result: {
         protocolVersion: requested,
         capabilities: { tools: {} },
-        serverInfo: { name: MCP_SERVER_NAME, version: "1.0.0" },
+        // The real build id lets a person or a live check tell which proxy is staged (S-6).
+        serverInfo: {
+          name: MCP_SERVER_NAME,
+          version: typeof SWARM_PROXY_BUILD === "string" ? SWARM_PROXY_BUILD : "dev",
+        },
       },
     }
   }

@@ -7,8 +7,8 @@
 // symlink checks under the vault are the SYNC half (`sync`, row 43c, 01c §3.1-§3.2, SR8-12), which builds on `render`.
 // When it runs (`schedule`, debounce, label language, the close nudge text) is the TRIGGER half (row 43d, 01c §5, §8.3).
 //
-// What reaches the vault is less than the store holds (01c §3.3): deviceOnly, secret-looking and classified items are
-// never copied (only counted, L6); memory text is data, so every ASCII punctuation mark in it is backslash-escaped and
+// What reaches the vault is less than the store holds (01c §3.3): secret-looking and classified items are never copied,
+// deviceOnly items only when the person exported them (`mirrorExclusion`, 1.2.10 01d §3.2; only counted, L6); memory text is data, so every ASCII punctuation mark in it is backslash-escaped and
 // nothing in it can become a link, embed, tag or HTML; report copies keep their Markdown but lose raw HTML, image
 // auto-load, embeds, runnable code blocks and inline queries (SR8-13), and non-web link targets (SR8-13); a report that
 // carries a classification word is link-only (SR8-14); secrets in a copied report are masked line by line.
@@ -116,6 +116,9 @@ interface RenderedFile {
   readonly content: string
 }
 
+/** N10-064 (01d §3.6): the not-copied count per class, in the hub's order (module-local; export guard). */
+type NotCopiedByClass = { device: number; secret: number; classified: number; unsafe: number }
+
 export interface RenderResult {
   /** Sorted by path. */
   readonly files: readonly RenderedFile[]
@@ -123,10 +126,20 @@ export interface RenderResult {
   readonly notCopied: number
   /** Of those, the items skipped for an id or name that failed its pattern (`VAULT_PATH_UNSAFE`). */
   readonly unsafe: number
+  /** N10-064: `notCopied` per class; the classes sum to `notCopied`; its `unsafe` is the `unsafe` above. */
+  readonly notCopiedByClass: Readonly<NotCopiedByClass>
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Labels (01c §4.5 with N8-435). Generated text only: memory content is never translated.
+
+const CLASS_ORDER = ["device", "secret", "classified", "unsafe"] as const
+
+/** `{count} {label}` for each non-zero class in `CLASS_ORDER`, joined with ", " (01d §3.6). */
+const classParts = (counts: NotCopiedByClass, labels: Record<keyof NotCopiedByClass, string>) =>
+  CLASS_ORDER.filter((key) => counts[key] > 0)
+    .map((key) => `${counts[key]} ${labels[key]}`)
+    .join(", ")
 
 const LABELS = {
   en: {
@@ -136,8 +149,16 @@ const LABELS = {
     missions: "## Missions",
     notes: "## Notes",
     skills: "## Skills",
-    notCopied: (n: number) =>
-      `${n} notes are not copied here: kept on this device only, secret-looking, or marked as classified.`,
+    // N10-065 (01d §3.6): counts only, non-zero classes in the order device, secret, classified, unsafe.
+    notCopied: (n: number, c: NotCopiedByClass) =>
+      `${n} notes are not copied here: ${classParts(c, {
+        device: "kept on this device only",
+        secret: "secret-looking",
+        classified: "marked as classified",
+        unsafe: "with a name Swarm cannot use",
+      })}.`,
+    exportHint:
+      "You can copy a note kept on this device to the vault in Swarm's memory view (Copy to vault). Secret-looking and classified notes are never copied.",
     related: "## Related",
     untrusted:
       "> [!warning] Written after the session read web, MCP, Studio or files outside the project. Check before relying on it.",
@@ -145,6 +166,8 @@ const LABELS = {
     classified: (p: string) => `This report is marked as classified and is not copied here. Open it at ${p}.`,
     missing: (p: string) =>
       `The report file is missing, outside this project or unreadable, so it is not copied here. Path: ${p}.`,
+    // N10-075 (C31, S10-01): the link-only report of an exported device-only index entry whose report changed.
+    reportChanged: "changed since you copied it",
     reports: "## Reports",
     detail: "Detail",
     references: "References",
@@ -159,8 +182,15 @@ const LABELS = {
     missions: "## Misi",
     notes: "## Catatan",
     skills: "## Keahlian",
-    notCopied: (n: number) =>
-      `${n} catatan tidak disalin ke sini: hanya di perangkat ini, tampak berisi rahasia, atau ditandai sebagai dokumen berklasifikasi.`,
+    notCopied: (n: number, c: NotCopiedByClass) =>
+      `${n} catatan tidak disalin ke sini: ${classParts(c, {
+        device: "hanya di perangkat ini",
+        secret: "tampak berisi rahasia",
+        classified: "ditandai sebagai dokumen berklasifikasi",
+        unsafe: "dengan nama yang tidak dapat dipakai Swarm",
+      })}.`,
+    exportHint:
+      "Anda dapat menyalin catatan yang hanya di perangkat ini ke vault di tampilan memori Swarm (Salin ke vault). Catatan yang tampak berisi rahasia atau berklasifikasi tidak pernah disalin.",
     related: "## Terkait",
     untrusted:
       "> [!warning] Ditulis setelah sesi membaca web, MCP, Studio, atau berkas di luar proyek. Periksa sebelum mengandalkannya.",
@@ -169,6 +199,7 @@ const LABELS = {
       `Laporan ini ditandai sebagai dokumen berklasifikasi dan tidak disalin ke sini. Buka di ${p}.`,
     missing: (p: string) =>
       `Berkas laporan tidak ada, berada di luar proyek ini, atau tidak dapat dibaca, jadi tidak disalin ke sini. Lokasi: ${p}.`,
+    reportChanged: "berubah sejak Anda menyalinnya",
     reports: "## Laporan",
     detail: "Rincian",
     references: "Rujukan",
@@ -184,10 +215,13 @@ const LABELS = {
 const NAME_MAX = 60
 const REPORT_SUFFIX = "-report"
 const HEX6 = /^[0-9a-f]{6}$/
-// Item ids are 6 hex today (`randomBytes(3)`); store-written ids (roll-ups) and older stores may differ, so any id made
-// of these characters is accepted. It is never joined into a path (the file name is folded), but it is written as the
-// link label and `swarm-id`, so nothing that could end a wikilink or a YAML string may pass.
-const ITEM_ID = /^[0-9A-Za-z_-]{1,64}$/
+/**
+ * The mirror's note-id check. Item ids are 6 hex today (`randomBytes(3)`); store-written ids (roll-ups) and older
+ * stores may differ, so any id made of these characters is accepted. It is never joined into a path (the file name is
+ * folded), but it is written as the link label and `swarm-id`, so nothing that could end a wikilink or a YAML string
+ * may pass. Also the memory route's rule for `unsafe` in the kept list and for the id in its audit line (1.3.0 row 53x).
+ */
+export const ITEM_ID = /^[0-9A-Za-z_-]{1,64}$/
 const FOLDER = /^[a-z0-9][a-z0-9-]{0,80}$/
 const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/
 // SK-f (N8-046): `Skill <name> (<scope>): <description>. Triggers: …`
@@ -244,10 +278,21 @@ export const classified = (text: string) => CLASSIFIED.test(text)
 const refStrings = (item: Item) =>
   (item.refs ?? []).flatMap((ref) => ("symbol" in ref ? [ref.symbol, ref.path ?? ""] : [ref.path]))
 
-function excluded(item: Item) {
-  if (item.deviceOnly) return true
-  const strings = [item.text, item.body ?? "", ...refStrings(item)]
-  return strings.some((value) => value !== "" && (MemoryLearn.looksSecret(value) || classified(value)))
+/** N10-062: why an item stays out of the vault copy (module-local until a reader outside needs the name; export guard). */
+type MirrorExclusion = "classified" | "secret" | "device"
+
+/**
+ * N10-062 (01d §3.2, C18): the one decision whether an item stays out of the vault copy, and why. Classified, then
+ * secret-looking (both always, also for a note the person exported), then a device-only note the person has not
+ * exported (`vaultAllowed`); undefined = copied. Re-evaluated on every run over the store as it is then. Used by
+ * `render`, the memory route and its `kept` list, the store's export refusal and the close nudge (`missionIndexed`).
+ */
+export function mirrorExclusion(item: Item): MirrorExclusion | undefined {
+  const strings = [item.text, item.body ?? "", ...refStrings(item)].filter((value) => value !== "")
+  if (strings.some(classified)) return "classified"
+  if (strings.some(MemoryLearn.looksSecret)) return "secret"
+  if (item.deviceOnly && item.vaultAllowed !== true) return "device"
+  return undefined
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -583,7 +628,10 @@ const newestFirst = (a: { time: number; id: string }, b: { time: number; id: str
 const RELATED_MAX = 10
 
 export function render(input: RenderInput): RenderResult {
-  if (!FOLDER.test(input.folder)) return { files: [], notCopied: input.items.length, unsafe: input.items.length }
+  if (!FOLDER.test(input.folder)) {
+    const n = input.items.length
+    return { files: [], notCopied: n, unsafe: n, notCopiedByClass: { device: 0, secret: 0, classified: 0, unsafe: n } }
+  }
   const lang: Language = input.language ?? "id"
   const L = LABELS[lang]
   const base = `swarm-memory/${input.folder}`
@@ -591,11 +639,9 @@ export function render(input: RenderInput): RenderResult {
   const projectLabel = linkLabel(input.projectName, input.folder)
   const hubLink = `**${L.project}**: [[${base}/index|${projectLabel}]]`
 
-  let notCopied = 0
-  let unsafe = 0
-  const skip = (isUnsafe: boolean) => {
-    notCopied++
-    if (isUnsafe) unsafe++
+  const byClass: NotCopiedByClass = { device: 0, secret: 0, classified: 0, unsafe: 0 }
+  const skip = (why: keyof NotCopiedByClass) => {
+    byClass[why]++
   }
 
   // Classify the items. Archived index entries (rolledInto) are represented by their roll-up and add nothing.
@@ -609,12 +655,13 @@ export function render(input: RenderInput): RenderResult {
 
   for (const item of input.items) {
     if (item.rolledInto !== undefined && item.kind !== "index_rollup") continue
-    if (excluded(item)) {
-      skip(false)
+    const excluded = mirrorExclusion(item)
+    if (excluded !== undefined) {
+      skip(excluded)
       continue
     }
     if (!ITEM_ID.test(item.id)) {
-      skip(true)
+      skip("unsafe")
       continue
     }
     if (item.kind === "index") {
@@ -622,7 +669,7 @@ export function render(input: RenderInput): RenderResult {
       const missionName = missionId && missionIdOk(missionId) ? noteName("mission", missionId) : undefined
       const reportName = missionId && missionName ? noteName("report", missionId) : undefined
       if (!missionId || !missionName || !reportName || missions.has(missionId)) {
-        skip(true)
+        skip("unsafe")
         continue
       }
       missions.set(missionId, {
@@ -640,7 +687,7 @@ export function render(input: RenderInput): RenderResult {
     if (skillMatch && SKILL_NAME.test(skillMatch[1]!)) {
       const name = noteName("skill", skillMatch[1]!)
       if (!name) {
-        skip(true)
+        skip("unsafe")
         continue
       }
       skills.push({ item, skill: skillMatch[1]!, note: { dir: "skills", name: name.slice(0, -3), id: skillMatch[1]!, time: item.time } })
@@ -648,7 +695,7 @@ export function render(input: RenderInput): RenderResult {
     }
     const name = noteName("note", item.id, item.text)
     if (!name) {
-      skip(true)
+      skip("unsafe")
       continue
     }
     const note: Note = { dir: "notes", name: name.slice(0, -3), id: item.id, time: item.time }
@@ -755,14 +802,20 @@ export function render(input: RenderInput): RenderResult {
     const where = mission.report.path ?? ""
     const shown = escapeText(where)
     const found = input.reports?.[where] ?? ({ status: "missing" } as const)
+    // S10-01 (C31, N10-074): a device-only index entry reaches here only because the person exported it, and then its
+    // report is copied only while it is the report they confirmed (sha256 of its UTF-8 bytes, as read at export);
+    // otherwise, or without a stored hash, it is link-only with N10-075. Never re-read into the vault on the flag alone.
+    const changed = item?.deviceOnly === true && found.status === "ok" && sha256(found.text) !== item.vaultReportSha256
     const content =
       found.status === "large" || (found.status === "ok" && Buffer.byteLength(found.text) > MIRROR_REPORT_MAX_BYTES)
         ? L.large(shown)
         : found.status === "missing" || where === ""
           ? L.missing(shown)
-          : classified(found.text)
-            ? L.classified(shown)
-            : neutraliseReport(found.text)
+          : changed
+            ? `**${L.report}**: ${shown} (${L.reportChanged})`
+            : classified(found.text)
+              ? L.classified(shown)
+              : neutraliseReport(found.text)
     emit(
       mission.report.note,
       { id: mission.report.note.id, source: "report", tags: [TAG.report, TAG.mission(mission.note.id), ...(untrusted ? [TAG.untrusted] : [])] },
@@ -770,7 +823,8 @@ export function render(input: RenderInput): RenderResult {
     )
   }
 
-  // The hub (01c §4.6): every mission, report, note and skill of the folder, then the not-copied count.
+  // The hub (01c §4.6): every mission, report, note and skill of the folder, then the not-copied counts per class.
+  const notCopied = CLASS_ORDER.reduce((sum, key) => sum + byClass[key], 0)
   const firstLine = (text: string) => escapeText(text.split(/\r?\n/)[0]!)
   const byId = <T extends { note: Note }>(list: readonly T[]) => [...list].sort((a, b) => (a.note.id < b.note.id ? -1 : 1))
   const noteLines = byId([...plain, ...rollups]).map((entry) => `- ${link(entry.note)} ${firstLine(entry.item.text)}`)
@@ -782,11 +836,13 @@ export function render(input: RenderInput): RenderResult {
     ...section(L.reports, missionList.flatMap((m) => (m.report ? [m.report.note] : []))),
     ...(noteLines.length ? ["", L.notes, ...noteLines] : []),
     ...section(L.skills, byId(skills).map((s) => s.note)),
-    ...(notCopied ? ["", L.notCopied(notCopied)] : []),
+    ...(notCopied ? ["", L.notCopied(notCopied, byClass)] : []),
+    // The export hint only when a device-only note could be copied by the person (01d §3.6).
+    ...(byClass.device ? ["", L.exportHint] : []),
   ])
 
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-  return { files, notCopied, unsafe }
+  return { files, notCopied, unsafe: byClass.unsafe, notCopiedByClass: { ...byClass } }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

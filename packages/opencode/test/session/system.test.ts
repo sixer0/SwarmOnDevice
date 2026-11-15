@@ -488,11 +488,12 @@ describe("session.system", () => {
       graft:
         "graft: use the graft MCP tools to find code, callers and blast radius before grep or reading files by hand.",
       rtk: "rtk: prefix commands with long output with `rtk` (for example `rtk bun test`, `rtk git log`).",
-      searxng: "web search: use the swarm-web `search` tool (local SearXNG) as the default web search.",
-      firecrawl: "crawl: use swarm-web `fetch` with mode=crawl (local Firecrawl); mode=page for a single page.",
-      // 1.2.8 row 41: N8-122 as corrected (R20-C26), the OBS-g vault rule.
+      // 1.2.10 row 60 (B10-01, N10-015): the real tool names.
+      searxng: "web search: use `swarm-web_search` (local SearXNG) as the default web search.",
+      firecrawl: "crawl: use `swarm-web_fetch` with mode=crawl (local Firecrawl); mode=page for a single page.",
+      // 1.2.8 row 41: N8-122 as corrected (R20-C26), the OBS-g vault rule. 1.2.10 row 60: N10-016 added after "never edit it."
       obsidian:
-        "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
+        "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. Notes kept on this device stay out of it; only the person exports one, never you, and never via the inbox. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
     } satisfies Record<InstalledTools.ComponentId, string>
 
     const stateFile = () => InstalledTools.stateFilePath()

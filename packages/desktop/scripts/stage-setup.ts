@@ -30,11 +30,36 @@ function fail(message: string): never {
   throw new StageFail(message)
 }
 
-async function compile(entry: string, outfile: string) {
-  const result =
-    await $`${process.execPath} build --compile ${`--target=${TARGET}`} --outfile ${outfile} ${join(SETUP, entry)}`
-      .cwd(SETUP)
-      .nothrow()
+/**
+ * C115 (N135-1, N135-2): a compiled bun binary reads `bunfig.toml` (and runs its `preload`) and `.env` from the folder it
+ * is started in, unless the build turns that off. opencode starts the proxy with the project folder as its working
+ * folder, so a project file could run code inside the proxy or set its environment. Both binaries are built with every
+ * runtime autoload off; tsconfig and package.json are off by default in bun 1.3 and are pinned off here too.
+ */
+const NO_RUNTIME_AUTOLOAD = [
+  "--no-compile-autoload-bunfig",
+  "--no-compile-autoload-dotenv",
+  "--no-compile-autoload-tsconfig",
+  "--no-compile-autoload-package-json",
+] as const
+
+/**
+ * The `bun` arguments of one compile, run with `packages/setup` as the working folder. stage-setup-autoload.test.ts
+ * compiles the proxy with exactly these arguments.
+ * @internal test seam
+ */
+export function compileArgs(entry: string, outfile: string, defines: string[] = []) {
+  return ["build", "--compile", `--target=${TARGET}`, ...NO_RUNTIME_AUTOLOAD, ...defines, "--outfile", outfile, join(SETUP, entry)]
+}
+
+/**
+ * The folder compileArgs runs in.
+ * @internal test seam
+ */
+export const SETUP_DIR = SETUP
+
+async function compile(entry: string, outfile: string, defines: string[] = []) {
+  const result = await $`${process.execPath} ${compileArgs(entry, outfile, defines)}`.cwd(SETUP).nothrow()
   if (result.exitCode !== 0) fail(`compile ${entry} exit ${result.exitCode}`)
 }
 
@@ -53,10 +78,23 @@ async function main() {
   const lockBytes = await readFile(lockPath)
   if (sha256(lockBytes) !== before) fail("genlock changed packages/setup/tools.lock.json; commit the setup lock first")
 
+  // The proxy reports `<SwarmRelease>+<commit10>` in its MCP initialize answer (SWARM_PROXY_BUILD, N13-372, AC-S6c),
+  // so a staged copy can be told apart from the bundled one. The value is a JSON string literal: an unquoted define
+  // would be parsed as code. Loaded here so check-setup-stage, which imports FILES, never loads the builder config.
+  const { SWARM_RELEASE } = await import("../electron-builder.config")
+  const head = await $`git rev-parse HEAD`.cwd(SETUP).quiet().nothrow()
+  const commit = head.stdout.toString().trim().slice(0, 10)
+  if (head.exitCode !== 0 || !/^[0-9a-f]{10}$/.test(commit)) fail("cannot read the commit for the proxy build id")
+  const build = `${SWARM_RELEASE}+${commit}`
+  if (!/^\d+\.\d+\.\d+\+[0-9a-f]{10}$/.test(build)) fail(`proxy build id "${build}" is not <release>+<commit10>`)
+
   const work = await mkdtemp(join(RESOURCES, ".swarm-setup-stage-"))
   try {
     await compile("src/index.ts", join(work, "swarm-setup"))
-    await compile("src/mcpproxy/main.ts", join(work, PROXY_BINARY_NAME))
+    await compile("src/mcpproxy/main.ts", join(work, PROXY_BINARY_NAME), [
+      "--define",
+      `SWARM_PROXY_BUILD=${JSON.stringify(build)}`,
+    ])
     await writeFile(join(work, "tools.lock.json"), lockBytes)
 
     const names = (await readdir(work)).sort()

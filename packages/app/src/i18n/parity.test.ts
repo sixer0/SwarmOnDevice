@@ -160,9 +160,10 @@ const pluralCategories = new Map(
 //   - 1.2.9 (row 24 of docs/2026-11-14_swarm_1_2_9_patch, AC-C04, N9-045): the tidy result becomes two plural forms
 //     (`session.mission.tidy.done.one`/`.other`, replacing `session.mission.tidy.done`) and the rehome approval refusal text
 //     `session.mission.move.error.approval` is added (EN and ID only): +2 +1 -1, ending at 329;
-//     1.2.9 row 79b (C112): the tidy approve button `session.mission.tidy.approve` becomes `.one`/`.other` (EN and ID only), +2 -1, ending at 330.
+//     1.2.9 row 79b (C112): the tidy approve button `session.mission.tidy.approve` becomes `.one`/`.other` (EN and ID only), +2 -1, ending at 330;
+//     1.2.10 (row 41 of docs/2026-11-15_swarm_1_2_10_patch, N10-100): +19 keys (the Obsidian outcome texts, the changed-step drift line, the memory vault copy/remove/confirm/rule/refusal texts, EN and ID only), ending at 349.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// three-hundred-and-thirty-first entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// three-hundred-and-fiftieth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -494,6 +495,25 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "session.mission.placement.otherFolder",
   "session.mission.placement.rootUnknown",
   "session.mission.placement.folderMissing",
+  "memory.obsidian.registered",
+  "memory.obsidian.closeObsidian",
+  "memory.obsidian.notRegistered",
+  "session.mission.line.driftChanged.one",
+  "session.mission.line.driftChanged.other",
+  "memory.vault.copy",
+  "memory.vault.remove",
+  "memory.vault.confirmText",
+  "memory.vault.confirmTextIndex",
+  "memory.vault.confirmCopy",
+  "memory.vault.confirmCancel",
+  "memory.vault.rule",
+  "memory.vault.reason.device",
+  "memory.vault.reason.secret",
+  "memory.vault.reason.classified",
+  "memory.vault.personOnly",
+  "memory.refused.classified",
+  "memory.refused.notDeviceOnly",
+  "memory.refused.archived",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

@@ -119,6 +119,7 @@ export function classifyConsented(input: Input, files: readonly string[], catego
 function classifyEdit(input: Input): Verdict {
   if (input.editClass === "skill_folder") return refused("skill_folder")
   if (input.editClass === "vault_mirror") return refused("vault_mirror")
+  if (input.editClass === "vault_inbox") return refused("vault_inbox")
   if (input.editClass === "secret") return classifyConsented(input, editTargets(input), "secret_file")
   if (input.editClass === "sensitive") return classifyConsented(input, editTargets(input), "sensitive_file")
   // Not the absence of `risk`: an edit nothing can undo carries no risk label either.
@@ -395,6 +396,23 @@ function writesVaultMirror(input: Input) {
   }
   if (input.permission !== "bash") return false
   return [...shellWriteNames(input), ...interpreterWriteNames(input)].some((file) => Reach.vaultMirror(file, instance))
+}
+
+/**
+ * 1.3.0 row 147 (AC-S6-INBOX, C95 S13-07, F8, N13-409): a write into the vault inbox `<vault>/inbox/**`, an edit's or the
+ * shell's, judged by the same names as `writesVaultMirror` (`shellWriteNames`, `interpreterWriteNames`). A read of the
+ * inbox is not a write name, so it stays as it was.
+ */
+function writesVaultInbox(input: Input) {
+  const instance = input.instance
+  if (input.permission === "edit")
+    return input.editClass === "vault_inbox" || editTargets(input).some((file) => Reach.vaultInbox(file, instance))
+  if (input.permission === "external_directory" && input.follows?.some((prompt) => prompt.permission === "edit")) {
+    const filepath = input.metadata.filepath
+    return typeof filepath === "string" && Reach.vaultInbox(filepath, instance)
+  }
+  if (input.permission !== "bash") return false
+  return [...shellWriteNames(input), ...interpreterWriteNames(input)].some((file) => Reach.vaultInbox(file, instance))
 }
 
 /**
@@ -1162,6 +1180,9 @@ export function classifyBase(input: Input, checkClass: CheckClass = CHECK_CLASS)
   // 1.2.8 row 40f (AC-SEC11, SR8-11): a write into the vault mirror folder is refused in every mode, before the state
   // folder rule, so the default vault under ~/.swarm gets its own category and the guard does not rest on that rule.
   if (!planFile && writesVaultMirror(input)) return refused("vault_mirror")
+  // 1.3.0 row 147 (AC-S6-INBOX, C95 S13-07): a write into the vault inbox likewise, in every mode and before the state
+  // folder rule, so a note reaches the inbox only through swarm-web_vault_inbox, which checks classification words.
+  if (!planFile && writesVaultInbox(input)) return refused("vault_inbox")
   if (!planFile && writesAppState(input)) return indirectStateWrite(input) ? held("app_state") : refused("app_state")
   // 1.2.8 row 40e (SK-e, S14-D2, N8-411): a write into a skill folder, an edit's or the shell's, is refused in every mode;
   // a consent item never opens it (`underConsent` keeps every X but `outside_write`). Reads stay as they are.

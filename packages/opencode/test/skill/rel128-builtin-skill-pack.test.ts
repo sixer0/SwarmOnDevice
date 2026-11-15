@@ -335,7 +335,7 @@ describe("obsidian-memory", () => {
     expect(text).toContain("`remember`")
     expect(BUILTIN_TOOLS.has("remember")).toBe(true)
     expect(read(SRC, "session", "system.ts")).toContain(
-      "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
+      "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. Notes kept on this device stay out of it; only the person exports one, never you, and never via the inbox. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
     )
   })
 })
@@ -491,7 +491,9 @@ describe("swarm-whats-new", () => {
     files: [],
     missionTypes: [],
   }
-  const VERSIONS = ["1.2.9", "1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
+  // 1.3.0 row 86 (N10-186, AC-REN-WN, INTENT): 1.3.0 is this build; 1.2.10 was never released and has no section.
+  // 1.3.1 row R1 (INTENT): the Obsidian hotfix brief is this build; 1.3.0 keeps its section.
+  const VERSIONS = ["1.3.1", "1.3.0", "1.2.9", "1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
 
   it.live("listed as a built-in with its description and English and Indonesian triggers", () =>
     provideTmpdirInstance(() =>

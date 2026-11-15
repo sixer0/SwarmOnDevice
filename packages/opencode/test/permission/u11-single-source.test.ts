@@ -194,7 +194,8 @@ describe("M4, M6: the register's names", () => {
     // (protected_read, checkpointed). 1.2.7 row 31 (F-4, N7-051, INTENT): one held X (own_api).
     // 1.2.8 row 40e (SK-e, N8-411, INTENT): one held X (skill_folder).
     // 1.2.8 row 40f (AC-SEC11, N8-441, INTENT): one held X (vault_mirror).
-    expect(PermissionV1.DeferredCategory.literals).toHaveLength(32)
+    // 1.3.0 row 147 (AC-S6-INBOX, N13-409, INTENT): one held X (vault_inbox).
+    expect(PermissionV1.DeferredCategory.literals).toHaveLength(33)
     expect(PermissionV1.AllowedCategory.literals).toHaveLength(10)
   })
 })

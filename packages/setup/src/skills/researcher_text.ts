@@ -295,7 +295,7 @@ function obsidianInboxSkill(inputs: ResearcherAssemblyInputs): string {
       "",
       "## What not to put in a note",
       "",
-      "No secrets, tokens, credentials or personal data - the inbox is a scratchpad the user may later sync or share, and the audit trail records note names rather than bodies anyway. Summaries plus URLs and fetch times, the same discipline a research answer uses.",
+      "No secrets, tokens, credentials or personal data - the inbox is a scratchpad the user may later sync or share, and the audit trail records note names rather than bodies anyway. Summaries plus URLs and fetch times, the same discipline a research answer uses. Never copy Swarm project-memory notes into the inbox: a note Swarm keeps on this device stays there unless the person exports it in Swarm's memory view.",
       "",
     ],
   )

@@ -142,6 +142,8 @@ import type {
   McpStatusResponses,
   MemoryAddErrors,
   MemoryAddResponses,
+  MemoryAllowVaultErrors,
+  MemoryAllowVaultResponses,
   MemoryGetErrors,
   MemoryGetResponses,
   MemoryRemoveErrors,
@@ -2975,7 +2977,7 @@ export class Skill extends HeyApiClient {
   /**
    * Approve a skill draft
    *
-   * Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).
+   * Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written. Send draftTime, the draft's time as listed; a different draft on disk, or a request without draftTime, is refused with 409 SKILL_CHANGED and nothing is written. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).
    */
   public draftApprove<ThrowOnError extends boolean = false>(
     parameters: {
@@ -2985,6 +2987,7 @@ export class Skill extends HeyApiClient {
       workspace?: string
       scope?: "global" | "project"
       acceptCommands?: boolean
+      draftTime?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2999,6 +3002,7 @@ export class Skill extends HeyApiClient {
             { in: "query", key: "workspace" },
             { in: "body", key: "scope" },
             { in: "body", key: "acceptCommands" },
+            { in: "body", key: "draftTime" },
           ],
         },
       ],
@@ -3567,6 +3571,7 @@ export class Memory extends HeyApiClient {
    */
   public update<ThrowOnError extends boolean = false>(
     parameters: {
+      "x-swarm-desktop-nonce"?: string
       id: string
       directory?: string
       workspace?: string
@@ -3580,6 +3585,7 @@ export class Memory extends HeyApiClient {
       [
         {
           args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
             { in: "path", key: "id" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
@@ -3591,6 +3597,47 @@ export class Memory extends HeyApiClient {
     )
     return (options?.client ?? this.client).patch<MemoryUpdateResponses, MemoryUpdateErrors, ThrowOnError>({
       url: "/memory/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Allow or stop a note in the vault
+   *
+   * Person only (Swarm desktop app): allow a device-only note into the Obsidian vault copy, or remove it. Never changes which models may receive the note.
+   */
+  public allowVault<ThrowOnError extends boolean = false>(
+    parameters: {
+      "x-swarm-desktop-nonce"?: string
+      id: string
+      directory?: string
+      workspace?: string
+      allowed?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "allowed" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<MemoryAllowVaultResponses, MemoryAllowVaultErrors, ThrowOnError>({
+      url: "/memory/{id}/vault",
       ...options,
       ...params,
       headers: {

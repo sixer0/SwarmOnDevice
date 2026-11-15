@@ -82,6 +82,27 @@ describe("AC-B01b setup classification words stay equal to the mirror's", () => 
     }
   })
 
+  // 1.3.0 row 134 (AC-S6b, F7, N13-418): opencode's vault inbox check slugs the name with its own copy of slugify; it
+  // must give the setup copy's slug on every case here, or a slug-only hit would pass one check and not the other.
+  test("N13-418: SessionTools.slugify equals setup slugify on the corpus and the slug cases", async () => {
+    const setup = (await load()) as SetupClassified & { readonly slugify: (name: string) => string }
+    const { SessionTools } = await import("../../src/session/tools")
+    const cases = [
+      ...MATCHED_CORPUS,
+      ...UNMATCHED_CORPUS,
+      ...S9_10_NOT_MATCHED,
+      "TERBATAS_note",
+      "  --Rahasia__Plan--  ",
+      "x".repeat(60),
+      "a-b".repeat(20),
+      "Mission m-syn129: report (draft) 2026-11-14",
+      "---",
+      "Ünïcode naïve",
+    ]
+    for (const name of cases)
+      expect({ name, slug: SessionTools.slugify(name) }).toEqual({ name, slug: setup.slugify(name) })
+  })
+
   test("the result is the list entry in capitals, never the matched text", async () => {
     const setup = await load()
     expect(setup.classificationWord("ini rahasia")).toBe("RAHASIA")

@@ -44,6 +44,15 @@ describe("row 100 G-03: mission-control names the fixed behaviour", () => {
     expect(flat).toContain("Notes are never held back by dependencies")
   })
 
+  // 1.2.10 row 49a (N10-057, INTENT of 1.2.6 row 100: the skill names derived.drift; it now also names row changes).
+  test("1.2.10 N10-057: the derived.drift line names row changes in place, file stays 118 lines", () => {
+    const line = TEXT.split("\n").find((l) => l.includes("derived.drift"))
+    expect(line).toBe(
+      "Rows added or dropped after approval, and changes to a row's deps, agent, phase, kind, size, model tier, output or verification, show in studio_mission_get as derived.drift, each with its decision id. docs/<mission>/09_decisions/decisions.md is an export of that register (studio_mission_export), never a second place to write decisions.",
+    )
+    expect(TEXT.replace(/\n$/, "").split("\n").length).toBe(118)
+  })
+
   test("autonomous self-approval quotes the top-level autonomous field", () => {
     const rec = calls().find((c) => c.tool === "studio_mission_record_decision" && c.args.autonomous === true)
     expect(rec?.args.decision).toMatchObject({ by: "controller" })

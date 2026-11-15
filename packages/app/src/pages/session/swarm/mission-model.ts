@@ -99,6 +99,11 @@ export type MissionDerivedWire = {
     count: number
     rows: Array<{ row: string; timeCreated: string; decision: string | null }>
     dropped: Array<{ row: string; timeDropped: string; decision: string | null }>
+    /**
+     * 1.2.10 row 50 (AC-P3c; host row 49): one entry per row change after approval (field names, never shown values);
+     * absent from an older host. The app reads only `row`; `changes` values are never rendered (S10-31).
+     */
+    changed?: Array<{ row: string; timeChanged: string; decision: string | null; fields: string[]; changes?: unknown[] }>
   }
 }
 
@@ -220,8 +225,11 @@ export type MissionVM = {
   finalCount: number
   /** Row 197 (S194-03): true when the agent approved its own mission in Swarm's autonomous mode (host derived.approval). */
   selfApproved: boolean
-  /** Row 88 (MC-09): added/dropped row counts after approval, taken as the host sent them (absent = no drift known). */
-  drift?: { count: number; dropped: number }
+  /**
+   * Row 88 (MC-09): added/dropped row counts after approval, taken as the host sent them (absent = no drift known).
+   * 1.2.10 row 50 (AC-P3c): `changed` = distinct rows changed after approval (0 from an older host).
+   */
+  drift?: { count: number; dropped: number; changed: number }
 }
 
 // ── Tables (§5.3, §5.4)
@@ -611,7 +619,11 @@ export function buildMission(
     finalCount: deliverables.filter((d) => d.status === "final").length,
     // Taken as sent; the host's DB CHECK keeps autonomous to by: controller.
     selfApproved: derived.approval?.autonomous === true && mission.status !== "draft",
-    drift: { count: derived.drift?.count ?? 0, dropped: derived.drift?.dropped.length ?? 0 },
+    drift: {
+      count: derived.drift?.count ?? 0,
+      dropped: derived.drift?.dropped.length ?? 0,
+      changed: new Set((derived.drift?.changed ?? []).map((entry) => entry.row)).size,
+    },
   }
 }
 
@@ -644,9 +656,15 @@ export function missionStatusLine(model: Pick<MissionVM, "status" | "openDecisio
  * Row 88 (1.2.6 MC-09, keep-UI-simple): the one drift line next to the status line, only when steps were added after
  * approval (host `derived.drift.count`, which counts added rows only). Dropped rows ride along on the same line as a data
  * attribute; they never show a line on their own. null = no line.
+ * 1.2.10 row 50 (AC-P3c): steps changed after approval (distinct rows) also show the same line, alone or after the added
+ * sentence; dropped-only still shows none.
  */
-export function missionDriftLine(model: Pick<MissionVM, "drift">): { count: number; dropped: number } | null {
+export function missionDriftLine(
+  model: Pick<MissionVM, "drift">,
+): { count: number; dropped: number; changed: number } | null {
   const drift = model.drift
-  if (!drift || drift.count <= 0) return null
-  return { count: drift.count, dropped: drift.dropped }
+  if (!drift) return null
+  const changed = drift.changed ?? 0
+  if (drift.count <= 0 && changed <= 0) return null
+  return { count: drift.count, dropped: drift.dropped, changed }
 }

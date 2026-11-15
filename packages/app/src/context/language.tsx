@@ -37,6 +37,8 @@ type PluralKey =
   | "session.mission.tidy.done"
   // 1.2.9 row 79b (C112): the tidy approve button, "Approve and move 1 mission" / "2 missions".
   | "session.mission.tidy.approve"
+  // 1.2.10 row 41 (N10-099): the mission-panel drift line, "1 step changed" / "2 steps changed" after approval.
+  | "session.mission.line.driftChanged"
 type Source = { dict: Record<string, string> }
 
 function cookie(locale: Locale) {

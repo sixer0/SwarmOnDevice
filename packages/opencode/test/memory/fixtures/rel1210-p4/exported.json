@@ -1,0 +1,70 @@
+{
+  "comment": "Synthetic store N10-230 (1.2.10 row 40). Device-only notes with vaultAllowed true (p4e-001 user note, p4e-002 agent note with body and refs, p4e-003 mission index entry), one device-only index entry not exported (p4e-004), one device-only note not exported (p4e-005) and one any-model note (p4e-006). p4e-003 vaultReportSha256 is the sha256 of the bytes of ../rel128-obs-c/report.md: a test copies that file to <projectRoot>/docs/2026-10-02_quandel-review/report/report.md for the unchanged-report case and changes a byte for the changed-report case.",
+  "key": "dir-p4e0a1b2c3d4e5f6a7b8c9d0",
+  "folder": "syn-project-p4e0a1",
+  "projectName": "Syn Project P4",
+  "version": 2,
+  "enabled": true,
+  "items": [
+    {
+      "id": "p4e-001",
+      "text": "Plimbo reviews always start from the zorvex list.",
+      "source": "user",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1763400000000
+    },
+    {
+      "id": "p4e-002",
+      "text": "Nimbard grids are checked twice before the vestrel run.",
+      "source": "agent",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1763400100000,
+      "sessionID": "ses_p4e1",
+      "body": "The second check uses the quandel order.",
+      "refs": [{ "path": "docs/2026-10-02_quandel-review/02_data/nimbard.md", "line": 7 }]
+    },
+    {
+      "id": "p4e-003",
+      "kind": "index",
+      "missionId": "2026-10-02_quandel-review",
+      "text": "2026-10-02 2026-10-02_quandel-review | quandel review closed | triggers: quandel, nimbard | docs/2026-10-02_quandel-review/report/report.md",
+      "source": "agent",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "vaultReportSha256": "74896305bbca2c79d22b2cfbf8a49072822eff2500b747a543e5e1a5efce881f",
+      "time": 1763400200000,
+      "sessionID": "ses_p4e1",
+      "body": "Quandel review closed with the nimbard grid.",
+      "refs": [{ "path": "docs/2026-10-02_quandel-review/report/report.md" }]
+    },
+    {
+      "id": "p4e-004",
+      "kind": "index",
+      "missionId": "2026-10-05_vestrel-audit",
+      "text": "2026-10-05 2026-10-05_vestrel-audit | vestrel audit closed | triggers: vestrel, zorvex | docs/2026-10-05_vestrel-audit/report/report.md",
+      "source": "agent",
+      "deviceOnly": true,
+      "time": 1763400300000,
+      "sessionID": "ses_p4e2",
+      "refs": [{ "path": "docs/2026-10-05_vestrel-audit/report/report.md" }]
+    },
+    {
+      "id": "p4e-005",
+      "text": "Zorvex audit notes stay with the vestrel folder.",
+      "source": "agent",
+      "deviceOnly": true,
+      "time": 1763400400000,
+      "sessionID": "ses_p4e2"
+    },
+    {
+      "id": "p4e-006",
+      "text": "Quandel lists are sorted by date.",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1763400500000,
+      "sessionID": "ses_p4e2"
+    }
+  ]
+}

@@ -354,10 +354,11 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
    * is not attested (Mission Control key on this request, S9-01). Refused before any write, dry runs too. The detail and
    * the warn line are path-free and carry no session id and no decision or message text.
    */
-  function refuseUnattested(name: string, s: HostToolSession, mission: string, request?: string): void {
+  function refuseUnattested(name: string, s: HostToolSession, mission: string, request?: string, message?: string): void {
     if (s.attested === true) return
     opts.log("warn", `datum-studio-host.mission.${name}`, "SESSION_NOT_ATTESTED", { mission, agent: s.agentId })
-    throw new MissionToolError("SESSION_NOT_ATTESTED", "only the person answers as the person, from Mission Control in the Swarm app (this request is not attested)", { mission, ...(request !== undefined ? { request } : {}), agent: s.agentId })
+    // 1.2.10 row 73 (B10-11, N10-006, N10-007): `message` is the owner-message wording; every other caller keeps the 1.2.9 text.
+    throw new MissionToolError("SESSION_NOT_ATTESTED", message ?? "only the person answers as the person, from Mission Control in the Swarm app (this request is not attested)", { mission, ...(request !== undefined ? { request } : {}), agent: s.agentId })
   }
 
   return [
@@ -419,10 +420,12 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           `  progress ${d.progress.done}/${d.progress.total} rows done; ready: ${d.ready.join(", ") || "-"}`,
           ...d.phases.map((p) => `  ${p.order}. ${p.id}: ${p.rows.join(", ") || "-"}`),
           // 1.2.6 row 87 (MC-09): one drift line, only when rows were added or dropped after approval.
-          ...(d.drift.count > 0 || d.drift.dropped.length > 0
+          // 1.2.10 row 49 (P3, N10-054): also when a row's approved fields changed; names only, never values.
+          ...(d.drift.count > 0 || d.drift.dropped.length > 0 || d.drift.changed.length > 0
             ? [
                 `  drift: ${d.drift.count} row${d.drift.count === 1 ? "" : "s"} added after approval (${d.drift.rows.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ") || "-"})` +
-                  (d.drift.dropped.length > 0 ? `; dropped: ${d.drift.dropped.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ")}` : ""),
+                  (d.drift.dropped.length > 0 ? `; dropped: ${d.drift.dropped.map((r) => `${r.row} by ${r.decision ?? "-"}`).join(", ")}` : "") +
+                  (d.drift.changed.length > 0 ? `; changed: ${d.drift.changed.map((c) => `${c.row} by ${c.decision ?? "-"} (${c.fields.join(", ")})`).join(", ")}` : ""),
               ]
             : []),
           // 1.2.8 row 31 (H-N14, N8-204): detail: true lists every row with its reports.
@@ -523,7 +526,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const o = writeOptions(a, s)
         const patches = (Array.isArray(a.rows) ? a.rows : []) as Array<RowPatch & { checkpoint?: { n: number; m: number; label?: string } }>
         const messages = (Array.isArray(a.messages) ? a.messages : []) as NewMissionMessage[]
-        if (messages.some((m) => m.from === "owner")) refuseUnattested("studio_mission_update_row", s, mission)
+        if (messages.some((m) => m.from === "owner")) refuseUnattested("studio_mission_update_row", s, mission, undefined, "only the person writes an owner message, from Mission Control in the Swarm app (this request is not attested)")
         const r = await write(dry(a), (tx) => {
           let out: RowPatchJobResult = { changed: [], results: [], waves: [], ready: [] }
           const stripped = patches.map(({ checkpoint: _c, ...p }) => p)

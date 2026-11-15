@@ -9,6 +9,9 @@ const make = (directory: string) => ({
   worktree: {
     create: async () => ({ data: { directory: `${directory}/worktree-1` } }),
   },
+  memory: {
+    get: async () => ({ data: { enabled: true, items: [] } }),
+  },
 })
 
 const root = "/tmp/story"
@@ -17,6 +20,7 @@ const sdk = {
   scope: "story-server",
   url: "http://localhost:4096",
   client: make(root),
+  event: { on: () => () => {} },
   createClient(input: { directory: string }) {
     return make(input.directory)
   },

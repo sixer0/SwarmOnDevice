@@ -196,7 +196,7 @@ export const DIAGRAM_FLOW_SKILL_TRIGGERS: Triggers = {
 const SWARM_WHATS_NEW_SKILL_NAME = "swarm-whats-new"
 /** @internal test seam */
 export const SWARM_WHATS_NEW_SKILL_DESCRIPTION =
-  "What is new in Swarm for agents, per release from 1.2.0 to this build (1.2.9): what you can now do, what you must do differently (rules, refusals, approvals), which tools and skills exist, and known limits. Load it when asked what changed, what Swarm or an agent can do now, for the changelog, or to save release notes to memory."
+  "What is new in Swarm for agents, per release from 1.2.0 to this build (1.3.1): what you can now do, what you must do differently (rules, refusals, approvals), which tools and skills exist, and known limits. Load it when asked what changed, what Swarm or an agent can do now, for the changelog, or to save release notes to memory."
 const SWARM_WHATS_NEW_SKILL_CONTENT: string = SWARM_WHATS_NEW_SKILL_BODY
 /** Keywords in English and Indonesian that suggest the swarm-whats-new built-in (01b section 3.1 limits: 10 entries). */
 const SWARM_WHATS_NEW_SKILL_TRIGGERS: Triggers = {

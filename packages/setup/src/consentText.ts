@@ -272,8 +272,10 @@ const SINGLE: Record<Exclude<ComponentId, "runtime">, readonly ConsentBlock[]> =
       ],
       pathsWritten: [
         "/Applications/Obsidian.app — ONLY if absent (P-16 whitelist)",
-        "the new vault at PC-PATH-13 with its inbox/ folder at PC-PATH-12, plus a .obsidian/ settings dir inside that vault",
-        "Swarm install records under ~/.swarm/tools/obsidian/; Obsidian's own global state under ~/Library/Application Support/obsidian/ (created by the app on first launch, outside P-16 — F-3/D-08)",
+        "the new vault at PC-PATH-13 with its inbox/ folder at PC-PATH-12 (Obsidian itself creates a .obsidian/ settings folder inside it the first time it opens the vault; Swarm writes none)",
+        "Swarm install records under ~/.swarm/tools/obsidian/; Obsidian's own global state under ~/Library/Application Support/obsidian/ belongs to Obsidian. " +
+          "The Swarm app adds exactly one entry (folder path and time) for this vault to Obsidian's vault list (obsidian.json) when the person presses Open graph in Obsidian while Obsidian is closed, " +
+          "creating that list and its folder first if Obsidian has not made them yet, keeps a one-time copy of an existing list beside it (obsidian.json.swarm-backup), and changes nothing else there",
         "An existing personal vault is never pointed at or modified (C7-3).",
       ],
       uninstallPath: [

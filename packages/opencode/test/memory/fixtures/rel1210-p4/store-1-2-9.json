@@ -1,0 +1,57 @@
+{
+  "version": 2,
+  "enabled": true,
+  "items": [
+    {
+      "id": "p49-001",
+      "text": "Nimbard notes are kept on this device.",
+      "source": "user",
+      "deviceOnly": true,
+      "time": 1763500000000
+    },
+    {
+      "id": "p49-002",
+      "text": "Zorvex runs need the plimbo flag.",
+      "source": "learned",
+      "deviceOnly": false,
+      "time": 1763500100000,
+      "sessionID": "ses_p491",
+      "failed": "zorvex run",
+      "worked": "zorvex run --plimbo",
+      "untrusted": true,
+      "refs": [{ "symbol": "Zorvex.run", "path": "src/zorvex.ts" }]
+    },
+    {
+      "id": "p49-003",
+      "kind": "index",
+      "missionId": "2026-10-08_plimbo-check",
+      "text": "2026-10-08 2026-10-08_plimbo-check | plimbo check closed | triggers: plimbo, vestrel | docs/2026-10-08_plimbo-check/report/report.md",
+      "source": "agent",
+      "deviceOnly": true,
+      "time": 1763500200000,
+      "sessionID": "ses_p491",
+      "body": "Plimbo check closed with two vestrel fixes.",
+      "refs": [{ "path": "docs/2026-10-08_plimbo-check/report/report.md" }]
+    },
+    {
+      "id": "p49-r01",
+      "kind": "index_rollup",
+      "text": "2026-Q3 roll-up | 1 missions | triggers: quandel, nimbard | body",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1763500300000,
+      "body": "[p49-m01] 2026-07-20 2026-07-20_quandel-sort | quandel sort closed | triggers: quandel, nimbard | docs/2026-07-20_quandel-sort/report/report.md"
+    },
+    {
+      "id": "p49-m01",
+      "kind": "index",
+      "missionId": "2026-07-20_quandel-sort",
+      "rolledInto": "p49-r01",
+      "text": "2026-07-20 2026-07-20_quandel-sort | quandel sort closed | triggers: quandel, nimbard | docs/2026-07-20_quandel-sort/report/report.md",
+      "source": "agent",
+      "deviceOnly": false,
+      "time": 1762500000000
+    }
+  ],
+  "consolidated": { "count": 5, "time": 1763500400000 }
+}

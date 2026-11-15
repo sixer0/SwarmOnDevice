@@ -267,16 +267,23 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
           </Show>
 
           {/* Row 88 (1.2.6 MC-09): one drift line, not a panel, when steps were added after approval. Dropped rows only
-              ride along as a data attribute (no wording of their own). */}
+              ride along as a data attribute (no wording of their own). 1.2.10 row 50 (AC-P3c): the same line also says
+              how many steps were changed after approval (names stay in the host data; no value is ever shown, S10-31). */}
           <Show when={state.mission && missionDriftLine(state.mission)}>
             {(drift) => (
               <p
                 data-mission-drift-line={drift().count}
                 data-mission-drift-dropped={drift().dropped > 0 ? drift().dropped : undefined}
+                data-mission-drift-changed={drift().changed > 0 ? drift().changed : undefined}
                 role="status"
                 class={`shrink-0 text-12-regular ${FAINT}`}
               >
-                {t("session.mission.line.drift", { count: drift().count })}
+                {[
+                  drift().count > 0 ? t("session.mission.line.drift", { count: drift().count }) : "",
+                  drift().changed > 0 ? language.plural("session.mission.line.driftChanged", drift().changed) : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               </p>
             )}
           </Show>

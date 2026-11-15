@@ -61,9 +61,18 @@ const NEXT: Record<string, string> = {
  */
 const PERSON_ONLY =
   "only the person answers as the person, in Mission Control in the Swarm app: ask with studio_mission_request_decision and wait for the answer; only when Swarm's autonomous mode is on may you record your own C<n> decision (by: controller, autonomous: true)"
+/**
+ * 1.2.10 row 74 (B10-11, N10-008): an owner message (messages[].from: "owner") from an unattested session. The hint
+ * tells the agent to send as agent or controller and to ask the person; it names no way to write as the owner.
+ */
+const OWNER_ONLY =
+  "owner messages come only from the person, in Mission Control in the Swarm app: send yours as from: agent or from: controller, and ask the person with studio_mission_request_decision when you need an answer"
 const NEXT_BY_TOOL: Record<string, string> = {
   "studio_mission_answer_decision:SESSION_NOT_ATTESTED": PERSON_ONLY,
   "studio_mission_record_decision:SESSION_NOT_ATTESTED": PERSON_ONLY,
+  // 1.2.10 row 74 (N10-009): create keeps PERSON_ONLY (a by: user decision); update_row is the owner-message refusal.
+  "studio_mission_create:SESSION_NOT_ATTESTED": PERSON_ONLY,
+  "studio_mission_update_row:SESSION_NOT_ATTESTED": OWNER_ONLY,
 }
 
 const FALLBACK = "read the mission with studio_mission_get and fix what rincian names, then retry the same call"

@@ -1,0 +1,59 @@
+{
+  "comment": "Synthetic store N10-233 (1.2.10 row 40), cases S-6 and S-7 (AND rule). Rule-4 group A: exact duplicate device-only user notes p4m-a1 (newest, the keeper, exported) and p4m-a2 (not exported) -> the keeper loses vaultAllowed. Rule-4 group B: p4m-b1 and p4m-b2 both exported -> the keeper keeps it. Rule-1/3 group C: device-only agent notes with the same hook, p4m-c1 (exported, no body) and p4m-c2 (not exported, with a body that flows into the keeper) -> the keeper loses vaultAllowed.",
+  "key": "dir-p4m0a1b2c3d4e5f6a7b8c9d0",
+  "folder": "syn-project-p4m0a1",
+  "projectName": "Syn Project P4",
+  "version": 2,
+  "enabled": true,
+  "items": [
+    {
+      "id": "p4m-a1",
+      "text": "Plimbo files keep the zorvex header.",
+      "source": "user",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1763700200000
+    },
+    {
+      "id": "p4m-a2",
+      "text": "Plimbo files keep the zorvex header.",
+      "source": "user",
+      "deviceOnly": true,
+      "time": 1763700100000
+    },
+    {
+      "id": "p4m-b1",
+      "text": "Vestrel lists end with the nimbard total.",
+      "source": "user",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1763700400000
+    },
+    {
+      "id": "p4m-b2",
+      "text": "Vestrel lists end with the nimbard total.",
+      "source": "user",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1763700300000
+    },
+    {
+      "id": "p4m-c1",
+      "text": "Quandel imports run before the zorvex sort.",
+      "source": "agent",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1763700600000,
+      "sessionID": "ses_p4m1"
+    },
+    {
+      "id": "p4m-c2",
+      "text": "Quandel imports run before the zorvex sort",
+      "source": "agent",
+      "deviceOnly": true,
+      "time": 1763700500000,
+      "sessionID": "ses_p4m2",
+      "body": "The zorvex sort needs the quandel ids first."
+    }
+  ]
+}
