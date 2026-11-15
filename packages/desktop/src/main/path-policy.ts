@@ -15,7 +15,7 @@ import { posix, win32 } from "node:path"
 export const PROTECTED_HOME_PLACES: readonly string[] = [
   ".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".netrc", ".git-credentials", ".password-store", ".pgpass",
   ".swarm-patch-key", ".config/gh", ".config/gcloud", ".config/op", ".local/share/keyrings", "Library/Keychains",
-  "Library/Cookies",
+  "Library/Cookies", ".swarm/setup",
 ]
 
 // U-2 (a) system folders (macOS and Linux), refused as the path or as an ancestor of it. `/etc` and `/var` also catch
