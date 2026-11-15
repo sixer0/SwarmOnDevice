@@ -139,6 +139,7 @@ export type FolderMissingDeps = {
 /**
  * 1.3.0 row 82 (AC-B1015, C20 D5): the longest Restore / Recreate waits for `deps.reload` before it opens anyway. A
  * reload that never settles no longer keeps the notice's open entry (and the project) waiting forever.
+ * @internal test seam
  */
 export const FOLDER_RELOAD_TIMEOUT_MS = 10_000
 
