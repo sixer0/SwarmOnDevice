@@ -15,7 +15,7 @@
  * Kunci `params` diselesaikan SATU resolver (`./params`, IP-25/D-87) sebelum tinggi dan
  * renderer: alias pendek sah -> kunci penuh (REPORT PARAM_ALIAS), lainnya PARAM_IGNORED.
  */
-import type { ResolvedTemplate, StudioChartV1, SvgResult } from "../../../contract";
+import type { LintIssue, ResolvedTemplate, StudioChartV1, SvgResult } from "../../../contract";
 import { figureFootMm } from "./apparatus";
 import { chartCanvas, finalizeChart } from "./canvas";
 import { type StudioChartInput, toStudioChart } from "./custom";
@@ -23,7 +23,7 @@ import { EMPTY_CHART_TEMPLATE, compositeHeightMm, renderComposite } from "./comp
 import { coreHeightMm, isCoreCode } from "./families";
 import { autoFitChart } from "./autofit";
 import { applyChartIntent, attachFullLabels, capacityAdvice } from "./intent";
-import { CHART_LINT_OPTIONS, lintChartGeometry } from "./geometry";
+import { CHART_LINT_OPTIONS, chartLinksAlongNodes, lintChartGeometry } from "./geometry";
 import { assertChartSpec, figureLabel, figureLimits, mergeReports } from "./guards";
 import { referenceHeightMm } from "./heights";
 import { chartRendererFor, drawnChartDef } from "./lookup";
@@ -86,6 +86,20 @@ function assertNotCrowded(spec: StudioChartV1, svg: string, limits: { maxHeightM
       suggestion: parts.join("; "),
     },
   );
+}
+
+/**
+ * Swarm 1.2.10 row 65b (AC-B1002b, N10-013): one REPORT `LINK_ALONG_NODE` issue per connector run along a node
+ * outline (`chartLinksAlongNodes`, N10-108) of the SVG that is returned. Report only: never a defect, never in the lint
+ * `score`, so it cannot start auto-fit or move a byte. Read on the score-0 return and after `autoFitChart` (appended
+ * after its `extra`); an empty list leaves the report exactly as before (no empty `checksRun` entry).
+ */
+function linkAlongNodeIssues(svg: string): LintIssue[] {
+  return chartLinksAlongNodes(svg).map((e) => ({
+    checkId: "LINK_ALONG_NODE",
+    status: "REPORT" as const,
+    detail: `garis menyusuri tepi kotak ${e.node} sepanjang ${e.mm.toFixed(2)} mm (hanya dilaporkan, bukan cacat)`,
+  }));
 }
 
 /** Rasio tinggi bawaan keluarga tanpa `heightMm` (mm per mm lebar). */
@@ -156,7 +170,13 @@ function renderPreset(input: StudioChartV1, tpl: ResolvedTemplate, noAutoOrient 
   // FIG-02a: render bersih (lint geometri tanpa cacat) dikembalikan apa adanya (byte-identik);
   // tata letak otomatis hanya bila cacat terdeteksi.
   const geo = lintChartGeometry(first.res.svg, CHART_LINT_OPTIONS);
-  if (geo.score === 0) return finalizeChart(first.res, first.spec, tpl);
+  if (geo.score === 0) {
+    const fin = finalizeChart(first.res, first.spec, tpl);
+    // Swarm 1.2.10 row 65b (AC-B1002b, N10-013): a connector running along a node outline is REPORT only; an empty
+    // list returns the BASE object unchanged (no empty checksRun entry), so a chart without a run keeps its bytes.
+    const along = linkAlongNodeIssues(first.res.svg);
+    return along.length ? { ...fin, report: mergeReports(fin.report, { checksRun: ["LINK_ALONG_NODE"], issues: along }) } : fin;
+  }
   const fitted = autoFitChart(input, first.res, geo, {
     render: (s, h) => renderOnce(s, h),
     estimate: (s) => estimateHeightMm(resolveChartParams(s, drawnChartDef(s.kind).code).spec),
@@ -167,5 +187,8 @@ function renderPreset(input: StudioChartV1, tpl: ResolvedTemplate, noAutoOrient 
   // canvas -> refuse FIGURE_OVER_CAPACITY instead of returning the squeezed render.
   assertNotCrowded(input, fitted.res.svg, limits);
   const fin = finalizeChart(fitted.res, fitted.spec === input ? first.spec : resolveChartParams(fitted.spec, drawnChartDef(fitted.spec.kind).code).spec, tpl);
-  return { ...fin, report: mergeReports(fin.report, { checksRun: [...new Set(fitted.extra.map((i) => i.checkId))], issues: fitted.extra }) };
+  // Row 65b (AC-B1002b): runs of the returned render (first or best candidate) follow the auto-fit issues.
+  const along = linkAlongNodeIssues(fitted.res.svg);
+  const extra = along.length ? [...fitted.extra, ...along] : fitted.extra;
+  return { ...fin, report: mergeReports(fin.report, { checksRun: [...new Set(extra.map((i) => i.checkId))], issues: extra }) };
 }

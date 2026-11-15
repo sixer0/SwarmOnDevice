@@ -125,7 +125,7 @@
   "patched": 168,
   "replaced": 12,
   "added": 32,
-  "bytes": 10302532
+  "bytes": 10303951
  },
  "files": [
   {
@@ -1614,10 +1614,11 @@
   {
    "path": "src/lib/studio/engine/chart/core/geometry.ts",
    "status": "patched",
-   "bytes": 30292,
+   "bytes": 30269,
    "source_sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8",
-   "sha256": "3567db2098c156f78e9248f0cb86e69d8c0dd399998def5eed246ee7c2eaf632",
-   "patch_row1210-65a": {"id": "1210-65a-b1002-chart-link-along", "row": "65a", "decision": "1.2.10 AC-B1002a (spec 01f AT-B1002a; register N10-108, N10-109; C11, C19 D-2, C24)", "summary": "NEW exported chartLinksAlongNodes (report data only, marked @internal test seam until row 65b adds its readers): chart connectors running along a straight data-node outline, own start/end nodes included; thresholds imported from diagram/fit/lint.ts (EDGE_ALONG_MIN_MM, EDGE_ALONG_TOL_MM). Additions only: lintChartGeometry, GeometryDefect and scanSvgGeometry unchanged; every chart parity render and lint result byte-identical", "diff_base": "sha256 before this row", "before_sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8", "after_sha256": "3567db2098c156f78e9248f0cb86e69d8c0dd399998def5eed246ee7c2eaf632", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/65a_row65a_diffs/engine_chart_core_geometry.ts.diff", "diff_sha256": "8e8bd43fba06b8ac53d5d32a5cae26456b52db339e73bdba4e6890dda114f14e"}
+   "sha256": "34f80d6999762ccb77030ab62685bc4c0fceef298acb5284c9f431ee421929c8",
+   "patch_row1210-65a": {"id": "1210-65a-b1002-chart-link-along", "row": "65a", "decision": "1.2.10 AC-B1002a (spec 01f AT-B1002a; register N10-108, N10-109; C11, C19 D-2, C24)", "summary": "NEW exported chartLinksAlongNodes (report data only, marked @internal test seam until row 65b adds its readers): chart connectors running along a straight data-node outline, own start/end nodes included; thresholds imported from diagram/fit/lint.ts (EDGE_ALONG_MIN_MM, EDGE_ALONG_TOL_MM). Additions only: lintChartGeometry, GeometryDefect and scanSvgGeometry unchanged; every chart parity render and lint result byte-identical", "diff_base": "sha256 before this row", "before_sha256": "ef8b0f987e71f3e6b69a43fd9145200547a4643d4f2e568ac36b731b0d49f8e8", "after_sha256": "3567db2098c156f78e9248f0cb86e69d8c0dd399998def5eed246ee7c2eaf632", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/65a_row65a_diffs/engine_chart_core_geometry.ts.diff", "diff_sha256": "8e8bd43fba06b8ac53d5d32a5cae26456b52db339e73bdba4e6890dda114f14e"},
+   "patch_row1210-65b": {"id": "1210-65b-b1002-chart-link-report", "row": "65b", "decision": "1.2.10 AC-B1002b (spec 01f AT-B1002b; register N10-013, N10-108; C24, C43)", "summary": "chartLinksAlongNodes now has production readers (chart/core/render.ts, host verify/static-checks.ts): the ' * @internal test seam' doc line is removed (-23 B); no code change", "diff_base": "sha256 before this row", "before_sha256": "3567db2098c156f78e9248f0cb86e69d8c0dd399998def5eed246ee7c2eaf632", "after_sha256": "34f80d6999762ccb77030ab62685bc4c0fceef298acb5284c9f431ee421929c8", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/65b_row65b_diffs/engine_chart_core_geometry.ts.diff", "diff_sha256": "938305ded9d188cd718b234227e42b59feea900247879b7eaeaa0adb58cf142c"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/guards.ts",
@@ -1708,9 +1709,9 @@
   {
    "path": "src/lib/studio/engine/chart/core/render.ts",
    "status": "patched",
-   "bytes": 10076,
+   "bytes": 11518,
    "source_sha256": "0cbae90e4cfe4dc2db0effc18b9c1f72fb8a6784dbac56f9647e66038d0d6c9b",
-   "sha256": "27b69d71df6f1a597994e10e8bbc567eac2d0ac261c548b4d04fbc687c6a9b11",
+   "sha256": "949ab7058b87a17cdec6c31ecb29be16ea85fba003a6cebf1a240ee9c4a3e630",
    "patch": {
     "id": "row158-chart-over-capacity",
     "row": 158,
@@ -1720,7 +1721,8 @@
     "after_sha256": "27b69d71df6f1a597994e10e8bbc567eac2d0ac261c548b4d04fbc687c6a9b11",
     "diff_file": "docs/2026-11-06_swarm_1_2_0_datum_installer/implementation/112_row158_diffs/engine__chart__core__render.ts.diff",
     "diff_sha256": "0e5b6799c0563b68180650bcce4c2022caa9e4d69fe7268aa21934317b85de31"
-   }
+   },
+   "patch_row1210-65b": {"id": "1210-65b-b1002-chart-link-report", "row": "65b", "decision": "1.2.10 AC-B1002b (spec 01f AT-B1002b; register N10-013, N10-108; C24, C43)", "summary": "renderPreset: one REPORT LINK_ALONG_NODE issue per chartLinksAlongNodes run of the returned SVG, on the score-0 return (mergeReports) and after autoFitChart (appended after its extra); detail 'garis menyusuri tepi kotak <node> sepanjang <mm> mm (hanya dilaporkan, bukan cacat)'. Empty list = previous object unchanged; no SVG byte moves (g04 pins; 45 other parity charts' reports byte-equal). autofit.ts unchanged (the fit-path issues are appended in render.ts)", "diff_base": "sha256 before this row", "before_sha256": "27b69d71df6f1a597994e10e8bbc567eac2d0ac261c548b4d04fbc687c6a9b11", "after_sha256": "949ab7058b87a17cdec6c31ecb29be16ea85fba003a6cebf1a240ee9c4a3e630", "diff": "docs/2026-11-15_swarm_1_2_10_patch/implementation/65b_row65b_diffs/engine_chart_core_render.ts.diff", "diff_sha256": "f2130ef3376df74fa90d662e88896d668fa92a8239e7142a98e45fc40017777a"}
   },
   {
    "path": "src/lib/studio/engine/chart/core/scale.ts",
@@ -6469,6 +6471,7 @@
   "1210-65a-b1002-chart-link-along",
   "1210-78-b1014-refusal-folder",
   "1210-79-b1014-downloaddir-figure",
-  "1210-79-b1014-downloaddir-verify"
+  "1210-79-b1014-downloaddir-verify",
+  "1210-65b-b1002-chart-link-report"
  ]
 }

@@ -88,6 +88,9 @@ export const PREVIEW_ISSUE_CLASS: Readonly<Record<string, "notice" | "defect">> 
   LABEL_HALO: "notice",
   // Swarm 1.2.8 row 55b (C12 OP-18-5, N8-481): sequence flow across pools is a warning, never a defect.
   POOL_FLOW_CROSSES: "notice",
+  // Swarm 1.2.10 row 65b (AC-B1002b, F-S1, N10-013): a chart connector running along a box is reported only; without
+  // this entry the unknown REPORT code would default to "defect" (g04's legacy layout is frozen and cannot be fixed).
+  LINK_ALONG_NODE: "notice",
   CAPTION_WRAP: "defect",
   CAPTION_TRUNCATED: "defect",
   LABEL_LEADER: "defect",

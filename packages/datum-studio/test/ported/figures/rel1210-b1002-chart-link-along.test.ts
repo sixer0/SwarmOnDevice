@@ -16,6 +16,8 @@ import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import * as chartMod from "../../../vendor/src/lib/studio/engine/chart/core"
 import * as geo from "../../../vendor/src/lib/studio/engine/chart/core/geometry"
+import * as preview from "../../../src/mcp-host/local-api/routes/figure-preview-figure"
+import { checkFigureFit } from "../../../src/mcp-host/verify/static-checks"
 
 type J = any
 const PARITY_CHART_DIR = path.join(import.meta.dir, "..", "_fixtures", "tests", "parity", "fixtures", "chart")
@@ -116,5 +118,74 @@ describe("AC-B1002a chart lint: connector along a node outline (N10-108), report
     expect(sha256(JSON.stringify(lints)), "lintChartGeometry results byte-equal to BASE").toBe(SWEEP_BASE_SHA)
     console.log(`chartLinksAlongNodes non-empty: ${JSON.stringify(withRuns)}`)
     if (hasFn) expect(withRuns).toEqual(["g04.json@datum", "g04.json@gallery"])
+  })
+})
+
+// Block AC-B1002b (row 65b; spec 01f AT-B1002b; register N10-013, N10-014; decisions C24 F-S1, C43).
+// The finding reaches three outputs, never as a defect: the chart render report (REPORT `LINK_ALONG_NODE`), the
+// preview class (`"notice"`) and FIGURE_FIT (`FIG_GEOMETRY` note, status unchanged). A chart without a run keeps its
+// report bytes (the empty list takes the BASE code path). Red at BASE a3e3c4c93a: (a) no LINK_ALONG_NODE line,
+// (b) the preview class is "defect", (c) no note; (d) is the BASE comparison data (green at BASE and HEAD).
+describe("AC-B1002b LINK_ALONG_NODE in the render report, the preview notices and the FIGURE_FIT notes", () => {
+  const detailId = (node: string, mm: number) => `garis menyusuri tepi kotak ${node} sepanjang ${mm.toFixed(2)} mm (hanya dilaporkan, bukan cacat)`
+  const detailEn = (node: string, mm: number) => `LINK_ALONG_NODE: chart connector runs along box ${node} for ${mm.toFixed(2)} mm (reported only, not a defect)`
+  const g04 = (): J => JSON.parse(readFileSync(path.join(PARITY_CHART_DIR, "g04.json"), "utf8"))
+  /**
+   * BASE captures (red step, scratch `capture.ts` in RB at a3e3c4c93a): sha256 of JSON.stringify(report) of g04 (equal in
+   * both styles), and of JSON.stringify({ "<file>@<style>": report }) over the 45 other chart parity fixtures x 2 styles.
+   */
+  const G04_REPORT_BASE_SHA = "c319b2cdbbaadfe9fd4931afa1e830b682ca6ddfb3e3c3b0d7a2305cbb7e9991"
+  const OTHERS_REPORT_BASE_SHA = "377b452d0d13f5c5764f010a3caea599fa41f85212e87000f8d6fda0b1a52b77"
+  /** FIGURE_FIT of g04 at BASE (both styles): PASS with no finding. */
+  const G04_FIT_BASE_STATUS = "PASS"
+
+  for (const style of ["datum", "gallery"]) {
+    test(`(a) g04 @${style}: one REPORT LINK_ALONG_NODE issue per run, the rest of the report and the SVG bytes as at BASE`, () => {
+      const r = (chartMod as J).renderChart({ ...g04(), style })
+      expect(sha256(r.svg), "g04 bytes frozen (C11)").toBe(G04_SHA[style])
+      const lines = r.report.issues.filter((i: J) => i.checkId === "LINK_ALONG_NODE")
+      expect(lines).toEqual(G04_ALONG.map((e) => ({ checkId: "LINK_ALONG_NODE", status: "REPORT", detail: detailId(e.node, e.mm) })))
+      expect(r.report.checksRun).toContain("LINK_ALONG_NODE")
+      const rest = {
+        ...r.report,
+        checksRun: r.report.checksRun.filter((c: string) => c !== "LINK_ALONG_NODE"),
+        issues: r.report.issues.filter((i: J) => i.checkId !== "LINK_ALONG_NODE"),
+      }
+      expect(sha256(JSON.stringify(rest)), "g04 report without the new lines equals BASE").toBe(G04_REPORT_BASE_SHA)
+    })
+  }
+
+  test("(b) previewIssueClass(LINK_ALONG_NODE, REPORT) is a notice, and the g04 preview lists both runs under notices", async () => {
+    expect(preview.previewIssueClass("LINK_ALONG_NODE", "REPORT")).toBe("notice")
+    for (const style of ["datum", "gallery"]) {
+      const p = await preview.renderResolved(
+        { block: { blockId: "b65", address: "6.9", type: "chart", content: {} } as never, type: "chart", spec: { ...g04(), style } as never },
+        { params: {} } as never,
+        { inline: true, withSvg: true, lang: "ID" },
+      )
+      expect(sha256(p.svg!), `preview g04 @${style} bytes equal the pin`).toBe(G04_SHA[style])
+      expect(p.notices.filter((i) => i.checkId === "LINK_ALONG_NODE").map((i) => i.detail)).toEqual(G04_ALONG.map((e) => detailId(e.node, e.mm)))
+      expect(p.defects.map((i) => i.checkId)).not.toContain("LINK_ALONG_NODE")
+    }
+  })
+
+  test("(c) FIGURE_FIT on g04: status as at BASE, one FIG_GEOMETRY note per run, never a FAIL", () => {
+    for (const style of ["datum", "gallery"]) {
+      const svg = render(g04(), style)
+      const fit = checkFigureFit({ format: "PNG", svg, figureKind: "chart", figureLabel: "Gambar 6.9" })
+      expect(fit.status).toBe(G04_FIT_BASE_STATUS)
+      expect(fit.findings).toEqual(G04_ALONG.map((e) => ({ code: "FIG_GEOMETRY", page: null, address: null, label: "Gambar 6.9", detail: detailEn(e.node, e.mm) })))
+    }
+  })
+
+  test("(d) every other chart parity fixture x 2 styles: render report JSON byte-equal to BASE", () => {
+    const files = readdirSync(PARITY_CHART_DIR).filter((n) => n.endsWith(".json") && n !== "g04.json").sort()
+    expect(files.length).toBe(45)
+    const reports: Record<string, unknown> = {}
+    for (const f of files) {
+      const chart = JSON.parse(readFileSync(path.join(PARITY_CHART_DIR, f), "utf8"))
+      for (const style of ["datum", "gallery"]) reports[`${f}@${style}`] = (chartMod as J).renderChart({ ...structuredClone(chart), style }).report
+    }
+    expect(sha256(JSON.stringify(reports)), "other charts' reports byte-equal to BASE").toBe(OTHERS_REPORT_BASE_SHA)
   })
 })

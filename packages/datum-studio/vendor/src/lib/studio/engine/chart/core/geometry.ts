@@ -488,7 +488,6 @@ function scanLinksAndNodes(svg: string): { links: AlongShape[]; nodes: AlongShap
  * overlaps the edge over at least `EDGE_ALONG_MIN_MM`. One entry per (link, node) with the summed overlap in mm
  * (rounded to 0.01), sorted by link index (numeric) then node id. Report data only: never part of
  * `GeometryLint.defects`, `counts` or `score` (a score above 0 would send the render into auto-fit and move bytes).
- * @internal test seam
  */
 export function chartLinksAlongNodes(svg: string): Array<{ link: string; node: string; mm: number }> {
   const { links, nodes } = scanLinksAndNodes(svg);
