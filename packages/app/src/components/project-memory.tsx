@@ -7,7 +7,7 @@ import { Icon as LegacyIcon } from "@opencode-ai/ui/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
 import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
-import type { MemoryItem, MemoryRef, MemoryRefusal, MemoryResult } from "@opencode-ai/sdk/v2/client"
+import type { MemoryItem, MemoryKeptReason, MemoryRef, MemoryRefusal, MemoryResult } from "@opencode-ai/sdk/v2/client"
 import { ProjectMemory } from "@opencode-ai/schema/project-memory"
 import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
@@ -31,6 +31,18 @@ const INDEX_LIMITS = ProjectMemory.INDEX_LIMITS
 type Item = MemoryItem & Pick<ProjectMemory.Item, "kind" | "missionId" | "rolledInto">
 
 const isIndex = (item: Item) => item.kind === "index" || item.kind === "index_rollup"
+
+/**
+ * 1.2.10 P4-b (01d §3.7): the label a note gets for why it stays out of the Obsidian vault copy. Typed against the
+ * server's reason list, so a new reason without a decision here fails the build. `unsafe` has no label.
+ */
+const VAULT_REASON: Record<MemoryKeptReason, `memory.vault.reason.${"device" | "secret" | "classified"}` | undefined> =
+  {
+    device: "memory.vault.reason.device",
+    secret: "memory.vault.reason.secret",
+    classified: "memory.vault.reason.classified",
+    unsafe: undefined,
+  }
 
 /** `YYYY-Qn roll-up | <n> missions | ...` or `YYYY roll-up part <p> | ...` (N8-010): period and mission count. */
 const ROLLUP_LINE = /^(\d{4}(?:-Q[1-4])?) roll-up(?: part \d+)? \| (\d+) missions \|/
@@ -175,6 +187,16 @@ export function DialogProjectMemory() {
 
   const client = () => memory.sdk().client.memory
 
+  // 1.2.10 P4-b (01d §3.7): which notes stay out of the vault copy and why, from the server's one exclusion rule
+  // (the app never re-implements it). Asked again whenever the list reloads (open, each save, `memory.updated`), and
+  // never with `language`: that parameter makes the next mirror run re-render its labels. A failed request shows no
+  // labels; the rule sentence stays.
+  const [vault] = createResource(
+    () => memory.current(),
+    async () => (await client().vault()).data?.kept,
+  )
+  const reason = (id: string) => (vault.error ? undefined : vault.latest)?.find((entry) => entry.id === id)?.reason
+
   // 1.2.8 OBS-f (01c §7.1, N8-114..N8-121): ask the server where the hub note is, then hand only that path to the
   // desktop, which checks it and opens Obsidian. No hub yet -> say so and never call the desktop.
   // Without a platform provider (the view's own render tests) there is simply no Obsidian action.
@@ -277,6 +299,7 @@ export function DialogProjectMemory() {
                     {(item) => (
                       <MemoryRow
                         item={item}
+                        reason={reason(item.id)}
                         members={
                           item.kind === "index_rollup"
                             ? groups().archived.filter((member) => member.rolledInto === item.id)
@@ -298,11 +321,14 @@ export function DialogProjectMemory() {
                 </Show>
               </section>
             </Show>
+            {/* 1.2.10 P4-b: the one rule sentence, at the top of the notes group; each row adds only its reason. */}
+            <p class="text-[12px] leading-[18px] text-v2-text-text-faint">{language.t("memory.vault.rule")}</p>
             <ul class="flex flex-col">
               <For each={groups().notes}>
                 {(item) => (
                   <MemoryRow
                     item={item}
+                    reason={reason(item.id)}
                     onDelete={() => save(() => client().remove({ id: item.id }))}
                     onText={(text) => save(() => client().update({ id: item.id, text }))}
                     onScope={() => save(() => client().update({ id: item.id, deviceOnly: !item.deviceOnly }))}
@@ -370,6 +396,8 @@ function MemoryDetail(props: { item: Item }) {
 
 function MemoryRow(props: {
   item: Item
+  /** Why the note stays out of the vault copy (1.2.10 P4-b), from the server's `kept` list; none when it is copied. */
+  reason?: MemoryKeptReason
   /** A roll-up's archived members (01e §7): listed read-only inside its detail, never editable. */
   members?: Item[]
   onDelete: () => void
@@ -455,6 +483,14 @@ function MemoryRow(props: {
           >
             {language.t(props.item.deviceOnly ? "memory.scope.device" : "memory.scope.any")}
           </button>
+          <Show when={props.reason && VAULT_REASON[props.reason]}>
+            {(key) => (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{language.t(key())}</span>
+              </>
+            )}
+          </Show>
         </div>
       </div>
       <div class="flex shrink-0 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
