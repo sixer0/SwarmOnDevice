@@ -76,20 +76,20 @@ describe("A09 register names, thresholds and the one shipped code", () => {
     expect(lint.EDGE_ALONG_MIN_MM).toBe(1.0)
     expect(lint.EDGE_ALONG_TOL_MM).toBe(0.1)
   })
-  test("exactly one of GEOM_EDGE_ALONG / EDGE_ALONG_NODE is the engine code, with the WHAT/SUGGEST texts N9-025", () => {
-    expect(shippedCodes().length).toBe(1)
+  test("the engine code is exactly GEOM_EDGE_ALONG (never EDGE_ALONG_NODE), with the WHAT/SUGGEST texts N9-025", () => {
+    expect(shippedCodes()).toEqual([GEOM])
     const g = lint.lintDiagramGeometry(svgOf(ALONG))
-    const issue = (fitMod.diagramGeometryIssues(g) as J[]).find((i) => i.checkId === shippedCodes()[0])
+    const issue = (fitMod.diagramGeometryIssues(g) as J[]).find((i) => i.checkId === GEOM)
     expect(issue?.status).toBe("REPORT")
     expect(issue?.detail).toContain("garis menyusuri tepi simpul lain")
     expect(issue?.suggest).toBe("geser simpul atau atur via agar garis tidak menempel di tepi simpul lain")
   })
-  test("the shipped code and the FIGURE_FIT fail set agree (C10(d)): GEOM_* -> defect and failing, else notice and not failing", () => {
-    const [code] = shippedCodes()
-    const failing = checks.DIAGRAM_FAIL_KINDS.has(KIND)
-    expect([code, failing]).toEqual(code === GEOM ? [GEOM, true] : [NOTICE, false])
-    expect(fig.previewIssueClass(code, "REPORT")).toBe(code === GEOM ? "defect" : "notice")
-    expect(fig.GEOM_T03_CODES).not.toContain(code) // the diagram guide list is not extended (budget 0 B)
+  test("the shipped code GEOM_EDGE_ALONG and the FIGURE_FIT fail set agree (C10(d)): defect class, failing, notice code not shipped", () => {
+    expect(shippedCodes()).toEqual([GEOM])
+    expect(checks.DIAGRAM_FAIL_KINDS.has(KIND)).toBe(true)
+    expect(fig.previewIssueClass(GEOM, "REPORT")).toBe("defect")
+    expect(fig.GEOM_T03_CODES).not.toContain(GEOM) // the diagram guide list is not extended (budget 0 B)
+    expect(fig.GEOM_T03_CODES).not.toContain(NOTICE)
   })
   test("a T-03 kind: counted, but outside the auto-fit score (no figure changes bytes)", () => {
     const g = lint.lintDiagramGeometry(svgOf(ALONG))
@@ -136,18 +136,10 @@ describe("A09 on the preview path: B1 and N9-152 at 128 and 166 mm, clean twin s
         const d = along(p.svg)
         expect(d.map((x) => [x.text, x.other])).toEqual([[`konektor ${c.link}`, c.node]])
         expect(d[0].amount).toBeCloseTo(c.mm, 1)
-        const [code] = shippedCodes()
         const ff = figureFit(p.svg)
-        if (code === GEOM) {
-          expect(p.defects).toContain(GEOM)
-          expect(ff.status).toBe("FAIL")
-          expect(ff.failKinds).toContain(KIND)
-        } else {
-          expect(p.notices).toContain(NOTICE)
-          expect(p.defects).not.toContain(NOTICE)
-          expect(ff.failKinds).not.toContain(KIND)
-          expect(ff.noteKinds).toContain(KIND)
-        }
+        expect(p.defects).toContain(GEOM)
+        expect(ff.status).toBe("FAIL")
+        expect(ff.failKinds).toContain(KIND)
       })
     }
   }

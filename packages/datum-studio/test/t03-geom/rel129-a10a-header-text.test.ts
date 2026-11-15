@@ -5,8 +5,8 @@
 // texts only (bold tracked `table_header` signature, centre outside every node), the text box grown by HEADER_CLEAR_MM
 // (0.3 mm) tested against every link stroke (centre line + half width). A header that `lineThroughText` already reports is
 // not reported twice. `lineThroughText` itself is not widened (it is in the auto-fit `score` and ROUTE_KINDS). A T-03
-// kind: outside `score`, so no figure the engine builds changes bytes. Its code is GEOM_EDGE_HEADER (fails FIGURE_FIT) or
-// EDGE_OVER_HEADER (a preview notice, not in the fail set), whichever the Q1 sweep of row 32 allowed; exactly one ships.
+// kind: outside `score`, so no figure the engine builds changes bytes. Its code is GEOM_EDGE_HEADER (fails FIGURE_FIT); the notice
+// code EDGE_OVER_HEADER is not shipped (Swarm 1.3.0 row 76, AC-B1012b: the tests assert the exact code, not either of the pair).
 // Red at BASE d4282fcfd8 (kind, constant and codes absent; B1 / N9-153 at 128 mm not reported); green after row 32.
 import { useStudioEnv } from "../ported/_env"
 useStudioEnv()
@@ -77,20 +77,20 @@ describe("A10a register names, threshold and the one shipped code", () => {
     expect(lint.lintDiagramGeometry(svgOf("")).counts[KIND]).toBe(0)
     expect(lint.HEADER_CLEAR_MM).toBe(0.3)
   })
-  test("exactly one of GEOM_EDGE_HEADER / EDGE_OVER_HEADER is the engine code, with the WHAT/SUGGEST texts N9-030", () => {
-    expect(shippedCodes().length).toBe(1)
+  test("the engine code is exactly GEOM_EDGE_HEADER (never EDGE_OVER_HEADER), with the WHAT/SUGGEST texts N9-030", () => {
+    expect(shippedCodes()).toEqual([GEOM])
     const g = lint.lintDiagramGeometry(svgOf([header("KOLAM X"), link("M 47.5 2 L 47.5 30")].join("\n")))
-    const issue = (fitMod.diagramGeometryIssues(g) as J[]).find((i) => i.checkId === shippedCodes()[0])
+    const issue = (fitMod.diagramGeometryIssues(g) as J[]).find((i) => i.checkId === GEOM)
     expect(issue?.status).toBe("REPORT")
     expect(issue?.detail).toContain("garis melintasi teks judul kolam/lajur")
     expect(issue?.suggest).toBe("atur via agar garis lewat di luar pita judul kolam/lajur")
   })
-  test("the shipped code and the FIGURE_FIT fail set agree (C10(d)): GEOM_* -> defect and failing, else notice and not failing", () => {
-    const [code] = shippedCodes()
-    const failing = checks.DIAGRAM_FAIL_KINDS.has(KIND)
-    expect([code, failing]).toEqual(code === GEOM ? [GEOM, true] : [NOTICE, false])
-    expect(fig.previewIssueClass(code, "REPORT")).toBe(code === GEOM ? "defect" : "notice")
-    expect(fig.GEOM_T03_CODES).not.toContain(code) // the diagram guide list is not extended (budget 0 B)
+  test("the shipped code GEOM_EDGE_HEADER and the FIGURE_FIT fail set agree (C10(d)): defect class, failing, notice code not shipped", () => {
+    expect(shippedCodes()).toEqual([GEOM])
+    expect(checks.DIAGRAM_FAIL_KINDS.has(KIND)).toBe(true)
+    expect(fig.previewIssueClass(GEOM, "REPORT")).toBe("defect")
+    expect(fig.GEOM_T03_CODES).not.toContain(GEOM) // the diagram guide list is not extended (budget 0 B)
+    expect(fig.GEOM_T03_CODES).not.toContain(NOTICE)
   })
   test("a T-03 kind: counted, but outside the auto-fit score (no figure changes bytes)", () => {
     const g = lint.lintDiagramGeometry(svgOf([header("KOLAM X"), link("M 47.5 2 L 47.5 30")].join("\n")))
@@ -134,18 +134,10 @@ describe("A10a on the preview path: B1 and N9-153 reported at 128 mm, silent at 
         ["KOLAM X", "konektor 0"],
         ["LAJUR 2", "konektor 0"],
       ])
-      const [code] = shippedCodes()
       const ff = figureFit(p.svg)
-      if (code === GEOM) {
-        expect(p.defects).toContain(GEOM)
-        expect(ff.status).toBe("FAIL")
-        expect(ff.failKinds).toContain(KIND)
-      } else {
-        expect(p.notices).toContain(NOTICE)
-        expect(p.defects).not.toContain(NOTICE)
-        expect(ff.failKinds).not.toContain(KIND)
-        expect(ff.noteKinds).toContain(KIND)
-      }
+      expect(p.defects).toContain(GEOM)
+      expect(ff.status).toBe("FAIL")
+      expect(ff.failKinds).toContain(KIND)
     })
     test(`${c.name} @166 (negative control): the leg at x 50.67 is clear of the headers from 53.26 and nothing is reported`, async () => {
       const p = await preview(c.f, c.name, 166)

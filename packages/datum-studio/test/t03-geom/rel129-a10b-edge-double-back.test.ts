@@ -4,8 +4,8 @@
 // down over its own stroke). No lint kind saw the spur. New lint kind `edgeDoublesBack`: two consecutive collinear
 // segments of a link with opposite direction, after repeated vertices are removed, of any length (an SVG-side predicate;
 // the router's `doublesBack` is not imported). A path that only repeats a vertex is not reported. A T-03 kind: outside
-// `score`, so no figure the engine builds changes bytes. Its code is GEOM_EDGE_DOUBLE_BACK (fails FIGURE_FIT) or
-// EDGE_DOUBLES_BACK (a preview notice, not in the fail set), whichever the Q1 sweep of row 33 allowed; exactly one ships.
+// `score`, so no figure the engine builds changes bytes. Its code is GEOM_EDGE_DOUBLE_BACK (fails FIGURE_FIT); the notice
+// code EDGE_DOUBLES_BACK is not shipped (Swarm 1.3.0 row 76, AC-B1012b: the tests assert the exact code, not either of the pair).
 // Red at BASE d4282fcfd8 (kind and codes absent; the B4 / N9-154 spur not reported); green after row 33.
 import { useStudioEnv } from "../ported/_env"
 useStudioEnv()
@@ -71,20 +71,20 @@ describe("A10b register names and the one shipped code", () => {
     expect(lint.DIAGRAM_DEFECT_KINDS).toContain(KIND)
     expect(lint.lintDiagramGeometry(svgOf("")).counts[KIND]).toBe(0)
   })
-  test("exactly one of GEOM_EDGE_DOUBLE_BACK / EDGE_DOUBLES_BACK is the engine code, with the WHAT/SUGGEST texts N9-034", () => {
-    expect(shippedCodes().length).toBe(1)
+  test("the engine code is exactly GEOM_EDGE_DOUBLE_BACK (never EDGE_DOUBLES_BACK), with the WHAT/SUGGEST texts N9-034", () => {
+    expect(shippedCodes()).toEqual([GEOM])
     const g = lint.lintDiagramGeometry(svgOf(link(SPUR)))
-    const issue = (fitMod.diagramGeometryIssues(g) as J[]).find((i) => i.checkId === shippedCodes()[0])
+    const issue = (fitMod.diagramGeometryIssues(g) as J[]).find((i) => i.checkId === GEOM)
     expect(issue?.status).toBe("REPORT")
     expect(issue?.detail).toContain("garis berbalik arah di tepi gambar")
     expect(issue?.suggest).toBe("hapus via di tepi gambar atau pilih sisi lain")
   })
-  test("the shipped code and the FIGURE_FIT fail set agree (C10(d)): GEOM_* -> defect and failing, else notice and not failing", () => {
-    const [code] = shippedCodes()
-    const failing = checks.DIAGRAM_FAIL_KINDS.has(KIND)
-    expect([code, failing]).toEqual(code === GEOM ? [GEOM, true] : [NOTICE, false])
-    expect(fig.previewIssueClass(code, "REPORT")).toBe(code === GEOM ? "defect" : "notice")
-    expect(fig.GEOM_T03_CODES).not.toContain(code) // the diagram guide list is not extended (budget 0 B)
+  test("the shipped code GEOM_EDGE_DOUBLE_BACK and the FIGURE_FIT fail set agree (C10(d)): defect class, failing, notice code not shipped", () => {
+    expect(shippedCodes()).toEqual([GEOM])
+    expect(checks.DIAGRAM_FAIL_KINDS.has(KIND)).toBe(true)
+    expect(fig.previewIssueClass(GEOM, "REPORT")).toBe("defect")
+    expect(fig.GEOM_T03_CODES).not.toContain(GEOM) // the diagram guide list is not extended (budget 0 B)
+    expect(fig.GEOM_T03_CODES).not.toContain(NOTICE)
   })
   test("a T-03 kind: counted, but outside the auto-fit score (no figure changes bytes)", () => {
     const g = lint.lintDiagramGeometry(svgOf(link(SPUR)))
@@ -135,18 +135,10 @@ describe("A10b on the preview path: the MASUK spur of B4 and N9-154 is reported 
         expect(p.svg).toContain(`d="${c.spur[w]}"`)
         const d = doublesBack(p.svg)
         expect(d.map((x) => [x.text, x.other, x.amount])).toEqual([["konektor 0", "x 2.38, y 2.38", 2.38]])
-        const [code] = shippedCodes()
         const ff = figureFit(p.svg)
-        if (code === GEOM) {
-          expect(p.defects).toContain(GEOM)
-          expect(ff.status).toBe("FAIL")
-          expect(ff.failKinds).toContain(KIND)
-        } else {
-          expect(p.notices).toContain(NOTICE)
-          expect(p.defects).not.toContain(NOTICE)
-          expect(ff.failKinds).not.toContain(KIND)
-          expect(ff.noteKinds).toContain(KIND)
-        }
+        expect(p.defects).toContain(GEOM)
+        expect(ff.status).toBe("FAIL")
+        expect(ff.failKinds).toContain(KIND)
       })
     }
   }
