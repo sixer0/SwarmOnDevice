@@ -16,6 +16,15 @@
  * in another tracked file (comments and strings do not count). Matching is by name, not by resolved import, so the
  * check can only under-report. Test files are readers, never declarers.
  *
+ * Name-only readers (1.2.10 row 68, B10-05, N10-115): each file's import bindings are collected too (`import { A }`,
+ * `import { A as B }` counts A, `import type { A }`, `export { A } from`, and `ns.A` / `ns["A"]` after
+ * `import * as ns`, after `export * as ns` + `import { ns }`, and after `import ns = require()`; no module resolution,
+ * so barrels count by name). Dynamic `import()` / `require()` bind when destructured, assigned to a namespace local or
+ * read by one property; a file with any other dynamic shape (or a bare `typeof import("…")`) keeps name matching: all
+ * its identifiers count as bindings. An unmarked, non-generated, non-baselined export whose production readers are by
+ * name only is listed in `nameOnly`. Report-only in 1.2.10 (C19 D-1): it does not change the classification above or
+ * the exit code.
+ *
  * Usage: `bun script/swarm/check-exports.ts [--json] [--prune-stale]`. Exit 0 = no unexplained export and no stale
  * baseline entry; exit 1 otherwise. Deterministic output order; no clock, no network.
  */
@@ -54,6 +63,8 @@ interface ExportRow extends Declared {
   readonly prodReaders: number
   /** Other tracked test files holding the name as an identifier. */
   readonly testReaders: number
+  /** Other tracked non-test files reading the name through an import binding (or keeping name matching). */
+  readonly prodBindings: number
   readonly generated: boolean
 }
 
@@ -69,6 +80,14 @@ interface Unexplained {
   readonly testReaders: number
 }
 
+interface NameOnly {
+  readonly file: string
+  readonly line: number
+  readonly name: string
+  /** Other tracked non-test files holding the name as an identifier (none of them through an import binding). */
+  readonly prodReaders: number
+}
+
 interface CheckResult {
   readonly files: number
   readonly exports: number
@@ -79,6 +98,8 @@ interface CheckResult {
   readonly explainedByGenerated: number
   readonly unexplained: Unexplained[]
   readonly stale: BaselineEntry[]
+  /** N10-115: unmarked, non-generated, non-baselined exports read in production by name only. Report-only (C19 D-1). */
+  readonly nameOnly: NameOnly[]
 }
 
 function scriptKind(file: string): ts.ScriptKind {
@@ -137,6 +158,104 @@ export function exportedNames(file: string, src: string): Set<string> {
   return new Set(declaredExports(file, src).exports.map((e) => e.name))
 }
 
+/**
+ * Export names one source reads through an import binding (B10-05): `import { A }` / `import { A as B }` /
+ * `import type { A }` (A), `export { A } from` / `export { A as B } from` (A), and `ns.A`, `ns["A"]` or the type
+ * `ns.A` after `import * as ns`. The self-namespace form (`export * as Ns from "./mod"` in one file, `import { Ns }`
+ * and `Ns.A` in another) is the same read: `members` lists every `X.A` on a named import X, and the scan counts it
+ * when some file declares `export * as X` (`namespaceExports`). `keepsNameMatching` is true when the file has a
+ * dynamic `import()`, an import type `import("…")`, a `require()` call or `import x = require()`: such a file can read
+ * any export without a static binding, so its identifiers keep counting by name.
+ */
+function importBindings(sf: ts.SourceFile): {
+  names: Set<string>
+  members: Map<string, Set<string>>
+  namespaceExports: string[]
+  keepsNameMatching: boolean
+} {
+  const names = new Set<string>()
+  const namespaces = new Set<string>()
+  const namedLocals = new Map<string, string>() // local name -> imported export name
+  const members = new Map<string, Set<string>>() // imported export name -> members read on it
+  const namespaceExports: string[] = []
+  let keepsNameMatching = false
+  for (const st of sf.statements) {
+    if (ts.isImportDeclaration(st)) {
+      const bound = st.importClause?.namedBindings
+      if (bound && ts.isNamespaceImport(bound)) namespaces.add(bound.name.text)
+      else if (bound)
+        for (const spec of bound.elements) {
+          names.add((spec.propertyName ?? spec.name).text)
+          namedLocals.set(spec.name.text, (spec.propertyName ?? spec.name).text)
+        }
+    } else if (ts.isExportDeclaration(st) && st.moduleSpecifier && st.exportClause) {
+      if (ts.isNamespaceExport(st.exportClause)) namespaceExports.push(st.exportClause.name.text)
+      else for (const spec of st.exportClause.elements) names.add((spec.propertyName ?? spec.name).text)
+    }
+  }
+  // `X.A` / `X["A"]` / type `X.A`: A is bound when X is a namespace import; recorded as a member when X is a named one.
+  const read = (target: ts.Node, member: string) => {
+    if (!ts.isIdentifier(target)) return
+    if (namespaces.has(target.text)) names.add(member)
+    const from = namedLocals.get(target.text)
+    if (from === undefined) return
+    const set = members.get(from)
+    if (set) set.add(member)
+    else members.set(from, new Set([member]))
+  }
+  // First pass: dynamic module reads. The common shapes bind like their static forms; any other shape keeps name
+  // matching for the whole file.
+  const dynamic = (n: ts.Node): void => {
+    if (ts.isCallExpression(n)) {
+      const callee = n.expression
+      if (callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === "require"))
+        if (!dynamicRead(n)) keepsNameMatching = true
+    } else if (ts.isImportTypeNode(n)) {
+      // `import("…").A.B` reads A; a bare `typeof import("…")` can read anything.
+      let q = n.qualifier
+      while (q && ts.isQualifiedName(q)) q = q.left
+      if (q) names.add(q.text)
+      else keepsNameMatching = true
+    } else if (ts.isExternalModuleReference(n)) {
+      // `import ns = require("…")`: ns reads like a namespace import.
+      if (ts.isImportEqualsDeclaration(n.parent)) namespaces.add(n.parent.name.text)
+      else keepsNameMatching = true
+    }
+    ts.forEachChild(n, dynamic)
+  }
+  /** `const { A, B: c } = await import(…)`, `const ns = await import(…)`, `(await import(…)).A`, the same for `require(…)`, or a bare side-effect call. */
+  const dynamicRead = (call: ts.CallExpression): boolean => {
+    let at: ts.Node = ts.isAwaitExpression(call.parent) ? call.parent : call
+    while (ts.isParenthesizedExpression(at.parent)) at = at.parent
+    const use = at.parent
+    if (ts.isExpressionStatement(use)) return true
+    // An un-awaited `import()` is a promise: `.then(…)` and friends read nothing by name here.
+    if (call.expression.kind === ts.SyntaxKind.ImportKeyword && !ts.isAwaitExpression(call.parent)) return false
+    if (ts.isPropertyAccessExpression(use) && use.expression === at) return !!names.add(use.name.text)
+    if (ts.isElementAccessExpression(use) && use.expression === at && ts.isStringLiteralLike(use.argumentExpression))
+      return !!names.add(use.argumentExpression.text)
+    if (!ts.isVariableDeclaration(use) || use.initializer !== at) return false
+    if (ts.isIdentifier(use.name)) return !!namespaces.add(use.name.text)
+    if (!ts.isObjectBindingPattern(use.name)) return false
+    for (const el of use.name.elements) {
+      const prop = el.propertyName ?? el.name
+      if (el.dotDotDotToken || !(ts.isIdentifier(prop) || ts.isStringLiteralLike(prop))) return false
+      names.add(prop.text)
+    }
+    return true
+  }
+  const walk = (n: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(n)) read(n.expression, n.name.text)
+    else if (ts.isQualifiedName(n)) read(n.left, n.right.text)
+    else if (ts.isElementAccessExpression(n) && ts.isStringLiteralLike(n.argumentExpression))
+      read(n.expression, n.argumentExpression.text)
+    ts.forEachChild(n, walk)
+  }
+  dynamic(sf)
+  walk(sf)
+  return { names, members, namespaceExports, keepsNameMatching }
+}
+
 function trackedSourceFiles(repo: string): string[] {
   const out = spawnSync("git", ["ls-files", "-z"], { cwd: repo, encoding: "utf8", maxBuffer: 1 << 28 })
   if (out.status !== 0) throw new Error(`git ls-files failed (${out.status}): ${out.stderr}`)
@@ -146,11 +265,23 @@ function trackedSourceFiles(repo: string): string[] {
     .sort()
 }
 
-function scan(repo: string, replace: Readonly<Record<string, string>>): { files: number; rows: ExportRow[] } {
+function scan(
+  repo: string,
+  replace: Readonly<Record<string, string>>,
+): { files: number; rows: ExportRow[]; keptByName: number } {
   const files = trackedSourceFiles(repo)
   const readers = new Map<string, string[]>() // identifier -> files holding it (each file once)
+  const binders = new Map<string, Set<string>>() // export name -> production files binding it
+  const bind = (id: string, file: string) => {
+    const set = binders.get(id)
+    if (set) set.add(file)
+    else binders.set(id, new Set([file]))
+  }
+  const namespaceExports = new Set<string>() // `export * as X from` names, any production file
+  const memberReads: { file: string; members: Map<string, Set<string>> }[] = []
   const declared: { file: string; exports: Declared[] }[] = []
   let scanned = 0
+  let keptByName = 0
   for (const file of files) {
     let src: string
     try {
@@ -171,8 +302,19 @@ function scan(repo: string, replace: Readonly<Record<string, string>>): { files:
       if (list) list.push(file)
       else readers.set(id, [file])
     }
+    if (!readsAsTest(file)) {
+      // Only production bindings matter for `nameOnly`; test files never make an export production-read.
+      const bound = importBindings(sf)
+      if (bound.keepsNameMatching) keptByName++
+      for (const id of bound.keepsNameMatching ? seen : bound.names) bind(id, file)
+      for (const ns of bound.namespaceExports) namespaceExports.add(ns)
+      if (bound.members.size > 0) memberReads.push({ file, members: bound.members })
+    }
     if (!readsAsTest(file) && exports.length > 0) declared.push({ file, exports })
   }
+  // No module resolution: `X.A` on a named import X binds A when any file declares `export * as X`.
+  for (const { file, members } of memberReads)
+    for (const [ns, set] of members) if (namespaceExports.has(ns)) for (const member of set) bind(member, file)
   const rows: ExportRow[] = []
   for (const { file, exports } of declared) {
     const once = new Set<string>()
@@ -186,10 +328,19 @@ function scan(repo: string, replace: Readonly<Record<string, string>>): { files:
         if (readsAsTest(other)) testReaders++
         else prodReaders++
       }
-      rows.push({ ...e, marked: exports.some((x) => x.name === e.name && x.marked), file, prodReaders, testReaders, generated: GENERATED.test(file) })
+      const prodBindings = [...(binders.get(e.name) ?? [])].filter((other) => other !== file).length
+      rows.push({
+        ...e,
+        marked: exports.some((x) => x.name === e.name && x.marked),
+        file,
+        prodReaders,
+        testReaders,
+        prodBindings,
+        generated: GENERATED.test(file),
+      })
     }
   }
-  return { files: scanned, rows }
+  return { files: scanned, rows, keptByName }
 }
 
 const key = (file: string, name: string) => `${file}\0${name}`
@@ -213,7 +364,16 @@ export function checkExports(opts: {
   baseline: readonly BaselineEntry[]
   replace?: Readonly<Record<string, string>>
 }): CheckResult {
-  const { files, rows } = scan(opts.repo, opts.replace ?? {})
+  return runGuard(opts).result
+}
+
+/** `checkExports` plus the number of production files that keep name matching (console line of N10-115). */
+function runGuard(opts: {
+  repo: string
+  baseline: readonly BaselineEntry[]
+  replace?: Readonly<Record<string, string>>
+}): { result: CheckResult; keptByName: number } {
+  const { files, rows, keptByName } = scan(opts.repo, opts.replace ?? {})
   const listed = new Set(opts.baseline.map((b) => key(b.file, b.name)))
   const open = rows.filter((r) => r.prodReaders === 0)
   let byMarker = 0
@@ -239,15 +399,25 @@ export function checkExports(opts: {
   }
   const stale = opts.baseline.filter((b) => !unmarkedOpen.has(key(b.file, b.name)))
   unexplained.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name))
+  // B10-05 (report-only, C19 D-1): production readers exist, but none of them binds the export by import.
+  const nameOnly: NameOnly[] = rows
+    .filter((r) => r.prodReaders > 0 && r.prodBindings === 0 && !r.generated && !r.marked)
+    .filter((r) => !listed.has(key(r.file, r.name)))
+    .map((r) => ({ file: r.file, line: r.line, name: r.name, prodReaders: r.prodReaders }))
+    .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name))
   return {
-    files,
-    exports: rows.length,
-    withoutProdReader: open.length,
-    explainedByMarker: byMarker,
-    explainedByBaseline: byBaseline,
-    explainedByGenerated: byGenerated,
-    unexplained,
-    stale,
+    result: {
+      files,
+      exports: rows.length,
+      withoutProdReader: open.length,
+      explainedByMarker: byMarker,
+      explainedByBaseline: byBaseline,
+      explainedByGenerated: byGenerated,
+      unexplained,
+      stale,
+      nameOnly,
+    },
+    keptByName,
   }
 }
 
@@ -260,7 +430,7 @@ if (import.meta.main) {
   const repo = path.resolve(import.meta.dir, "../..")
   const args = new Set(process.argv.slice(2))
   const baseline = loadBaseline(repo)
-  const result = checkExports({ repo, baseline })
+  const { result, keptByName } = runGuard({ repo, baseline })
   if (args.has("--prune-stale") && result.stale.length > 0) {
     // Shrink only: the kept entries are a subset of the file's own entries, in the file's own order.
     const drop = new Set(result.stale.map((s) => key(s.file, s.name)))
@@ -275,6 +445,11 @@ if (import.meta.main) {
         `marker ${result.explainedByMarker}, baseline ${result.explainedByBaseline}, generated sdk ${result.explainedByGenerated}, ` +
         `unexplained ${result.unexplained.length}; stale baseline entries ${result.stale.length}`,
     )
+    console.log(
+      `read by name only ${result.nameOnly.length} exports (reported, not failing; ` +
+        `name matching kept for ${keptByName} files with dynamic import or require)`,
+    )
+    for (const n of result.nameOnly) console.log(`read by name only ${n.file}:${n.line} ${n.name}`)
     for (const u of result.unexplained)
       console.log(`unexplained ${u.file}:${u.line} ${u.name} (${u.testReaders ? `test readers ${u.testReaders}` : "no outside reader"})`)
     for (const s of result.stale) console.log(`stale ${s.file} ${s.name}`)
