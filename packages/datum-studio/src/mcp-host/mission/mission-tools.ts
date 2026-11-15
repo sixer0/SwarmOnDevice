@@ -354,10 +354,11 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
    * is not attested (Mission Control key on this request, S9-01). Refused before any write, dry runs too. The detail and
    * the warn line are path-free and carry no session id and no decision or message text.
    */
-  function refuseUnattested(name: string, s: HostToolSession, mission: string, request?: string): void {
+  function refuseUnattested(name: string, s: HostToolSession, mission: string, request?: string, message?: string): void {
     if (s.attested === true) return
     opts.log("warn", `datum-studio-host.mission.${name}`, "SESSION_NOT_ATTESTED", { mission, agent: s.agentId })
-    throw new MissionToolError("SESSION_NOT_ATTESTED", "only the person answers as the person, from Mission Control in the Swarm app (this request is not attested)", { mission, ...(request !== undefined ? { request } : {}), agent: s.agentId })
+    // 1.2.10 row 73 (B10-11, N10-006, N10-007): `message` is the owner-message wording; every other caller keeps the 1.2.9 text.
+    throw new MissionToolError("SESSION_NOT_ATTESTED", message ?? "only the person answers as the person, from Mission Control in the Swarm app (this request is not attested)", { mission, ...(request !== undefined ? { request } : {}), agent: s.agentId })
   }
 
   return [
@@ -525,7 +526,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const o = writeOptions(a, s)
         const patches = (Array.isArray(a.rows) ? a.rows : []) as Array<RowPatch & { checkpoint?: { n: number; m: number; label?: string } }>
         const messages = (Array.isArray(a.messages) ? a.messages : []) as NewMissionMessage[]
-        if (messages.some((m) => m.from === "owner")) refuseUnattested("studio_mission_update_row", s, mission)
+        if (messages.some((m) => m.from === "owner")) refuseUnattested("studio_mission_update_row", s, mission, undefined, "only the person writes an owner message, from Mission Control in the Swarm app (this request is not attested)")
         const r = await write(dry(a), (tx) => {
           let out: RowPatchJobResult = { changed: [], results: [], waves: [], ready: [] }
           const stripped = patches.map(({ checkpoint: _c, ...p }) => p)
