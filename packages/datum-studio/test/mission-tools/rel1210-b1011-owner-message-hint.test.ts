@@ -90,6 +90,9 @@ afterAll(async () => {
   await host?.close()
   mod?.configureTemplateSource(null)
   if (store) await mod.closeHostStore(store)
+  // C119 N2 (row 98b): drop the cached STUDIO_WORKSPACE_ROOT so a later file in the same run opens its own root.
+  const { resetStudioEnvCache } = await import("../../vendor/src/lib/studio/contract/env")
+  resetStudioEnvCache()
 })
 
 describe("N10-201 AC-B1011 row 73: the owner-message refusal has its own text (O1)", () => {
