@@ -150,6 +150,9 @@ export function DialogProjectMemory() {
     index_body_long: language.t("memory.refused.indexBodyLong", { max: INDEX_LIMITS.body }),
     index_format: language.t("memory.refused.indexFormat"),
     index_full: language.t("memory.refused.indexFull"),
+    classified: language.t("memory.refused.classified"),
+    not_device_only: language.t("memory.refused.notDeviceOnly"),
+    archived: language.t("memory.refused.archived"),
   }
   const groups = () => memoryGroups((memory.current()?.items ?? []) as Item[])
 

@@ -48,7 +48,7 @@ export const REFUSED = {
   index_body_long: `Not saved: the index entry body is over ${ProjectMemory.INDEX_LIMITS.body} characters. Keep the detail in the final report and link it; the report path is already in the line.`,
   index_full:
     "Not saved: the mission index is full and older entries cannot be rolled up without cutting them. Ask the person to remove or consolidate old entries in the memory view.",
-} satisfies Record<Exclude<ProjectMemory.Refusal, "full">, string>
+} satisfies Record<Exclude<ProjectMemory.Refusal, "full" | "classified" | "not_device_only" | "archived">, string>
 
 export const RememberTool = Tool.define<typeof Parameters, Metadata, Memory.Service>(
   "remember",
@@ -118,7 +118,7 @@ export const RememberTool = Tool.define<typeof Parameters, Metadata, Memory.Serv
           if (result.refused)
             return {
               title: "Not saved",
-              output: result.refused === "full" ? "Not saved." : REFUSED[result.refused],
+              output: result.refused === "full" ? "Not saved." : REFUSED[result.refused as keyof typeof REFUSED],
               metadata: { refused: result.refused },
             }
           return {
