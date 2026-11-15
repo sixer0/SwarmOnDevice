@@ -142,6 +142,16 @@ describe("AC-P1d open-obsidian-note with the registry step (N10-163)", () => {
     expect(s.logs.length).toBe(0)
   })
 
+  test("H1 the real closed output ('\\n', exit 0) -> registered and one launch; a second press -> opened (C127)", async () => {
+    const fixture = keep(registryUnregistered())
+    const s = setup(fixture, { runner: "closedNewline" })
+    expect(await s.press()).toBe("registered")
+    expect(s.counts.runner).toBe(2)
+    expect(s.logs).toEqual([])
+    expect(await s.press()).toBe("opened")
+    expect(s.opened).toEqual([s.url, s.url])
+  })
+
   test("d2 registryRegistered -> opened, no detection call, the list unchanged", async () => {
     const fixture = keep(registryRegistered())
     const hash = fileHash(fixture)

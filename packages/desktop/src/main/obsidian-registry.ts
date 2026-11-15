@@ -357,7 +357,7 @@ async function ensureConfigDir(configDir: string, appPresent: boolean): Promise<
 
 /**
  * The two-signal closed check (01a §3.4.1; C12, C17 Q1-2). Closed only when the keyed lsappinfo find exits 0 with
- * empty stdout AND `lstat(<configDir>/SingletonLock)` is ENOENT. One or more `ASN:` lines = running. Anything else
+ * empty or whitespace-only stdout (H1, C127) AND `lstat(<configDir>/SingletonLock)` is ENOENT. One or more `ASN:` lines = running. Anything else
  * (other text, non-zero or -1, a rejection, no answer within LSAPPINFO_TIMEOUT_MS, a lock of any type, an `lstat`
  * error other than ENOENT) = unsure. The lock's target is never read and no pid is probed.
  */
@@ -371,7 +371,9 @@ async function closedCheck(input: ObsidianRegistryInput): Promise<ClosedVerdict>
     .finally(() => clearTimeout(timer))
   if (typeof seen !== "object" || seen === null || seen.code !== 0 || typeof seen.stdout !== "string") return "unsure"
   if (seen.stdout.includes("ASN:")) return "running"
-  if (seen.stdout !== "") return "unsure"
+  // 1.3.1 row H1 (C127): the real keyed find prints one "\n" when nothing matches, so whitespace-only output is "no
+  // instance"; any other text stays unsure.
+  if (seen.stdout.trim() !== "") return "unsure"
   return lstat(path.join(input.configDir, OBSIDIAN_SINGLETON_LOCK)).then(
     () => "unsure" as const,
     (error) => (errorCode(error) === "ENOENT" ? ("closed" as const) : ("unsure" as const)),

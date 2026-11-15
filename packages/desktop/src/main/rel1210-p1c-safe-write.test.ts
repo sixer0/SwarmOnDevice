@@ -147,6 +147,38 @@ describe("AC-P1c: closed check and safe-write refusals (N10-162)", () => {
     await refused(fixture, switchable("garbage"), unsure)
   })
 
+  // 1.3.1 row H1 (C127): the real lsappinfo prints one "\n" (exit 0) when Obsidian is not running. Whitespace-only
+  // output is "no instance"; any other text without ASN stays unsure.
+  for (const output of ["closedNewline", "closedTwoNewlines", "closedSpaceNewline"] as const) {
+    test(`H1 runner ${output} (whitespace-only stdout, exit 0), no lock -> registered, both closed checks pass`, async () => {
+      const fixture = keep(registryUnregistered())
+      const runner = switchable(output)
+      expect(await press(fixture, runner)).toEqual({ result: "registered" })
+      expect(runner.calls).toBe(2)
+    })
+  }
+
+  test("H1 runner garbageLine ('garbage\\n') -> close-obsidian / obsidian-unsure", async () => {
+    await refused(keep(registryUnregistered()), switchable("garbageLine"), unsure)
+  })
+
+  test("H1 runner closedNewline + SingletonLock present -> close-obsidian / obsidian-unsure (the second signal still counts)", async () => {
+    const fixture = keep(registryUnregistered())
+    singletonLockPresent("dangling-link", fixture)
+    await refused(fixture, switchable("closedNewline"), unsure)
+  })
+
+  test("H1 S9 repeat: closedNewline first, then running before the rename -> close-obsidian / obsidian-running", async () => {
+    const fixture = keep(registryUnregistered())
+    const runner = switchable("closedNewline")
+    await refused(fixture, runner, running, {
+      beforeRename: async () => {
+        runner.output = "running"
+      },
+    })
+    expect(runner.calls).toBe(2)
+  })
+
   test("c5 runner nonZero, then runner rejects -> close-obsidian / obsidian-unsure (both)", async () => {
     const fixture = keep(registryUnregistered())
     await refused(fixture, switchable("nonZero"), unsure)

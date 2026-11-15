@@ -18,6 +18,7 @@ import {
   registryExtraKeys,
   registryMissingFile,
   registryMissingFolder,
+  registryRealShape,
   registryUnregistered,
 } from "./rel1210-obsidian-registry.fixture"
 
@@ -144,6 +145,43 @@ describe("AC-P1b: Obsidian registry write (N10-161)", () => {
     expect(afterRest).toEqual(beforeRest)
     for (const id of Object.keys(beforeVaults)) expect(afterVaults[id]).toEqual(beforeVaults[id])
     expect(Object.values(beforeVaults).filter((e: any) => e.open === true).length).toBe(2)
+  })
+
+  test("H1 registryRealShape (every entry { path, ts, open }) + the real closed output '\\n' -> registered; other entries byte-for-byte, the new one exactly { path, ts }", async () => {
+    const fixture = keep(registryRealShape())
+    const original = readFileSync(fixture.registryPath, "utf8")
+    const before = JSON.parse(original)
+    const step = await reg.ensureObsidianVault({
+      configDir: fixture.configDir,
+      vaultRoot: fixture.vaultRoot,
+      hubPath: fixture.hubPath,
+      appPresent: true,
+      runLsappinfo: lsappinfoOutputs.closedNewline,
+      now: () => 1_700_000_123_456,
+    })
+    expect(step).toEqual({ result: "registered" })
+    const written = readFileSync(fixture.registryPath, "utf8")
+    const after = JSON.parse(written)
+    const ids = addedIds(before.vaults, after.vaults)
+    expect(ids.length).toBe(1)
+    expect(ids[0]).toMatch(/^[0-9a-f]{16}$/)
+    // Exactly the keys Obsidian itself writes for a vault it adds: { path, ts }, no `open`.
+    expect(Object.keys(after.vaults[ids[0]])).toEqual(["path", "ts"])
+    expect(after.vaults[ids[0]]).toEqual({ path: fixture.vaultRoot, ts: 1_700_000_123_456 })
+    // Every other entry, `open` included, keeps its exact serialisation, in its place in the file.
+    for (const id of Object.keys(before.vaults)) {
+      const entry = JSON.stringify(id) + ":" + JSON.stringify(before.vaults[id])
+      expect(original.includes(entry)).toBe(true)
+      expect(written.includes(entry)).toBe(true)
+      expect(typeof after.vaults[id].open).toBe("boolean")
+    }
+    expect(Object.values(before.vaults).map((entry: any) => entry.open)).toEqual([false, true, false])
+    // The whole file: the original object with one entry appended to `vaults`, compact as Obsidian writes it.
+    const expected = JSON.parse(original)
+    expected.vaults[ids[0]] = { path: fixture.vaultRoot, ts: 1_700_000_123_456 }
+    expect(written).toBe(JSON.stringify(expected))
+    // The one-time backup holds the original bytes.
+    expect(readFileSync(join(fixture.configDir, BACKUP), "utf8")).toBe(original)
   })
 
   test("b4 second call after b1 -> in-vault, 0 runner calls, file and backup sha256 unchanged", async () => {

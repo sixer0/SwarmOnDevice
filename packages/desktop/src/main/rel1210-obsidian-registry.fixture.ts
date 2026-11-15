@@ -170,6 +170,20 @@ export function registryExtraKeys(home = fakeObsidianHome(), mode = 0o644) {
 }
 
 /**
+ * 1.3.1 row H1 (C127, C128): the shape of a real `obsidian.json` as Obsidian 1.14 writes it (compact JSON, every
+ * vault entry `{ path, ts, open }` with `open` a boolean on every entry, `false` included; the root not listed).
+ * Values are synthetic; only the shape follows the real file.
+ */
+export function registryRealShape(home = fakeObsidianHome(), mode = 0o644) {
+  const vaults = {
+    "1f2e3d4c5b6a7980": { path: otherVault(home, "journal"), ts: TS - 2_000, open: false },
+    "0a9b8c7d6e5f4a3b": { path: otherVault(home, "reading"), ts: TS - 1_000, open: true },
+    "2b3c4d5e6f708192": { path: otherVault(home, "archive"), ts: TS - 500, open: false },
+  }
+  return writeRegistry(home, "registryRealShape", json({ vaults, frame: "hidden" }), mode)
+}
+
+/**
  * N10-221: `obsidian.json` is a symlink to a valid registry elsewhere under `base` (`registry-odd-file`).
  * `directory` puts a folder at the registry name instead (c12 second shape).
  */
@@ -246,6 +260,12 @@ export function singletonLockPresent(kind: "dangling-link" | "file" | "directory
  */
 export const lsappinfoOutputs = {
   closed: (): Promise<LsappinfoResult> => Promise.resolve({ code: 0, stdout: "" }),
+  // 1.3.1 row H1 (C127): what /usr/bin/lsappinfo really prints for a keyed find with no match (one newline, exit 0),
+  // and two other whitespace-only forms; all three are "no instance".
+  closedNewline: (): Promise<LsappinfoResult> => Promise.resolve({ code: 0, stdout: "\n" }),
+  closedTwoNewlines: (): Promise<LsappinfoResult> => Promise.resolve({ code: 0, stdout: "\n\n" }),
+  closedSpaceNewline: (): Promise<LsappinfoResult> => Promise.resolve({ code: 0, stdout: " \n" }),
+  garbageLine: (): Promise<LsappinfoResult> => Promise.resolve({ code: 0, stdout: "garbage\n" }),
   running: (): Promise<LsappinfoResult> => Promise.resolve({ code: 0, stdout: 'ASN:0x0-0x1:"Obsidian":\n' }),
   twoInstances: (): Promise<LsappinfoResult> =>
     Promise.resolve({ code: 0, stdout: 'ASN:0x0-0x1:"Obsidian":\nASN:0x0-0x2:"Obsidian":\n' }),
