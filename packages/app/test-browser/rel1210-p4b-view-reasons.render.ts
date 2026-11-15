@@ -219,16 +219,24 @@ describe("the vault request", () => {
   })
 
   test("is asked again after a successful save, so a label follows the note's new state", async () => {
-    state.items = store()
-    state.kept = []
-    await open()
-    expect(labelCounts("n-device", "en")).toEqual([0, 0, 0])
-    const before = state.vaultCalls.length
-    state.kept = kept()
-    row("n-clean")!.querySelector<HTMLElement>("[data-memory-scope]")!.click()
-    await tick(30)
-    expect(state.vaultCalls.length).toBeGreaterThan(before)
-    expect(labelCounts("n-device", "en")).toEqual([1, 0, 0])
+    // C76 (row 59): the scope is a button only in the desktop app (C18 D-6), so this case has a fake desktop nonce.
+    const bridge = globalThis as { api?: unknown }
+    const saved = bridge.api
+    bridge.api = { desktopNonce: async () => "0123456789abcdef0123456789abcdef" }
+    try {
+      state.items = store()
+      state.kept = []
+      await open()
+      expect(labelCounts("n-device", "en")).toEqual([0, 0, 0])
+      const before = state.vaultCalls.length
+      state.kept = kept()
+      row("n-clean")!.querySelector<HTMLElement>("[data-memory-scope]")!.click()
+      await tick(30)
+      expect(state.vaultCalls.length).toBeGreaterThan(before)
+      expect(labelCounts("n-device", "en")).toEqual([1, 0, 0])
+    } finally {
+      bridge.api = saved
+    }
   })
 
   test("a failed request shows no labels and keeps the rule sentence", async () => {
