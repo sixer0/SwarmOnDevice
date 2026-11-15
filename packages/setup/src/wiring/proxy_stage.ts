@@ -15,6 +15,13 @@
 //                                  disk, rename only when that hash equals the source hash;
 //   - target is a symlink or not a regular file -> refused, nothing followed or replaced.
 // The health rule stays in the writer: this module never reads state.json and never decides eligibility.
+//
+// `requireExisting: true` (1.3.0 row 132a, folded F3 / S13-02; the desktop launch refresh, row 132, always
+// passes it): the refresh may only replace a copy the person already installed. Before any read the stager
+// lstats ~/.swarm, ~/.swarm/setup and ~/.swarm/setup/bin; each must be a real directory (not a symlink),
+// owned by the current uid, with `mode & 0o022 === 0`, else `{ ok: false, code: PROXY_REFRESH_UNSAFE_DIR }`
+// with no setup.log line (the log lives inside that chain). A missing directory or a missing target ->
+// `{ ok: true, staged: false }` with no ensureDir, no temp file and no setup.log line.
 
 import {
   closeSync,
@@ -41,18 +48,27 @@ export const PROXY_MODE = 0o755
 export const PROXY_MAX_BYTES = 256 * 1024 * 1024
 
 const SOURCE = "swarm-setup.wiring.proxy_stage"
+const NOTHING_TO_REFRESH = "no staged proxy to refresh"
 
 export interface ProxyStageOptions {
   /** HOME base for PC-PATH-14 and setup.log; defaults to paths.homeDir(). */
   readonly base?: string
   /** Directory holding the shipped proxy; defaults to paths.resolveProgramDir(). */
   readonly programDir?: string
+  /**
+   * Refresh only (N13-416): replace PC-PATH-14 only when it already exists as a regular file under a safe
+   * parent chain; never create a directory, temp file or setup.log line when it is absent.
+   */
+  readonly requireExisting?: boolean
 }
+
+/** Refusal code (N13-415): a parent of PC-PATH-14 is a symlink, not ours, or group/world-writable. */
+export const PROXY_REFRESH_UNSAFE_DIR = "PROXY_REFRESH_UNSAFE_DIR"
 
 export type ProxyStageResult =
   | { readonly ok: true; readonly staged: true; readonly changed: boolean; readonly target: string; readonly sha256: string }
   | { readonly ok: true; readonly staged: false; readonly reason: string }
-  | { readonly ok: false; readonly reason: string }
+  | { readonly ok: false; readonly reason: string; readonly code?: typeof PROXY_REFRESH_UNSAFE_DIR }
 
 function underHome(tildePath: string, base: string): string {
   if (tildePath.startsWith("~/")) return join(base, tildePath.slice(2))
@@ -77,6 +93,11 @@ export function stageProxyBinary(opts: ProxyStageOptions = {}): ProxyStageResult
   const source = join(opts.programDir ?? resolveProgramDir(), PROXY_BINARY_NAME)
   const target = underHome(PROXY_BINARY_PATH, base)
 
+  if (opts.requireExisting) {
+    const gate = existingTargetGate(target)
+    if (gate) return gate
+  }
+
   let sourceSize: number
   try {
     const st = statSync(source)
@@ -96,6 +117,8 @@ export function stageProxyBinary(opts: ProxyStageOptions = {}): ProxyStageResult
     const want = sha256(bytes)
 
     const existing = lstatOrNull(target)
+    // Under requireExisting this lstat decides: a target removed since the gate is never recreated.
+    if (!existing && opts.requireExisting) return { ok: true, staged: false, reason: NOTHING_TO_REFRESH }
     if (existing) {
       if (existing.isSymbolicLink() || !existing.isFile()) {
         const reason = `refusing to replace PC-PATH-14: it is ${existing.isSymbolicLink() ? "a symlink" : "not a regular file"}`
@@ -107,7 +130,8 @@ export function stageProxyBinary(opts: ProxyStageOptions = {}): ProxyStageResult
       }
     }
 
-    ensureDir(dirname(target), MODES.DIR_0700)
+    // Under requireExisting the chain was checked above and must not be (re)created here.
+    if (!opts.requireExisting) ensureDir(dirname(target), MODES.DIR_0700)
     const tmp = join(dirname(target), `.tmp-${randomUUID()}`)
     const fd = openSync(tmp, "wx", 0o600)
     let committed = false
@@ -142,6 +166,28 @@ export function stageProxyBinary(opts: ProxyStageOptions = {}): ProxyStageResult
     log(base, "error", reason, { stack: (err as Error).stack })
     return { ok: false, reason }
   }
+}
+
+/**
+ * requireExisting gate: null = go on with the usual content rule. Checks ~/.swarm, ~/.swarm/setup and
+ * ~/.swarm/setup/bin in order, then the target. Writes nothing and logs nothing on any outcome.
+ */
+function existingTargetGate(target: string): ProxyStageResult | null {
+  const bin = dirname(target)
+  const setup = dirname(bin)
+  const swarm = dirname(setup)
+  const uid = typeof process.getuid === "function" ? process.getuid() : undefined
+  for (const dir of [swarm, setup, bin]) {
+    const st = lstatOrNull(dir)
+    if (!st) return { ok: true, staged: false, reason: NOTHING_TO_REFRESH }
+    const safe =
+      !st.isSymbolicLink() && st.isDirectory() && (uid === undefined || st.uid === uid) && (st.mode & 0o022) === 0
+    if (!safe) {
+      return { ok: false, code: PROXY_REFRESH_UNSAFE_DIR, reason: "a parent of the staged proxy is not a safe directory" }
+    }
+  }
+  if (!lstatOrNull(target)) return { ok: true, staged: false, reason: NOTHING_TO_REFRESH }
+  return null
 }
 
 function lstatOrNull(path: string): ReturnType<typeof lstatSync> | null {
