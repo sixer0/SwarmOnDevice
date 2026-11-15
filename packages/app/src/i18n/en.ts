@@ -1672,11 +1672,12 @@ export const dict = {
   "memory.obsidian.noApp": "Obsidian is not installed. Install it from Swarm setup, then try again.",
   "memory.obsidian.failed": "Could not open Obsidian.",
   // 1.2.10 row 41 (N10-080..N10-082): the three new outcomes of Open graph in Obsidian (registered, close-obsidian, not-registered).
-  "memory.obsidian.registered": "Swarm added the Swarm vault (~/.swarm/vault) to Obsidian's vault list.",
+  // 1.3.1 row H1 (B13-49): {{vault}} is the configured vault folder, never a fixed ~/.swarm/vault.
+  "memory.obsidian.registered": "Swarm added the Swarm vault ({{vault}}) to Obsidian's vault list.",
   "memory.obsidian.closeObsidian":
-    "Close Obsidian, then press Open graph in Obsidian again. If Obsidian is already closed, open it once and quit it normally. Or add the folder yourself: in Obsidian choose Open folder as vault and pick ~/.swarm/vault.",
+    "Close Obsidian, then press Open graph in Obsidian again. If Obsidian is already closed, open it once and quit it normally. Or add the folder yourself: in Obsidian choose Open folder as vault and pick {{vault}}.",
   "memory.obsidian.notRegistered":
-    "Swarm could not add the Swarm vault to Obsidian's vault list safely, so it changed nothing. Add it yourself: in Obsidian choose Open folder as vault and pick ~/.swarm/vault.",
+    "Swarm could not add the Swarm vault to Obsidian's vault list safely, so it changed nothing. Add it yourself: in Obsidian choose Open folder as vault and pick {{vault}}.",
   // 1.2.10 row 41 (N10-085..N10-097, N10-102): copy a kept note to the Obsidian vault, its confirmation, rule and refusals.
   "memory.vault.copy": "Copy to vault",
   "memory.vault.remove": "In vault: remove",

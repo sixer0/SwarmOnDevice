@@ -1832,11 +1832,12 @@ export const dict = {
   "memory.obsidian.noApp": "Obsidian belum terpasang. Pasang dari penyiapan Swarm, lalu coba lagi.",
   "memory.obsidian.failed": "Tidak dapat membuka Obsidian.",
   // 1.2.10 row 41 (N10-080..N10-082): tiga hasil baru Buka grafik di Obsidian.
-  "memory.obsidian.registered": "Swarm menambahkan vault Swarm (~/.swarm/vault) ke daftar vault Obsidian.",
+  // 1.3.1 row H1 (B13-49): {{vault}} adalah folder vault yang diatur, bukan ~/.swarm/vault yang tetap.
+  "memory.obsidian.registered": "Swarm menambahkan vault Swarm ({{vault}}) ke daftar vault Obsidian.",
   "memory.obsidian.closeObsidian":
-    "Tutup Obsidian, lalu tekan Buka grafik di Obsidian lagi. Jika Obsidian sudah tertutup, buka sekali lalu keluar seperti biasa. Atau tambahkan foldernya sendiri: di Obsidian pilih Open folder as vault lalu pilih ~/.swarm/vault.",
+    "Tutup Obsidian, lalu tekan Buka grafik di Obsidian lagi. Jika Obsidian sudah tertutup, buka sekali lalu keluar seperti biasa. Atau tambahkan foldernya sendiri: di Obsidian pilih Open folder as vault lalu pilih {{vault}}.",
   "memory.obsidian.notRegistered":
-    "Swarm tidak dapat menambahkan vault Swarm ke daftar vault Obsidian dengan aman, jadi tidak ada yang diubah. Tambahkan sendiri: di Obsidian pilih Open folder as vault lalu pilih ~/.swarm/vault.",
+    "Swarm tidak dapat menambahkan vault Swarm ke daftar vault Obsidian dengan aman, jadi tidak ada yang diubah. Tambahkan sendiri: di Obsidian pilih Open folder as vault lalu pilih {{vault}}.",
   // 1.2.10 row 41 (N10-085..N10-097, N10-102): salin catatan ke vault Obsidian, konfirmasi, aturan, dan penolakan.
   "memory.vault.copy": "Salin ke vault",
   "memory.vault.remove": "Di vault: hapus",

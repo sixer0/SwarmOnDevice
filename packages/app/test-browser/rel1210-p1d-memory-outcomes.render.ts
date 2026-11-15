@@ -137,21 +137,22 @@ async function press() {
   await tick(30)
 }
 
-// N10-080..N10-082 as fixed in the register (amended row 37, C28 RN-5).
+// N10-080..N10-082 as fixed in the register (amended row 37, C28 RN-5); 1.3.1 row H1 (B13-49): the folder named is the
+// configured vault taken from the hub path (/synthetic/vault here), never a fixed ~/.swarm/vault.
 const NEW_TEXT: Record<Locale, Record<"registered" | "close-obsidian" | "not-registered", string>> = {
   en: {
-    registered: "Swarm added the Swarm vault (~/.swarm/vault) to Obsidian's vault list.",
+    registered: "Swarm added the Swarm vault (/synthetic/vault) to Obsidian's vault list.",
     "close-obsidian":
-      "Close Obsidian, then press Open graph in Obsidian again. If Obsidian is already closed, open it once and quit it normally. Or add the folder yourself: in Obsidian choose Open folder as vault and pick ~/.swarm/vault.",
+      "Close Obsidian, then press Open graph in Obsidian again. If Obsidian is already closed, open it once and quit it normally. Or add the folder yourself: in Obsidian choose Open folder as vault and pick /synthetic/vault.",
     "not-registered":
-      "Swarm could not add the Swarm vault to Obsidian's vault list safely, so it changed nothing. Add it yourself: in Obsidian choose Open folder as vault and pick ~/.swarm/vault.",
+      "Swarm could not add the Swarm vault to Obsidian's vault list safely, so it changed nothing. Add it yourself: in Obsidian choose Open folder as vault and pick /synthetic/vault.",
   },
   id: {
-    registered: "Swarm menambahkan vault Swarm (~/.swarm/vault) ke daftar vault Obsidian.",
+    registered: "Swarm menambahkan vault Swarm (/synthetic/vault) ke daftar vault Obsidian.",
     "close-obsidian":
-      "Tutup Obsidian, lalu tekan Buka grafik di Obsidian lagi. Jika Obsidian sudah tertutup, buka sekali lalu keluar seperti biasa. Atau tambahkan foldernya sendiri: di Obsidian pilih Open folder as vault lalu pilih ~/.swarm/vault.",
+      "Tutup Obsidian, lalu tekan Buka grafik di Obsidian lagi. Jika Obsidian sudah tertutup, buka sekali lalu keluar seperti biasa. Atau tambahkan foldernya sendiri: di Obsidian pilih Open folder as vault lalu pilih /synthetic/vault.",
     "not-registered":
-      "Swarm tidak dapat menambahkan vault Swarm ke daftar vault Obsidian dengan aman, jadi tidak ada yang diubah. Tambahkan sendiri: di Obsidian pilih Open folder as vault lalu pilih ~/.swarm/vault.",
+      "Swarm tidak dapat menambahkan vault Swarm ke daftar vault Obsidian dengan aman, jadi tidak ada yang diubah. Tambahkan sendiri: di Obsidian pilih Open folder as vault lalu pilih /synthetic/vault.",
   },
 }
 

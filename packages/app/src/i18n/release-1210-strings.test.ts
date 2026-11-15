@@ -8,18 +8,19 @@ import { describe, expect, test } from "bun:test"
 
 const app = async (locale: string): Promise<Record<string, string>> => (await import(`./${locale}.ts`)).dict
 
+// 1.3.1 row H1 (B13-49): the three Obsidian outcome texts name the configured vault through {{vault}}.
 const NEW_APP: Record<string, { en: string; id: string }> = {
   "memory.obsidian.registered": {
-    en: "Swarm added the Swarm vault (~/.swarm/vault) to Obsidian's vault list.",
-    id: "Swarm menambahkan vault Swarm (~/.swarm/vault) ke daftar vault Obsidian.",
+    en: "Swarm added the Swarm vault ({{vault}}) to Obsidian's vault list.",
+    id: "Swarm menambahkan vault Swarm ({{vault}}) ke daftar vault Obsidian.",
   },
   "memory.obsidian.closeObsidian": {
-    en: "Close Obsidian, then press Open graph in Obsidian again. If Obsidian is already closed, open it once and quit it normally. Or add the folder yourself: in Obsidian choose Open folder as vault and pick ~/.swarm/vault.",
-    id: "Tutup Obsidian, lalu tekan Buka grafik di Obsidian lagi. Jika Obsidian sudah tertutup, buka sekali lalu keluar seperti biasa. Atau tambahkan foldernya sendiri: di Obsidian pilih Open folder as vault lalu pilih ~/.swarm/vault.",
+    en: "Close Obsidian, then press Open graph in Obsidian again. If Obsidian is already closed, open it once and quit it normally. Or add the folder yourself: in Obsidian choose Open folder as vault and pick {{vault}}.",
+    id: "Tutup Obsidian, lalu tekan Buka grafik di Obsidian lagi. Jika Obsidian sudah tertutup, buka sekali lalu keluar seperti biasa. Atau tambahkan foldernya sendiri: di Obsidian pilih Open folder as vault lalu pilih {{vault}}.",
   },
   "memory.obsidian.notRegistered": {
-    en: "Swarm could not add the Swarm vault to Obsidian's vault list safely, so it changed nothing. Add it yourself: in Obsidian choose Open folder as vault and pick ~/.swarm/vault.",
-    id: "Swarm tidak dapat menambahkan vault Swarm ke daftar vault Obsidian dengan aman, jadi tidak ada yang diubah. Tambahkan sendiri: di Obsidian pilih Open folder as vault lalu pilih ~/.swarm/vault.",
+    en: "Swarm could not add the Swarm vault to Obsidian's vault list safely, so it changed nothing. Add it yourself: in Obsidian choose Open folder as vault and pick {{vault}}.",
+    id: "Swarm tidak dapat menambahkan vault Swarm ke daftar vault Obsidian dengan aman, jadi tidak ada yang diubah. Tambahkan sendiri: di Obsidian pilih Open folder as vault lalu pilih {{vault}}.",
   },
   "session.mission.line.driftChanged.one": {
     en: "{{count}} step changed after approval.",

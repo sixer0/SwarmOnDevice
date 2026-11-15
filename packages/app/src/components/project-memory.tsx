@@ -250,21 +250,26 @@ export function DialogProjectMemory() {
     const open = platform?.openObsidianNote
     if (!open || opening()) return
     setOpening(true)
+    let hubPath = ""
     const result = await client()
       .vault({ language: language.locale() === "id" ? "id" : "en" })
       .then((response) => {
         const vault = response.data
         if (!vault) return "failed" as const
         if (!vault.exists) return "missing" as const
+        hubPath = vault.hubPath
         return open(vault.hubPath)
       })
       .catch(() => "failed" as const)
       .finally(() => setOpening(false))
     if (result === "opened") return
+    // 1.3.1 row H1 (B13-49): name the configured vault folder, not a fixed ~/.swarm/vault. The server builds the hub
+    // path as <vault>/swarm-memory/<project folder>/index.md, so the vault is three segments above it.
+    const vault = hubPath.split("/").slice(0, -3).join("/")
     // Only the press that added the vault to Obsidian's list says so; later presses are "opened" (no stored flag).
     if (result === "registered")
-      return showToast({ variant: "success", title: language.t("memory.obsidian.registered") })
-    showToast({ variant: "error", title: language.t(obsidianText[result]) })
+      return showToast({ variant: "success", title: language.t("memory.obsidian.registered", { vault }) })
+    showToast({ variant: "error", title: language.t(obsidianText[result], { vault }) })
   }
 
   const add = async (event: SubmitEvent) => {
