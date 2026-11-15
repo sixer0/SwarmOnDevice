@@ -30,6 +30,7 @@ import {
   lstatSync,
   openSync,
   readFileSync,
+  readSync,
   renameSync,
   rmSync,
   statSync,
@@ -125,7 +126,13 @@ export function stageProxyBinary(opts: ProxyStageOptions = {}): ProxyStageResult
         log(base, "error", reason, {})
         return { ok: false, reason }
       }
-      if ((existing.mode & 0o777) === PROXY_MODE && sha256(readFileSync(target)) === want) {
+      // Content decides, never metadata (1.3.0 row 132, folded F1 / S13-01): a different size copies without
+      // reading the target; an equal size is hashed with a read bounded by the source size (<= PROXY_MAX_BYTES).
+      if (
+        existing.size === sourceSize &&
+        (existing.mode & 0o777) === PROXY_MODE &&
+        sha256OfAtMost(target, sourceSize) === want
+      ) {
         return { ok: true, staged: true, changed: false, target, sha256: want }
       }
     }
@@ -188,6 +195,30 @@ function existingTargetGate(target: string): ProxyStageResult | null {
   }
   if (!lstatOrNull(target)) return { ok: true, staged: false, reason: NOTHING_TO_REFRESH }
   return null
+}
+
+/** sha256 of the file when it holds exactly `size` bytes; null when it holds more, less, or cannot be read. */
+function sha256OfAtMost(path: string, size: number): string | null {
+  let fd: number
+  try {
+    fd = openSync(path, "r")
+  } catch {
+    return null
+  }
+  try {
+    const buf = new Uint8Array(size + 1)
+    let got = 0
+    while (got < buf.length) {
+      const n = readSync(fd, buf, got, buf.length - got)
+      if (n <= 0) break
+      got += n
+    }
+    return got === size ? sha256(buf.subarray(0, size)) : null
+  } catch {
+    return null
+  } finally {
+    closeSync(fd)
+  }
 }
 
 function lstatOrNull(path: string): ReturnType<typeof lstatSync> | null {

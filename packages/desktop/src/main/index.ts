@@ -64,6 +64,7 @@ import { createDatumStudio } from "./datum-studio-host/start"
 import { startRenderBridge } from "./datum-render"
 import { createRenderEnvGate } from "./sidecar-env"
 import { createToolHealth } from "./tool-health/startup"
+import { refreshStagedProxy } from "./proxy-refresh"
 
 // Row 33: longest the sidecar spawn waits for the render bridge (normally a socket listen, milliseconds).
 const SIDECAR_RENDER_ENV_WAIT_MS = 5_000
@@ -313,6 +314,15 @@ const main = Effect.gen(function* () {
   // installs (D6). The setup runner is the IPC layer's one instance (assigned below), so a revive during a user install
   // is refused SETUP_BUSY.
   let ipcSetupRunner: ReturnType<typeof registerIpcHandlers>["setupRunner"] | undefined
+  // 1.3.0 row 132 (AC-S6a, F4): refresh an already staged swarm-web-proxy from this bundle once per packaged launch,
+  // synchronously, before tool-health probes it and before the sidecar spawns the MCP servers. Never creates
+  // ~/.swarm; logs one fixed code.
+  refreshStagedProxy({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    home: homedir(),
+    log: (level, code, context) => writeLog("proxy-refresh", code, context, level),
+  })
   const toolHealth = createToolHealth({
     home: homedir(),
     platform: process.platform,
