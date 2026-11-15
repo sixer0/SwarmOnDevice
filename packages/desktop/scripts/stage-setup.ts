@@ -30,11 +30,36 @@ function fail(message: string): never {
   throw new StageFail(message)
 }
 
+/**
+ * C115 (N135-1, N135-2): a compiled bun binary reads `bunfig.toml` (and runs its `preload`) and `.env` from the folder it
+ * is started in, unless the build turns that off. opencode starts the proxy with the project folder as its working
+ * folder, so a project file could run code inside the proxy or set its environment. Both binaries are built with every
+ * runtime autoload off; tsconfig and package.json are off by default in bun 1.3 and are pinned off here too.
+ */
+const NO_RUNTIME_AUTOLOAD = [
+  "--no-compile-autoload-bunfig",
+  "--no-compile-autoload-dotenv",
+  "--no-compile-autoload-tsconfig",
+  "--no-compile-autoload-package-json",
+] as const
+
+/**
+ * The `bun` arguments of one compile, run with `packages/setup` as the working folder. stage-setup-autoload.test.ts
+ * compiles the proxy with exactly these arguments.
+ * @internal test seam
+ */
+export function compileArgs(entry: string, outfile: string, defines: string[] = []) {
+  return ["build", "--compile", `--target=${TARGET}`, ...NO_RUNTIME_AUTOLOAD, ...defines, "--outfile", outfile, join(SETUP, entry)]
+}
+
+/**
+ * The folder compileArgs runs in.
+ * @internal test seam
+ */
+export const SETUP_DIR = SETUP
+
 async function compile(entry: string, outfile: string, defines: string[] = []) {
-  const result =
-    await $`${process.execPath} build --compile ${`--target=${TARGET}`} ${defines} --outfile ${outfile} ${join(SETUP, entry)}`
-      .cwd(SETUP)
-      .nothrow()
+  const result = await $`${process.execPath} ${compileArgs(entry, outfile, defines)}`.cwd(SETUP).nothrow()
   if (result.exitCode !== 0) fail(`compile ${entry} exit ${result.exitCode}`)
 }
 
