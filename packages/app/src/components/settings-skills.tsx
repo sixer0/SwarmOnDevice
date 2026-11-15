@@ -33,6 +33,8 @@ type SkillDraftRow = {
   name: string
   scope: "global" | "project"
   content: string
+  // The draft's time as listed (1.2.10 AC-B1007a); every approve sends it back as `draftTime`.
+  time: number
   untrusted: boolean
   runsCommands: boolean
   replaces: boolean
@@ -96,7 +98,8 @@ function useSettingsDirectory(): Accessor<string | undefined> {
 }
 
 type Open = { key: string; mode: "view" | "edit"; content: string; hash?: string; scope?: "global" | "project" }
-type Confirm = { kind: "delete" | "commands"; key: string }
+// `time`: for the commands confirm, the draft time the first click was sent with (the draft the person saw).
+type Confirm = { kind: "delete" | "commands"; key: string; time?: number }
 
 export const SettingsSkills: Component<{ v2?: boolean; directory?: Accessor<string | undefined> }> = (props) => {
   const language = useLanguage()
@@ -253,17 +256,34 @@ export const SettingsSkills: Component<{ v2?: boolean; directory?: Accessor<stri
   // 1.2.9 AC-B08 (N9-011, C8): refuse first, without asking. The first click sends approve WITHOUT acceptCommands,
   // which the server refuses with no write: SKILL_SHELL_UNTRUSTED (untrusted project) shows its text and no confirm;
   // only SKILL_SHELL_UNCONFIRMED opens the second confirm.
+  // 1.2.10 AC-B1007a: both clicks send `draftTime`, the time of the draft the person saw (the confirm keeps the time of
+  // its first click). A draft changed on disk since is refused with SKILL_CHANGED: close the confirm, show the
+  // "changed" text and reload, so the new draft is listed.
   const approve = (draft: SkillDraftRow, confirmed: boolean) => {
     const first = draft.runsCommands && !confirmed
+    const key = keyOf(draft.scope, draft.name)
+    const draftTime =
+      confirmed && state.confirm?.kind === "commands" && state.confirm.key === key && state.confirm.time !== undefined
+        ? state.confirm.time
+        : draft.time
     if (first) setState({ confirm: undefined })
     return run(async () => {
       const result = await client().skill.draftApprove(
-        { name: draft.name, scope: draft.scope, ...(draft.runsCommands && confirmed ? { acceptCommands: true } : {}) },
+        {
+          name: draft.name,
+          scope: draft.scope,
+          draftTime,
+          ...(draft.runsCommands && confirmed ? { acceptCommands: true } : {}),
+        },
         await headers(),
       )
       if (first && result.error && skillErrorCode(result.error) === "SKILL_SHELL_UNCONFIRMED") {
-        setState({ confirm: { kind: "commands", key: keyOf(draft.scope, draft.name) } })
+        setState({ confirm: { kind: "commands", key, time: draftTime } })
         return {}
+      }
+      if (result.error && skillErrorCode(result.error) === "SKILL_CHANGED") {
+        setState({ confirm: undefined })
+        reload()
       }
       if (!result.error) {
         setState({ confirm: undefined })

@@ -85,12 +85,22 @@ const fresh = () => {
       name: "d-plain",
       scope: "project",
       content: "plain draft",
+      time: 1001,
       untrusted: false,
       runsCommands: false,
       replaces: false,
     },
-    { name: "d-shell", scope: "global", content: "!`ls`", untrusted: true, runsCommands: true, replaces: true },
-    { name: "d-shell-p", scope: "project", content: "!`pwd`", untrusted: false, runsCommands: true, replaces: false },
+    // 1.2.10 AC-B1007a (INTENT, row 70): drafts are listed with their `time`; every approve echoes it as `draftTime`.
+    { name: "d-shell", scope: "global", content: "!`ls`", time: 1002, untrusted: true, runsCommands: true, replaces: true },
+    {
+      name: "d-shell-p",
+      scope: "project",
+      content: "!`pwd`",
+      time: 1003,
+      untrusted: false,
+      runsCommands: true,
+      replaces: false,
+    },
   ]
 }
 fresh()
@@ -377,7 +387,7 @@ for (const [label, module] of [
       expect(world.calls).toEqual([
         {
           route: "draftApprove",
-          input: { name: "d-plain", scope: "project" },
+          input: { name: "d-plain", scope: "project", draftTime: 1001 },
           headers: { "x-swarm-desktop-nonce": NONCE },
         },
       ])
@@ -398,7 +408,7 @@ for (const [label, module] of [
     test("global scope: Approve asks first without acceptCommands and opens N8-430; only its confirm sends acceptCommands", async () => {
       const first = {
         route: "draftApprove",
-        input: { name: "d-shell", scope: "global" },
+        input: { name: "d-shell", scope: "global", draftTime: 1002 },
         headers: { "x-swarm-desktop-nonce": NONCE },
       }
       await mount(module.DialogSettings)
@@ -419,7 +429,7 @@ for (const [label, module] of [
         first,
         {
           route: "draftApprove",
-          input: { name: "d-shell", scope: "global", acceptCommands: true },
+          input: { name: "d-shell", scope: "global", draftTime: 1002, acceptCommands: true },
           headers: { "x-swarm-desktop-nonce": NONCE },
         },
       ])
@@ -428,7 +438,7 @@ for (const [label, module] of [
     test("project scope asks first, shows N8-429; SKILL_SHELL_UNCONFIRMED on the confirm maps to N8-431", async () => {
       await mount(module.DialogSettings)
       await click('[data-draft="d-shell-p"] [data-action="draft-approve"]')
-      expect(world.calls.map((call) => call.input)).toEqual([{ name: "d-shell-p", scope: "project" }])
+      expect(world.calls.map((call) => call.input)).toEqual([{ name: "d-shell-p", scope: "project", draftTime: 1003 }])
       const confirm = $('[data-draft="d-shell-p"] [data-slot="skill-commands-confirm"]')?.textContent ?? ""
       expect(confirm).toContain(text("settings.skills.drafts.confirmCommands"))
       expect(confirm).not.toContain(text("settings.skills.drafts.confirmCommandsGlobal"))
@@ -436,7 +446,12 @@ for (const [label, module] of [
       world.forceUnconfirmed = true
       await click('[data-draft="d-shell-p"] [data-action="draft-approve-commands"]')
       expect(routes()).toEqual(["draftApprove", "draftApprove"])
-      expect(world.calls[1].input).toEqual({ name: "d-shell-p", scope: "project", acceptCommands: true })
+      expect(world.calls[1].input).toEqual({
+        name: "d-shell-p",
+        scope: "project",
+        draftTime: 1003,
+        acceptCommands: true,
+      })
       expect($('[data-slot="skill-error"]')?.textContent).toBe(text("settings.skills.error.shellUnconfirmed"))
     })
   })
