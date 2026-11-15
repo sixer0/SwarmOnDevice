@@ -136,6 +136,22 @@ export type FolderMissingDeps = {
   reload?: (directory: string) => Promise<unknown> | unknown
 }
 
+/**
+ * 1.3.0 row 82 (AC-B1015, C20 D5): the longest Restore / Recreate waits for `deps.reload` before it opens anyway. A
+ * reload that never settles no longer keeps the notice's open entry (and the project) waiting forever.
+ */
+export const FOLDER_RELOAD_TIMEOUT_MS = 10_000
+
+/** Waits for the reload, a rejection, or FOLDER_RELOAD_TIMEOUT_MS, whichever comes first; a late reload is ignored. */
+function settleReload(reload: () => unknown) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const limit = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, FOLDER_RELOAD_TIMEOUT_MS)
+  })
+  const done = (async () => reload())().catch(() => undefined)
+  return Promise.race([done, limit]).finally(() => clearTimeout(timer))
+}
+
 export type FolderMissingOpenOptions = {
   /** false when the folder lives on another (remote) server: the desktop cannot check it, so it opens at once. */
   local?: boolean
@@ -182,9 +198,10 @@ export function createFolderMissingNotice(deps: FolderMissingDeps): FolderMissin
 
   async function opened(directory: string, onOpen: () => unknown) {
     const seenMissing = missingFolders.delete(directory)
-    // A failed reload must not keep the person from the project: opening still runs, as before.
+    // A failed reload must not keep the person from the project: opening still runs, as before. Nor may one that never
+    // settles (row 82): after FOLDER_RELOAD_TIMEOUT_MS it goes on.
     if (seenMissing) {
-      await (async () => deps.reload?.(directory))().catch(() => undefined)
+      await settleReload(() => deps.reload?.(directory))
       // Row 79a: boundaries that hold a LOCATION_NOT_FOLDER failure render their content again (the load re-runs).
       // Before the notice closes, so the error page never shows in between.
       for (const reset of [...folderBackListeners]) reset()
