@@ -142,6 +142,8 @@ import type {
   McpStatusResponses,
   MemoryAddErrors,
   MemoryAddResponses,
+  MemoryAllowVaultErrors,
+  MemoryAllowVaultResponses,
   MemoryGetErrors,
   MemoryGetResponses,
   MemoryRemoveErrors,
@@ -3569,6 +3571,7 @@ export class Memory extends HeyApiClient {
    */
   public update<ThrowOnError extends boolean = false>(
     parameters: {
+      "x-swarm-desktop-nonce"?: string
       id: string
       directory?: string
       workspace?: string
@@ -3582,6 +3585,7 @@ export class Memory extends HeyApiClient {
       [
         {
           args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
             { in: "path", key: "id" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
@@ -3593,6 +3597,47 @@ export class Memory extends HeyApiClient {
     )
     return (options?.client ?? this.client).patch<MemoryUpdateResponses, MemoryUpdateErrors, ThrowOnError>({
       url: "/memory/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Allow or stop a note in the vault
+   *
+   * Person only (Swarm desktop app): allow a device-only note into the Obsidian vault copy, or remove it. Never changes which models may receive the note.
+   */
+  public allowVault<ThrowOnError extends boolean = false>(
+    parameters: {
+      "x-swarm-desktop-nonce"?: string
+      id: string
+      directory?: string
+      workspace?: string
+      allowed?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-swarm-desktop-nonce" },
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "allowed" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<MemoryAllowVaultResponses, MemoryAllowVaultErrors, ThrowOnError>({
+      url: "/memory/{id}/vault",
       ...options,
       ...params,
       headers: {

@@ -7,6 +7,7 @@ import { VaultMirror } from "@/memory/vault-mirror"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
+import { ApiMemoryPersonOnlyError, MEMORY_PERSON_ONLY, MEMORY_PERSON_ONLY_MESSAGE } from "../groups/memory"
 
 const HUB = "index.md"
 
@@ -53,5 +54,15 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       .handle("settings", (ctx) => memory.setEnabled(ctx.payload.enabled))
       .handle("update", (ctx) => memory.update(ctx.params.id, ctx.payload))
       .handle("remove", (ctx) => memory.remove(ctx.params.id))
+      // 1.2.10 row 54a (contract landing, N10-067): fail closed. Every call is refused 403 before anything is read, with
+      // or without the nonce, until row 54 implements the person-only logic. Nothing is read or written here.
+      .handle("allowVault", () =>
+        Effect.fail(
+          new ApiMemoryPersonOnlyError({
+            name: "MemoryPersonOnlyError",
+            data: { code: MEMORY_PERSON_ONLY, message: MEMORY_PERSON_ONLY_MESSAGE },
+          }),
+        ),
+      )
   }),
 )
