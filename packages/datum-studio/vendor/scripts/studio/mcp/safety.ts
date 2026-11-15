@@ -199,7 +199,9 @@ const ASSET_EXT = new Set([".png", ".jpg", ".jpeg"]);
  */
 export function resolveAllowedPath(raw: string, roots: readonly string[], purpose: PathPurpose, nfs: NodeFs, maxBytes = Infinity): string {
   const resolved = checkPathLexical(raw);
-  const outside = () => new McpToolError("PATH_OUTSIDE_ROOTS", `path ${resolved} di luar akar yang diizinkan (STUDIO_MCP_FILE_ROOTS: ${roots.join(path.delimiter)})`);
+  // Swarm patch (1.2.10 row 78, B10-14, N10-010): the host passes the session folder as the only root (C114), so the
+  // refusal names that folder, not the env var. Result text for the calling agent only, never logged (S10-41).
+  const outside = () => new McpToolError("PATH_OUTSIDE_ROOTS", `path ${resolved} di luar akar yang diizinkan, yaitu folder sesi ini (${roots.join(path.delimiter)}). Simpan di dalam folder itu; setelah proyek dipindah ke grup, folder sesi ikut pindah.`);
   if (!roots.some((r) => isInside(resolved, path.resolve(r)))) throw outside();
   const reads = purpose === "read-report" || purpose === "read-asset";
   if (!reads) assertNotProtected(resolved, purpose === "write-dir");
