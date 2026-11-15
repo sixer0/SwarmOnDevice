@@ -1,5 +1,6 @@
 import { useParams } from "@solidjs/router"
 import { Show, type JSX } from "solid-js"
+import { ProjectMemoryLine } from "@/components/project-memory"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { SessionPermissionDock } from "@/pages/session/composer/session-permission-dock"
@@ -181,6 +182,9 @@ export function SessionComposerRegion(props: {
             </div>
           </Show>
         </Show>
+        <div class="flex justify-center">
+          <ProjectMemoryLine />
+        </div>
       </div>
     </div>
   )
