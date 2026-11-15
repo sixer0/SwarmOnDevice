@@ -706,13 +706,9 @@ function keepExport(found: Item, next: Item, attested: boolean): Item {
 function exportRefusal(item: Item): ProjectMemory.Refusal | undefined {
   if (item.rolledInto !== undefined) return "archived"
   if (item.deviceOnly !== true) return "not_device_only"
-  const strings = [
-    item.text,
-    item.body ?? "",
-    ...(item.refs ?? []).flatMap((ref) => ("symbol" in ref ? [ref.symbol, ref.path ?? ""] : [ref.path])),
-  ].filter((value) => value !== "")
-  if (strings.some(VaultMirror.classified)) return "classified"
-  if (strings.some(MemoryLearn.looksSecret)) return "secret"
+  // 01d §3.2 single decision point (C58(b)): the mirror's own exclusion, classified before secret.
+  const excluded = VaultMirror.mirrorExclusion(item)
+  if (excluded === "classified" || excluded === "secret") return excluded
 }
 
 /**

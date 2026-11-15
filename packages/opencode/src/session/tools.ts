@@ -537,11 +537,19 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
 
   // N8-437: whether the closed mission has an index entry in this project's memory, so the close nudge can name its
   // vault notes. Memory off, a disabled store or a failed lookup give the nudge without links (logged).
+  // N10-070 (C18 D-9): only an entry the mirror copies counts (`mirrorExclusion`), so the nudge never links notes that
+  // are not in the vault: a device-only entry the person has not exported, or a secret-looking or classified one.
   const missionIndexed = (missionId: string): Effect.Effect<boolean> =>
     Effect.gen(function* () {
       if (!memory || process.env.SWARM_DISABLE_MEMORY) return false
       const store = yield* memory.get()
-      return store.enabled && store.items.some((item) => item.kind === "index" && item.missionId === missionId)
+      return (
+        store.enabled &&
+        store.items.some(
+          (item) =>
+            item.kind === "index" && item.missionId === missionId && VaultMirror.mirrorExclusion(item) === undefined,
+        )
+      )
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logError("mission index lookup failed", {
