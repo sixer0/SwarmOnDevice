@@ -1,4 +1,4 @@
-# Swarm whats-new: agent briefs 1.2.0 to 1.2.9
+# Swarm whats-new: agent briefs 1.2.0 to 1.3.0
 
 What changed for you, the agent, per release, newest first: what you can do, must do, known limits. When this text
 and a tool's description or refusal disagree, the tool is right. Codes in capitals are refusal or gate codes.
@@ -16,7 +16,27 @@ and a tool's description or refusal disagree, the tool is right. Codes in capita
    or FAIL per item with evidence.
 5. Record: save the results as one `remember` note.
 
-## 1.2.9 (this build)
+## 1.3.0 (this build)
+1.2.10 was never released; its changes ship here.
+Can:
+- Diagram rules (engine in DATUM Studio, `direction` opt-in, fit codes): skill `diagram-flow`.
+- `studio_mission_get` drift also lists rows changed after approval (derived.drift.changed: row, decision, fields).
+- Charts: LINK_ALONG_NODE (a connector running along a box) is a note in the render report, never a defect.
+- `tool-health` reports a swarm-web proxy that differs from the app's copy as NOT_INSTALLED; Swarm refreshes it at
+  each launch.
+Must:
+- Memory kept on this device (on-device model) is not copied to the vault; only the person copies a note, in the
+  memory view; secret or classified never. Never copy memory into the inbox. Changing who receives a note is
+  person-only.
+- The vault inbox: only with `swarm-web_vault_inbox`; write, edit, apply_patch or a shell write into the inbox folder
+  is refused in every mode. Swarm refuses a classified note before asking (BLOCKED_BY_POLICY).
+- An owner message (from: owner) from a session the app has not attested is refused (SESSION_NOT_ATTESTED): in
+  `studio_mission_update_row` send yours as from: agent and ask the person.
+- A skill draft is approved only with the draftTime the list showed; a changed draft is refused (SKILL_CHANGED).
+Limits: registering the vault in Obsidian (on open) and copying a note to the vault are the person's steps in the
+app; you cannot do them. The project memory line under the session composer is for the person.
+
+## 1.2.9
 Can:
 - `studio_figure_preview` reports backupResidue, `studio_mission_export` reports backupRemoved.
 - Diagrams: after a detour a connector enters a box head-on (flows that set direction); chart flowcharts draw BPMN
@@ -37,44 +57,28 @@ Limits: secret-shaped values in inbox notes are not checked: keep them out yours
 
 ## 1.2.8
 Can:
-- Skills: draft a skill with `skill_draft` (load `skill-authoring` first); the person approves it in Settings >
-  Skills, a draft running shell commands needs a second confirmation. An optional `triggers:` map only suggests a
-  skill. Skills appear without a restart; a skill in `skills.disabled` is not offered, except the required
-  `obsidian-memory`.
-- Mission index: after the final report write exactly one entry with `remember` {kind: "index", missionId, text:
-  "YYYY-MM-DD <mission-id> | <outcome> | triggers: k1, k2, k3 | docs/<mission-id>/10_report/report.md"} (one line,
-  at most 300 characters and 5 triggers; body at most 2000). At most 40 live entries per project; older ones roll up
-  per quarter or year.
-- Obsidian: Swarm itself mirrors memory, index entries and final reports into the vault folder swarm-memory/. You
-  write one inbox note at mission close and per lasting decision with `swarm-web_vault_inbox` (`obsidian-memory`).
-- Sub-projects: after creating a mission in the Default Project root, propose a group with
-  `studio_mission_request_decision` (skill `project-folders`). Only the person's click moves anything;
+- Skills: draft one with `skill_draft` (load `skill-authoring` first); the person approves it in Settings > Skills.
+- Mission index: after the final report write exactly one `remember` {kind: "index", missionId, text} entry (one
+  line, at most 300 characters and 5 triggers).
+- Obsidian: Swarm itself mirrors memory, index entries and final reports into the vault folder swarm-memory/, except
+  notes kept on this device. You write one inbox note at mission close and per lasting decision with
+  `swarm-web_vault_inbox` (`obsidian-memory`).
+- Sub-projects: propose a group with `studio_mission_request_decision` (skill `project-folders`);
   `studio_mission_place` is person-only.
-- Diagrams at Visio minimum: Basic Flowchart, Cross-Functional, BPMN Basic (events, tasks, gateways, pools, data
-  objects, message flows); connectors with route, glue, bend points, arrowheads, dash, weight, label position and
-  line jumps. Load `diagram-flow` and read studio://skema/diagram-visio before the spec. Diagram blocks persist
-  through `studio_chapter_submit`, markdown import, `studio_write` and `studio_edit`.
-- `studio_mission_get` and `studio_registry` honour detail:true (full sha256). `studio_edit` warns about a table
-  that will fail OVERLAP_CLIP.
+- Diagrams at Visio minimum (flowchart, cross-functional, BPMN basic): load `diagram-flow` and read
+  studio://skema/diagram-visio before the spec.
 Must:
 - Never write into a skills folder or into the vault swarm-memory folder with edit, write, apply_patch, shell or an
-  interpreter one-liner: refused in every mode, also with "always". Use `skill_draft`, Settings > Skills or `remember`.
-- Close in this order: final report, index entry, then `studio_mission_set_status` done. Without the entry the close
-  is refused with MEMORY_INDEX_MISSING (other clients get the warning MEMORY_INDEX_UNCHECKED).
-- `studio_mission_create` with a session it does not know is refused with SESSION_UNKNOWN.
+  interpreter one-liner: refused in every mode. Use `skill_draft`, Settings > Skills or `remember`.
+- Close in this order: final report, index entry, then `studio_mission_set_status` done (else MEMORY_INDEX_MISSING).
 - Swarm's own server under consent: read only the listed own-server GET/HEAD routes (no directory override outside
   your worktree); routes that can read secrets or file contents wait for the main agent; person-only routes never.
   With curl/httpie/xh, only the registered options.
-- Config writes, skill write routes and sub-project moves need the desktop app's per-launch nonce: you cannot do
-  them through the server API, and `swarm serve` refuses them. Never pose as the person: an answer recorded outside
-  the app is marked as recorded by an agent on the person's behalf.
-- Diagrams: GEOM_LABEL_COLLISION and GEOM_FRAME_OUTSIDE fail FIGURE_FIT; a horizontal pool at 128 mm is refused
-  (use a vertical pool); DATUM-37 now ends in -rank or -sheet; POOL_FLOW_CROSSES warns about a flow leaving its
-  pool. Check every label yourself.
-- The verifier may write Markdown files after asking.
+- Config writes, skill write routes and sub-project moves need the desktop app's per-launch nonce; never pose as the
+  person.
+- Diagrams: GEOM_LABEL_COLLISION and GEOM_FRAME_OUTSIDE fail FIGURE_FIT; check every label yourself.
 Limits: notes holding a classification word are not mirrored; vault notes are readable by Obsidian, its plugins and
-any sync; skills placed by hand with shell blocks are not trust-checked yet; only root to group moves exist; BPMN
-beyond the basic set (expanded sub-process, loop task, most event triggers) is absent.
+any sync.
 
 ## 1.2.7
 Can:
