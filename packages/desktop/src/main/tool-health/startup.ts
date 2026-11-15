@@ -15,8 +15,10 @@
 // this build (logged once, not recorded), so no false "did not start" message appears.
 
 import { spawn as nodeSpawn } from "node:child_process"
-import { statSync } from "node:fs"
-import { isAbsolute } from "node:path"
+import { createHash } from "node:crypto"
+import { lstatSync, statSync } from "node:fs"
+import { lstat, open, stat } from "node:fs/promises"
+import { isAbsolute, join } from "node:path"
 import { readSetupComponentStates } from "../setup-runner"
 import { changedWatchedFiles, watchedFileChangedMessage } from "./flux"
 import { runProbe, type ProbeResult } from "./probe"
@@ -40,6 +42,101 @@ export const INSTALLED_SETUP_STATES: ReadonlySet<string> = new Set(["healthy", "
 /** Environment of a user revive argv (01c 3.3). PATH is fixed; the rest are copied from the parent when present. */
 export const REVIVE_ENV_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 export const REVIVE_ENV_COPY = ["HOME", "USER", "LOGNAME", "LANG", "TMPDIR"] as const
+
+// 1.3.0 row 132b (AC-S6c, folded F2 / S13-01): the staged swarm-web-proxy is checked against the copy this app
+// bundle ships. The launch refresh (refreshStagedProxy, row 132) runs before tool-health, so a copy that still differs here is
+// one the refresh refused or failed to replace; it is reported through the regime as the shipped component
+// `swarm-web` with the existing NOT_INSTALLED reason, whose existing message points to the "Install tools" command
+// (setup's install stages the proxy again). No new reason, message or UI. Packaged builds with the bundle copy only.
+// Mirrored from packages/setup (rel130-s6-tool-health-stale.test.ts fails on drift):
+// - STAGED_PROXY_REL = PROXY_BINARY_PATH (setup/src/mcpproxy/register.ts) without "~/"
+// - STAGED_PROXY_MAX_BYTES = PROXY_MAX_BYTES (setup/src/wiring/proxy_stage.ts)
+
+/** Component id of the staged proxy check; the swarm-web MCP entry runs that file. */
+const STAGED_PROXY_HEALTH_ID = "swarm-web"
+const STAGED_PROXY_NAME = "swarm-web-proxy"
+const STAGED_PROXY_REL = [".swarm", "setup", "bin", STAGED_PROXY_NAME] as const
+const STAGED_PROXY_MAX_BYTES = 256 * 1024 * 1024
+const HASH_CHUNK_BYTES = 1024 * 1024
+
+/** sha256 of the first `max` bytes of `path`, and how many bytes it read (at most `max`). Rejects on any error. */
+async function sha256Bounded(path: string, max: number): Promise<{ sha256: string; bytes: number }> {
+  const handle = await open(path, "r")
+  try {
+    const hash = createHash("sha256")
+    const buf = Buffer.alloc(Math.min(HASH_CHUNK_BYTES, Math.max(1, max)))
+    let total = 0
+    while (total < max) {
+      const { bytesRead } = await handle.read(buf, 0, Math.min(buf.length, max - total), null)
+      if (bytesRead <= 0) break
+      hash.update(buf.subarray(0, bytesRead))
+      total += bytesRead
+    }
+    return { sha256: hash.digest("hex"), bytes: total }
+  } finally {
+    await handle.close().catch(() => undefined)
+  }
+}
+
+/**
+ * The F2 content rule for the staged proxy, never metadata: one `lstat` of the target; a symlink or non-regular file
+ * is stale unread; a size other than the bundle copy's is stale unread (so a target above STAGED_PROXY_MAX_BYTES is
+ * never read); an equal size is hashed with a read bounded by the bundle size (plus one byte to see a target that
+ * grew meanwhile) and compared with the bundle's hash. Mode and mtime never make a copy current. Never throws; the
+ * detail holds no path.
+ */
+async function checkStagedProxy(paths: { source: string; target: string }): Promise<ProbeResult> {
+  const stale = (why: string): ProbeResult => ({
+    healthy: false,
+    reason: "NOT_INSTALLED",
+    detail: `the staged ${STAGED_PROXY_NAME} is not the copy this Swarm build ships (${why})`,
+  })
+  try {
+    let target
+    try {
+      target = await lstat(paths.target)
+    } catch {
+      return { healthy: false, reason: "NOT_INSTALLED", detail: `no staged ${STAGED_PROXY_NAME}` }
+    }
+    if (target.isSymbolicLink() || !target.isFile()) return stale("not a regular file")
+    const source = await stat(paths.source)
+    if (!source.isFile() || source.size === 0 || source.size > STAGED_PROXY_MAX_BYTES)
+      return { healthy: false, reason: "FILE_MISSING", detail: `the bundled ${STAGED_PROXY_NAME} is not usable` }
+    if (target.size !== source.size) return stale("size differs")
+    const want = await sha256Bounded(paths.source, source.size)
+    if (want.bytes !== source.size) return stale("bundle copy changed while it was read")
+    const got = await sha256Bounded(paths.target, source.size + 1)
+    if (got.bytes !== source.size || got.sha256 !== want.sha256) return stale("content differs")
+    return { healthy: true, reason: "OK", detail: `the staged ${STAGED_PROXY_NAME} matches the bundled copy` }
+  } catch (error) {
+    return stale(`unreadable: ${(error as NodeJS.ErrnoException)?.code ?? "error"}`)
+  }
+}
+
+/** The bundle copy when this is a packaged build that ships one, else undefined (dev runs: no check). */
+function bundledProxyPath(ctx: ToolHealthContext): string | undefined {
+  if (!ctx.isPackaged || !ctx.resourcesPath) return undefined
+  const source = join(ctx.resourcesPath, "swarm-setup", STAGED_PROXY_NAME)
+  try {
+    return statSync(source).isFile() ? source : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The shipped component for the staged proxy check; `installedWhen.path` = the staged file (absent = not installed). */
+function stagedProxyComponent(home: string): ResolvedToolHealthComponent {
+  const target = join(home, ...STAGED_PROXY_REL)
+  return {
+    id: STAGED_PROXY_HEALTH_ID,
+    label: STAGED_PROXY_HEALTH_ID,
+    probe: { kind: "file", path: target },
+    startup: "probe",
+    consent: "auto",
+    installedWhen: { path: target },
+    source: "shipped",
+  }
+}
 
 /** What tool-health needs from the shared setup runner (setup-runner.ts `start`, row 92b). */
 export type ToolHealthSetupRunner = WebReviveRunner
@@ -169,14 +266,27 @@ export function createToolHealth(deps: ToolHealthDeps): ToolHealth {
 
   const setupStates = () => readSetupComponentStates(deps.home) as Record<string, string | undefined>
 
+  // Row 132b: packaged builds that ship the proxy add the staged proxy check; an entry of the same id from the
+  // person's file never replaces it (it would silence the check).
+  const isStagedProxy = (c: ResolvedToolHealthComponent) => c.id === STAGED_PROXY_HEALTH_ID && c.source === "shipped"
+  const withStagedProxy = (components: ResolvedToolHealthComponent[]): ResolvedToolHealthComponent[] => {
+    if (!bundledProxyPath(deps)) return components
+    return [...components.filter((c) => c.id !== STAGED_PROXY_HEALTH_ID), stagedProxyComponent(deps.home)]
+  }
+
   const registry = (): ResolvedToolHealthComponent[] => {
-    if (deps.resolveRegistry) return deps.resolveRegistry()
+    if (deps.resolveRegistry) return withStagedProxy(deps.resolveRegistry())
     const { components, user } = resolveToolHealthRegistry(deps, { getuid: deps.getuid as (() => number) | undefined })
     for (const issue of user.issues) log("warn", userRegistryIssueMessage(issue), { reason: issue.code, id: issue.id })
-    return components
+    return withStagedProxy(components)
   }
 
   const probe = async (c: ResolvedToolHealthComponent): Promise<ProbeResult> => {
+    if (isStagedProxy(c)) {
+      const source = bundledProxyPath(deps)
+      if (!source) return { healthy: false, reason: "FILE_MISSING", detail: `the bundled ${STAGED_PROXY_NAME} is not usable` }
+      return checkStagedProxy({ source, target: join(deps.home, ...STAGED_PROXY_REL) })
+    }
     if (deps.probe) return deps.probe(c)
     return runProbe(c.probe, {
       fetch: deps.fetch,
@@ -239,7 +349,9 @@ export function createToolHealth(deps: ToolHealthDeps): ToolHealth {
     if (!when) return true
     if ("setupComponent" in when) return INSTALLED_SETUP_STATES.has(setupStates()[when.setupComponent] ?? "")
     try {
-      statSync(when.path)
+      // Row 132b: a staged proxy that is a (dangling) symlink is installed and flagged by the check, not skipped.
+      if (isStagedProxy(c)) lstatSync(when.path)
+      else statSync(when.path)
       return true
     } catch {
       return false
