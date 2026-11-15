@@ -1,4 +1,4 @@
-# Swarm whats-new: agent briefs 1.2.0 to 1.3.0
+# Swarm whats-new: agent briefs 1.2.0 to 1.3.1
 
 What changed for you, the agent, per release, newest first: what you can do, must do, known limits. When this text
 and a tool's description or refusal disagree, the tool is right. Codes in capitals are refusal or gate codes.
@@ -16,7 +16,11 @@ and a tool's description or refusal disagree, the tool is right. Codes in capita
    or FAIL per item with evidence.
 5. Record: save the results as one `remember` note.
 
-## 1.3.0 (this build)
+## 1.3.1 (this build)
+Fixed: Open in Obsidian with Obsidian closed now registers the vault and opens the note (no "close Obsidian" refusal).
+The outcome messages name the configured vault folder. Nothing else changed for agents.
+
+## 1.3.0
 1.2.10 was never released; its changes ship here.
 Can:
 - Diagram rules (engine in DATUM Studio, `direction` opt-in, fit codes): skill `diagram-flow`.

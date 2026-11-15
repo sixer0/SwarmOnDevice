@@ -18,7 +18,9 @@ const between = (from: string, to: string) => {
   const end = text.indexOf(`\n## ${to}`)
   return start > 0 && end > start ? text.slice(start, end) : ""
 }
-const v130 = between("1.3.0 (this build)", "1.2.9")
+// 1.3.1 row R1 (INTENT): 1.3.1 (Obsidian hotfix) is this build; the 1.3.0 section keeps its content, without the marker.
+const v130 = between("1.3.0\n", "1.2.9")
+const v131 = between("1.3.1 (this build)", "1.3.0")
 
 const POINTER = "- Diagram rules (engine in DATUM Studio, `direction` opt-in, fit codes): skill `diagram-flow`."
 const P4_LINE =
@@ -26,13 +28,24 @@ const P4_LINE =
 const OWNER_LINE = "- An owner message (from: owner) from a session the app has not attested is refused (SESSION_NOT_ATTESTED)"
 
 describe("swarm-whats-new 1.3.0 brief (N10-185)", () => {
-  test("the 1.3.0 section is this build; 1.2.9 is not; 1.2.10 has no heading; the title names 1.3.0", () => {
+  test("1.3.1 is this build; 1.3.0 and 1.2.9 are not; 1.2.10 has no heading; the title names 1.3.1", () => {
     expect(v130.length).toBeGreaterThan(200)
+    expect(text).toContain("\n## 1.3.0\n")
     expect(text).toContain("\n## 1.2.9\n")
+    expect(text).not.toContain("## 1.3.0 (this build)")
     expect(text).not.toContain("## 1.2.9 (this build)")
     expect(text).not.toMatch(/\n## 1\.2\.10\b/)
-    expect(text.split("\n")[0]).toBe("# Swarm whats-new: agent briefs 1.2.0 to 1.3.0")
+    expect(text.split("\n")[0]).toBe("# Swarm whats-new: agent briefs 1.2.0 to 1.3.1")
     expect(text.match(/\(this build\)/g)?.length).toBe(1)
+  })
+
+  test("1.3.1 row R1: the 1.3.1 brief names the Obsidian fix and nothing path-like or classified", () => {
+    const slice = flat(v131)
+    expect(slice).toContain("Open in Obsidian with Obsidian closed now registers the vault")
+    expect(slice).toContain("name the configured vault folder")
+    expect(v131).not.toMatch(
+      /\b004\b|adint|kajian|rev-f|swarm-audit|Documents\/Research|\/Users\/|\/private\/tmp|~\/|TERBATAS|RAHASIA|CONFIDENTIAL|RESTRICTED|[0-9]{1,3}(\.[0-9]{1,3}){3}/i,
+    )
   })
 
   test("the diagram-flow pointer is in the 1.3.0 section exactly once and names the skill in backticks", () => {
