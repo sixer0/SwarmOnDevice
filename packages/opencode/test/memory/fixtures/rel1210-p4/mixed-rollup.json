@@ -1,0 +1,52 @@
+{
+  "comment": "Synthetic store N10-232 (1.2.10 row 40), case S-8 (AND rule). p4r-r01 is an exported device-only 2026-Q3 roll-up with one exported archived member (p4r-m01). p4r-002 is a live device-only 2026-Q3 index entry that is NOT exported: rolling it into p4r-r01 must drop the roll-up's vaultAllowed. p4r-003 is a live device-only exported 2026-Q3 index entry (the roll-up keeps the flag when only it is rolled in).",
+  "key": "dir-p4r0a1b2c3d4e5f6a7b8c9d0",
+  "folder": "syn-project-p4r0a1",
+  "projectName": "Syn Project P4",
+  "version": 2,
+  "enabled": true,
+  "items": [
+    {
+      "id": "p4r-r01",
+      "kind": "index_rollup",
+      "text": "2026-Q3 roll-up | 1 missions | triggers: vestrel, nimbard | body",
+      "source": "agent",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1763600000000,
+      "body": "[p4r-m01] 2026-07-03 2026-07-03_vestrel-pass | vestrel pass closed | triggers: vestrel, nimbard | docs/2026-07-03_vestrel-pass/report/report.md"
+    },
+    {
+      "id": "p4r-m01",
+      "kind": "index",
+      "missionId": "2026-07-03_vestrel-pass",
+      "rolledInto": "p4r-r01",
+      "text": "2026-07-03 2026-07-03_vestrel-pass | vestrel pass closed | triggers: vestrel, nimbard | docs/2026-07-03_vestrel-pass/report/report.md",
+      "source": "agent",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1762300000000
+    },
+    {
+      "id": "p4r-002",
+      "kind": "index",
+      "missionId": "2026-08-14_zorvex-pass",
+      "text": "2026-08-14 2026-08-14_zorvex-pass | zorvex pass closed | triggers: zorvex, plimbo | docs/2026-08-14_zorvex-pass/report/report.md",
+      "source": "agent",
+      "deviceOnly": true,
+      "time": 1762400000000,
+      "sessionID": "ses_p4r1"
+    },
+    {
+      "id": "p4r-003",
+      "kind": "index",
+      "missionId": "2026-09-09_quandel-pass",
+      "text": "2026-09-09 2026-09-09_quandel-pass | quandel pass closed | triggers: quandel, plimbo | docs/2026-09-09_quandel-pass/report/report.md",
+      "source": "agent",
+      "deviceOnly": true,
+      "vaultAllowed": true,
+      "time": 1762450000000,
+      "sessionID": "ses_p4r1"
+    }
+  ]
+}

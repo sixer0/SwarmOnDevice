@@ -1,0 +1,25 @@
+{
+  "comment": "Synthetic store N10-229 (1.2.10 row 40). p4c-001 is a device-only note carrying the classification word RESTRICTED (MIRROR_CLASSIFIED_WORDS, N10-144); it is the only classification word used in these fixtures. p4c-002 is a clean device-only note.",
+  "key": "dir-p4c0a1b2c3d4e5f6a7b8c9d0",
+  "folder": "syn-project-p4c0a1",
+  "projectName": "Syn Project P4",
+  "version": 2,
+  "enabled": true,
+  "items": [
+    {
+      "id": "p4c-001",
+      "text": "Vestrel survey summary, marked RESTRICTED.",
+      "source": "user",
+      "deviceOnly": true,
+      "time": 1763300000000
+    },
+    {
+      "id": "p4c-002",
+      "text": "Quandel survey uses the plimbo grid.",
+      "source": "agent",
+      "deviceOnly": true,
+      "time": 1763300100000,
+      "sessionID": "ses_p4c1"
+    }
+  ]
+}
