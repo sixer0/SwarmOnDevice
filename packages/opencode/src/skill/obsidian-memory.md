@@ -1,8 +1,11 @@
 # Obsidian memory: what agents write to the vault
 
-This skill cannot be turned off. Swarm already copies project memory, mission index entries and final reports into
-the vault folder `swarm-memory/` by itself. You never write, edit, rename or delete anything in `swarm-memory/`, and
-you never write into the vault with edit, write, bash or any tool other than `swarm-web_vault_inbox`.
+This skill cannot be turned off. Swarm copies project memory, mission index entries and final reports into the vault
+folder `swarm-memory/` by itself, except notes kept on this device (written while an on-device model ran, or set so by
+the person), secret-looking notes and notes with a classification word. Only the person exports a kept note, in
+Swarm's memory view. Never copy a memory note, its text or a summary of it into the inbox to get it into the vault.
+You never write, edit, rename or delete anything in `swarm-memory/`, and you never write into the vault with edit,
+write, bash or any tool other than `swarm-web_vault_inbox`.
 
 ## When you write a note
 1. Mission close: after `studio_mission_set_status` returned `done` or `cancelled`, write one note.
