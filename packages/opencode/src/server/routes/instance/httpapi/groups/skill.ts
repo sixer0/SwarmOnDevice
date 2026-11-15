@@ -132,6 +132,8 @@ const SkillDraftApprovePayload = Schema.Struct({
   acceptCommands: Schema.optional(Schema.Boolean).annotate({
     description: "Set only after the person's second, explicit confirm; required when the draft runs shell commands",
   }),
+  // 1.2.10 row 70a (AC-B1007s, N10-107; S10-38): required on every approve, checked by the handler (409, not 400).
+  draftTime: Schema.optional(Schema.Number),
 })
 
 const PERSON_ONLY =
@@ -208,7 +210,7 @@ export const SkillApi = HttpApi.make("skill")
             identifier: "skill.draftApprove",
             summary: "Approve a skill draft",
             description:
-              "Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written." +
+              "Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written. Send draftTime, the draft's time as listed; a different draft on disk, or a request without draftTime, is refused with 409 SKILL_CHANGED and nothing is written." +
               PERSON_ONLY,
           }),
         ),

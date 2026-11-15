@@ -11100,7 +11100,7 @@
             }
           }
         },
-        "description": "Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
+        "description": "Save the draft with the same checks as PUT /skill and remove the draft. A draft that runs shell commands needs acceptCommands: true, else 400 SKILL_SHELL_UNCONFIRMED and nothing is written. Send draftTime, the draft's time as listed; a different draft on disk, or a request without draftTime, is refused with 409 SKILL_CHANGED and nothing is written. Person-only: needs the desktop app's per-launch x-swarm-desktop-nonce, else 403 SKILL_PERSON_ONLY (also on a server holding no nonce).",
         "summary": "Approve a skill draft",
         "requestBody": {
           "content": {
@@ -11114,6 +11114,29 @@
                   },
                   "acceptCommands": {
                     "type": "boolean"
+                  },
+                  "draftTime": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["NaN"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["-Infinity"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
                   }
                 },
                 "required": ["scope"],
@@ -21343,6 +21366,12 @@
             "type": "boolean",
             "description": "Never sent to a model that runs off this device"
           },
+          "vaultAllowed": {
+            "type": "boolean"
+          },
+          "vaultReportSha256": {
+            "type": "string"
+          },
           "time": {
             "anyOf": [
               {
@@ -27673,7 +27702,10 @@
           "index_long",
           "index_body_long",
           "index_format",
-          "index_full"
+          "index_full",
+          "classified",
+          "not_device_only",
+          "archived"
         ]
       },
       "MemoryResult": {
@@ -29375,6 +29407,12 @@
           "deviceOnly": {
             "type": "boolean",
             "description": "Never sent to a model that runs off this device"
+          },
+          "vaultAllowed": {
+            "type": "boolean"
+          },
+          "vaultReportSha256": {
+            "type": "string"
           },
           "time": {
             "anyOf": [

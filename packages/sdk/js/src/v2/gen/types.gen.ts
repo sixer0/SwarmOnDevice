@@ -979,6 +979,8 @@ export type MemoryItem = {
    * Never sent to a model that runs off this device
    */
   deviceOnly: boolean
+  vaultAllowed?: boolean
+  vaultReportSha256?: string
   time: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   sessionID?: string
   failed?: string
@@ -3071,6 +3073,9 @@ export type MemoryRefusal =
   | "index_body_long"
   | "index_format"
   | "index_full"
+  | "classified"
+  | "not_device_only"
+  | "archived"
 
 export type MemoryResult = {
   item?: MemoryItem
@@ -3629,6 +3634,8 @@ export type MemoryItem1 = {
    * Never sent to a model that runs off this device
    */
   deviceOnly: boolean
+  vaultAllowed?: boolean
+  vaultReportSha256?: string
   time: number | "NaN" | "Infinity" | "-Infinity"
   sessionID?: string
   failed?: string
@@ -12718,6 +12725,7 @@ export type SkillDraftApproveData = {
   body?: {
     scope: "global" | "project"
     acceptCommands?: boolean
+    draftTime?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   }
   headers?: {
     "x-swarm-desktop-nonce"?: string

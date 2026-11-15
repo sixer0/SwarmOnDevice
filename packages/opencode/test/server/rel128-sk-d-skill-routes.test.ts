@@ -348,7 +348,11 @@ describe("AC-SKd drafts and SR8-08", () => {
       }),
     ])
     expect((await listSkills(tmp.path)).some((item) => item.name === "drafted")).toBe(false)
-    const approved = await call(tmp.path, "POST", "/skill/drafts/drafted/approve", { body: { scope: "project" } })
+    // 1.2.10 row 70a (C40, INTENT): every approve sends the draft's time as listed by GET /skill/drafts.
+    const draftTime = (await call(tmp.path, "GET", "/skill/drafts", { nonce: null })).json()[0].time
+    const approved = await call(tmp.path, "POST", "/skill/drafts/drafted/approve", {
+      body: { scope: "project", draftTime },
+    })
     expect(approved.status).toBe(200)
     expect(readFileSync(path.join(tmp.path, ".swarm", "skills", "drafted", "SKILL.md"), "utf8")).toBe(content)
     expect(existsSync(folder)).toBe(false)
@@ -363,7 +367,9 @@ describe("AC-SKd drafts and SR8-08", () => {
     const content = skillText("runner", "Runs a listing", "!`ls`")
     const folder = await writeDraft(tmp.path, "runner", content)
     expect((await call(tmp.path, "GET", "/skill/drafts", { nonce: null })).json()[0].runsCommands).toBe(true)
-    for (const body of [{ scope: "project" }, { scope: "project", acceptCommands: false }]) {
+    // 1.2.10 row 70a (C40, INTENT): every approve sends the draft's time as listed by GET /skill/drafts.
+    const draftTime = (await call(tmp.path, "GET", "/skill/drafts", { nonce: null })).json()[0].time
+    for (const body of [{ scope: "project", draftTime }, { scope: "project", acceptCommands: false, draftTime }]) {
       const refused = await call(tmp.path, "POST", "/skill/drafts/runner/approve", { body })
       expect(refused.status).toBe(400)
       expect(refused.text).toContain("SKILL_SHELL_UNCONFIRMED")
@@ -372,7 +378,7 @@ describe("AC-SKd drafts and SR8-08", () => {
     expect(existsSync(folder)).toBe(true)
     expect(approvalLines()).toEqual([])
     const accepted = await call(tmp.path, "POST", "/skill/drafts/runner/approve", {
-      body: { scope: "project", acceptCommands: true },
+      body: { scope: "project", acceptCommands: true, draftTime },
     })
     expect(accepted.status).toBe(200)
     expect(readFileSync(path.join(tmp.path, ".swarm", "skills", "runner", "SKILL.md"), "utf8")).toBe(content)
@@ -389,9 +395,11 @@ describe("AC-SKd drafts and SR8-08", () => {
     const next = skillText("twice", "Second version")
     await writeDraft(tmp.path, "twice", next)
     expect((await call(tmp.path, "GET", "/skill/drafts", { nonce: null })).json()[0].replaces).toBe(true)
-    expect((await call(tmp.path, "POST", "/skill/drafts/twice/approve", { body: { scope: "project" } })).status).toBe(
-      200,
-    )
+    // 1.2.10 row 70a (C40, INTENT): every approve sends the draft's time as listed by GET /skill/drafts.
+    const draftTime = (await call(tmp.path, "GET", "/skill/drafts", { nonce: null })).json()[0].time
+    expect(
+      (await call(tmp.path, "POST", "/skill/drafts/twice/approve", { body: { scope: "project", draftTime } })).status,
+    ).toBe(200)
     expect(readFileSync(path.join(tmp.path, ".swarm", "skills", "twice", "SKILL.md"), "utf8")).toBe(next)
 
     const gone = await writeDraft(tmp.path, "unwanted", skillText("unwanted"))
@@ -436,7 +444,9 @@ describe("1.2.9 AC-B08 server order (48a, S9-08): SKILL_SHELL_UNTRUSTED before S
     ProjectTrust.assumeTrustedForTests(false)
     expect(await draftListed(tmp.path)).toBe(true)
     const before = await swarmListing(tmp.path)
-    for (const body of [{ scope: "project" }, { scope: "project", acceptCommands: true }]) {
+    // 1.2.10 row 70a (C40, INTENT): every approve sends the draft's time as listed by GET /skill/drafts.
+    const draftTime = (await call(tmp.path, "GET", "/skill/drafts", { nonce: null })).json()[0].time
+    for (const body of [{ scope: "project", draftTime }, { scope: "project", acceptCommands: true, draftTime }]) {
       const result = await call(tmp.path, "POST", "/skill/drafts/syn129-runner/approve", { body })
       const label = `acceptCommands=${String((body as { acceptCommands?: boolean }).acceptCommands)}`
       expect(`${label} ${result.status}`).toBe(`${label} 403`)
@@ -477,7 +487,11 @@ describe("1.2.9 AC-B08 server order (48a, S9-08): SKILL_SHELL_UNTRUSTED before S
     ProjectTrust.assumeTrustedForTests(true)
     expect(await draftListed(tmp.path)).toBe(true)
     const before = await swarmListing(tmp.path)
-    const result = await call(tmp.path, "POST", "/skill/drafts/syn129-runner/approve", { body: { scope: "project" } })
+    // 1.2.10 row 70a (C40, INTENT): every approve sends the draft's time as listed by GET /skill/drafts.
+    const draftTime = (await call(tmp.path, "GET", "/skill/drafts", { nonce: null })).json()[0].time
+    const result = await call(tmp.path, "POST", "/skill/drafts/syn129-runner/approve", {
+      body: { scope: "project", draftTime },
+    })
     expect(result.status).toBe(400)
     expect(result.text).toContain("SKILL_SHELL_UNCONFIRMED")
     expect(result.text).not.toContain("SKILL_SHELL_UNTRUSTED")
