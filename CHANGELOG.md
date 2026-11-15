@@ -1,11 +1,12 @@
-# Changelog Swarm 1.1.0 sampai 1.3.0
+# Changelog Swarm 1.1.0 sampai 1.3.1
 
-Disusun 2026-11-13 (bagian 1.2.8 dan 1.2.9 ditambahkan 2026-11-14, bagian 1.3.0 dan koreksi bagian lama 2026-11-15) dari catatan rilis, laporan akhir, log keputusan dan pesan commit tiap versi (sumber di akhir tiap bagian; path `docs/...` ada di folder kerja Swarm_OnDevice, di luar repo ini). Urutan terbaru di atas. "Diperbaiki" = cacat yang dibetulkan; "Baru" = fitur atau perilaku yang ditambahkan.
+Disusun 2026-11-13 (bagian 1.2.8 dan 1.2.9 ditambahkan 2026-11-14, bagian 1.3.0, 1.3.1 dan koreksi bagian lama 2026-11-15) dari catatan rilis, laporan akhir, log keputusan dan pesan commit tiap versi (sumber di akhir tiap bagian; path `docs/...` ada di folder kerja Swarm_OnDevice, di luar repo ini). Urutan terbaru di atas. "Diperbaiki" = cacat yang dibetulkan; "Baru" = fitur atau perilaku yang ditambahkan.
 
 Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); nomor rilis Swarm dibaca dari `SwarmRelease`. Mulai 1.2.0 versi app ikut nomor rilis Swarm.
 
 | Versi | Tanggal | Cara rilis | Fokus |
 |---|---|---|---|
+| 1.3.1 | 2026-11-15 | Patch menu dari 1.2.0 sampai 1.3.0 (satu berkas) | Perbaikan cepat Obsidian: membuka graph saat Obsidian tertutup |
 | 1.3.0 | 2026-11-15 | Patch menu dari 1.2.0 sampai 1.2.9 (satu berkas) | Masalah pengguna 1.2.9 (Obsidian, memori proyek di sesi, drift misi, salinan memori ke vault), backlog 1.2.9, perbaikan keamanan proxy swarm-web dan inbox vault (S-6); 1.2.10 tidak dirilis |
 | 1.2.9 | 2026-11-14 | Patch menu dari 1.2.0 sampai 1.2.8 (satu berkas) | Backlog 1.2.8: diagram dan alat Studio, memori, vault dan skill, Mission Control dan pemindahan misi; perbaikan keamanan id sesi Mission Control |
 | 1.2.8 | 2026-11-14 | Patch menu dari 1.2.0 sampai 1.2.7 (satu berkas) | Sisa 1.2.7 dan audit Swarm, kelola skill, memori ke Obsidian, sub-proyek, indeks memori, diagram setara minimum Visio |
@@ -24,6 +25,24 @@ Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); 
 | 1.1.0 | 2026-11-03 | Installer | Knowledge Library, pemasang tools, CLI `swarm` |
 
 ---
+
+## 1.3.1 (2026-11-15)
+
+Dibangun dari `b28f52c052` (1.3.0). Perbaikan cepat untuk satu masalah Obsidian yang Anda temui setelah memasang 1.3.0; tidak ada perubahan lain.
+
+**Diperbaiki**
+- Obsidian. Di 1.3.0, "Open graph in Obsidian" menolak dengan pesan "tutup Obsidian dulu" padahal Obsidian sudah tertutup, sehingga vault Swarm tidak pernah terdaftar dan Obsidian tidak terbuka. Penyebabnya: saat Obsidian tertutup, macOS menjawab pemeriksaan "apakah Obsidian berjalan" dengan satu baris kosong, bukan jawaban kosong, dan 1.3.0 menganggap jawaban itu belum pasti. Kini baris kosong dibaca sebagai "Obsidian tertutup": Swarm mendaftarkan vault lalu membuka Obsidian. Jawaban lain yang tidak dikenal tetap ditolak seperti sebelumnya, dan bila Obsidian memang terbuka, Swarm tetap meminta Anda menutupnya dulu.
+- Pesan hasil di tampilan memori (terdaftar, tutup Obsidian dulu, tidak terdaftar) kini menyebut folder vault yang Anda atur, bukan folder bawaan.
+
+**Batasan yang diketahui**
+- Bila folder vault Swarm berupa tautan simbolik (symlink) dan Obsidian sudah mendaftarkannya lewat tautan itu, Obsidian bisa tetap menjawab "vault not found". Tambahkan folder aslinya di Obsidian ("Open folder as vault"). Masuk backlog 1.3.2.
+- Backlog 1.3.1 yang disebut di bagian 1.3.0 kini menjadi backlog 1.3.2.
+
+**Catatan pemasangan**
+- Patch menu 1.3.1 terpasang pada 1.2.0 sampai 1.3.0 lewat satu berkas, `swarm-1.2.0-to-1.3.1.swarmpatch`, dengan `--migration none`: tidak ada migrasi data. Versi 1.1.x tetap memakai DMG.
+- Langkah Anda: tanda tangani patch, pasang lewat menu, tutup Obsidian, lalu tekan "Open graph in Obsidian" di tampilan memori satu kali. Obsidian terbuka dengan vault Swarm.
+
+Sumber: keputusan U16, C127 sampai C129; commit `a3b4eac067`, `6711fa38f8`, `0bf06732ba`.
 
 ## 1.3.0 (2026-11-15)
 
