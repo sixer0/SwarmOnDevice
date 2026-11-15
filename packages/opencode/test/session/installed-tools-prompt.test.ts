@@ -297,7 +297,9 @@ describe("installed tools block: silence (row 236)", () => {
 })
 
 describe("installed tools block: swarm-web lines need `connected` (C76)", () => {
-  const webLines = ["swarm-web `search`", "swarm-web `fetch`", "`swarm-web_vault_inbox`"]
+  // 1.2.10 row 60 (B10-01): the real tool names. Moved together with system.ts, since the `not.toContain` asserts below
+  // pass on any text if these strings are not in the prompt.
+  const webLines = ["`swarm-web_search`", "`swarm-web_fetch`", "`swarm-web_vault_inbox`"]
 
   for (const [label, map] of [
     ["disabled", { "swarm-web": { status: "disabled" } }],

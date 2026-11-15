@@ -335,7 +335,7 @@ describe("obsidian-memory", () => {
     expect(text).toContain("`remember`")
     expect(BUILTIN_TOOLS.has("remember")).toBe(true)
     expect(read(SRC, "session", "system.ts")).toContain(
-      "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
+      "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. Notes kept on this device stay out of it; only the person exports one, never you, and never via the inbox. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
     )
   })
 })

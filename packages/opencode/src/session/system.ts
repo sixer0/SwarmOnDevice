@@ -41,17 +41,17 @@ const INSTALLED_TOOL_LINES: Record<InstalledTools.ComponentId, { text: string; m
   },
   rtk: { text: "rtk: prefix commands with long output with `rtk` (for example `rtk bun test`, `rtk git log`)." },
   searxng: {
-    text: "web search: use the swarm-web `search` tool (local SearXNG) as the default web search.",
+    text: "web search: use `swarm-web_search` (local SearXNG) as the default web search.",
     mcp: InstalledTools.SWARM_WEB_MCP,
   },
   firecrawl: {
-    text: "crawl: use swarm-web `fetch` with mode=crawl (local Firecrawl); mode=page for a single page.",
+    text: "crawl: use `swarm-web_fetch` with mode=crawl (local Firecrawl); mode=page for a single page.",
     mcp: InstalledTools.SWARM_WEB_MCP,
   },
   obsidian: {
     // N8-122 (OBS-g, R20-C26): the vault rule shows only where the inbox tool is connected, since it cannot be followed
     // without it.
-    text: "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
+    text: "notes: use `swarm-web_vault_inbox` to drop a note in the Obsidian inbox. It is not the memory store. The vault folder swarm-memory/ is generated from project memory: never edit it. Notes kept on this device stay out of it; only the person exports one, never you, and never via the inbox. When a mission closes or a lasting decision is recorded, write one inbox note (skill obsidian-memory).",
     mcp: InstalledTools.SWARM_WEB_MCP,
   },
 }
