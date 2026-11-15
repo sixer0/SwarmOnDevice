@@ -8,6 +8,7 @@ const app = async (locale: string): Promise<Record<string, string>> => (await im
 const ui = async (locale: string): Promise<Record<string, string>> =>
   (await import(`../../../ui/src/i18n/${locale}.ts`)).dict
 
+// INTENT (1.2.10 row 41, N10-098, AC-B1017w): `toast.project.folderMissing.recreateFailed` has new en and id values (key unchanged).
 const APP: Record<string, { en: string; id: string }> = {
   "session.mission.deliverable.notInProject": {
     en: "Not in this project yet. The agent saves it to docs/{{mission}}/11_deliverables.",
@@ -31,8 +32,8 @@ const APP: Record<string, { en: string; id: string }> = {
   "toast.project.folderMissing.recreate": { en: "Recreate", id: "Buat ulang" },
   "toast.project.folderMissing.choose": { en: "Choose folder", id: "Pilih folder" },
   "toast.project.folderMissing.recreateFailed": {
-    en: "{{path}} could not be recreated because its parent folder is missing too. Choose another folder.",
-    id: "{{path}} tidak bisa dibuat ulang karena folder induknya juga tidak ada. Pilih folder lain.",
+    en: "{{path}} could not be recreated: its parent folder is missing or something else is at that path. Choose another folder.",
+    id: "{{path}} tidak bisa dibuat ulang: folder induknya tidak ada atau ada sesuatu yang lain di jalur itu. Pilih folder lain.",
   },
   "session.map.decisions.category.own_api": { en: "Calls Swarm's own server", id: "Memanggil server Swarm sendiri" },
 }

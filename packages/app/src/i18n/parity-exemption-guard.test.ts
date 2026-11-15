@@ -352,6 +352,25 @@ const APPROVED_EXEMPT_KEYS = [
   "session.mission.placement.otherFolder",
   "session.mission.placement.rootUnknown",
   "session.mission.placement.folderMissing",
+  "memory.obsidian.registered",
+  "memory.obsidian.closeObsidian",
+  "memory.obsidian.notRegistered",
+  "session.mission.line.driftChanged.one",
+  "session.mission.line.driftChanged.other",
+  "memory.vault.copy",
+  "memory.vault.remove",
+  "memory.vault.confirmText",
+  "memory.vault.confirmTextIndex",
+  "memory.vault.confirmCopy",
+  "memory.vault.confirmCancel",
+  "memory.vault.rule",
+  "memory.vault.reason.device",
+  "memory.vault.reason.secret",
+  "memory.vault.reason.classified",
+  "memory.vault.personOnly",
+  "memory.refused.classified",
+  "memory.refused.notDeviceOnly",
+  "memory.refused.archived",
 ]
 
 function arrayLiteral(name: string) {
@@ -369,10 +388,10 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the three-hundred-and-thirty approved keys and nothing else", () => {
+  test("the exemption holds exactly the three-hundred-and-forty-nine approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(330)
-    expect(new Set(exemptKeys).size).toBe(330)
+    expect(exemptKeys.length).toBe(349)
+    expect(new Set(exemptKeys).size).toBe(349)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {

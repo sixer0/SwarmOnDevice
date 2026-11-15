@@ -787,7 +787,7 @@ export const dict = {
   "toast.project.folderMissing.restore": "Pulihkan",
   "toast.project.folderMissing.recreate": "Buat ulang",
   "toast.project.folderMissing.choose": "Pilih folder",
-  "toast.project.folderMissing.recreateFailed": "{{path}} tidak bisa dibuat ulang karena folder induknya juga tidak ada. Pilih folder lain.",
+  "toast.project.folderMissing.recreateFailed": "{{path}} tidak bisa dibuat ulang: folder induknya tidak ada atau ada sesuatu yang lain di jalur itu. Pilih folder lain.",
 
   "toast.update.title": "Pembaruan tersedia",
   "toast.update.description": "Versi baru Swarm ({{version}}) sekarang tersedia untuk diinstal.",
@@ -1069,6 +1069,9 @@ export const dict = {
   "session.mission.approval.autonomous": "Disetujui sendiri (otonom): Swarm menyetujui misi ini sendiri dalam mode otonom.",
   "session.mission.line.paused": "Misi dijeda - langkah ditahan. Jawab keputusan di sini, atau minta Swarm melanjutkan.",
   "session.mission.line.drift": "{{count}} langkah ditambahkan setelah persetujuan.",
+  // 1.2.10 row 41 (N10-083/084): bentuk jamak; id memakai satu teks untuk kedua bentuk.
+  "session.mission.line.driftChanged.one": "{{count}} langkah diubah setelah persetujuan.",
+  "session.mission.line.driftChanged.other": "{{count}} langkah diubah setelah persetujuan.",
   "session.mission.emptySession": "Belum ada misi di sesi ini. Misi yang dimulai di sesi lain tampil di jendela sesi tersebut.",
   "session.mission.type.research": "Riset",
   "session.mission.type.debug": "Debug",
@@ -1828,6 +1831,29 @@ export const dict = {
   "memory.obsidian.notYet": "Belum ada catatan di vault. Catatan muncul setelah perubahan memori berikutnya.",
   "memory.obsidian.noApp": "Obsidian belum terpasang. Pasang dari penyiapan Swarm, lalu coba lagi.",
   "memory.obsidian.failed": "Tidak dapat membuka Obsidian.",
+  // 1.2.10 row 41 (N10-080..N10-082): tiga hasil baru Buka grafik di Obsidian.
+  "memory.obsidian.registered": "Swarm menambahkan vault Swarm (~/.swarm/vault) ke daftar vault Obsidian.",
+  "memory.obsidian.closeObsidian":
+    "Tutup Obsidian, lalu tekan Buka grafik di Obsidian lagi. Jika Obsidian sudah tertutup, buka sekali lalu keluar seperti biasa. Atau tambahkan foldernya sendiri: di Obsidian pilih Open folder as vault lalu pilih ~/.swarm/vault.",
+  "memory.obsidian.notRegistered":
+    "Swarm tidak dapat menambahkan vault Swarm ke daftar vault Obsidian dengan aman, jadi tidak ada yang diubah. Tambahkan sendiri: di Obsidian pilih Open folder as vault lalu pilih ~/.swarm/vault.",
+  // 1.2.10 row 41 (N10-085..N10-097, N10-102): salin catatan ke vault Obsidian, konfirmasi, aturan, dan penolakan.
+  "memory.vault.copy": "Salin ke vault",
+  "memory.vault.remove": "Di vault: hapus",
+  "memory.vault.confirmText":
+    "Salin catatan ini ke vault Obsidian? Obsidian, pluginnya, sinkronisasi apa pun yang Anda aktifkan, dan agen yang boleh membaca di luar proyek (misalnya dalam mode otonom) dapat membaca salinannya. Swarm tetap hanya memberikan catatan ini ke model di perangkat ini. Anda dapat menghapusnya dari vault nanti.",
+  "memory.vault.confirmTextIndex": "Laporan akhirnya {{report}} ikut disalin, dengan aturan laporan yang sudah ada.",
+  "memory.vault.confirmCopy": "Salin",
+  "memory.vault.confirmCancel": "Batal",
+  "memory.vault.rule":
+    "Catatan yang hanya di perangkat ini, catatan yang tampak berisi rahasia, dan catatan yang ditandai sebagai dokumen berklasifikasi tidak disalin ke vault Obsidian. Catatan untuk model apa pun disalin. Anda dapat menyalin sendiri catatan yang hanya di perangkat ini.",
+  "memory.vault.reason.device": "Hanya di perangkat ini",
+  "memory.vault.reason.secret": "Tampak berisi rahasia: tidak pernah disalin",
+  "memory.vault.reason.classified": "Ditandai berklasifikasi: tidak pernah disalin",
+  "memory.vault.personOnly": "Hanya di aplikasi desktop Swarm.",
+  "memory.refused.classified": "Catatan ini ditandai sebagai dokumen berklasifikasi, jadi tidak pernah disalin ke vault.",
+  "memory.refused.notDeviceOnly": "Catatan ini sudah disalin ke vault karena model apa pun boleh menerimanya.",
+  "memory.refused.archived": "Entri ini bagian dari ringkasan. Salin ringkasannya saja.",
   "session.mission.placement.title": "Di mana misi ini disimpan?",
   "session.mission.placement.join": "Gabung ke {{group}}",
   "session.mission.placement.new": "Grup baru {{group}}",
