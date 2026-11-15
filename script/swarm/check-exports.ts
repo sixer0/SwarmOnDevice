@@ -26,13 +26,21 @@
  * name only is listed in `nameOnly`. Report-only in 1.2.10 (C19 D-1): it does not change the classification above or
  * the exit code.
  *
- * Usage: `bun script/swarm/check-exports.ts [--json] [--prune-stale]`. Exit 0 = no unexplained export and no stale
- * baseline entry; exit 1 otherwise. Deterministic output order; no clock, no network.
+ * Harness imports (1.2.10 row 77, B10-13, S10-40, N10-117): every specifier a production file loads (static imports and
+ * re-exports, `import x = require()`, `import("…")` types, `import()` / `require()` with a string-literal argument) is
+ * resolved, relative or through a package's `@/` alias from its tracked `tsconfig.json`, to a `git ls-files` path (as
+ * written, with an extension, `.js` -> `.ts`, or `index`). One that lands on a harness (`isHarness`: anything
+ * `readsAsTest` accepts, `test-harness*`, `*.mock.*`, `*.fake.*`, `*.stub.*`, `mocks/`, `__mocks__/`, `fakes/`,
+ * `stubs/`) is listed in `harnessImports` and fails the guard. `packages/storybook/` is neither importer nor target.
+ * Unresolved and non-literal specifiers are counted, never guessed; package specifiers are not repo paths.
+ *
+ * Usage: `bun script/swarm/check-exports.ts [--json] [--prune-stale]`. Exit 0 = no unexplained export, no stale
+ * baseline entry and no harness import; exit 1 otherwise. Deterministic output order; no clock, no network.
  */
 
 import ts from "typescript"
 import { spawnSync } from "node:child_process"
-import { readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 const MARKER = "@internal test seam"
@@ -40,17 +48,43 @@ const GENERATED = /^packages\/sdk\/js\/src\/v2\/gen\//
 const SOURCE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
 const BASELINE_FILE = "script/swarm/check-exports.baseline.json"
 
-// Named so it shares no identifier with a baselined export (this file is scanned too: a shared name would read as a
-// production reader of that export and make its baseline entry stale).
-// Row 74a (C104, review F1): browser harnesses are tests too: `test-browser/`, `*.render.*` (the render half of an app
-// browser test) and `*.fixture.*` (their data). Before, a reader there made a test-only export look production-read.
-function readsAsTest(file: string): boolean {
+/**
+ * True when a tracked path is a test file: its readers never make an export production-read, and it never declares one.
+ * Named so it shares no identifier with a baselined export (this file is scanned too: a shared name would read as a
+ * production reader of that export and make its baseline entry stale).
+ * Row 74a (C104, review F1): browser harnesses are tests too: `test-browser/`, `*.render.*` (the render half of an app
+ * browser test) and `*.fixture.*` (their data). Before, a reader there made a test-only export look production-read.
+ * @internal test seam
+ */
+export function readsAsTest(file: string): boolean {
   return (
     /(^|\/)(test|tests|__tests__|e2e|test-fixtures|fixtures|test-browser)\//.test(file) ||
     /\.(test|spec|render|fixture)\.[a-z]+$/.test(file) ||
     /\/(test-utils?|testing)\.[a-z]+$/.test(file)
   )
 }
+
+// B10-13 (row 77, N10-117, S10-40): what a production file must not import. Every test file `readsAsTest` accepts, plus
+// test harnesses that do not read as tests for the export scan (kept apart so the export classification is unchanged).
+function isHarness(file: string): boolean {
+  return (
+    readsAsTest(file) ||
+    /(^|\/)test-harness[^/]*$/.test(file) ||
+    /\.(mock|fake|stub)\.[a-z]+$/.test(file) ||
+    /(^|\/)(mocks|__mocks__|fakes|stubs)\//.test(file)
+  )
+}
+
+/** Storybook files are neither production importers nor reported harnesses (its `mocks/` replace app modules). */
+const STORYBOOK = /^packages\/storybook\//
+// C92 (row 77 PROBE ruling R1): the one allowed production -> harness import, exact file and exact specifier only.
+// `packages/opencode/script/httpapi-exercise.ts` is the dev-only launcher of the package script `test:httpapi`; it is
+// not shipped in the app bundle. Any other import from that file, or this import from any other file, still fails.
+const HARNESS_IMPORT_EXCEPTION = {
+  file: "packages/opencode/script/httpapi-exercise.ts",
+  specifier: "../test/server/httpapi-exercise/index",
+}
+const RESOLVE_EXT =[".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".d.ts", ".json"]
 
 interface Declared {
   readonly name: string
@@ -101,6 +135,13 @@ interface CheckResult {
   readonly stale: BaselineEntry[]
   /** N10-115: unmarked, non-generated, non-baselined exports read in production by name only. Report-only (C19 D-1). */
   readonly nameOnly: NameOnly[]
+  /** N10-117: production files importing a harness (`isHarness`), by specifier as written. Any entry fails the guard. */
+  readonly harnessImports: HarnessImport[]
+}
+
+interface HarnessImport {
+  readonly file: string
+  readonly specifier: string
 }
 
 function scriptKind(file: string): ts.ScriptKind {
@@ -257,20 +298,102 @@ function importBindings(sf: ts.SourceFile): {
   return { names, members, namespaceExports, keepsNameMatching }
 }
 
-function trackedSourceFiles(repo: string): string[] {
+/**
+ * Module specifiers one source loads (B10-13): static imports (type-only included) and re-exports, `import x =
+ * require()`, `import("…")` types, and `import()` / `require()` calls whose argument is a string literal. A call with
+ * any other argument is only counted (`nonLiteral`); its target is never guessed.
+ */
+function moduleSpecifiers(sf: ts.SourceFile): { literal: string[]; nonLiteral: number } {
+  const literal: string[] = []
+  let nonLiteral = 0
+  const visit = (n: ts.Node): void => {
+    if ((ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) && n.moduleSpecifier) {
+      if (ts.isStringLiteralLike(n.moduleSpecifier)) literal.push(n.moduleSpecifier.text)
+    } else if (ts.isExternalModuleReference(n)) {
+      if (ts.isStringLiteralLike(n.expression)) literal.push(n.expression.text)
+      else nonLiteral++
+    } else if (ts.isImportTypeNode(n)) {
+      if (ts.isLiteralTypeNode(n.argument) && ts.isStringLiteralLike(n.argument.literal)) literal.push(n.argument.literal.text)
+    } else if (ts.isCallExpression(n)) {
+      const callee = n.expression
+      if (callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === "require")) {
+        const arg = n.arguments[0]
+        if (arg && ts.isStringLiteralLike(arg)) literal.push(arg.text)
+        else if (arg) nonLiteral++
+      }
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return { literal, nonLiteral }
+}
+
+/** `@/*` path aliases of tracked `tsconfig.json` files: the folder they apply to and the folder `@/` stands for. */
+function pathAliases(repo: string, tracked: readonly string[]): { dir: string; target: string }[] {
+  const out: { dir: string; target: string }[] = []
+  for (const file of tracked) {
+    if (path.posix.basename(file) !== "tsconfig.json" || !existsSync(path.join(repo, file))) continue
+    const parsed = ts.parseConfigFileTextToJson(file, readFileSync(path.join(repo, file), "utf8")).config as
+      | { compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> } }
+      | undefined
+    const first = parsed?.compilerOptions?.paths?.["@/*"]?.[0]
+    if (!first?.endsWith("/*")) continue
+    const dir = path.posix.dirname(file)
+    const base = path.posix.join(dir, parsed?.compilerOptions?.baseUrl ?? ".")
+    out.push({ dir: dir === "." ? "" : `${dir}/`, target: path.posix.join(base, first.slice(0, -1)) })
+  }
+  // The deepest folder wins for nested packages.
+  return out.sort((a, b) => b.dir.length - a.dir.length)
+}
+
+/**
+ * The tracked file a specifier of `from` loads: relative or `@/` alias, as written, with an added extension, a `.js`
+ * family extension swapped for its TypeScript one, or an `index` file. `"bare"` for a package specifier (not a repo
+ * path, not checked); `undefined` when nothing tracked matches (counted, never guessed).
+ */
+function resolveSpecifier(
+  from: string,
+  specifier: string,
+  tracked: ReadonlySet<string>,
+  aliases: readonly { dir: string; target: string }[],
+): string | undefined {
+  const spec = specifier.replace(/[?#].*$/, "")
+  const alias = spec.startsWith("@/") ? aliases.find((a) => from.startsWith(a.dir)) : undefined
+  const relative = spec === "." || spec === ".." || spec.startsWith("./") || spec.startsWith("../")
+  if (!relative && !spec.startsWith("@/")) return "bare"
+  if (!relative && !alias) return undefined
+  const base = alias ? path.posix.join(alias.target, spec.slice(2)) : path.posix.join(path.posix.dirname(from), spec)
+  if (base.startsWith("../")) return undefined
+  const swapped = /\.(js|jsx|mjs|cjs)$/.test(base)
+    ? [base.replace(/\.js$/, ".ts").replace(/\.jsx$/, ".tsx").replace(/\.mjs$/, ".mts").replace(/\.cjs$/, ".cts")]
+    : []
+  if (base.endsWith(".js")) swapped.push(base.replace(/\.js$/, ".tsx"))
+  const candidates = [
+    base,
+    ...swapped,
+    ...RESOLVE_EXT.map((ext) => `${base}${ext}`),
+    ...RESOLVE_EXT.map((ext) => `${base}/index${ext}`),
+  ]
+  return candidates.find((c) => tracked.has(c))
+}
+
+function trackedFiles(repo: string): string[] {
   const out = spawnSync("git", ["ls-files", "-z"], { cwd: repo, encoding: "utf8", maxBuffer: 1 << 28 })
   if (out.status !== 0) throw new Error(`git ls-files failed (${out.status}): ${out.stderr}`)
   return out.stdout
     .split("\0")
-    .filter((f) => SOURCE.test(f) && !/(^|\/)node_modules\//.test(f))
+    .filter((f) => f !== "" && !/(^|\/)node_modules\//.test(f))
     .sort()
 }
 
 function scan(
   repo: string,
   replace: Readonly<Record<string, string>>,
-): { files: number; rows: ExportRow[]; keptByName: number } {
-  const files = trackedSourceFiles(repo)
+): { files: number; rows: ExportRow[]; keptByName: number; harnessImports: HarnessImport[]; unresolved: number } {
+  const tracked = trackedFiles(repo)
+  const files = tracked.filter((f) => SOURCE.test(f))
+  const loads: { file: string; specifiers: string[] }[] = [] // production importers only (B10-13)
+  let unresolved = 0
   const readers = new Map<string, string[]>() // identifier -> files holding it (each file once)
   const binders = new Map<string, Set<string>>() // export name -> production files binding it
   const bind = (id: string, file: string) => {
@@ -311,6 +434,11 @@ function scan(
       for (const ns of bound.namespaceExports) namespaceExports.add(ns)
       if (bound.members.size > 0) memberReads.push({ file, members: bound.members })
     }
+    if (!isHarness(file) && !STORYBOOK.test(file)) {
+      const specs = moduleSpecifiers(sf)
+      unresolved += specs.nonLiteral
+      if (specs.literal.length > 0) loads.push({ file, specifiers: specs.literal })
+    }
     if (!readsAsTest(file) && exports.length > 0) declared.push({ file, exports })
   }
   // No module resolution: `X.A` on a named import X binds A when any file declares `export * as X`.
@@ -341,7 +469,22 @@ function scan(
       })
     }
   }
-  return { files: scanned, rows, keptByName }
+  // B10-13: only `git ls-files` candidates count, so nothing outside the repo is read or loaded.
+  const trackedSet = new Set(tracked)
+  const aliases = pathAliases(repo, tracked)
+  const harness = new Map<string, HarnessImport>()
+  for (const { file, specifiers } of loads)
+    for (const specifier of specifiers) {
+      if (file === HARNESS_IMPORT_EXCEPTION.file && specifier === HARNESS_IMPORT_EXCEPTION.specifier) continue
+      const target = resolveSpecifier(file, specifier, trackedSet, aliases)
+      if (target === undefined) unresolved++
+      else if (target !== "bare" && isHarness(target) && !STORYBOOK.test(target))
+        harness.set(key(file, specifier), { file, specifier })
+    }
+  const harnessImports = [...harness.values()].sort((a, b) =>
+    a.file === b.file ? (a.specifier < b.specifier ? -1 : 1) : a.file < b.file ? -1 : 1,
+  )
+  return { files: scanned, rows, keptByName, harnessImports, unresolved }
 }
 
 const key = (file: string, name: string) => `${file}\0${name}`
@@ -368,13 +511,16 @@ export function checkExports(opts: {
   return runGuard(opts).result
 }
 
-/** `checkExports` plus the number of production files that keep name matching (console line of N10-115). */
+/**
+ * `checkExports` plus the number of production files that keep name matching (console line of N10-115) and the number
+ * of import specifiers the harness check could not resolve (console line of N10-117).
+ */
 function runGuard(opts: {
   repo: string
   baseline: readonly BaselineEntry[]
   replace?: Readonly<Record<string, string>>
-}): { result: CheckResult; keptByName: number } {
-  const { files, rows, keptByName } = scan(opts.repo, opts.replace ?? {})
+}): { result: CheckResult; keptByName: number; unresolved: number } {
+  const { files, rows, keptByName, harnessImports, unresolved } = scan(opts.repo, opts.replace ?? {})
   const listed = new Set(opts.baseline.map((b) => key(b.file, b.name)))
   const open = rows.filter((r) => r.prodReaders === 0)
   let byMarker = 0
@@ -423,8 +569,10 @@ function runGuard(opts: {
       unexplained,
       stale,
       nameOnly,
+      harnessImports,
     },
     keptByName,
+    unresolved,
   }
 }
 
@@ -437,7 +585,7 @@ if (import.meta.main) {
   const repo = path.resolve(import.meta.dir, "../..")
   const args = new Set(process.argv.slice(2))
   const baseline = loadBaseline(repo)
-  const { result, keptByName } = runGuard({ repo, baseline })
+  const { result, keptByName, unresolved } = runGuard({ repo, baseline })
   if (args.has("--prune-stale") && result.stale.length > 0) {
     // Shrink only: the kept entries are a subset of the file's own entries, in the file's own order.
     const drop = new Set(result.stale.map((s) => key(s.file, s.name)))
@@ -462,7 +610,10 @@ if (import.meta.main) {
     for (const s of result.stale) console.log(`stale ${s.file} ${s.name}`)
     // N10-116 (row 71): only after at least one stale line.
     if (result.stale.length > 0) console.log("--prune-stale removes these stale entries (the baseline only shrinks).")
+    // N10-117 (row 77, B10-13).
+    for (const h of result.harnessImports) console.log(`production file imports a harness ${h.file} -> ${h.specifier}`)
+    console.log(`import specifiers not resolved ${unresolved} (not checked)`)
   }
   const pruned = args.has("--prune-stale") ? 0 : result.stale.length
-  process.exit(result.unexplained.length > 0 || pruned > 0 ? 1 : 0)
+  process.exit(result.unexplained.length > 0 || pruned > 0 || result.harnessImports.length > 0 ? 1 : 0)
 }

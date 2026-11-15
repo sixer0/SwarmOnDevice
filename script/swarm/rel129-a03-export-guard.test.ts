@@ -518,8 +518,9 @@ describe("AC-A03.64", () => {
     const name = "missionFilesScroll"
     const outside = [...new Set(trackedWordHits(name).map((h) => h.split(":")[0]))].filter((f) => f !== file)
     expect(outside.length).toBeGreaterThan(0)
-    expect(outside.filter((f) => !/(^|\/)test-browser\/|\.render\.[a-z]+$/.test(f))).toEqual([])
+    // 1.2.10 row 77 (B10-13): the guard's own classifier, not a partial copy of it (the copy lacked `.fixture.`).
     const g = await guard()
+    expect(outside.filter((f) => !g.readsAsTest(f))).toEqual([])
     const baseline = g.loadBaseline(repo)
     const original = readFileSync(path.join(repo, file), "utf8")
     const dir = mkdtempSync(path.join(os.tmpdir(), "a03-74a-"))
