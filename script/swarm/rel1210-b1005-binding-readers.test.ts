@@ -49,7 +49,7 @@ async function runWith(readers: readonly [string, string][]): Promise<Result> {
   const before = [host, ...readers.map(([f]) => f)].map(read)
   try {
     const replace: Record<string, string> = { [host]: path.join(dir, "0.ts") }
-    writeFileSync(replace[host], `${before[0]}\n${probe}\n`)
+    writeFileSync(replace[host]!, `${before[0]}\n${probe}\n`)
     readers.forEach(([file, prefix], i) => {
       replace[file] = path.join(dir, `${i + 1}${path.basename(file)}`)
       writeFileSync(replace[file], `${prefix}${before[i + 1]}`)
@@ -70,7 +70,7 @@ describe("AC-B1005", () => {
     const entry = nameOnlyOf(r).filter((e) => `${e.file} ${e.name}` === hit)
     expect(entry.length).toBe(1)
     // Many production files hold a local `slot`: the case B10-05 is about.
-    expect(entry[0].prodReaders ?? 0).toBeGreaterThan(10)
+    expect(entry[0]!.prodReaders ?? 0).toBeGreaterThan(10)
   }, 120_000)
 
   const bindings: readonly [string, string][] = [

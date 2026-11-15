@@ -60,7 +60,7 @@ function carriesMarker(file: string, i: number): boolean {
   const lines = linesOf(file)
   const block: string[] = []
   for (let k = i - 1; k >= 0; k--) {
-    const t = lines[k].trim()
+    const t = lines[k]!.trim()
     if (!(t.startsWith("/**") || t.startsWith("*") || t.startsWith("//"))) break
     block.push(t)
     if (t.startsWith("/**")) break
@@ -254,7 +254,7 @@ async function a03SweepDecl(rel: string, name: string): Promise<{ line: string; 
   const re = new RegExp(`^(?:export\\s+)?(?:declare\\s+)?(?:async\\s+)?(?:const|let|function|class|interface|type|enum)\\s+${name}\\b`)
   const at = lines.flatMap((l, i) => (re.test(l) ? [i] : []))
   if (at.length !== 1) throw new Error(`${rel}: ${name} is declared ${at.length} times, expected 1`)
-  return { line: lines[at[0]], above: lines.slice(0, at[0]), text }
+  return { line: lines[at[0]!]!, above: lines.slice(0, at[0]), text }
 }
 
 /** True when `name` leaves `rel` through an `export { ... }` list (a way round the keyword). */
@@ -265,9 +265,9 @@ function a03SweepListed(text: string, name: string): boolean {
 /** N9-071 in either form (C91 OP-60-3): the exact line directly above the declaration, or the tag inside the doc block directly above. */
 function a03SweepMarked(above: string[]): boolean {
   let i = above.length - 1
-  if (i < 0 || !above[i].trim().endsWith("*/")) return false
-  const block = [above[i]]
-  while (i > 0 && !above[i].trim().startsWith("/**")) block.unshift(above[--i])
+  if (i < 0 || !above[i]!.trim().endsWith("*/")) return false
+  const block = [above[i]!]
+  while (i > 0 && !above[i]!.trim().startsWith("/**")) block.unshift(above[--i]!)
   return block.some((l) => l.includes("@internal test seam"))
 }
 
@@ -435,7 +435,7 @@ describe("AC-A03.64", () => {
   test(`shrink-only (3): every entry was exported at BASE ${BASE} (no 1.2.9 name in the baseline)`, async () => {
     const g = await guard()
     const entries = g.loadBaseline(repo)
-    const files = [...new Set(entries.flatMap((e) => (MOVED[e.file] ? [e.file, MOVED[e.file]] : [e.file])))]
+    const files = [...new Set(entries.flatMap((e) => (MOVED[e.file] ? [e.file, MOVED[e.file]!] : [e.file])))]
     const src = showAll(BASE, files)
     const names = new Map<string, Set<string>>()
     const at = (f: string) => {
@@ -445,7 +445,7 @@ describe("AC-A03.64", () => {
       }
       return names.get(f)!
     }
-    const fresh = entries.filter((e) => !at(e.file).has(e.name) && !(MOVED[e.file] && at(MOVED[e.file]).has(e.name)))
+    const fresh = entries.filter((e) => !at(e.file).has(e.name) && !(MOVED[e.file] && at(MOVED[e.file]!).has(e.name)))
     expect(fresh.map((e) => `${e.file} ${e.name}`)).toEqual([])
   }, 120_000)
 
@@ -460,9 +460,9 @@ describe("AC-A03.64", () => {
     const file = "packages/setup/src/vault/classified.ts"
     const lines = linesOf(file)
     const words = declLine(file, "CLASSIFIED_WORDS")
-    expect(lines[words - 1].trim()).toBe(`/** ${MARKER} */`)
+    expect(lines[words - 1]!.trim()).toBe(`/** ${MARKER} */`)
     const word = declLine(file, "classificationWord")
-    expect(lines[word - 1].trim()).not.toBe(`/** ${MARKER} */`)
+    expect(lines[word - 1]!.trim()).not.toBe(`/** ${MARKER} */`)
     expect(carriesMarker(file, word)).toBe(true)
   })
 
@@ -516,7 +516,7 @@ describe("AC-A03.64", () => {
     // missionFilesScroll (1.2.9 row 57) is read outside its file only by a test-browser *.render.ts harness.
     const file = "packages/app/src/pages/session/swarm/mission-control.tsx"
     const name = "missionFilesScroll"
-    const outside = [...new Set(trackedWordHits(name).map((h) => h.split(":")[0]))].filter((f) => f !== file)
+    const outside = [...new Set(trackedWordHits(name).map((h) => h.split(":")[0]!))].filter((f) => f !== file)
     expect(outside.length).toBeGreaterThan(0)
     // 1.2.10 row 77 (B10-13): the guard's own classifier, not a partial copy of it (the copy lacked `.fixture.`).
     const g = await guard()
@@ -535,7 +535,7 @@ describe("AC-A03.64", () => {
       const red = g.checkExports({ repo, baseline, replace: { [file]: copy } })
       const hit = red.unexplained.filter((u) => u.name === name)
       expect(hit.map((u) => `${u.file} ${u.name}`)).toEqual([`${file} ${name}`])
-      expect(hit[0].testReaders).toBeGreaterThan(0)
+      expect(hit[0]!.testReaders).toBeGreaterThan(0)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
