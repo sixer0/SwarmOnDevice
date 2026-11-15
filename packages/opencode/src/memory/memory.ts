@@ -87,7 +87,24 @@ export interface Interface {
     /** Required with kind "index": the mission id, equal to the id in the line. */
     missionId?: string
   }) => Effect.Effect<Result>
-  readonly update: (id: string, input: { text?: string; deviceOnly?: boolean }) => Effect.Effect<Result>
+  readonly update: (
+    id: string,
+    input: {
+      text?: string
+      deviceOnly?: boolean
+      /**
+       * 1.2.10 (N10-061, 01d §3.3 step 2): true lets this device-only note into the vault copy, false undoes it. Only
+       * with `personAttested`; without it nothing changes and `{}` is returned. Handled alone: `text` and `deviceOnly`
+       * are not applied in the same call.
+       */
+      vaultAllowed?: boolean
+      /**
+       * 1.2.10 (N10-069): the person made this change at the Swarm desktop app. Set only by the HTTP handler from the
+       * desktop nonce check, never by an agent tool. Decides whether a text edit keeps the export flag (01d §3.5 S-3).
+       */
+      personAttested?: boolean
+    },
+  ) => Effect.Effect<Result>
   readonly remove: (id: string) => Effect.Effect<boolean>
   readonly setEnabled: (enabled: boolean) => Effect.Effect<Info>
   /**
@@ -148,11 +165,14 @@ export const layer = Layer.effect(
     })
 
     /** Serialised across processes: several Swarm processes can run agents on one project. */
-    const change = <A>(target: string, fn: (store: Stored) => { store?: Stored; value: A }) =>
+    const change = <A>(
+      target: string,
+      fn: (store: Stored) => { store?: Stored; value: A } | Promise<{ store?: Stored; value: A }>,
+    ) =>
       Effect.promise(() =>
         Flock.withLock(`memory:${path.basename(target)}`, async () => {
           const before = await readStore(target)
-          const result = fn(before)
+          const result = await fn(before)
           if (result.store) await writeStore(target, result.store, before.version)
           return result.value
         }),
@@ -296,6 +316,8 @@ export const layer = Layer.effect(
             ? rollUp(store.items, { date: checked.date, time, id: freshId })
             : { items: store.items }
         if ("refused" in rolled) return { value: rolled }
+        // 1.2.10 S-2 (01d §3.5): a replacement is agent text, so it never carries the export flag of the entry it
+        // replaces: the item is built field by field, never from `...found`. deviceOnly is only ever OR-ed (S10-04).
         const item: Item = {
           id: found ? found.id : freshId(),
           text,
@@ -372,7 +394,18 @@ export const layer = Layer.effect(
       const added = yield* change(target, (store): { store?: Stored; value: Item | undefined } => {
         // A repeated lesson about the same failing command is the same lesson, whatever worked this time.
         if (store.items.some((existing) => existing.failed === item.failed)) return { value: undefined }
-        const next: Item = { id: randomBytes(3).toString("hex"), source: "learned", time: Date.now(), ...item }
+        // 1.2.10 S10-18 (01d §3.5 S-1): built by name, never a spread of the input, so no other key reaches the store.
+        const next: Item = {
+          // Key order as the 1.2.9 spread wrote it, so a stored lesson is byte-identical.
+          id: randomBytes(3).toString("hex"),
+          source: "learned",
+          time: Date.now(),
+          text: item.text,
+          deviceOnly: item.deviceOnly,
+          sessionID: item.sessionID,
+          failed: item.failed,
+          worked: item.worked,
+        }
         return { store: { ...store, items: [...store.items, next] }, value: next }
       })
       if (added) {
@@ -405,8 +438,41 @@ export const layer = Layer.effect(
       }),
       add,
       update: Effect.fn("ProjectMemory.update")(function* (id, input) {
-        const text = input.text === undefined ? undefined : input.text.replace(/\s+/g, " ").trim()
         const target = yield* file()
+        if (input.vaultAllowed !== undefined) {
+          // 01d §3.1 store-level guard, behind the person-only route: unattested, nothing changes.
+          if (input.personAttested !== true) return {}
+          const allowed = input.vaultAllowed
+          const base = yield* root()
+          // 01d §3.3 step 2: one decision on the store read inside the lock, so an agent edit cannot race it.
+          const outcome = yield* change(
+            target,
+            async (store): Promise<{ store?: Stored; value: { result: Result; wrote: boolean } }> => {
+              const found = store.items.find((item) => item.id === id)
+              if (!found) return { value: { result: {}, wrote: false } }
+              const write = (value: Item) => ({
+                store: { ...store, items: store.items.map((item) => (item.id === id ? value : item)) },
+                value: { result: { item: value }, wrote: true },
+              })
+              if (!allowed) {
+                // Undo is always allowed, also for a note that has since turned secret or classified.
+                if (found.vaultAllowed === undefined && found.vaultReportSha256 === undefined)
+                  return { value: { result: { item: found }, wrote: false } }
+                return write(withoutExport(found))
+              }
+              const refused = exportRefusal(found)
+              if (refused) return { value: { result: { refused }, wrote: false } }
+              if (found.vaultAllowed === true) return { value: { result: { item: found }, wrote: false } }
+              // S10-01 (01_specs): an index entry exports its final report only as the person confirmed it, so the
+              // report's sha256 is read here, inside the lock, and stored with the flag.
+              const sha = isIndex(found) ? await reportSha256(base, found.text) : undefined
+              return write({ ...withoutExport(found), vaultAllowed: true, ...(sha ? { vaultReportSha256: sha } : {}) })
+            },
+          )
+          if (outcome.wrote) yield* publish(undefined)
+          return outcome.result
+        }
+        const text = input.text === undefined ? undefined : input.text.replace(/\s+/g, " ").trim()
         if (text !== undefined) {
           const current = (yield* read(target)).items.find((item) => item.id === id)
           if (current && indexed(current) && current.text !== text) {
@@ -430,13 +496,13 @@ export const layer = Layer.effect(
             const checked = indexRefusal({ text, missionId: found.missionId ?? "", kind: "index" })
             if (typeof checked === "string") return { value: undefined }
             const refs = uniqueRefs([{ path: checked.report }, ...(found.refs ?? [])])
-            const value: Item = {
+            const value = keepExport(found, {
               ...found,
               text,
               source: "user",
               ...(refs.length <= MAX_REFS ? { refs } : {}),
               ...(input.deviceOnly === undefined ? {} : { deviceOnly: input.deviceOnly }),
-            }
+            }, input.personAttested === true)
             return { store: { ...store, items: store.items.map((item) => (item.id === id ? value : item)) }, value }
           }
           // Rewritten by the user, it is their note now and no longer ties to a command the runtime may retract. A body
@@ -452,7 +518,11 @@ export const layer = Layer.effect(
                   untrusted: found.body || found.refs?.length ? found.untrusted : undefined,
                 }
               : found
-          const value = input.deviceOnly === undefined ? next : { ...next, deviceOnly: input.deviceOnly }
+          const value = keepExport(
+            found,
+            input.deviceOnly === undefined ? next : { ...next, deviceOnly: input.deviceOnly },
+            input.personAttested === true,
+          )
           return { store: { ...store, items: store.items.map((item) => (item.id === id ? value : item)) }, value }
         })
         if (item) yield* publish(undefined)
@@ -595,6 +665,80 @@ function refusal(input: {
 // other value is an ordinary note.
 
 const isIndex = (item: Item) => item.kind === "index"
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Vault export flag (1.2.10, N10-061 `vaultAllowed`, N10-074 `vaultReportSha256`; 01d §3.1, §3.5). Stored only as true,
+// only on a device-only note (I-1); clearing deletes both keys, never writes false. Read only by the mirror's exclusion,
+// these store rules, the memory handlers and the view: model routing (prompt, recall, onDevice) reads deviceOnly alone.
+
+/** The note brings no device-only content the person has not allowed into the vault copy. */
+const allowedContent = (item: Item) => !item.deviceOnly || item.vaultAllowed === true
+
+/** The note without the export keys. */
+function withoutExport(item: Item): Item {
+  const { vaultAllowed: _allowed, vaultReportSha256: _sha, ...rest } = item
+  return rest
+}
+
+/** The flag set (on a device-only note only) or cleared; an existing flag keeps its report hash. */
+function exportFlag(item: Item, allowed: boolean): Item {
+  if (allowed && item.deviceOnly) return item.vaultAllowed === true ? item : { ...withoutExport(item), vaultAllowed: true }
+  return item.vaultAllowed === undefined && item.vaultReportSha256 === undefined ? item : withoutExport(item)
+}
+
+/**
+ * S-3, S-4, S10-07 for an `update` of text or scope: the flag survives only a text change the person attested (for an
+ * index entry, with the same report path) and no actual change of deviceOnly (D-8); I-1 then drops it off a note that
+ * is no longer device-only.
+ */
+function keepExport(found: Item, next: Item, attested: boolean): Item {
+  if (found.vaultAllowed === undefined && found.vaultReportSha256 === undefined) return next
+  const textChanged = next.text !== found.text
+  const reportOf = (text: string) => ProjectMemory.INDEX_TEXT_PATTERN.exec(text)?.[5]
+  const keep =
+    found.vaultAllowed === true &&
+    next.deviceOnly === found.deviceOnly &&
+    (!textChanged || (attested && (!isIndex(found) || reportOf(next.text) === reportOf(found.text))))
+  return exportFlag(next, keep)
+}
+
+/** 01d §3.3 step 2, in this order: archived, not device-only, classified, secret. */
+function exportRefusal(item: Item): ProjectMemory.Refusal | undefined {
+  if (item.rolledInto !== undefined) return "archived"
+  if (item.deviceOnly !== true) return "not_device_only"
+  const strings = [
+    item.text,
+    item.body ?? "",
+    ...(item.refs ?? []).flatMap((ref) => ("symbol" in ref ? [ref.symbol, ref.path ?? ""] : [ref.path])),
+  ].filter((value) => value !== "")
+  if (strings.some(VaultMirror.classified)) return "classified"
+  if (strings.some(MemoryLearn.looksSecret)) return "secret"
+}
+
+/**
+ * The sha256 of the final report an index entry's line names (group 5), read under the project root. Undefined when it
+ * cannot be read as a regular file of at most `VaultMirror.MIRROR_REPORT_MAX_BYTES`: the mirror then links it only.
+ */
+async function reportSha256(base: string, text: string): Promise<string | undefined> {
+  const report = ProjectMemory.INDEX_TEXT_PATTERN.exec(text)?.[5]
+  if (!report) return undefined
+  const full = path.resolve(base, report)
+  const relative = path.relative(base, full)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined
+  const handle = await fs.open(full, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW).catch(() => undefined)
+  if (!handle) return undefined
+  try {
+    const stat = await handle.stat()
+    if (!stat.isFile() || stat.size > VaultMirror.MIRROR_REPORT_MAX_BYTES) return undefined
+    return createHash("sha256")
+      .update(await handle.readFile())
+      .digest("hex")
+  } catch {
+    return undefined
+  } finally {
+    await handle.close()
+  }
+}
 /** An index entry, a roll-up or an archived entry: lines the index rules govern. An unknown kind is an ordinary note. */
 const indexed = (item: Item) => isIndex(item) || item.kind === "index_rollup" || item.rolledInto !== undefined
 
@@ -689,11 +833,16 @@ function rollInto(work: Item[], period: string, members: readonly Item[], input:
     const fits = current?.body !== undefined && current.body.length + 1 + line.length <= ProjectMemory.LIMITS.body
     const body = fits ? `${current!.body}\n${line}` : line
     const part = fits ? state.part : state.part + 1
+    const deviceOnly = (fits && current!.deviceOnly) || member.deviceOnly
+    // 1.2.10 S-8 (01d §3.5, D-5): the roll-up stays exported only when it was (or is new) and every device-only member
+    // it takes in was exported too; set only on a device-only roll-up. Members keep their own flag, archived.
+    const allowed = deviceOnly && (fits ? current!.vaultAllowed === true : true) && allowedContent(member)
     const next: Item = {
       id: fits ? current!.id : input.id(),
       text: rollupText(period, part, body),
       source: "agent",
-      deviceOnly: (fits && current!.deviceOnly) || member.deviceOnly,
+      deviceOnly,
+      ...(allowed ? { vaultAllowed: true } : {}),
       time: input.time,
       body,
       ...((fits && current!.untrusted) || member.untrusted ? { untrusted: true } : {}),
@@ -984,7 +1133,9 @@ export function consolidate(
     const [keeper, ...rest] = group.toSorted((a, b) => b.time - a.time)
     for (const other of rest) drop.add(other.id)
     const deviceOnly = group.some((item) => item.deviceOnly)
-    if (deviceOnly !== keeper!.deviceOnly) replace.set(keeper!.id, { ...keeper!, deviceOnly })
+    // 1.2.10 S-6 (01d §3.5): the keeper is exported only when every device-only member of the group was.
+    const next = exportFlag({ ...keeper!, deviceOnly }, group.every(allowedContent))
+    if (JSON.stringify(next) !== JSON.stringify(keeper)) replace.set(keeper!.id, next)
   }
 
   // Rule 1 and 3: agent and learned notes with the same hook merge; stale refs are dropped. Two notes with different
@@ -1007,13 +1158,17 @@ export function consolidate(
       const keeper = merged[index]!
       drop.add(item.id)
       const refs = uniqueRefs([...(keeper.refs ?? []), ...(item.refs ?? [])])
-      merged[index] = {
-        ...keeper,
-        ...(keeper.body || item.body ? { body: keeper.body ?? item.body } : {}),
-        ...(refs.length ? { refs } : {}),
-        deviceOnly: keeper.deviceOnly || item.deviceOnly,
-        ...(keeper.untrusted || item.untrusted ? { untrusted: true } : {}),
-      }
+      // 1.2.10 S-7 (01d §3.5): the same AND rule over the merged notes; body and refs flow into the keeper.
+      merged[index] = exportFlag(
+        {
+          ...keeper,
+          ...(keeper.body || item.body ? { body: keeper.body ?? item.body } : {}),
+          ...(refs.length ? { refs } : {}),
+          deviceOnly: keeper.deviceOnly || item.deviceOnly,
+          ...(keeper.untrusted || item.untrusted ? { untrusted: true } : {}),
+        },
+        allowedContent(keeper) && allowedContent(item),
+      )
     }
     for (const note of merged) {
       const refs = (note.refs ?? []).filter((ref) => !options.stale(ref)).slice(0, MAX_REFS)
