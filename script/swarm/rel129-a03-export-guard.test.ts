@@ -49,11 +49,6 @@ function linesOf(file: string): string[] {
   return readFileSync(path.join(repo, file), "utf8").split("\n")
 }
 
-/** Lines that start an export declaration (`export const`, `export function`, `export interface`, `export {` ...). */
-function exportLines(file: string): string[] {
-  return linesOf(file).filter((l) => /^export\b/.test(l))
-}
-
 /** Index of the line that declares `name` (with or without `export`), or -1. */
 function declLine(file: string, name: string): number {
   const re = new RegExp(`^(export\\s+)?(declare\\s+)?(async\\s+)?(const|let|function|interface|type|class|enum)\\s+${name}\\b`)
@@ -104,20 +99,8 @@ describe("AC-A03.61", () => {
     [`${vd}/src/lib/studio/contract/types/diagram.ts`]: ["DiagramViaPoint"],
     [`${vd}/src/lib/studio/services/import/markdown.ts`]: ["DIAGRAM_FENCE_INFOS", "DIAGRAM_FENCE_INVALID", "FENCE_KEPT_AS_CODE"],
   }
-  // Exported lines per file before row 61 (`^export` lines at HEAD before this row) minus the names above.
-  const exportsAfter: Record<string, number> = {
-    [`${dg}/build/lanesroute.ts`]: 6,
-    [`${dg}/core/svg.ts`]: 46,
-    [`${dg}/fit/labels.ts`]: 16,
-    [`${dg}/fit/lint.ts`]: 20,
-    [`${dg}/fit/text.ts`]: 26,
-    [`${dg}/layout-b/swimlane.ts`]: 6,
-    [`${vd}/scripts/studio/mcp/write-client.ts`]: 31,
-    [`${vd}/scripts/studio/mcp/write-content.ts`]: 35,
-    [`${vd}/src/lib/studio/contract/schema/v2/refusal-hints.ts`]: 12,
-    [`${vd}/src/lib/studio/contract/types/diagram.ts`]: 7,
-    [`${vd}/src/lib/studio/services/import/markdown.ts`]: 7,
-  }
+  // 1.2.10 row 75 (B10-12a): the per-file `^export` line counts that stood here pinned the total, so a new legitimate
+  // export failed them. What they meant lives in the per-name file-local tests below and in block AC-A03.64.
   // Test-only exports kept (D list of 60_a03_list.md, plus the 1.2.9 seams of C91); each carries the marker.
   const seams: Record<string, readonly string[]> = {
     [`${dg}/build/svg.ts`]: ["jumpHops"],
@@ -141,12 +124,6 @@ describe("AC-A03.61", () => {
         expect(linesOf(file)[i]).not.toMatch(/^export\b/)
       })
     }
-  }
-
-  for (const [file, count] of Object.entries(exportsAfter)) {
-    test(`${path.basename(file)} keeps ${count} export lines`, () => {
-      expect(exportLines(file).length).toBe(count)
-    })
   }
 
   for (const [file, names] of Object.entries(seams)) {
@@ -194,20 +171,8 @@ describe("AC-A03.62", () => {
     [`${oc}/skill/manage.ts`]: ["APPROVALS_FILE", "Checked"],
     [`${oc}/tool/skill_draft.ts`]: ["SKILL_DRAFTS_FULL", "DraftRecord"],
   }
-  // `^export` lines per file after the sweep (the count before row 62 minus the names above).
-  const exportsAfter: Record<string, number> = {
-    [`${oc}/memory/memory.ts`]: 27,
-    [`${oc}/memory/vault-mirror.ts`]: 30,
-    [`${oc}/permission/autonomy-parts/types.ts`]: 16,
-    [`${oc}/project/rehome.ts`]: 17,
-    [`${oc}/project/instance-store.ts`]: 7,
-    [`${hp}/groups/project.ts`]: 4,
-    [`${hp}/groups/skill.ts`]: 10,
-    [`${hp}/handlers/project.ts`]: 5,
-    [`${oc}/skill/index.ts`]: 50,
-    [`${oc}/skill/manage.ts`]: 38,
-    [`${oc}/tool/skill_draft.ts`]: 3,
-  }
+  // 1.2.10 row 75 (B10-12a): the per-file `^export` line counts were dropped (see block AC-A03.61); the un-exported names
+  // stay un-exported through the tests below, and every new export needs a reader or the marker (block AC-A03.64).
   // Test-only exports kept (D list of 60_a03_list.md, the Reach seams N9-072, the three DIAGRAM_FLOW names above and the
   // 1.2.9 seams TerminalScan, runningTerminalCwds, setRehomeDecisionForTests, resetForTests); each carries the marker.
   const seams: Record<string, readonly string[]> = {
@@ -265,12 +230,6 @@ describe("AC-A03.62", () => {
         expect(linesOf(file)[i]).not.toMatch(/^export\b/)
       })
     }
-  }
-
-  for (const [file, count] of Object.entries(exportsAfter)) {
-    test(`${path.basename(file)} keeps ${count} export lines`, () => {
-      expect(exportLines(file).length).toBe(count)
-    })
   }
 
   for (const [file, names] of Object.entries(seams)) {
@@ -526,6 +485,31 @@ describe("AC-A03.64", () => {
     }
     // The working tree was never edited.
     expect(readFileSync(path.join(repo, mutFile), "utf8")).toBe(original)
+  }, 120_000)
+
+  test("row 75 (B10-12a): a new marked export in vault-mirror.ts is explained; a new unmarked one with no reader is unexplained", async () => {
+    // Replaces the `keeps N export lines` pins: a legitimate new export must not fail, an unexplained one must.
+    const file = "packages/opencode/src/memory/vault-mirror.ts"
+    const g = await guard()
+    const baseline = g.loadBaseline(repo)
+    const original = readFileSync(path.join(repo, file), "utf8")
+    const marked = ["row75Marked", "Probe"].join("")
+    const bare = ["row75Unmarked", "Probe"].join("")
+    expect(trackedWordHits(marked)).toEqual([])
+    expect(trackedWordHits(bare)).toEqual([])
+    const dir = mkdtempSync(path.join(os.tmpdir(), "a03-75-"))
+    try {
+      const copy = path.join(dir, "vault-mirror.ts")
+      writeFileSync(copy, `${original}\n/**\n * Row 75 probe.\n * ${MARKER}\n */\nexport const ${marked} = 1\n`)
+      const ok = g.checkExports({ repo, baseline, replace: { [file]: copy } })
+      expect(ok.unexplained).toEqual([])
+      writeFileSync(copy, `${original}\n/** Row 75 probe, no marker. */\nexport const ${bare} = 1\n`)
+      const red = g.checkExports({ repo, baseline, replace: { [file]: copy } })
+      expect(red.unexplained.map((u) => `${u.file} ${u.name}`)).toEqual([`${file} ${bare}`])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    expect(readFileSync(path.join(repo, file), "utf8")).toBe(original)
   }, 120_000)
 
   test("mutation (row 74a, F1): a reader in a browser render harness does not explain an export; the marker does", async () => {
