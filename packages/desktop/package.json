@@ -9,6 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsgo -b",
+    "test:handoff": "bun ./scripts/test-handoff.ts",
     "predev": "bun ./scripts/predev.ts",
     "dev": "electron-vite dev",
     "prebuild": "bun ./scripts/prebuild.ts",

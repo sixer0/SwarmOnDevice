@@ -123,6 +123,8 @@ const make = (kind: "node" | "cargo" | "python", files: Record<string, string> =
 
 beforeAll(() => {
   // The fixture home must be a test one: these tests write files into it.
+  if (path.resolve(home()) === path.join("/Users", os.userInfo().username))
+    throw new Error("refusing the real HOME: run `bun run test:outward` (fresh fixture HOME, XDG_* and TMPDIR)")
   expect(path.resolve(home())).not.toBe(path.join("/Users", os.userInfo().username))
 })
 afterEach(() => {

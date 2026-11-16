@@ -304,8 +304,10 @@ beforeAll(() => requireProcessList("handoff-e2e.test.ts"))
 
 test("HO-00 guard: fixture HOME and TMPDIR, no /Applications, no real home, no /usr/bin/open", () => {
   expect(path.isAbsolute(REAL_HOME)).toBe(true)
-  expect(process.env.HOME === REAL_HOME).toBe(false)
   const tmp = process.env.TMPDIR ?? ""
+  if (process.env.HOME === REAL_HOME || !path.isAbsolute(tmp) || forbidden(tmp + "/"))
+    throw new Error("HO-00: refusing the real HOME or a TMPDIR inside it: run `bun run test:handoff` (fresh fixture HOME and TMPDIR)")
+  expect(process.env.HOME === REAL_HOME).toBe(false)
   expect({ tmpAbsolute: path.isAbsolute(tmp), tmpForbidden: forbidden(tmp + "/") }).toEqual({
     tmpAbsolute: true,
     tmpForbidden: false,
