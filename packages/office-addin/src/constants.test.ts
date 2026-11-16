@@ -19,6 +19,7 @@ describe("office-addin constants (register rev 5)", () => {
     expect(c.OFFICE_CSRF_HEADER).toBe("X-Swarm-Office")
     expect(c.OFFICE_TOKEN_HEADER).toBe("X-Swarm-Office-Token")
     expect(c.OFFICE_JS_URL).toBe("https://officeapis.public.onecdn.static.microsoft/1/office.js")
+    expect(c.OFFICE_MANIFEST_FILE).toBe("swarm-office-addin.xml")
   })
 
   test("limits", () => {

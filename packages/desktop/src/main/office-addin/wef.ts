@@ -13,8 +13,10 @@
 import { createHash } from "node:crypto"
 import { mkdir, readFile, readdir, rm, rmdir, stat, unlink, writeFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
+import { OFFICE_MANIFEST_FILE } from "@swarm/office-addin/constants"
 
-export const WEF_MANIFEST_FILE = "swarm-office-addin.xml"
+// C31: the filename is defined once in office-addin/src/constants.ts; this name stays for existing callers.
+export const WEF_MANIFEST_FILE = OFFICE_MANIFEST_FILE
 
 export type WefFs = {
   mkdir: (dir: string) => Promise<unknown>

@@ -44,6 +44,9 @@ export const OFFICE_HISTORY_LIMIT = 50
 export const OFFICE_TITLE_MAX_CHARS = 200
 export const OFFICE_EXCEL_CELL_MAX_CHARS = 32_767
 
+// Section 6: manifest filename (repo, packaged resources and wef folders; C31)
+export const OFFICE_MANIFEST_FILE = "swarm-office-addin.xml"
+
 // Section 4.1: pane CSP (rev 3 D4: frame-ancestors 'none')
 export const OFFICE_PANE_CSP =
   "default-src 'self'; script-src 'self' https://officeapis.public.onecdn.static.microsoft; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"

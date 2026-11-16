@@ -80,6 +80,8 @@ export default defineConfig({
           index: "src/main/index.ts",
           sidecar: "src/main/sidecar.ts",
           "datum-studio-host": "src/main/datum-studio-host.ts",
+          // Row M2-03: out/main/office-bridge.js, the office-bridge utility process entry (forked by M7-03).
+          "office-bridge": "src/main/office-bridge.ts",
         },
         // Keep this identical to electron-vite's Node 20.11+ shim. Its regex insertion can
         // corrupt bundled TypeScript, while a Rollup banner places the shim safely.
@@ -93,7 +95,8 @@ const require = __cjs_mod__.createRequire(import.meta.url);
 `,
         },
       },
-      externalizeDeps: { include: [nodePtyPkg] },
+      // Row M2-03: @swarm/office-addin is a workspace TS source package (no dist, not packaged), so it is bundled.
+      externalizeDeps: { include: [nodePtyPkg], exclude: ["@swarm/office-addin"] },
     },
     plugins: [
       {
