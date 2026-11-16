@@ -15,6 +15,7 @@ import { ProviderTransform } from "@/provider/transform"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 
 import { testEffect } from "../lib/effect"
+import { withCapturedLog } from "../lib/log-capture"
 import type { Agent } from "../../src/agent/agent"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionID, MessageID } from "../../src/session/schema"
@@ -2318,5 +2319,412 @@ describe("session.llm.stream", () => {
         },
       }),
     },
+  )
+})
+
+// --- Swarm 1.3.2 row 17 (S2): F0 records the offered tool set; F1 makes an unknown tool name visible ---
+
+const qwenFixture = { providerID: "alibaba", modelID: "qwen-plus" }
+
+/** The plain fixtures F0 and F1 need on both sides of the provider boundary. */
+function prepFixtures(id: string) {
+  const model = loadFixture(qwenFixture.providerID, qwenFixture.modelID).model
+  const sessionID = SessionID.make(id)
+  const agent = {
+    name: "test",
+    mode: "primary",
+    options: {},
+    permission: [{ permission: "*", pattern: "*", action: "allow" }],
+  } satisfies Agent.Info
+  const user = {
+    id: MessageID.make(`msg_user-${id}`),
+    sessionID,
+    role: "user",
+    time: { created: Date.now() },
+    agent: agent.name,
+    model: { providerID: ProviderV2.ID.make(qwenFixture.providerID), modelID: ModelV2.ID.make(model.id) },
+  } satisfies SessionV1.User
+  return { model, agent, user }
+}
+
+/** A chat-completions stream that asks for one tool by name. */
+function createToolCallResponse(name: string) {
+  return createEventResponse(
+    [
+      {
+        id: "chatcmpl-unknown-tool",
+        object: "chat.completion.chunk",
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              tool_calls: [{ index: 0, id: "call-unknown-tool", type: "function", function: { name, arguments: "{}" } }],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      {
+        id: "chatcmpl-unknown-tool",
+        object: "chat.completion.chunk",
+        choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+      },
+    ],
+    true,
+  )
+}
+
+const offer = (...keys: string[]) =>
+  Object.fromEntries(keys.map((key) => [key, tool({ description: `offered ${key}`, inputSchema: z.object({}) })]))
+
+/** Byte length of the rendered line, for the ceiling F0 has to enforce itself. */
+const bytes = (line: string) => new TextEncoder().encode(line).length
+
+const qwenConfig = () => ({
+  enabled_providers: [qwenFixture.providerID],
+  provider: {
+    [qwenFixture.providerID]: {
+      options: { apiKey: "test-key", baseURL: `${state.server!.url.origin}/v1` },
+    },
+  },
+  // Two enabled servers. F0 groups the offered keys by these names; nothing dials them, because MCP is not part of
+  // the LLM graph under test and this instance never starts it.
+  mcp: {
+    "datum-studio": { type: "remote" as const, url: "http://127.0.0.1:9/mcp", oauth: false as const },
+    phantom: { type: "remote" as const, url: "http://127.0.0.1:9/mcp", oauth: false as const },
+  },
+})
+
+describe("session.llm.request tool set is recorded", () => {
+  it.instance(
+    "F0 writes one provider tool set line per turn, and names the keys only when a server contributed none",
+    () =>
+      withCapturedLog((log) =>
+        Effect.gen(function* () {
+          const { model, agent, user } = prepFixtures("session-test-f0-tool-set")
+          const resolved = yield* Provider.use.getModel(
+            ProviderV2.ID.make(qwenFixture.providerID),
+            ModelV2.ID.make(model.id),
+          )
+          const turn = (keys: string[]) =>
+            drain({
+              user,
+              sessionID: user.sessionID,
+              model: resolved,
+              agent,
+              system: ["You are a helpful assistant."],
+              messages: [{ role: "user", content: "Hello" }],
+              tools: offer(...keys),
+            })
+
+          // Turn 1: every enabled server contributed, so counts are enough.
+          yield* Effect.exit(
+            turn([
+              "datum-studio_studio_mission_create",
+              "datum-studio_studio_registry",
+              "phantom_one",
+              "read",
+            ]),
+          )
+          const first = yield* log.matching("provider tool set")
+          expect(first).toHaveLength(1)
+          expect(first[0]).toContain("level=INFO")
+          expect(first[0]).toContain('message="provider tool set"')
+          expect(first[0]).toContain("toolCount=4")
+          expect(first[0]).toContain("mcp.datum-studio=2")
+          expect(first[0]).toContain("mcp.phantom=1")
+          expect(first[0]).toContain("nonMcpCount=1")
+          // 2 + 1 + 1 = 4: the arithmetic closes against the count.
+          expect(first[0]).toContain("zeroToolServers=")
+          expect(first[0]).not.toContain("zeroToolServers=phantom")
+          expect(/(^|\s)keys=/.test(first[0]!)).toBe(false)
+          expect(bytes(first[0]!)).toBeLessThanOrEqual(2048)
+
+          // Turn 2: `phantom` contributed nothing, so this turn names the keys that were offered.
+          yield* Effect.exit(
+            turn(["datum-studio_studio_mission_create", "datum-studio_studio_registry", "read"]),
+          )
+          const second = yield* log.matching("provider tool set")
+          expect(second).toHaveLength(2)
+          expect(second[1]).toContain("toolCount=3")
+          expect(second[1]).toContain("mcp.datum-studio=2")
+          expect(second[1]).toContain("nonMcpCount=1")
+          expect(second[1]).toContain("zeroToolServers=phantom")
+          expect(second[1]).toContain("datum-studio_studio_mission_create")
+          expect(second[1]).not.toContain("phantom_one")
+          expect(second[1]).not.toContain("keysOmitted")
+          expect(bytes(second[1]!)).toBeLessThanOrEqual(2048)
+
+          // Turn 3: the anomaly with more keys than the ceiling lets be named, so the cap has to hold and say so.
+          yield* Effect.exit(turn(Array.from({ length: 40 }, (_, index) => `datum-studio_t${index}`)))
+          const capped = yield* log.matching("provider tool set")
+          expect(capped).toHaveLength(3)
+          expect(capped[2]).toContain("toolCount=40")
+          expect(capped[2]).toContain("mcp.datum-studio=40")
+          expect(capped[2]).toContain("zeroToolServers=phantom")
+          expect(capped[2]).toContain("keysOmitted=8")
+          expect(bytes(capped[2]!)).toBeLessThanOrEqual(2048)
+          expect(bytes(capped[2]!)).toBeGreaterThan(600)
+        }),
+      ),
+    { config: qwenConfig, timeout: 30_000 },
+  )
+})
+
+describe("session.llm.repairToolCall surfaces unknown names", () => {
+  it.instance(
+    "F1 warns about an unprefixed name and names the registered key to the model",
+    () =>
+      withCapturedLog((log) =>
+        Effect.gen(function* () {
+          const { model, agent, user } = prepFixtures("session-test-f1-unknown")
+          const resolved = yield* Provider.use.getModel(
+            ProviderV2.ID.make(qwenFixture.providerID),
+            ModelV2.ID.make(model.id),
+          )
+          waitRequest("/chat/completions", createToolCallResponse("studio_mission_create"))
+
+          yield* Effect.exit(
+            drain({
+              user,
+              sessionID: user.sessionID,
+              model: resolved,
+              agent,
+              system: [],
+              messages: [{ role: "user", content: "Create the mission" }],
+              tools: offer("datum-studio_studio_mission_create"),
+            }),
+          )
+
+          const lines = yield* log.matching("unknown tool name")
+          expect(lines).toHaveLength(1)
+          expect(lines[0]).toContain("studio_mission_create")
+          expect(lines[0]).toContain("datum-studio_studio_mission_create")
+          expect(lines[0]).toContain(`session.id=${user.sessionID}`)
+        }),
+      ),
+    { config: qwenConfig, timeout: 30_000 },
+  )
+
+  it.instance(
+    "F1 leaves a correctly prefixed call without any new warning",
+    () =>
+      withCapturedLog((log) =>
+        Effect.gen(function* () {
+          const { model, agent, user } = prepFixtures("session-test-f1-known")
+          const resolved = yield* Provider.use.getModel(
+            ProviderV2.ID.make(qwenFixture.providerID),
+            ModelV2.ID.make(model.id),
+          )
+          waitRequest("/chat/completions", createToolCallResponse("datum-studio_studio_mission_create"))
+
+          const events = yield* Effect.exit(
+            LLM.Service.use((svc) =>
+              svc
+                .stream({
+                  user,
+                  sessionID: user.sessionID,
+                  model: resolved,
+                  agent,
+                  system: [],
+                  messages: [{ role: "user", content: "Create the mission" }],
+                  tools: offer("datum-studio_studio_mission_create"),
+                })
+                .pipe(Stream.take(200), Stream.runCollect),
+            ),
+          )
+          const names = Exit.isSuccess(events)
+            ? Array.from(events.value).flatMap((event) => ("name" in event ? [String(event.name)] : []))
+            : []
+          expect(names).toContain("datum-studio_studio_mission_create")
+
+          const warnings = yield* log.matching("unknown tool name")
+          expect(warnings).toHaveLength(0)
+        }),
+      ),
+    { config: qwenConfig, timeout: 30_000 },
+  )
+})
+
+// --- Swarm 1.3.2 row 16b: whole-line ceiling (NB-2), ambiguous hint (F-N5), sanitisation and hint-text teeth (F-N6) ---
+
+/** A configuration with many long server names, which is what puts pressure on the aggregate line, not on `keys`. */
+function manyServers(count: number) {
+  const mcp: Record<string, { type: "remote"; url: string; oauth: false }> = {}
+  for (let index = 0; index < count; index++) {
+    mcp[`swarm-mcp-server-zero-padded-name-${String(index).padStart(3, "0")}`] = {
+      type: "remote",
+      url: "http://127.0.0.1:9/mcp",
+      oauth: false,
+    }
+  }
+  return () => ({
+    enabled_providers: [qwenFixture.providerID],
+    provider: { [qwenFixture.providerID]: { options: { apiKey: "test-key", baseURL: `${state.server!.url.origin}/v1` } } },
+    mcp,
+  })
+}
+
+describe("session.llm.request tool set is bounded as one line", () => {
+  it.instance(
+    "NB-2 holds the 2,048 byte ceiling over the whole line, not only over keys",
+    () =>
+      withCapturedLog((log) =>
+        Effect.gen(function* () {
+          const { model, agent, user } = prepFixtures("session-test-nb2-ceiling")
+          const resolved = yield* Provider.use.getModel(
+            ProviderV2.ID.make(qwenFixture.providerID),
+            ModelV2.ID.make(model.id),
+          )
+          // One hundred configured servers of ~38 characters each, and only one of them contributing: the fixed fields
+          // alone are well past the ceiling today, which is exactly the hole row 24 named.
+          yield* Effect.exit(
+            drain({
+              user,
+              sessionID: user.sessionID,
+              model: resolved,
+              agent,
+              system: [],
+              messages: [{ role: "user", content: "Hello" }],
+              tools: offer("swarm-mcp-server-zero-padded-name-000_alpha"),
+            }),
+          )
+
+          const lines = yield* log.matching("provider tool set")
+          expect(lines).toHaveLength(1)
+          expect(bytes(lines[0]!)).toBeLessThanOrEqual(2048)
+          // Overflow is flagged, never silently dropped. The one contributing server's count field was coarsened away,
+          // 55 of the 99 empty ones did not fit, and the single offered key could not be named at all.
+          expect(lines[0]).toContain("zeroToolServersOmitted=55")
+          expect(lines[0]).toContain("mcpCountsCoarsened=1")
+          expect(lines[0]).toContain("mcpTotal=1")
+          expect(lines[0]).toContain("keysOmitted=1")
+          expect(/(^|\s)keys=/.test(lines[0]!)).toBe(false)
+        }),
+      ),
+    { config: manyServers(100), timeout: 30_000 },
+  )
+
+  it.instance(
+    "F-N6 pins that grouping uses the sanitised server name, so a dotted config name still groups",
+    () =>
+      withCapturedLog((log) =>
+        Effect.gen(function* () {
+          const { model, agent, user } = prepFixtures("session-test-fn6-sanitize")
+          const resolved = yield* Provider.use.getModel(
+            ProviderV2.ID.make(qwenFixture.providerID),
+            ModelV2.ID.make(model.id),
+          )
+          yield* Effect.exit(
+            drain({
+              user,
+              sessionID: user.sessionID,
+              model: resolved,
+              agent,
+              system: [],
+              messages: [{ role: "user", content: "Hello" }],
+              tools: offer("odd_name_lookup", "read"),
+            }),
+          )
+
+          const lines = yield* log.matching("provider tool set")
+          expect(lines).toHaveLength(1)
+          // `odd.name` arrives from config and composes its key as `odd_name_lookup`; dropping McpCatalog.sanitize
+          // would silently move that tool into nonMcpCount, which is what this pin catches.
+          expect(lines[0]).toContain("mcp.odd_name=1")
+          expect(lines[0]).toContain("nonMcpCount=1")
+        }),
+      ),
+    {
+      config: () => ({
+        enabled_providers: [qwenFixture.providerID],
+        provider: {
+          [qwenFixture.providerID]: { options: { apiKey: "test-key", baseURL: `${state.server!.url.origin}/v1` } },
+        },
+        mcp: { "odd.name": { type: "remote" as const, url: "http://127.0.0.1:9/mcp", oauth: false as const } },
+      }),
+      timeout: 30_000,
+    },
+  )
+})
+
+describe("session.llm.repairToolCall does not guess between candidates", () => {
+  it.instance(
+    "F-N5 names every plausible registration when an unprefixed call matches more than one",
+    () =>
+      withCapturedLog((log) =>
+        Effect.gen(function* () {
+          const { model, agent, user } = prepFixtures("session-test-fn5-ambiguous")
+          const resolved = yield* Provider.use.getModel(
+            ProviderV2.ID.make(qwenFixture.providerID),
+            ModelV2.ID.make(model.id),
+          )
+          waitRequest("/chat/completions", createToolCallResponse("search"))
+
+          yield* Effect.exit(
+            drain({
+              user,
+              sessionID: user.sessionID,
+              model: resolved,
+              agent,
+              system: [],
+              messages: [{ role: "user", content: "Search" }],
+              tools: offer("alpha_provider_search", "beta_provider_search"),
+            }),
+          )
+
+          const lines = yield* log.matching("unknown tool name")
+          expect(lines).toHaveLength(1)
+          // Two servers both end in `_search`: naming one of them confidently is a guess dressed as a fact (F-N5).
+          expect(lines[0]).toContain("candidates=alpha_provider_search,beta_provider_search")
+          expect(lines[0]).toContain("candidateCount=2")
+          expect(lines[0]).not.toContain("registered=alpha_provider_search")
+        }),
+      ),
+    { config: qwenConfig, timeout: 30_000 },
+  )
+
+  it.instance(
+    "F-N6 puts the hint where the model can read it, not only in the log",
+    () =>
+      withCapturedLog((log) =>
+        Effect.gen(function* () {
+          const { model, agent, user } = prepFixtures("session-test-fn6-hint")
+          const resolved = yield* Provider.use.getModel(
+            ProviderV2.ID.make(qwenFixture.providerID),
+            ModelV2.ID.make(model.id),
+          )
+          waitRequest("/chat/completions", createToolCallResponse("studio_mission_create"))
+
+          const events = yield* Effect.exit(
+            LLM.Service.use((svc) =>
+              svc
+                .stream({
+                  user,
+                  sessionID: user.sessionID,
+                  model: resolved,
+                  agent,
+                  system: [],
+                  messages: [{ role: "user", content: "Create the mission" }],
+                  tools: offer("datum-studio_studio_mission_create"),
+                })
+                .pipe(Stream.take(200), Stream.runCollect),
+            ),
+          )
+          // Measured at this revision, not assumed: the SDK re-parses the ORIGINAL call when the repaired name is also
+          // unknown (ai@6.0.168 dist/index.mjs:3689-3706), so the hint written into `input` never reaches the stream.
+          // What the model is actually told is the SDK's own unavailable-tool message, and it already lists the
+          // registered key. This pin catches the regression where that stops being true.
+          const payload = Exit.isSuccess(events) ? JSON.stringify(Array.from(events.value)) : ""
+          expect(payload).toContain("unavailable tool")
+          expect(payload).toContain("Available tools: datum-studio_studio_mission_create")
+
+          const lines = yield* log.matching("unknown tool name")
+          expect(lines).toHaveLength(1)
+          expect(lines[0]).toContain("registered=datum-studio_studio_mission_create")
+        }),
+      ),
+    { config: qwenConfig, timeout: 30_000 },
   )
 })

@@ -22,6 +22,7 @@ import { ConfigMCPV1 } from "@opencode-ai/core/v1/config/mcp"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { withTimeout } from "@/util/timeout"
+import { withoutPaths } from "@/util/log-path"
 import { withoutServerCredentials } from "@/util/server-credentials"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { McpOAuthPendingProvider, McpOAuthProvider, OAUTH_CALLBACK_PATH } from "./oauth-provider"
@@ -40,6 +41,105 @@ import { McpEvent } from "@opencode-ai/schema/mcp-event"
 import { McpBrowser } from "./browser"
 
 const DEFAULT_TIMEOUT = 30_000
+
+/** F2/F2b (1.3.2): the most bytes a squashed cause or an unavailable reason may hold in a log line. */
+const LOG_TEXT_MAX_BYTES = 200
+
+/** F4 (1.3.2): what one line of a local child's stderr may hold, and how many lines reach the log per client. */
+const STDERR_LINE_MAX_BYTES = 500
+const STDERR_MAX_LINES = 1_000
+
+/**
+ * F2/F2b/F4 (1.3.2): text from outside this process on its way into a log line. Causes and stderr carry absolute paths
+ * (home folder, user name), so they go through the one scrubber the house uses for that (`util/log-path.ts:22`, the
+ * shape at `server/routes/instance/httpapi/handlers/project.ts:50`) and are cut to a byte cap.
+ *
+ * NB-1 (row 24): `withoutPaths` is a path scrubber and touches nothing else, so credential shapes are masked here as
+ * well. A local child's stderr and a provider's connect error are both written by code this process does not control,
+ * and from 1.3.2 they are persisted rather than discarded — relying on each child to self-redact was the security
+ * review's one substantive finding. Masking runs before the byte cut, so a cut cannot leave a secret prefix behind.
+ */
+function logText(value: string, maxBytes: number) {
+  const masked = maskCredentials(withoutPaths(value))
+  if (Buffer.byteLength(masked) <= maxBytes) return masked
+  return Buffer.from(masked).subarray(0, maxBytes).toString()
+}
+
+/** NB-1: the placeholder a masked credential leaves behind, shaped so a reader knows something was removed on purpose. */
+const REDACTED = "[redacted]"
+
+/**
+ * NB-1 (row 24): the credential shapes worth masking in text this process did not write. Deliberately narrow: each one
+ * needs either an authentication keyword or an explicit assignment to fire, so the diagnostics that matter here
+ * (`BRIDGE_START pid=1`, `HOST_UNREACHABLE port=57302`, `TOKEN_REJECTED status=401`) pass through untouched, and the
+ * fourth rule catches the long opaque run that has no label on it at all.
+ */
+function maskCredentials(value: string) {
+  let text = value
+  // An `Authorization` header may carry its scheme; the scheme word stays so the line still says what kind of secret
+  // it was, and the value goes.
+  text = text.replace(
+    /(\b(?:proxy-)?authorization["']?\s*[:=]\s*)((?:bearer|basic|digest|ntlm|token)\s+)?[^\s,;]+/gi,
+    `$1$2${REDACTED}`,
+  )
+  // A scheme on its own, with no header name in front of it.
+  text = text.replace(/(\b(?:bearer|basic|digest)\s+)[A-Za-z0-9._~+\/=-]{6,}/gi, `$1${REDACTED}`)
+  // Named assignments, quoted or bare.
+  text = text.replace(
+    /(\b(?:x-api-key|api[-_]?key|apikey|client[-_]?secret|access[-_]?token|refresh[-_]?token|secret|password|passwd|token)\b["']?\s*[:=]\s*)("([^"\\]*)("|$)|'([^'\\]*)('|$)|[^\s,;]+)/gi,
+    `$1${REDACTED}`,
+  )
+  // Credentials embedded in a URL.
+  text = text.replace(/(:\/\/)([^/@\s:]+):([^@/\s]+)@/g, `$1$2:${REDACTED}@`)
+  // A long opaque run with no label on it at all: mixed case and digits over 40+ characters of base64 alphabet.
+  return text.replace(
+    /\b(?=[A-Za-z0-9+/]{40,}\b)(?=[A-Za-z0-9+/]*[0-9])(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]*[A-Z])[A-Za-z0-9+/]{40,}={0,2}\b/g,
+    REDACTED,
+  )
+}
+
+/** F2 (1.3.2): what a squashed cause says, in the same words the failed status carries. */
+function causeText(cause: Cause.Cause<unknown>) {
+  const error = Cause.squash(cause)
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * F4 (1.3.2, moved by row 16b on review finding F-N1): one logger line per stderr record from a local child, so
+ * `BRIDGE_START`, `HOST_UNREACHABLE` and `TOKEN_REJECTED` stop being lost (12c §C). The line cap and the per-client
+ * count cap bound what one child can write into `opencode.log`; past the count cap the drain continues and only one
+ * summary line is written, because stopping the drain would refill the pipe and block the child (row 18 §4).
+ *
+ * Raw stderr carries no protocol level, unlike the fields `serverLog` switches on further down, so records log at INFO.
+ * F-N7: a failed read now says so once instead of ending the drain in silence.
+ */
+function stderrLog(name: string, stream: AsyncIterable<Uint8Array>) {
+  let lines = 0
+  return Stream.fromAsyncIterable(stream, (cause) => new Error(String(cause))).pipe(
+    Stream.decodeText(),
+    Stream.splitLines,
+    Stream.runForEach((line) =>
+      Effect.gen(function* () {
+        if (line.length === 0) return
+        if (lines === STDERR_MAX_LINES) {
+          lines++
+          return yield* Effect.logWarning("MCP server stderr truncated", { server: name, limit: STDERR_MAX_LINES })
+        }
+        if (lines > STDERR_MAX_LINES) return
+        lines++
+        yield* Effect.logInfo("MCP server stderr", { server: name, line: logText(line, STDERR_LINE_MAX_BYTES) })
+      }),
+    ),
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.void
+        : Effect.logWarning("MCP server stderr reader stopped", {
+            server: name,
+            error: logText(causeText(cause), LOG_TEXT_MAX_BYTES),
+          }),
+    ),
+  )
+}
 
 /**
  * M-02 (1.2.6 row 54c, register N-052): when the built-in datum-studio server's stdio bridge ends (it exits 3 after a
@@ -436,6 +536,22 @@ const layer = Layer.effect(
         }),
       })
 
+      // F4 (1.3.2): read the child's stderr — `BRIDGE_START`, `HOST_UNREACHABLE`, `TOKEN_REJECTED` were reaching no log
+      // at all (12c §C). Row 16b moved the attach here from `watch` on row 18 finding F-N1: the SDK creates the
+      // PassThrough in the constructor and pipes the child into it at `start()` (`stdio.js:54,:98`), and the getter's own
+      // doc says attaching before start "prevents loss of any early error output emitted by the child process"
+      // (`client/stdio.d.ts:60-64`). A bridge that writes its reason and exits 3 during the handshake has no client for
+      // `watch` to attach to, so that was exactly the byte window still being lost; draining from spawn also stops a
+      // chatty dying child from filling the pipe and blocking until the connect timeout releases the transport.
+      const stderr = transport.stderr
+      if (stderr) {
+        // A bridge of its own, because these are the earliest bytes of a child that may never become a client. Logging
+        // through a plain callback cannot re-enter the Effect logger, and this is the file's existing pattern for that
+        // (`bridge.fork` at the `onclose` and `serverLog` handlers below).
+        const bridge = yield* EffectBridge.make()
+        bridge.fork(stderrLog(key, stderr as unknown as AsyncIterable<Uint8Array>))
+      }
+
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       return yield* connectTransport(transport, connectTimeout).pipe(
         Effect.map((client): { client: MCPClient | undefined; status: Status } => ({
@@ -470,7 +586,15 @@ const layer = Layer.effect(
 
         if (!mcpClient) {
           if (status.status !== "connected" && status.status !== "disabled") {
-            yield* Effect.logWarning("server unavailable", { key, type: mcp.type, status: status.status })
+            // F2b (1.3.2): the reason was already sitting in status.error and this line threw it away, which is why a
+            // launcher that exited 3 left no trace of why (06 §5). Message and three fields unchanged; the scrubbed
+            // reason is added.
+            yield* Effect.logWarning("server unavailable", {
+              key,
+              type: mcp.type,
+              status: status.status,
+              error: logText("error" in status ? status.error : "no error text", LOG_TEXT_MAX_BYTES),
+            })
           }
           return { status } satisfies CreateResult
         }
@@ -490,9 +614,27 @@ const layer = Layer.effect(
           Effect.catchCause((cause) =>
             Effect.tryPromise(() => mcpClient.close()).pipe(Effect.ignore, Effect.andThen(Effect.failCause(cause))),
           ),
+          // F2 (1.3.2): a thrown cause used to become a failed status with no line at all, which is the route that
+          // turns a loud defs() failure (catalog.ts:51 swallows the list error to void, so this is "Failed to get
+          // tools") into permanent silent absence. It is written down here as a tap, because this is where the server
+          // key is in scope and the cause still flows on to the handler below, which returns exactly what it returned
+          // before. Interrupts are not logged.
+          Effect.tapCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.void
+              : Effect.logWarning("MCP create failed", { key, error: logText(causeText(cause), LOG_TEXT_MAX_BYTES) }),
+          ),
         )
       },
       Effect.map((result): CreateResult => result),
+      // F-N2 (row 18): the coverage boundary of the F2 tap is recorded here on purpose. This handler cannot name the
+      // server key — an `Effect.fn` pipe operator never sees the call arguments — and it cannot log keyless either,
+      // because every tapped cause arrives here too, so logging would double the line for the common defs() failure.
+      // What is left uncovered is therefore a defect escaping the connect helpers themselves: both catch their own
+      // failures, and `connectTransport` releases the transport on failure, so only a synchronous throw from the SDK
+      // transport constructor would flip status here without a line.
+      // Closing that properly means moving the failure conversion inside the generator, which is a larger change than a
+      // hotfix should carry; until then, a silent `failed` status with no matching WARN points here.
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt
         const error = Cause.squash(cause)
@@ -692,14 +834,18 @@ const layer = Layer.effect(
 
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
-            const clients = Object.values(s.clients)
+            // F3 (1.3.2): the snapshot is what gets closed, so it is also what gets named. Clearing before closing is
+            // what stops a re-entrant onclose from double-deleting (:532 guard), so the line is logged here rather
+            // than in onclose, which cannot fire during shutdown.
+            const clients = Object.entries(s.clients)
             s.clients = {}
             s.defs = {}
             s.instructions = {}
             yield* Effect.forEach(
               clients,
-              (client) =>
+              ([name, client]) =>
                 Effect.gen(function* () {
+                  yield* Effect.logInfo("MCP connection closing", { server: name, reason: "instance disposed" })
                   const pid = client.transport instanceof StdioClientTransport ? client.transport.pid : null
                   if (typeof pid === "number") {
                     const pids = yield* descendants(pid)
@@ -849,6 +995,16 @@ const layer = Layer.effect(
         if (!listed) {
           yield* Effect.logWarning("missing cached tools for connected server", { clientName })
           continue
+        }
+        // F0b (1.3.2): the guard above catches an absent list; a server that answers with no tools at all passed every
+        // check here and still offered nothing, which is the genuinely silent shape (06 §8 item 4). The absence
+        // warning's message is left alone so current log parsing does not move.
+        //
+        // F-N3 (row 18): gated on the advertised capability, because an empty list is the honest answer from a server
+        // that never claimed `tools` (`:511` yields [] for exactly that case) and this loop runs on every prompt build.
+        // Warning there would cry wolf once per turn about a server that is behaving correctly.
+        if (listed.length === 0 && client.getServerCapabilities()?.tools) {
+          yield* Effect.logWarning("connected server contributed no tools", { clientName })
         }
         const timeout = requestTimeout(s, clientName, mcpConfig, defaultTimeout)
         const source = sourceOf(clientName, s.config[clientName], mcpConfig, global[clientName])

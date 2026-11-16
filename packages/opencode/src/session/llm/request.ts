@@ -4,6 +4,7 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 import type { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceState } from "@/effect/instance-state"
 import { Permission } from "@/permission"
+import { McpCatalog } from "@/mcp/catalog"
 import type { Agent } from "@/agent/agent"
 import type { MessageV2 } from "../message-v2"
 import type { Provider } from "@/provider/provider"
@@ -28,6 +29,12 @@ type PrepareInput = {
   readonly messages: ModelMessage[]
   readonly small?: boolean
   readonly tools: Record<string, Tool>
+  /**
+   * F0 (1.3.2): the configured MCP server names, used only to group the offered keys by server prefix. They are passed
+   * in because the AI SDK `Tool` map has already lost where each entry came from (`session/tools.ts:609` still holds
+   * `entry.source`, this map does not).
+   */
+  readonly mcpServers?: readonly string[]
   readonly provider: Provider.Info
   readonly auth: Auth.Info | undefined
   readonly plugin: Plugin.Interface
@@ -186,6 +193,12 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     ? (yield* InstanceState.context).project.id
     : undefined
 
+  // F0 (1.3.2): write down what this turn was actually offered. Nothing recorded it before, so an empty or shrunken
+  // tool set could not be told apart from a call that never happened (C59). One line per provider turn, because
+  // session/llm.ts:106 is prepare's only call site. Read `toolSetFields` below before trusting a count: the grouping is
+  // derived from config, and F-N4 names the four cases where that disagrees with what was offered.
+  yield* Effect.logInfo("provider tool set", toolSetFields(input, tools))
+
   return {
     system,
     messages,
@@ -221,6 +234,121 @@ function resolveTools(input: Pick<PrepareInput, "tools" | "agent" | "permission"
     Permission.merge(input.agent.permission, input.permission ?? []),
   )
   return Record.filter(input.tools, (_, k) => input.user.tools?.[k] !== false && !disabled.has(k))
+}
+
+/** F0: the hard ceiling of one provider tool set line, enforced here because the appender writes what it is handed. */
+const TOOL_SET_MAX_BYTES = 2_048
+/** F0: how many keys the anomaly case names before it reports the rest as `keysOmitted`. */
+const TOOL_SET_MAX_KEYS = 32
+/** F0: what `timestamp`, `level`, `run`, `message` and the separators around the fields cost. */
+const TOOL_SET_ENVELOPE = 160
+/** F0/NB-2 (row 24): room held back for the omission markers themselves, so adding one cannot breach the ceiling. */
+const TOOL_SET_MARKER_SLACK = 96
+
+/**
+ * F0 (1.3.2): the fields of the one provider tool set line per turn.
+ *
+ * Flat dotted keys, because the appender dot-joins nested plain objects but not arrays, and quotes any value holding
+ * whitespace (`packages/core/src/observability/logging.ts:23-46`). Grouping uses the sanitised server name, because
+ * that is what composes the key (`McpCatalog.toolName` at `mcp/catalog.ts:292`); a raw config name with a dot or a
+ * space would never match. The full key list appears only when an enabled server contributed nothing, which is the
+ * one case where counting is not enough to read the line.
+ *
+ * NB-2 (row 24): the 2,048 B ceiling is per line, so it is checked over the assembled fields and not only over `keys`.
+ * Over the ceiling, the per-server counts coarsen to one total and the zero list is cut, each reported rather than
+ * dropped. F-I2: the markers are given their own slack so reporting a cut cannot itself breach the ceiling.
+ *
+ * F-N4 (row 18): grouping is derived from config, while the line claims what was offered, and the two disagree in four
+ * cases a reader should know about. (1) A builtin or plugin tool whose name happens to start like a server prefix is
+ * counted under that server — `apply_patch` (`tool/apply_patch.ts:30`) and `plan_exit` (`tool/plan.ts:20`) are the two
+ * shipped names with an underscore in them, so a server configured as `apply` absorbs the builtin, and its own empty
+ * contribution disappears from `zeroToolServers`. (2) Config drifts from a live instance: `State` is built once per
+ * directory (`mcp/index.ts:794` builds `State` per directory), so a removed-but-still-connected server's tools land in `nonMcpCount` and a
+ * newly-added-not-yet-connected server cries `zeroToolServers` every turn. (3) `sanitize` collisions merge counts: `a.b`
+ * and `a_b` both group under `a_b`. (4) A SEC-13 refusal or a missing-`type` ignore keeps its name in
+ * `zeroToolServers` forever — not a lie, since those routes log their own lines, but read it together with them.
+ * Reading `zeroToolServers` as "configured and enabled and offered nothing" is correct; reading it as "connected and
+ * offered nothing" is not. The precise fix is threading per-key source from `session/tools.ts:609`, not importing
+ * `MCP.Service` here.
+ */
+function toolSetFields(input: PrepareInput, tools: Record<string, Tool>) {
+  const servers = [...new Set((input.mcpServers ?? []).map(McpCatalog.sanitize))]
+    .filter((name) => name.length > 0)
+    .sort((a, b) => b.length - a.length)
+  const offered = Object.keys(tools)
+  const counts = new Map<string, number>()
+  let nonMcpCount = 0
+  for (const key of offered) {
+    const server = servers.find((name) => key.startsWith(`${name}_`))
+    if (!server) {
+      nonMcpCount++
+      continue
+    }
+    counts.set(server, (counts.get(server) ?? 0) + 1)
+  }
+  const zeroServers = servers.filter((name) => !counts.has(name))
+  const identity: Record<string, string | number> = {
+    "session.id": input.sessionID,
+    "model.id": input.model.id,
+    toolCount: offered.length,
+    nonMcpCount,
+  }
+  const fields: Record<string, string | number> = {
+    ...identity,
+    ...Object.fromEntries([...counts].map(([name, count]) => [`mcp.${name}`, count])),
+    zeroToolServers: zeroServers.join(","),
+  }
+
+  // Over the ceiling the counts coarsen and the zero list is cut; both say so on the line.
+  if (renderedFields(fields) > TOOL_SET_MAX_BYTES - TOOL_SET_ENVELOPE - TOOL_SET_MARKER_SLACK) {
+    const kept = fitList(zeroServers, TOOL_SET_MAX_BYTES - TOOL_SET_ENVELOPE - TOOL_SET_MARKER_SLACK - renderedFields(identity) - "zeroToolServers=".length - "mcpCountsCoarsened=999".length)
+    const coarse: Record<string, string | number> = {
+      ...identity,
+      mcpTotal: [...counts.values()].reduce((sum, count) => sum + count, 0),
+      mcpCountsCoarsened: counts.size,
+      zeroToolServers: kept.joined,
+    }
+    if (kept.omitted > 0) coarse.zeroToolServersOmitted = kept.omitted
+    if (zeroServers.length === 0) return coarse
+    return listOfferedKeys(coarse, offered, TOOL_SET_MAX_BYTES - TOOL_SET_ENVELOPE - TOOL_SET_MARKER_SLACK - renderedFields(coarse) - "keys=".length - KEY_OMISSION_SLACK)
+  }
+
+  if (!fields.zeroToolServers) return fields
+  return listOfferedKeys(fields, offered, TOOL_SET_MAX_BYTES - TOOL_SET_ENVELOPE - TOOL_SET_MARKER_SLACK - renderedFields(fields) - "keys=".length - KEY_OMISSION_SLACK)
+}
+
+/** What it costs to add `keysOmitted=<n>` when the key list is cut. */
+const KEY_OMISSION_SLACK = " keysOmitted=99999".length
+
+/** Names the offered keys that fit the remaining budget, at most TOOL_SET_MAX_KEYS of them, and reports the cut. */
+function listOfferedKeys(
+  fields: Record<string, string | number>,
+  offered: readonly string[],
+  available: number,
+) {
+  const kept = fitList(offered, available, TOOL_SET_MAX_KEYS)
+  // An empty `keys=` would read as "nothing was offered", so the cut is carried by `keysOmitted` alone.
+  if (kept.joined.length > 0) fields.keys = kept.joined
+  if (kept.omitted > 0) fields.keysOmitted = kept.omitted
+  return fields
+}
+
+/** Joins as many leading entries as fit `available` bytes, comma-separated, and counts what fell out. */
+function fitList(entries: readonly string[], available: number, limit = entries.length) {
+  const named: string[] = []
+  let used = 0
+  for (const entry of entries) {
+    if (named.length >= limit) break
+    const cost = entry.length + (named.length > 0 ? 1 : 0)
+    if (used + cost > available) break
+    used += cost
+    named.push(entry)
+  }
+  return { joined: named.join(","), omitted: entries.length - named.length }
+}
+
+function renderedFields(fields: Record<string, string | number>) {
+  return Object.entries(fields).reduce((total, [key, value]) => total + key.length + String(value).length + 2, 0)
 }
 
 export function hasToolCalls(messages: ModelMessage[]): boolean {

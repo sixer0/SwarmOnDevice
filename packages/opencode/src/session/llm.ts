@@ -105,6 +105,9 @@ const live: Layer.Layer<
       const isWorkflow = language instanceof GitLabWorkflowLanguageModel
       const prepared = yield* LLMRequestPrep.prepare({
         ...input,
+        // F0 (1.3.2): what to group the offered tool keys by. Disabled servers are left out, so a server nobody
+        // enabled never shows up as an empty contributor.
+        mcpServers: Object.entries(cfg.mcp ?? {}).flatMap(([key, mcp]) => (mcp?.enabled === false ? [] : [key])),
         provider: item,
         auth: info,
         plugin,
@@ -301,11 +304,39 @@ const live: Layer.Layer<
                 toolName: lower,
               }
             }
+            // F1 (1.3.2, hygiene and not cure): an unmatched name used to leave no record here. The WARN is the durable
+            // half. The hint below goes inside the existing error string because InvalidTool.Parameters is exactly
+            // {tool, error} (tool/invalid.ts:4-7), but measured at this base the model does not see it on this path:
+            // when the repaired name is also unknown the SDK emits the failure for "invalid" and re-parses the ORIGINAL
+            // arguments (ai@6.0.168 dist/index.mjs:3689-3706), and its own message already lists the registered keys —
+            // which is what the regression pin in test/session/llm.test.ts now asserts. Row 16's claim that this string
+            // reaches the model was wrong (row 18 F-B1 lineage). Nothing else moves: the repair branch above still
+            // returns what it returned, toolName "invalid" and the activeTools filter below still drop the call.
+            const candidates = registeredCandidates(Object.keys(prepared.tools), failed.toolCall.toolName)
+            bridge.fork(
+              Effect.logWarning("unknown tool name", {
+                toolName: failed.toolCall.toolName,
+                "session.id": input.sessionID,
+                // F-N5 (row 18): one candidate is a hint; several is a choice we are not entitled to make silently, so
+                // the log names them all (bounded) and says how many there were.
+                ...(candidates.matches.length === 1
+                  ? { registered: candidates.matches[0]! }
+                  : {
+                      candidates: candidates.shown.join(","),
+                      candidateCount: candidates.matches.length,
+                    }),
+              }),
+            )
             return {
               ...failed.toolCall,
               input: JSON.stringify({
                 tool: failed.toolCall.toolName,
-                error: failed.error.message,
+                error:
+                  candidates.matches.length === 1
+                    ? `${failed.error.message} Registered as ${candidates.matches[0]!}.`
+                    : candidates.matches.length > 1
+                      ? `${failed.error.message} Several registered tools match this name: ${candidates.shown.join(", ")}.`
+                      : failed.error.message,
               }),
               toolName: "invalid",
             }
@@ -390,6 +421,26 @@ const live: Layer.Layer<
 )
 
 export const hasToolCalls = LLMRequestPrep.hasToolCalls
+
+/** F-N5 (row 18): how many candidate registrations the WARN and the model-facing hint are allowed to spell out. */
+const CANDIDATE_LIMIT = 4
+
+/**
+ * F1 (1.3.2): which registered keys an unmatched call most likely meant. The shape this has to catch is a prefixed MCP
+ * name written without its prefix (`datum-studio_studio_mission_create` asked for as `studio_mission_create`,
+ * session/tools.ts:662), so keys ending in the name win; containment is the fallback, and only when it is unambiguous.
+ *
+ * F-N5 (row 18): this returns every match rather than the first one. Two servers can both offer `search`, and naming one
+ * of them as the registration is a guess presented as a fact — the caller pluralises the hint and says how many there
+ * were instead of steering the model to an arbitrary server.
+ */
+function registeredCandidates(registered: readonly string[], requested: string) {
+  const wanted = requested.toLowerCase()
+  const suffixed = registered.filter((key) => key.toLowerCase().endsWith(`_${wanted}`))
+  const contained = suffixed.length > 0 ? [] : registered.filter((key) => key.toLowerCase().includes(wanted))
+  const matches = suffixed.length > 0 ? suffixed : contained.length === 1 ? contained : []
+  return { matches, shown: matches.slice(0, CANDIDATE_LIMIT) }
+}
 
 export const node = LayerNode.make({
   service: Service,
