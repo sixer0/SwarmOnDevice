@@ -266,6 +266,35 @@ describe("U-DT-09 builder config", () => {
     })
   }
 
+  // M9-01b (CP-M9 N-1): the composed afterPack itself, per target. The config is copied into a temp package dir so
+  // the library hook's cleanup removes a temp .library-stage, never the real one; a spy `bun` records each gate call.
+  test("the configured afterPack runs the office verify on darwin-arm64 only", async () => {
+    const pkg = join(root, "pkg")
+    const copy = join(pkg, "electron-builder.config.ts")
+    write(copy, await Bun.file(join(import.meta.dir, "..", "electron-builder.config.ts")).text())
+    const bin = join(root, "spy-bin")
+    const log = join(root, "after.log")
+    write(join(bin, "bun"), `#!/bin/sh\necho "$@" >> "${log}"\n`)
+    chmodSync(join(bin, "bun"), 0o755)
+    const savedPath = process.env.PATH
+    const savedTarget = process.env.SWARM_BUILD_TARGET
+    const calls: Record<string, string[]> = {}
+    for (const target of ["darwin-arm64", "linux-x64", "win32-x64"]) {
+      process.env.SWARM_BUILD_TARGET = target
+      const config = (await import(`${copy}?n1=${target}`)).default as Configuration
+      process.env.PATH = `${bin}:${savedPath}`
+      rmSync(log, { force: true })
+      await (config.afterPack as (context: unknown) => Promise<void>)({ appOutDir: "/out", packager: { getResourcesDir: () => "/out/Res" } })
+      process.env.PATH = savedPath
+      calls[target] = (await Bun.file(log).text()).trim().split("\n").map((line) => line.split(" ")[0]!.split("/").at(-1)!)
+    }
+    if (savedTarget === undefined) delete process.env.SWARM_BUILD_TARGET
+    if (savedTarget !== undefined) process.env.SWARM_BUILD_TARGET = savedTarget
+    expect(calls["darwin-arm64"]).toEqual(["stage-library.ts", "check-datum-stage.ts", "check-office-addin-stage.ts"])
+    expect(calls["linux-x64"]).toEqual(["stage-library.ts", "check-datum-stage.ts"])
+    expect(calls["win32-x64"]).toEqual(["stage-library.ts", "check-datum-stage.ts"])
+  })
+
   test("the config never imports the Bun-only gate script", async () => {
     const source = await Bun.file(join(import.meta.dir, "..", "electron-builder.config.ts")).text()
     expect(source).not.toMatch(/(from|import\()\s*["'][^"']*(check-office-addin-stage|stage-office-addin)/)
