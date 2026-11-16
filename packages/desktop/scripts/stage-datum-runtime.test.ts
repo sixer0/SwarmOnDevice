@@ -137,8 +137,33 @@ describe("runtimePlan (row 122)", () => {
     expect(plan.pruneStdlib).not.toContain("config-3.14-darwin")
   })
 
-  test("win32-x64 is refused until row 123", () => {
-    expect(() => runtimePlan("win32-x64")).toThrow(/row 123/)
+  test("win32-x64 (row 123/177): Windows interpreter, win_amd64 lxml and pillow, own lock, darwin prune list minus config", async () => {
+    const { PYTHON_WIN, WHEELS_WIN, WIN_LAUNCHER, WIN_PTH_LINE } = await import("./stage-datum-runtime")
+    const plan = runtimePlan("win32-x64")
+    expect(plan.python).toBe(PYTHON_WIN)
+    expect(PYTHON_WIN.file).toContain("x86_64-pc-windows-msvc")
+    expect(PYTHON_WIN.sha256).toBe("c1876a9795d3a94ee49a1499a69cd91e26ca3e2829593f93fa6e4db90d05402b")
+    for (const w of WHEELS_WIN.filter((w) => w.name === "lxml" || w.name === "pillow")) {
+      expect(w.file).toEndWith("-cp314-cp314-win_amd64.whl")
+      expect(w.sha256).toMatch(/^[0-9a-f]{64}$/)
+    }
+    expect(WHEELS_WIN.filter((w) => w.name !== "lxml" && w.name !== "pillow")).toEqual(WHEELS.filter((w) => w.name !== "lxml" && w.name !== "pillow"))
+    expect(plan.lockFile).toBe("requirements-win32-x64.lock")
+    expect(plan.pruneStdlib).not.toContain("config-3.14-darwin")
+    expect(plan.pruneStdlib).toContain("tkinter")
+    // Spec 114 §5.4.2 / WP-SEC-2: CRLF, line 3 guards bare names, 4-level .pth.
+    const lines = WIN_LAUNCHER.split("\r\n")
+    expect(lines.slice(0, 3)).toEqual(["@echo off", "setlocal DisableDelayedExpansion", 'set "NoDefaultCurrentDirectoryInExePath=1"'])
+    expect(WIN_LAUNCHER.split("\n").length - 1).toBe(WIN_LAUNCHER.split("\r\n").length - 1)
+    expect(WIN_PTH_LINE.split("/").filter((p) => p === "..").length).toBe(4)
+  })
+
+  test("row 177: cached() refuses an empty or missing pin before any download", async () => {
+    const { cached } = await import("./stage-datum-runtime")
+    const cache = await fs.mkdtemp(path.join(os.tmpdir(), "pin-"))
+    await expect(cached(cache, "x.whl", { url: "https://files.pythonhosted.org/x.whl", size: 1, sha256: "" }, true)).rejects.toThrow(/no sha256\/size pin/)
+    await expect(cached(cache, "x.whl", { url: "https://files.pythonhosted.org/x.whl", size: 0, sha256: "a".repeat(64) }, true)).rejects.toThrow(/no sha256\/size pin/)
+    await fs.rm(cache, { recursive: true, force: true })
   })
 
   test("ELF_EXPECTED is the count row 122 recorded (R12.3)", () => {

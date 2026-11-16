@@ -107,6 +107,42 @@ const LINUX_SO_TAG = "cpython-314-x86_64-linux-gnu"
 export const LINUX_SITE_IMPORTS = ["docx", "openpyxl", "pptx", "lxml", "lxml.etree", "PIL", "PIL.Image", "PIL._imaging", "PIL._imagingft", "xlsxwriter", "et_xmlfile", "typing_extensions", "playwright.sync_api", "datum_render_shim"]
 export const LINUX_SKILL_IMPORTS = ["datumbind", "datumcheck", "embed_fonts", "datum_symbols", "datumchart"]
 
+// Row 123 (spec 114 §5.1, §5.4.2; register R2.8, R5.13, R5.14, R6.3, R6.4, R12.5): win32-x64 pins. Interpreter:
+// R5.13 / research 02_collection_python_cross.md:21. lxml and pillow win_amd64 (row 177, S115-03): the PyPI digests of
+// 02_collection_python_cross.md:55,57. The six pure wheels and the shim are the darwin entries, unchanged.
+export const PYTHON_WIN = {
+  version: "3.14.10",
+  release: "20261026",
+  file: "cpython-3.14.10+20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+  url: "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.14.10%2B20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+  size: 23294761,
+  sha256: "c1876a9795d3a94ee49a1499a69cd91e26ca3e2829593f93fa6e4db90d05402b",
+} as const
+const WIN_NATIVE_WHEELS = {
+  lxml: { name: "lxml", version: "6.1.3", file: "lxml-6.1.3-cp314-cp314-win_amd64.whl", size: 4073951, sha256: "66299564c046bc7e0cc5de5106601eae907e9fa5904cd68a323380a8502f7861", url: `${PYPI}/0f/bc/5811cc73cac05e324e05ba9b0924e1a163a317a167ede8a9c748b11db30a/lxml-6.1.3-cp314-cp314-win_amd64.whl` },
+  pillow: { name: "pillow", version: "13.0.0", file: "pillow-13.0.0-cp314-cp314-win_amd64.whl", size: 7281830, sha256: "f7cbb7a64e7ec664775195e4f81923bc8a93d9451b963f844e59118f63147a7a", url: `${PYPI}/50/e2/7ad17747517e4c813dca78257d6bb593466f8231baf1384bc98d92745edb/pillow-13.0.0-cp314-cp314-win_amd64.whl` },
+} as const
+export const WHEELS_WIN = WHEELS.map((w) => (w.name === "lxml" || w.name === "pillow" ? WIN_NATIVE_WHEELS[w.name] : w))
+const WIN_SITE = "python/Lib/site-packages"
+// site-packages -> Lib -> python -> datum-runtime -> resources: 4 levels on Windows (spec 114 §5.1, WP-PY-2).
+export const WIN_PTH_LINE = "../../../../datum-house-style/scripts"
+// Removed on win32 (spec 114 §5.1): no pythonw, no Scripts/include/libs/tcl, no tkinter DLLs.
+const WIN_PRUNE_TOP = ["pythonw.exe", "Scripts", "include", "libs", "tcl"]
+const WIN_PRUNE_STDLIB = PRUNE_STDLIB.filter((n) => n !== "config-3.14-darwin")
+// Spec 114 §5.4.2 (L26, S115-02), exact text, CRLF (WP-SEC-2).
+export const WIN_LAUNCHER = [
+  "@echo off",
+  "setlocal DisableDelayedExpansion",
+  'set "NoDefaultCurrentDirectoryInExePath=1"',
+  "rem datum-python (Windows): the bundled interpreter for DATUM's scripts (spec 114 sections 5.2 and 5.4.2, register R6.3, decision L26).",
+  "rem -I -B as on macOS. Line 3 keeps bare tool names (which, rsvg-convert, inkscape) from resolving to the current folder. PATH puts this folder first, then System32.",
+  'set "here=%~dp0"',
+  'set "PATH=%here%;%SystemRoot%\\System32;%SystemRoot%"',
+  '"%here%..\\python\\python.exe" -I -B %*',
+  "exit /b %ERRORLEVEL%",
+  "",
+].join("\r\n")
+
 type RuntimePlan = {
   target: BuildTarget
   python: { version: string; release: string; file: string; url: string; size: number; sha256: string }
@@ -126,7 +162,7 @@ export function runtimePlan(target: BuildTarget): RuntimePlan {
       lockFile: "requirements-linux-x64.lock",
       pruneStdlib: PRUNE_STDLIB.map((n) => (n === "config-3.14-darwin" ? "config-3.14-x86_64-linux-gnu" : n)),
     }
-  fail(`target ${target} is not staged by this script yet (row 123)`)
+  return { target, python: PYTHON_WIN, wheels: WHEELS_WIN, lockFile: "requirements-win32-x64.lock", pruneStdlib: WIN_PRUNE_STDLIB }
 }
 
 export const LAUNCHER = `#!/bin/sh
@@ -177,7 +213,9 @@ async function exists(p: string) {
 
 // A cached file is used only when its size and sha256 match the pin. Otherwise it is fetched over https (GitHub release
 // or files.pythonhosted.org only), checked, and only then moved into the cache.
-async function cached(cache: string, rel: string, pin: { url: string; size: number; sha256: string }, offline: boolean) {
+export async function cached(cache: string, rel: string, pin: { url: string; size: number; sha256: string }, offline: boolean) {
+  // Row 177 (S115-03): an empty or malformed pin never lets bytes through.
+  if (!/^[0-9a-f]{64}$/.test(pin.sha256 ?? "") || !(pin.size > 0)) fail(`${rel} has no sha256/size pin`)
   const target = path.join(cache, rel)
   if (await exists(target)) {
     const st = await fs.stat(target)
@@ -400,11 +438,43 @@ export async function installWheelByUnzip(wheelFile: string, site: string): Prom
 /** A dotted module resolves under root as a package, a .py file or a linux extension module (static smoke, row 122). */
 export async function moduleFile(root: string, mod: string) {
   const base = path.join(root, ...mod.split("."))
-  for (const f of [path.join(base, "__init__.py"), `${base}.py`, `${base}.${LINUX_SO_TAG}.so`, `${base}.abi3.so`]) if (await exists(f)) return f
+  for (const f of [path.join(base, "__init__.py"), `${base}.py`, `${base}.${LINUX_SO_TAG}.so`, `${base}.abi3.so`, `${base}.cp314-win_amd64.pyd`, `${base}.pyd`])
+    if (await exists(f)) return f
   return null
 }
 
-type StageFile = { path: string; kind: "macho" | "elf" | "data" | "symlink"; mode: string; size?: number; sha256?: string; target?: string }
+type StageFile = { path: string; kind: "macho" | "elf" | "pe" | "data" | "symlink"; mode: string; size?: number; sha256?: string; target?: string }
+
+/** Row 123: win32-x64 steps 10-11 - PE count (WIN-PE-1 reads counts.pe), the manifest, then the output. */
+async function finishWindows(args: Args, rt: string, files: StageFile[], bytes: number, pruned: string[]) {
+  const pe = files.filter((f) => f.kind === "pe")
+  if (pe.length === 0) fail("0 PE files in the win32-x64 stage")
+  if (files.some((f) => f.kind === "symlink")) fail("symlink in the win32-x64 stage")
+  const manifest = {
+    schema: 1,
+    name: "datum-runtime",
+    version: RELEASE,
+    target: "win32-x64",
+    python: { version: PYTHON_WIN.version, release: PYTHON_WIN.release, asset: PYTHON_WIN.file, sha256: PYTHON_WIN.sha256 },
+    wheels: [...WHEELS_WIN.map(({ name, version, file, sha256 }) => ({ name, version, file, sha256 })), { ...SHIM_WHEEL }],
+    install: "unzip (pip --target layout; D-W8)",
+    launcher: "bin/datum-python.cmd",
+    pth: { path: `${WIN_SITE}/${PTH.name}`, line: WIN_PTH_LINE },
+    skillSha: await sha256File(path.join(SKILL, "SKILL.md")),
+    pruned,
+    thinned: [] as string[],
+    counts: { files: files.length, pe: pe.length, symlinks: 0, bytes },
+    files,
+  }
+  const manifestText = `${JSON.stringify(manifest, null, 1)}\n`
+  await fs.writeFile(path.join(rt, "runtime-manifest.json"), manifestText, { mode: 0o644 })
+  await fs.rm(args.out, { recursive: true, force: true })
+  await fs.rename(rt, args.out)
+  const msha = createHash("sha256").update(manifestText).digest("hex")
+  console.log(`DATUM_RUNTIME_STAGE files=${files.length} pe=${pe.length} symlinks=0 bytes=${bytes} pyc=0`)
+  console.log(`DATUM_RUNTIME_STAGE manifest sha256 ${msha}`)
+  console.log(`DATUM_RUNTIME_STAGE_OK ${args.out}`)
+}
 
 /** Row 122: linux-x64 steps 10-11 - ELF count and glibc floor, the manifest (kind `elf`, counts.elf), then the output. */
 async function finishLinux(args: Args, rt: string, files: StageFile[], bytes: number, pruned: string[]) {
@@ -457,6 +527,9 @@ async function main() {
   }
   const plan = runtimePlan(target)
   const linux = plan.target === "linux-x64"
+  // Row 123: win32-x64 follows the linux cross path (unzip install, static smoke, no thin/sign) with the Windows layout.
+  const win = plan.target === "win32-x64"
+  const cross = linux || win
 
   // 1. Inputs from the cache (fetch + verify if missing).
   const tarball = await cached(args.cache, plan.python.file, plan.python, args.offline)
@@ -464,11 +537,15 @@ async function main() {
   let fetched = tarball.fetched ? 1 : 0
   for (const w of plan.wheels) if ((await cached(args.cache, `wheels/${w.file}`, w, args.offline)).fetched) fetched++
   const lockPath = path.join(args.cache, plan.lockFile)
-  const lock = linux ? lockText(plan.wheels, "# datum-runtime linux-x64 lock (scripts/stage-datum-runtime.ts; row 122 pins, spec 113 §4)") : lockText()
+  const lock = linux
+    ? lockText(plan.wheels, "# datum-runtime linux-x64 lock (scripts/stage-datum-runtime.ts; row 122 pins, spec 113 §4)")
+    : win
+      ? lockText(plan.wheels, "# datum-runtime win32-x64 lock (scripts/stage-datum-runtime.ts; row 123/177 pins, spec 114 §5.1)")
+      : lockText()
   if (!(await exists(lockPath))) await fs.writeFile(lockPath, lock)
   else if ((await fs.readFile(lockPath, "utf8")) !== lock) fail(`cache ${plan.lockFile} differs from the pins in this script`)
   // Row 122: linux builds the shim wheel with the pinned darwin interpreter (the staged linux python cannot run here).
-  const hostTarball = linux ? await cached(args.cache, PYTHON.file, PYTHON, args.offline) : null
+  const hostTarball = cross ? await cached(args.cache, PYTHON.file, PYTHON, args.offline) : null
   if (hostTarball?.fetched) fetched++
   console.log(`DATUM_RUNTIME_STAGE cache ${args.cache} fetched=${fetched}`)
 
@@ -503,12 +580,15 @@ async function main() {
     const x = await $`/usr/bin/tar -xzf ${tarball.file} -C ${rt}`.env(env).nothrow().quiet()
     if (x.exitCode !== 0) fail(`tar exit ${x.exitCode}: ${x.stderr.toString().trim()}`)
     let shimPy = py
-    if (linux) {
+    if (cross) {
       // Row 122: the linux interpreter cannot run on this Mac; check it statically and extract the pinned darwin one
-      // (outside the stage) to build the shim wheel, whose bytes the sha256 pin below still decides.
-      const kind = await nativeKind(path.join(rt, "python", "bin", "python3.14")).catch(() => null)
-      if (kind?.kind !== "elf" || !kind.x64) fail("staged python/bin/python3.14 is not ELF x86-64")
-      if (!(await exists(path.join(rt, "python", PY_LIB, "os.py")))) fail(`staged python has no ${PY_LIB}/os.py`)
+      // (outside the stage) to build the shim wheel, whose bytes the sha256 pin below still decides. Row 123: same for
+      // the Windows interpreter (python/python.exe, stdlib in python/Lib).
+      const exe = win ? path.join(rt, "python", "python.exe") : path.join(rt, "python", "bin", "python3.14")
+      const kind = await nativeKind(exe).catch(() => null)
+      if (kind?.kind !== (win ? "pe" : "elf") || !kind.x64) fail(`staged ${path.relative(rt, exe)} is not ${win ? "PE" : "ELF"} x86-64`)
+      const stdlib = win ? "python/Lib" : `python/${PY_LIB}`
+      if (!(await exists(path.join(rt, stdlib, "os.py")))) fail(`staged python has no ${stdlib}/os.py`)
       const hostDir = path.join(work, "hostpy")
       await fs.mkdir(hostDir, { recursive: true })
       const hx = await $`/usr/bin/tar -xzf ${hostTarball!.file} -C ${hostDir}`.env(env).nothrow().quiet()
@@ -529,8 +609,9 @@ async function main() {
     // 5. Install all nine wheels offline, hashes required, no compile, into the staged site-packages only.
     const runLock = path.join(work, "requirements.lock")
     await fs.writeFile(runLock, `${lock}${SHIM_WHEEL.name}==${SHIM_WHEEL.version} --hash=sha256:${SHIM_WHEEL.sha256}\n`)
-    const site = path.join(rt, SITE)
-    if (linux) {
+    const site = path.join(rt, win ? WIN_SITE : SITE)
+    const siteRel = win ? WIN_SITE : SITE
+    if (cross) {
       // Row 122 (D-W8): unzip install with pip --target's layout; every wheel file was size+sha256 checked by cached(),
       // the shim by its pin above, and installWheelByUnzip checks each member's CRC and RECORD hash.
       const names: string[] = []
@@ -555,17 +636,27 @@ async function main() {
       await fs.rm(path.join(rt, rel), { recursive: true, force: true })
       pruned.push(rel)
     }
-    for (const n of (await fs.readdir(path.join(rt, "python", "bin"))).sort()) if (!KEEP_BIN.includes(n)) await remove(`python/bin/${n}`)
-    for (const n of (await fs.readdir(path.join(rt, "python", "lib"))).sort()) if (!KEEP_LIB.includes(n)) await remove(`python/lib/${n}`)
-    for (const n of PRUNE_TOP) if (await exists(path.join(rt, "python", n))) await remove(`python/${n}`)
-    for (const n of plan.pruneStdlib) if (await exists(path.join(rt, "python", PY_LIB, n))) await remove(`python/${PY_LIB}/${n}`)
-    for (const n of (await fs.readdir(path.join(rt, "python", PY_LIB, "lib-dynload"))).sort())
-      if (n.startsWith("_tkinter")) await remove(`python/${PY_LIB}/lib-dynload/${n}`)
-    for (const n of (await fs.readdir(site)).sort()) if (n === "pip" || /^pip-.*\.dist-info$/.test(n)) await remove(`${SITE}/${n}`)
+    if (win) {
+      // Row 123 (spec 114 §5.1): Windows layout - python.exe and its DLLs at python/, stdlib python/Lib, .pyd in python/DLLs.
+      for (const n of WIN_PRUNE_TOP) if (await exists(path.join(rt, "python", n))) await remove(`python/${n}`)
+      for (const n of plan.pruneStdlib) if (await exists(path.join(rt, "python", "Lib", n))) await remove(`python/Lib/${n}`)
+      for (const n of (await fs.readdir(path.join(rt, "python", "DLLs"))).sort())
+        if (n.startsWith("_tkinter") || /^(tcl|tk)\d*.*\.dll$/i.test(n)) await remove(`python/DLLs/${n}`)
+      for (const n of (await fs.readdir(path.join(rt, "python"))).sort())
+        if (/^(tcl|tk)\d*.*\.dll$/i.test(n)) await remove(`python/${n}`)
+    } else {
+      for (const n of (await fs.readdir(path.join(rt, "python", "bin"))).sort()) if (!KEEP_BIN.includes(n)) await remove(`python/bin/${n}`)
+      for (const n of (await fs.readdir(path.join(rt, "python", "lib"))).sort()) if (!KEEP_LIB.includes(n)) await remove(`python/lib/${n}`)
+      for (const n of PRUNE_TOP) if (await exists(path.join(rt, "python", n))) await remove(`python/${n}`)
+      for (const n of plan.pruneStdlib) if (await exists(path.join(rt, "python", PY_LIB, n))) await remove(`python/${PY_LIB}/${n}`)
+      for (const n of (await fs.readdir(path.join(rt, "python", PY_LIB, "lib-dynload"))).sort())
+        if (n.startsWith("_tkinter")) await remove(`python/${PY_LIB}/lib-dynload/${n}`)
+    }
+    for (const n of (await fs.readdir(site)).sort()) if (n === "pip" || /^pip-.*\.dist-info$/.test(n)) await remove(`${siteRel}/${n}`)
     // pip --target writes wheel scripts (XlsxWriter's vba_extract.py) to site-packages/bin with a shebang holding this
     // build's temp path: not used by DATUM, a host-path leak, and the reason two runs differed. Drop it and its RECORD rows.
     if (await exists(path.join(site, "bin"))) {
-      await remove(`${SITE}/bin`)
+      await remove(`${siteRel}/bin`)
       for (const n of (await fs.readdir(site)).sort()) {
         const record = path.join(site, n, "RECORD")
         if (!n.endsWith(".dist-info") || !(await exists(record))) continue
@@ -587,7 +678,7 @@ async function main() {
     // 7. Thin lxml's universal2 extensions to arm64 (K3; F7 closed by packaging §2.2: the arm64 slice keeps its signature).
     const thinned: string[] = []
     // Row 122: linux-x64 has nothing to thin or sign (manylinux wheels are x86-64 only; no codesign off macOS).
-    if (!linux) {
+    if (!cross) {
       for (const rel of await walk(path.join(site, "lxml"))) {
         if (!rel.endsWith(".so")) continue
         const f = path.join(site, "lxml", rel)
@@ -624,33 +715,48 @@ async function main() {
 
     // 8. Launcher, render shim, .pth.
     await fs.mkdir(path.join(rt, "bin"), { recursive: true })
-    await fs.writeFile(path.join(rt, "bin", "datum-python"), LAUNCHER, { mode: 0o755 })
-    await fs.copyFile(path.join(SHIM, "bin", "rsvg-convert"), path.join(rt, "bin", "rsvg-convert"))
-    for (const n of ["datum-python", "rsvg-convert"]) await fs.chmod(path.join(rt, "bin", n), 0o755)
-    await fs.writeFile(path.join(site, PTH.name), `${PTH.line}\n`, { mode: 0o644 })
+    if (win) {
+      // Row 123: datum-python.cmd only; no rsvg-convert shim on win32 (spec 114 X2, WL-2).
+      await fs.writeFile(path.join(rt, "bin", "datum-python.cmd"), WIN_LAUNCHER, { mode: 0o644 })
+      await fs.chmod(path.join(rt, "bin", "datum-python.cmd"), 0o644)
+      await fs.writeFile(path.join(site, PTH.name), `${WIN_PTH_LINE}\n`, { mode: 0o644 })
+    } else {
+      await fs.writeFile(path.join(rt, "bin", "datum-python"), LAUNCHER, { mode: 0o755 })
+      await fs.copyFile(path.join(SHIM, "bin", "rsvg-convert"), path.join(rt, "bin", "rsvg-convert"))
+      for (const n of ["datum-python", "rsvg-convert"]) await fs.chmod(path.join(rt, "bin", n), 0o755)
+      await fs.writeFile(path.join(site, PTH.name), `${PTH.line}\n`, { mode: 0o644 })
+    }
 
     // 9. Smoke test from cwd / with the skill linked where Resources keeps it. Nothing may be written into the stage.
     await fs.symlink(SKILL, path.join(res, "datum-house-style"))
-    if (linux) {
+    if (cross) {
       // Row 122: static smoke (the linux python cannot run here; the import run is LP-23 in colima). Every module of the
       // darwin smoke that this stage installs must resolve as a file, through the .pth for the skill scripts, and the
-      // excluded ones must be absent.
+      // excluded ones must be absent. Row 123: the same on win32 (.pyd modules; import run = WP-UAT on Windows).
+      // The .pth resolves against <work>/Resources, where the skill is linked (4 levels on win32, 5 elsewhere).
       const pthDir = path.resolve(site, (await fs.readFile(path.join(site, PTH.name), "utf8")).trim())
+      if (pthDir !== path.join(res, "datum-house-style", "scripts")) fail(`.pth resolves to ${path.relative(work, pthDir)}, not Resources/datum-house-style/scripts`)
       const missing: string[] = []
       for (const m of LINUX_SITE_IMPORTS) if (!(await moduleFile(site, m))) missing.push(m)
       for (const m of LINUX_SKILL_IMPORTS) if (!(await moduleFile(pthDir, m))) missing.push(m)
       if (missing.length) fail(`static smoke: not found ${missing.join(", ")}`)
-      const stdlib = path.join(rt, "python", PY_LIB)
+      const stdlib = path.join(rt, "python", win ? "Lib" : PY_LIB)
+      const dynload = win ? path.join(rt, "python", "DLLs") : path.join(stdlib, "lib-dynload")
       const present: string[] = []
       for (const m of ["matplotlib", "fitz", "pip", "tkinter", "cairosvg"])
-        for (const root of [site, stdlib, path.join(stdlib, "lib-dynload")]) if (await moduleFile(root, m)) present.push(m)
-      if (await moduleFile(path.join(stdlib, "lib-dynload"), "_tkinter")) present.push("_tkinter")
+        for (const root of [site, stdlib, dynload]) if (await moduleFile(root, m)) present.push(m)
+      if (await moduleFile(dynload, "_tkinter")) present.push("_tkinter")
       if (present.length) fail(`static smoke: present ${present.join(", ")}`)
-      if ((await fs.readFile(path.join(rt, "bin", "datum-python"), "utf8")) !== LAUNCHER) fail("bin/datum-python is not LAUNCHER")
-      if ((await sha256File(path.join(rt, "bin", "rsvg-convert"))) !== (await sha256File(path.join(SHIM, "bin", "rsvg-convert"))))
-        fail("bin/rsvg-convert is not the shim")
+      if (win) {
+        if ((await fs.readFile(path.join(rt, "bin", "datum-python.cmd"), "utf8")) !== WIN_LAUNCHER) fail("bin/datum-python.cmd is not WIN_LAUNCHER")
+        if (await exists(path.join(rt, "bin", "rsvg-convert"))) fail("bin/rsvg-convert must be absent on win32 (WL-2)")
+      } else {
+        if ((await fs.readFile(path.join(rt, "bin", "datum-python"), "utf8")) !== LAUNCHER) fail("bin/datum-python is not LAUNCHER")
+        if ((await sha256File(path.join(rt, "bin", "rsvg-convert"))) !== (await sha256File(path.join(SHIM, "bin", "rsvg-convert"))))
+          fail("bin/rsvg-convert is not the shim")
+      }
       console.log(
-        `DATUM_RUNTIME_STAGE static smoke ok ${PYTHON_LINUX.version} (${LINUX_SITE_IMPORTS.length} site + ${LINUX_SKILL_IMPORTS.length} skill modules resolve; import run = LP-23 in colima)`,
+        `DATUM_RUNTIME_STAGE static smoke ok ${plan.python.version} (${LINUX_SITE_IMPORTS.length} site + ${LINUX_SKILL_IMPORTS.length} skill modules resolve; import run = ${win ? "WP-UAT on Windows" : "LP-23 in colima"})`,
       )
     } else {
       const marker = path.join(work, "marker")
@@ -676,7 +782,7 @@ async function main() {
     await fs.rm(path.join(res, "datum-house-style"))
 
     // 10. Inventory: no .pyc, exactly 35 Mach-O, then the manifest (no timestamps: equal inputs give an equal manifest).
-    const files: Array<{ path: string; kind: "macho" | "elf" | "data" | "symlink"; mode: string; size?: number; sha256?: string; target?: string }> = []
+    const files: StageFile[] = []
     let bytes = 0
     for (const rel of await walk(rt)) {
       const abs = path.join(rt, rel)
@@ -692,6 +798,14 @@ async function main() {
       }
       if (!st.isFile()) fail(`not a regular file: ${rel}`)
       bytes += st.size
+      if (win) {
+        // Row 123: PE x86-64 is the only native kind (WIN-PE-1/2); a Mach-O, ELF or non-x64 PE stops the stage.
+        const native = await nativeKind(abs)
+        if (native && native.kind !== "pe") fail(`${native.kind} file in the win32-x64 stage: ${rel}`)
+        if (native && !native.x64) fail(`PE ${rel} is not x86-64`)
+        files.push({ path: rel, kind: native ? "pe" : "data", mode, size: st.size, sha256: await sha256File(abs) })
+        continue
+      }
       if (linux) {
         // Row 122: ELF x86-64 is the only native kind; a Mach-O or PE file, or a non-x86-64 ELF, stops the stage.
         const native = await nativeKind(abs)
@@ -702,6 +816,7 @@ async function main() {
       }
       files.push({ path: rel, kind: (await isMachO(abs)) ? "macho" : "data", mode, size: st.size, sha256: await sha256File(abs) })
     }
+    if (win) return await finishWindows(args, rt, files, bytes, pruned)
     if (linux) return await finishLinux(args, rt, files, bytes, pruned)
     const macho = files.filter((f) => f.kind === "macho")
     if (macho.length !== MACHO_EXPECTED) fail(`${macho.length} Mach-O files, expected ${MACHO_EXPECTED}`)
