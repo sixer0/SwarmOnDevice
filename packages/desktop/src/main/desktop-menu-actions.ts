@@ -10,6 +10,10 @@ export type DesktopMenuActionHandlers = Partial<{
   relaunch: () => void
   updateFromFile: () => void
   undoLastUpdate: () => void
+  // Office add-in (M7-01, IM-05): main-only handlers; ipc.ts never passes these (IA-6).
+  officeAddinToggle: () => void
+  officeAddinDisconnect: () => void
+  officeAddinClearCache: () => void
 }>
 
 export function runDesktopMenuAction(
@@ -38,6 +42,15 @@ export function runDesktopMenuAction(
       return
     case "app.undoLastUpdate":
       handlers.undoLastUpdate?.()
+      return
+    case "app.officeAddinToggle":
+      handlers.officeAddinToggle?.()
+      return
+    case "app.officeAddinDisconnect":
+      handlers.officeAddinDisconnect?.()
+      return
+    case "app.officeAddinClearCache":
+      handlers.officeAddinClearCache?.()
       return
     case "window.new":
       createMainWindow()

@@ -206,8 +206,9 @@ const systemOf = (body: unknown) =>
     .map((message) => (typeof message.content === "string" ? message.content : JSON.stringify(message.content)))
     .join("\n")
 
-/** Runs one turn of a build session and returns the system text the provider received. */
-const systemFor = (metadata: Record<string, unknown> | undefined) =>
+/** Runs one turn of a build session and returns the system text the provider received. With `title`, the session
+ *  keeps its default title so the first turn also fires the title model call (`prompt.ts` `ensureTitle`). */
+const systemFor = (metadata: Record<string, unknown> | undefined, opts?: { title?: boolean }) =>
   Effect.gen(function* () {
     yield* globalInstruction
     const dir = (yield* TestInstance).directory
@@ -225,7 +226,7 @@ const systemFor = (metadata: Record<string, unknown> | undefined) =>
     const sessions = yield* Session.Service
     const prompt = yield* SessionPrompt.Service
     const chat = yield* sessions.create({
-      title: "SD-1",
+      ...(opts?.title ? {} : { title: "SD-1" }),
       permission: [{ permission: "*", pattern: "*", action: metadata ? "deny" : "allow" }],
       ...(metadata ? { metadata } : {}),
     })
@@ -246,11 +247,42 @@ const systemFor = (metadata: Record<string, unknown> | undefined) =>
     })
     yield* llm.hang
     const fiber = yield* prompt.loop({ sessionID: chat.id as SessionID }).pipe(Effect.forkChild)
-    yield* awaitWithTimeout(llm.wait(1), "timed out waiting for the request", "10 seconds")
-    const system = systemOf((yield* llm.hits)[0]?.body)
+    const count = opts?.title ? 2 : 1
+    yield* awaitWithTimeout(llm.wait(count), "timed out waiting for the requests", "10 seconds")
+    const hits = yield* llm.hits
+    const titleHit = hits.find((hit) => isTitleCall(hit.body))
+    const mainHit = hits.find((hit) => !isTitleCall(hit.body))
     yield* Fiber.interrupt(fiber)
-    return { system, dir }
+    return {
+      system: systemOf(mainHit?.body),
+      dir,
+      title: titleHit ? { system: systemOf(titleHit.body), body: JSON.stringify(titleHit.body) } : undefined,
+    }
   })
+
+const TITLE_ASK = "Generate a title for this conversation"
+const isTitleCall = (body: unknown) => JSON.stringify(body).includes(TITLE_ASK)
+
+/** Everything SD-1 strips from an Office prompt; none of it may reach any model call of an Office session. */
+const stripped = (dir: string) => [
+  GLOBAL_MARK,
+  PROJECT_MARK,
+  MCP_MARK,
+  SKILL_NAME,
+  "<agent_routing>",
+  "<auto_workflow>",
+  "<gsp_workflow>",
+  "<mcp_instructions>",
+  "<available_skills>",
+  "<suggested_skills>",
+  "<swarm_rules>",
+  "<env>",
+  "Working directory:",
+  "Platform:",
+  dir,
+  Global.Path.home,
+  os.homedir(),
+]
 
 const OFFICE = {
   [OfficeProfile.OFFICE_ORIGIN_METADATA_KEY]: OfficeProfile.OFFICE_ORIGIN_VALUE,
@@ -287,26 +319,7 @@ describe("SD-1 Office prompt profile", () => {
         const system = result.system
         expect(system.length).toBeGreaterThan(0)
         expect(system).toContain(`Today's date: ${new Date().toDateString()}`)
-        for (const absent of [
-          GLOBAL_MARK,
-          PROJECT_MARK,
-          MCP_MARK,
-          SKILL_NAME,
-          "<agent_routing>",
-          "<auto_workflow>",
-          "<gsp_workflow>",
-          "<mcp_instructions>",
-          "<available_skills>",
-          "<suggested_skills>",
-          "<swarm_rules>",
-          "<env>",
-          "Working directory:",
-          "Platform:",
-          result.dir,
-          Global.Path.home,
-          os.homedir(),
-        ])
-          expect(system).not.toContain(absent)
+        for (const absent of stripped(result.dir)) expect(system).not.toContain(absent)
         const user = os.userInfo().username
         if (user.length >= 3) expect(system).not.toContain(user)
       }),
@@ -335,6 +348,44 @@ describe("SD-1 Office prompt profile", () => {
           `Today's date: ${new Date().toDateString()}`,
         ])
           expect(system).toContain(present)
+      }),
+    20_000,
+  )
+
+  // CP-M6 title call: `ensureTitle` (src/session/prompt.ts) calls the hidden `title` agent with `system: []`, so its
+  // system text is the title prompt plus `SystemPrompt.workflow("title")` (empty, src/session/system.ts:105) plus the
+  // first user message's own `system` field. No instruction file, env block, skill, MCP or memory producer runs there.
+  it.instance(
+    "an Office session's title call carries none of the stripped blocks",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* systemFor(OFFICE, { title: true })
+        expect(result.title).toBeDefined()
+        const call = result.title ?? { system: "", body: "" }
+        expect(call.system).toContain("You are a title generator")
+        expect(call.body).toContain("Summarise the selected paragraph.")
+        for (const absent of [...stripped(result.dir), "Today's date:"]) expect(call.body).not.toContain(absent)
+        const user = os.userInfo().username
+        if (user.length >= 3) expect(call.body).not.toContain(user)
+        // The main call of the same turn is still the stripped Office prompt.
+        expect(result.system).toContain(`Today's date: ${new Date().toDateString()}`)
+        expect(result.system).not.toContain(GLOBAL_MARK)
+      }),
+    20_000,
+  )
+
+  it.instance(
+    "the title call is the same for a non-Office session (title path is independent of SD-1)",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* systemFor(undefined, { title: true })
+        const call = result.title ?? { system: "", body: "" }
+        expect(call.system).toContain("You are a title generator")
+        for (const absent of [GLOBAL_MARK, PROJECT_MARK, MCP_MARK, SKILL_NAME, "<gsp_workflow>", "<env>"])
+          expect(call.body).not.toContain(absent)
+        // Non-vacuous: the main call of the same non-Office turn does carry the full prompt.
+        expect(result.system).toContain(GLOBAL_MARK)
+        expect(result.system).toContain("<env>")
       }),
     20_000,
   )

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Swarm Office add-in manifest. Every value is fixed by masterplan/00_register.md
+  revision 5, section 6.2; checked by test/manifest/manifest.test.ts (U-MAN-01).
+  No <Requirements> (sets are checked at runtime), no <AppDomains>, no <VersionOverrides>.
+-->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:type="TaskPaneApp">
+  <Id>b25aaa4e-a1e7-46ef-bba0-0139b2a424b9</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>PT GSP</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Swarm">
+    <Override Locale="id-ID" Value="Swarm"/>
+  </DisplayName>
+  <Description DefaultValue="Chat with Swarm on this Mac about the current document.">
+    <Override Locale="id-ID" Value="Mengobrol dengan Swarm di Mac ini tentang dokumen yang sedang dibuka."/>
+  </Description>
+  <IconUrl DefaultValue="https://localhost:46317/pane/icons/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:46317/pane/icons/icon-64.png"/>
+  <SupportUrl DefaultValue="https://localhost:46317/pane/index.html"/>
+  <Hosts>
+    <Host Name="Document"/>
+    <Host Name="Workbook"/>
+  </Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:46317/pane/index.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+</OfficeApp>
