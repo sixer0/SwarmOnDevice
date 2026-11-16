@@ -1607,8 +1607,25 @@ function decisionRequestOf(r: Row): DecisionRequest {
 export const PROJECT_PREFIX_MIN_SEGMENTS = 4
 
 export function projectDirScope(dir: string, home: string = homedir()): { exact: string; prefix: string | null } {
-  const exact = posix.resolve("/", dir)
-  return { exact, prefix: broadProjectDir(exact, home) ? null : `${exact}/` }
+  const exact = posix.resolve("/", storeProjectDir(dir))
+  return { exact, prefix: broadProjectDir(exact, storeProjectDir(home)) ? null : `${exact}/` }
+}
+
+/**
+ * 1.3.1 Windows (1.2.2 F1, S186-04): a Windows drive path is stored in POSIX form - `C:\Users\a\p` and `c:/Users/a/p`
+ * become `/C:/Users/a/p` - so migration 0003's CHECK (leading '/') and every POSIX scope rule hold unchanged, with no
+ * migration of existing stores. A POSIX path passes through as it is. nativeProjectDir turns it back for disk access.
+ * Desktop mirrors this in mission-ipc.ts (withinDirectory).
+ */
+export function storeProjectDir(dir: string): string {
+  if (!/^[A-Za-z]:[\\/]/.test(dir)) return dir
+  return `/${dir[0].toUpperCase()}:${dir.slice(2).replaceAll("\\", "/")}`
+}
+
+/** On win32 a stored `/C:/...` dir is `C:\...` on disk; elsewhere (and for POSIX dirs) the stored dir is the path. */
+export function nativeProjectDir(dir: string, platform: NodeJS.Platform = process.platform): string {
+  if (platform !== "win32" || !/^\/[A-Za-z]:(\/|$)/.test(dir)) return dir
+  return `${dir.slice(1, 3)}\\${dir.slice(4).replaceAll("/", "\\")}`
 }
 
 /** S186-01: '/', the home folder, a direct child of it ('~/Documents'), or fewer than 4 segments deep. */

@@ -81,8 +81,11 @@ export const PROJECT_PREFIX_MIN_SEGMENTS = 4
  * Row 185 (S186-01, L42): the "inside it" part only for a narrow folder - not '/', not the home folder or a folder
  * directly in it ('~/Documents'), and at least PROJECT_PREFIX_MIN_SEGMENTS segments deep - the store's rule.
  */
-export function withinDirectory(dir: string, directory: string, home: string = homedir()) {
-  if (dir === directory) return true
+export function withinDirectory(dir: string, rawDirectory: string, rawHome: string = homedir()) {
+  if (dir === rawDirectory) return true
+  // 1.3.1 Windows (F1): the store keeps `C:\a\b` as `/C:/a/b` (mission-store.ts storeProjectDir); compare in that form.
+  const directory = storeProjectDir(rawDirectory)
+  const home = storeProjectDir(rawHome)
   if (!dir.startsWith("/") || !directory.startsWith("/")) return false
   const exact = posix.resolve("/", directory)
   if (dir === exact) return true
@@ -90,6 +93,12 @@ export function withinDirectory(dir: string, directory: string, home: string = h
   const h = home.startsWith("/") ? posix.resolve("/", home) : null
   if (h !== null && (exact === h || posix.dirname(exact) === h)) return false
   return dir.startsWith(`${exact}/`) && !`${dir}/`.includes("/../") && !`${dir}/`.includes("/./")
+}
+
+/** Mirrors datum-studio mission-store.ts storeProjectDir: a Windows drive path in the store's POSIX form. */
+export function storeProjectDir(dir: string): string {
+  if (!/^[A-Za-z]:[\\/]/.test(dir)) return dir
+  return `/${dir[0].toUpperCase()}:${dir.slice(2).replaceAll("\\", "/")}`
 }
 
 function stillInScope(data: unknown, basis: Basis) {

@@ -15,7 +15,7 @@ import path from "node:path"
 import { BACKUP_DIR_NAME, prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
 import { StoreError, type MissionStore, type StoreTx } from "../../store/index.ts"
 import type { MissionDoc, MissionWriteOptions, NewDecisionRequest, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
-import { ROW_RUNNING_DONE_RULE, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
+import { nativeProjectDir, ROW_RUNNING_DONE_RULE, storeProjectDir, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
@@ -119,6 +119,9 @@ export function defaultProjectDir(mission: unknown, fileRoot: string): void {
   else if (m.project !== null && typeof m.project === "object" && !Array.isArray(m.project) && (m.project as Record<string, unknown>).dir === undefined) {
     m.project = { dir: fileRoot, ...(m.project as Record<string, unknown>) }
   }
+  // 1.3.1 Windows (F1): a drive path is stored as /C:/... (mission-store.ts storeProjectDir).
+  const project = m.project as Record<string, unknown> | null
+  if (project && typeof project === "object" && typeof project.dir === "string") project.dir = storeProjectDir(project.dir)
 }
 
 /** Declared actor (L2): the argument, else the session's agent. */
@@ -269,7 +272,7 @@ function placementGroupIssues(request: NewDecisionRequest, projectDir: string, n
   if (request?.topic !== "project-placement" || !Array.isArray(request.options)) return []
   return request.options.flatMap((o, i) => {
     if (typeof o?.group !== "string" || !groupNameOk(o.group)) return []
-    const dir = path.join(projectDir, o.group)
+    const dir = path.join(nativeProjectDir(projectDir), o.group)
     if (o.id === "join" && !groupMarkerOk(dir, nfs)) return [{ pointer: `/request/options/${i}/group`, keyword: "c57", message: "join must name a marked group (<group>/.swarm/group.json) of the mission's folder" }]
     if (o.id === "new" && nfs.exists(dir)) return [{ pointer: `/request/options/${i}/group`, keyword: "c57", message: "new must name a folder that does not exist yet" }]
     return []
@@ -668,7 +671,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       false,
       async (a, s) => {
         const mission = a.mission as string
-        const dir = a.projectDir as string
+        const dir = storeProjectDir(a.projectDir as string)
         if (s.attested !== true) {
           // 1.2.9 row 50 (S9-01, C36): no session id on this line; on a replay it would be the attested session's id.
           opts.log("warn", "datum-studio-host.mission.studio_mission_place", "SESSION_NOT_ATTESTED", { mission, agent: s.agentId })
@@ -677,7 +680,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const actor = actorOf(a, s)
         const r = await write(false, (tx) => {
           const out = M.setProjectDir(tx, mission, dir, { request: a.decision as string, ...(str(a, "tidyMission") ? { tidyMission: str(a, "tidyMission") } : {}) }, actor ? { actor } : {})
-          if (!groupMarkerOk(dir, nfs)) throw new StoreError("PLACE_DECISION_UNANSWERED", `${dir} is not a marked group folder (.swarm/group.json)`, { mission, projectDir: dir, reason: "marker" })
+          if (!groupMarkerOk(nativeProjectDir(dir), nfs)) throw new StoreError("PLACE_DECISION_UNANSWERED", `${dir} is not a marked group folder (.swarm/group.json)`, { mission, projectDir: dir, reason: "marker" })
           return out
         })
         return { text: `mission ${mission}: project dir ${r.unchanged ? `already ${r.to}, unchanged` : `${r.from} -> ${r.to}`}`, data: r }
