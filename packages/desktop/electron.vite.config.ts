@@ -37,7 +37,13 @@ const buildDate = (() => {
   return out
 })()
 
-const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.arch}`
+// Row 172 (spec 113 S7, register R2.2): the node-pty prebuild follows the build target, not the host. Unset or empty
+// SWARM_BUILD_TARGET is darwin-arm64 (R2.2); any other value must be a target id of R2.1 (darwin-arm64, linux-x64, win32-x64).
+const nodePtyPkg = (() => {
+  const target = process.env.SWARM_BUILD_TARGET || "darwin-arm64"
+  if (!["darwin-arm64", "linux-x64", "win32-x64"].includes(target)) throw new Error(`SWARM_BUILD_TARGET ${JSON.stringify(target)} is not a build target`)
+  return `@lydell/node-pty-${target}`
+})()
 
 const sentry =
   process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
