@@ -1,11 +1,12 @@
-# Changelog Swarm 1.1.0 sampai 1.3.1
+# Changelog Swarm 1.1.0 sampai 1.3.2
 
-Disusun 2026-11-13 (bagian 1.2.8 dan 1.2.9 ditambahkan 2026-11-14, bagian 1.3.0, 1.3.1 dan koreksi bagian lama 2026-11-15) dari catatan rilis, laporan akhir, log keputusan dan pesan commit tiap versi (sumber di akhir tiap bagian; path `docs/...` ada di folder kerja Swarm_OnDevice, di luar repo ini). Urutan terbaru di atas. "Diperbaiki" = cacat yang dibetulkan; "Baru" = fitur atau perilaku yang ditambahkan.
+Disusun 2026-11-13 (bagian 1.2.8 dan 1.2.9 ditambahkan 2026-11-14, bagian 1.3.0, 1.3.1 dan koreksi bagian lama 2026-11-15, bagian 1.3.2 2026-11-16) dari catatan rilis, laporan akhir, log keputusan dan pesan commit tiap versi (sumber di akhir tiap bagian; path `docs/...` ada di folder kerja Swarm_OnDevice, di luar repo ini). Urutan terbaru di atas. "Diperbaiki" = cacat yang dibetulkan; "Baru" = fitur atau perilaku yang ditambahkan.
 
 Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); nomor rilis Swarm dibaca dari `SwarmRelease`. Mulai 1.2.0 versi app ikut nomor rilis Swarm.
 
 | Versi | Tanggal | Cara rilis | Fokus |
 |---|---|---|---|
+| 1.3.2 | 2026-11-16 | Patch menu dari 1.2.8 ke atas (satu berkas) | Kasatmata: alat yang di-offer tiap turn, sebab kegagalan dan matinya koneksi MCP, stderr anak lokal; tanpa perubahan perilaku |
 | 1.3.1 | 2026-11-15 | Patch menu dari 1.2.0 sampai 1.3.0 (satu berkas) | Perbaikan cepat Obsidian: membuka graph saat Obsidian tertutup |
 | 1.3.0 | 2026-11-15 | Patch menu dari 1.2.0 sampai 1.2.9 (satu berkas) | Masalah pengguna 1.2.9 (Obsidian, memori proyek di sesi, drift misi, salinan memori ke vault), backlog 1.2.9, perbaikan keamanan proxy swarm-web dan inbox vault (S-6); 1.2.10 tidak dirilis |
 | 1.2.9 | 2026-11-14 | Patch menu dari 1.2.0 sampai 1.2.8 (satu berkas) | Backlog 1.2.8: diagram dan alat Studio, memori, vault dan skill, Mission Control dan pemindahan misi; perbaikan keamanan id sesi Mission Control |
@@ -25,6 +26,33 @@ Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); 
 | 1.1.0 | 2026-11-03 | Installer | Knowledge Library, pemasang tools, CLI `swarm` |
 
 ---
+
+## 1.3.2 (2026-11-16)
+
+Dibangun dari `3206f23757` (1.3.1). Hotfix kasatmata: rilis ini menambahkan baris log, bukan mengubah perilaku. Tidak ada yang berubah pada alur misi, MCP, vault atau tampilan; yang berubah adalah apa yang tercatat di `opencode.log` saat sesuatu terjadi.
+
+**Diperbaiki**
+- Alat yang di-offer ke model kini tercatat. Setiap turn provider menulis satu baris `provider tool set` berisi `toolCount`, kontribusi tiap server MCP (`mcp.<nama-server>=<jumlah>`), `nonMcpCount`, dan `zeroToolServers` — daftar server yang **terkonfigurasi dan tidak dimatikan** tetapi tidak menyumbang satu alat pun. Sebelumnya tidak ada catatan tentang apa yang benar-benar dikirim, sehingga "alatnya tidak muncul" tidak bisa dibedakan dari "model tidak pernah memanggil". Barisnya dibatasi 2.048 byte, dan kalau terlalu banyak server, hitungan per server dikoersen jadi `mcpTotal` sementara yang terpotong selalu dinyatakan (`mcpCountsCoarsened`, `zeroToolServersOmitted`, `keysOmitted`) — tidak ada pemotongan yang diam-diam. Nama alat lengkap hanya ditulis pada kasus ada server yang nol kontribusi.
+- Server aktif yang tidak menyumbang alat kini bersuara. Kalau server MCP terhubung, mengaku punya kapabilitas `tools`, dan hasilnya nol alat, muncul peringatan `connected server contributed no tools`. Yang tadinya paling sunyi — terhubung tapi nol — justru tidak tercatat sama sekali. Server yang sejak awal tidak mengaku punya alat (misalnya hanya prompts) sengaja tidak memicu peringatan ini, supaya tidak menjadi peringatan palsu pada tiap pergantian prompt.
+- Kegagalan klien MCP tidak lagi menjadi status tanpa sebab. Kegagalan mengambil daftar alat dulu berubah jadi status `failed` dengan satu kalimat tetap; kini sebab yang sebenarnya ikut tertulis: `MCP create failed` membawa sebab yang diringkas, dan `server unavailable` membawa isi `status.error` sehingga alasan peluncur yang keluar dengan kode 3 masih terbaca. Sesi yang diinterupsi tetap tidak menulis baris ini, karena interupsi bukan kegagalan.
+- Matinya sebuah koneksi kini tercatat alasannya. Koneksi yang masih hidup saat instance dimatikan dulu menghilang tanpa jejak; sekarang tiap klien yang hidup menulis satu baris `MCP connection closing` dengan `reason="instance disposed"` sebelum ditutup.
+- stderr anak lokal akhirnya sampai ke log. Sampai 1.3.1, stderr anak MCP ditampung lalu dibuang. Kini tiap baris dibaca sejak anaknya dibuat — bukan setelah handshake selesai — jadi `BRIDGE_START`, `HOST_UNREACHABLE` dan `TOKEN_REJECTED` dari bridge datum-studio tetap ada meskipun bridge mati di tengah handshake. Sebelum ditulis, nilai kredensial disamarkan jadi `[redacted]` (pola Bearer/Basic/API key/secret/password/token, kredensial di dalam URL, dan rangkaian token panjang); sisinya dibatasi: maksimal 500 byte per baris, maksimal 1.000 baris per klien lalu satu baris `MCP server stderr truncated`, dan kegagalan baca menyatakan dirinya sendiri, bukan berhenti diam-diam. Isi stderr lainnya ditulis apa adanya, hanya jalurnya yang disamarkan.
+- Nama alat yang tidak dikenal meninggalkan jejak. Panggilan yang tidak cocok dengan alat mana pun menulis satu baris `unknown tool name` dengan kandidat terdekat: `registered=…` kalau cuma satu, atau `candidates=… candidateCount=…` kalau lebih dari satu sama masuk akalnya — tidak lagi menunjuk satu secara sepihak. Jujur di sini: model sendiri sudah mendapat pesan dari AI SDK yang menyebut kunci yang terdaftar, jadi kontribusi 1.3.2 pada butir ini adalah jejak di log, bukan pesan baru untuk model.
+
+**Batasan yang diketahui**
+- Rilis ini tidak bisa membuat model memanggil alat yang tidak ingin ia panggil. Buktinya justru menunjukkan alat-alatnya di-offer; yang belum pernah terbukti adalah panggilan keluarnya. 1.3.2 membuat keheningan itu mustahil tidak terlihat — ia tidak memperbaiki pembentukan misi.
+- Kesimpulan audit kami sendiri ikut dikoreksi di sini: dugaan bahwa log-nya hilang itu salah. Log ada (42.507 baris diagnostik Electron di mesin ini) dan nol di antaranya menyebut kata kunci Studio. Karena itu rilis ini soal menampilkan, bukan soal mengangkut.
+- F0 menyala tiap turn, bukan hanya saat daftar alat berubah. Emit-on-change sengaja ditunda ke 1.3.3 sampai volume minggu pertama setelah pemasangan terukur; yang ditunda pengendalian laju, bukan lebar — satu baris tipikalnya ≤ 256 byte dan plafon kerasnya 2.048 byte. Mematikan F0 atau membatasi F4 akan mengulangi kesalahan yang sama: membungkam saksi demi kerapian.
+- Yang dengan sadar tidak ikut build ini: F5 (baca ulang deskriptor datum-studio dan batas reconnect per request) — teresklusi sebagai penyebab hilangnya panggilan dan menambah bidang ledak hotfix; batas kapasitas katalog seperti yang pernah diusulkan untuk Q4=A — dicabut, jalur itu dua kali terbukti tidak menyalurkan data ke store (C46); dan perbaikan kode pada proxy hasil stage — didokumentasikan sebagai batas di bawah, tidak diubah di sini.
+- Proxy `swarm-web` hasil stage (C43). Di sebagian mesin tersimpan salinan proxy lama di `~/.swarm/setup/bin`, dan jalur itu tidak menyegarkannya sendiri. Pemulihannya: jalankan ulang pemasang tools dari aplikasi yang terpasang sekarang. **Jangan menghapus `~/.swarm/setup/bin`** untuk memaksa provision ulang — kelayakan stage hanya memeriksa bahwa berkasnya ada di sana, jadi menghapusnya bisa mematikan `swarm-web` tanpa ada yang memulihkannya (C44).
+- Backlog yang sudah dicadangkan untuk 1.3.2 tidak dikonsumsi build ini. Item vault Obsidian lewat tautan simbolik (butir kedua di bagian 1.3.1) dan seluruh bekas backlog 1.3.1 (daftar B13-xx di bagian 1.3.0) tetap berstatus backlog. Nomor 1.3.2 di berkas ini dipakai untuk hotfix kasatmata ini, supaya tabrakan penomorannya terlihat dan tidak diam-diam.
+
+**Catatan pemasangan**
+- Patch menu 1.3.2 diterima oleh aplikasi 1.2.8 ke atas lewat satu berkas, `swarm-1.2.8-to-1.3.2.swarmpatch`, dengan `--migration none`: tidak ada migrasi data. Versi 1.1.x tetap memakai DMG.
+- Tanda tangan dan pemasangan tetap langkah manusia: `make` tidak pernah menandatangani dan tidak menyentuh kunci privat, dan gerbang pemasangan masih menunggu jawaban Anda. Setelah 1.3.2 terpasang, Undo mengembalikan ke **1.2.8**, bukan ke 1.3.1; pemulihan dari build yang salah adalah membangun ulang dari branch dan memasang manual.
+- Yang berubah bagi Anda hanya isinya `opencode.log`. Cara membacanya setelah pemasangan: cari baris `provider tool set` pada turn pertama, cek `mcp.datum-studio=` menyebut jumlah alat yang Anda harapkan, lalu cari `unknown tool name` bila panggilan tetap tidak muncul. Baris-baris inilah yang memutuskan bentuk 1.3.3, bukan perkiraan kita.
+
+Sumber: keputusan U14, C30, C39, C58 sampai C60, C64, C65; commit `1922d81d44` (isi log) dan commit versi di branch yang sama; laporan `docs/2026-11-16_swarm_repo_work_history_study/`.
 
 ## 1.3.1 (2026-11-15)
 

@@ -14,12 +14,13 @@ import {
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Cause, Effect, Exit } from "effect"
+import { Cause, Effect, Exit, Fiber } from "effect"
 import type { MCP as MCPNS } from "../../src/mcp/index"
 import { MCP } from "../../src/mcp/index"
 import { McpOAuthCallback } from "../../src/mcp/oauth-callback"
-import { TestInstance } from "../fixture/fixture"
+import { disposeAllInstancesEffect, TestInstance } from "../fixture/fixture"
 import { pollWithTimeout, testEffect } from "../lib/effect"
+import { withCapturedLog, type CapturedLog } from "../lib/log-capture"
 
 const it = testEffect(LayerNode.compile(MCP.node))
 const stdioFixture = path.join(import.meta.dir, "../fixture/mcp-lifecycle-stdio.ts")
@@ -557,4 +558,309 @@ it.live("McpOAuthCallback.cancelPending rejects the pending callback", () =>
       }),
     () => Effect.promise(() => McpOAuthCallback.stop()).pipe(Effect.ignore),
   ),
+)
+
+// --- Swarm 1.3.2 row 17 (S2): the five silent paths of mcp/index.ts must leave a durable line (F0b, F2, F2b, F3, F4) ---
+
+// --- Swarm 1.3.2 row 16b: the review's and security review's asks (F-N1, F-N2, F-N3, F-N6, F-N7, NB-1) ---
+
+
+
+/** The `error` text a failed status carries — F2b moves this same text into the `server unavailable` line. */
+function failureText(status: Record<string, MCPNS.Status> | MCPNS.Status, server: string) {
+  const item = "status" in status ? status : status[server]
+  return item && "error" in item ? item.error : undefined
+}
+
+it.instance(
+  "F2b server unavailable carries the error text that status already held",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const mcp = yield* MCP.Service
+        const result = yield* mcp.add("no-launcher", { type: "local", command: ["swarm-mcp-missing-launcher-132"] })
+
+        expect(statusName(result.status, "no-launcher")).toBe("failed")
+        const reason = failureText(result.status, "no-launcher")
+        expect(reason).toBeDefined()
+
+        const lines = yield* log.matching("server unavailable")
+        expect(lines).toHaveLength(1)
+        // The three fields that were already there have not moved.
+        expect(lines[0]).toContain("key=no-launcher")
+        expect(lines[0]).toContain("type=local")
+        expect(lines[0]).toContain("status=failed")
+        // F2b: the reason that was already sitting in status.error now travels in the line. Asserted as two
+        // quote-free substrings of it because the appender JSON-quotes a value holding spaces and quotes.
+        expect(lines[0]).toContain("Executable not found")
+        expect(lines[0]).toContain("swarm-mcp-missing-launcher-132")
+
+        // And it is scrubbed: an absolute command path never reaches the file in the clear.
+        yield* mcp.add("no-launcher-abs", {
+          type: "local",
+          command: ["/tmp/opencode-private-vault-132/swarm-mcp-missing-launcher"],
+        })
+        const abs = yield* log.matching("server unavailable", "key=no-launcher-abs")
+        expect(abs).toHaveLength(1)
+        expect(abs[0]).not.toContain("opencode-private-vault-132")
+        expect(abs[0]).toContain("error=")
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "F2 a thrown defs cause is logged before the status flip",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const server = yield* lifecycleServer({ capabilities: { tools: {} } })
+        server.state.listToolsError = "listTools exploded"
+        const mcp = yield* MCP.Service
+        const result = yield* mcp.add("defs-threw", remote(server.url))
+
+        // CreateResult is unchanged: the caller still sees a plain failure.
+        expect(statusName(result.status, "defs-threw")).toBe("failed")
+        expect(yield* mcp.tools()).toEqual({})
+
+        const lines = yield* log.matching("MCP create failed")
+        expect(lines).toHaveLength(1)
+        expect(lines[0]).toContain("key=defs-threw")
+        expect(lines[0]).toContain("Failed to get tools")
+        expect(lines[0]).not.toContain("/Users/")
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "F0b a connected server with an empty cached list warns and offers nothing",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const server = yield* lifecycleServer({ capabilities: { tools: {} } })
+        server.state.tools = []
+        const mcp = yield* MCP.Service
+        yield* mcp.add("empty-server", remote(server.url))
+
+        expect((yield* mcp.status())["empty-server"]?.status).toBe("connected")
+        expect(Object.keys(yield* mcp.tools())).toEqual([])
+
+        const warnings = yield* log.matching("connected server contributed no tools")
+        expect(warnings).toHaveLength(1)
+        expect(warnings[0]).toContain("clientName=empty-server")
+        // The absence warning keeps its own message, so existing log parsing does not move.
+        const all = yield* log.lines()
+        expect(all.filter((line) => line.includes("missing cached tools for connected server"))).toHaveLength(0)
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "F3 disposing an instance logs one teardown line per live client",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const first = yield* lifecycleServer()
+        const second = yield* lifecycleServer()
+        const mcp = yield* MCP.Service
+        yield* mcp.add("teardown-one", remote(first.url))
+        yield* mcp.add("teardown-two", remote(second.url))
+        expect(Object.keys(yield* mcp.clients())).toHaveLength(2)
+
+        // Disposal inside the capture: the finalizer's lines have to reach the file, which is what F3 is about.
+        yield* disposeAllInstancesEffect
+        const lines = yield* log.matching("MCP connection closing")
+        expect(lines).toHaveLength(2)
+        expect(lines.filter((line) => line.includes("server=teardown-one"))).toHaveLength(1)
+        expect(lines.filter((line) => line.includes("server=teardown-two"))).toHaveLength(1)
+        expect(lines.every((line) => line.includes("instance disposed"))).toBe(true)
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "F4 a local child's stderr reaches the log",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const mcp = yield* MCP.Service
+        const result = yield* mcp.add("stdio-stderr", {
+          type: "local",
+          command: [process.execPath, stdioFixture, "--stderr", "BRIDGE_START pid=1"],
+        })
+        expect(statusName(result.status, "stdio-stderr")).toBe("connected")
+
+        const lines = yield* log.matching("BRIDGE_START")
+        expect(lines).toHaveLength(1)
+        expect(lines[0]).toContain("server=stdio-stderr")
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+// --- Swarm 1.3.2 row 16b: review round (F-N1 pre-handshake stderr, F-N3 capability gate, F-N6 caps and interrupt,
+// F-N7 logged stop, NB-1 credential masking) ---
+
+/** Polls the capture for lines holding every needle, so a line written by another fiber still counts as arrived. */
+function appearing(log: CapturedLog, ...needles: string[]) {
+  return pollWithTimeout(
+    Effect.gen(function* () {
+      const all = yield* log.lines()
+      const hits = all.filter((line) => needles.every((needle) => line.includes(needle)))
+      return hits.length > 0 ? hits : undefined
+    }),
+    `no captured line holding ${needles.join(" + ")}`,
+    "10 seconds",
+  )
+}
+
+it.instance(
+  "F4 a child that dies during the handshake still leaves its stderr line",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const mcp = yield* MCP.Service
+        const result = yield* mcp.add("dying-server", {
+          type: "local",
+          command: [process.execPath, stdioFixture, "--die", "HOST_UNREACHABLE port=57302"],
+          timeout: 5000,
+        })
+
+        // The connect itself must still fail the way it always did; only the reason's survival is new.
+        expect(statusName(result.status, "dying-server")).toBe("failed")
+        const lines = yield* appearing(log, "HOST_UNREACHABLE", "server=dying-server")
+        expect(lines.length).toBeGreaterThan(0)
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "F4 masks credential shapes in a child's stderr before they reach the log",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const secret = "sk-live-0123456789abcdef0123456789abcdef"
+        const opaque = "Q1b3Az9Kf2Ld7Hs4Jg6Kp8Mo0Ni2Ru5Ty7Vw9Xa1Bc3De"
+        const mcp = yield* MCP.Service
+        yield* mcp.add("chatty-server", {
+          type: "local",
+          command: [
+            process.execPath,
+            stdioFixture,
+            "--stderr",
+            `request rejected Authorization: Bearer ${secret} via https://svc:hw63Jkaf82Lm@gsp.invalid/mcp blob ${opaque}`,
+          ],
+        })
+
+        const lines = yield* appearing(log, "request rejected")
+        expect(lines).toHaveLength(1)
+        // NB-1: every credential shape goes, the diagnosis around it stays.
+        expect(lines[0]).not.toContain(secret)
+        expect(lines[0]).not.toContain(opaque)
+        expect(lines[0]).not.toContain("hw63Jkaf82Lm")
+        expect(lines[0]).toContain("Bearer [redacted]")
+        expect(lines[0]).toContain("svc:[redacted]@gsp.invalid")
+        expect(lines[0]).toContain("request rejected")
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "F4 caps one stderr line at 500 bytes",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const mcp = yield* MCP.Service
+        yield* mcp.add("long-line-server", {
+          type: "local",
+          command: [process.execPath, stdioFixture, "--stderr", `LONG_START ${"x".repeat(2000)} LONG_END`],
+        })
+
+        const lines = yield* appearing(log, "LONG_START")
+        expect(lines).toHaveLength(1)
+        // Row 18 F-N6 case 2: the byte cap was asserted to exist; here it is exercised. The cut itself stays silent
+        // per line (row 18 F-I1 accepted that); only the line-count cap carries its own marker.
+        expect(lines[0]!.length).toBeLessThan(700)
+        expect(lines[0]).not.toContain("LONG_END")
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "F4 stops logging stderr at 1,000 lines per client and says so once",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const mcp = yield* MCP.Service
+        yield* mcp.add("flooding-server", {
+          type: "local",
+          command: [process.execPath, stdioFixture, "--stderr-many", "1002"],
+        })
+
+        const summary = yield* appearing(log, "MCP server stderr truncated")
+        expect(summary).toHaveLength(1)
+        expect(summary[0]).toContain("limit=1000")
+        const logged = (yield* log.lines()).filter((line) => line.includes("message=\"MCP server stderr\""))
+        expect(logged).toHaveLength(1000)
+        // Draining continues past the cap, so the flood never filled the pipe and stalled the child: the server is
+        // still connected and still answers tools/list (row 18 §4).
+        expect((yield* mcp.status())["flooding-server"]?.status).toBe("connected")
+        expect(Object.keys(yield* mcp.tools())).toEqual(["flooding-server_current_directory"])
+      }),
+    ),
+  { timeout: 60_000 },
+)
+
+it.instance(
+  "F0b stays quiet for a server that never advertised the tools capability",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        const server = yield* lifecycleServer({ capabilities: { prompts: {} } })
+        server.state.prompts = [{ name: "review" }]
+        const mcp = yield* MCP.Service
+        yield* mcp.add("prompts-only", remote(server.url))
+
+        expect((yield* mcp.status())["prompts-only"]?.status).toBe("connected")
+        expect(Object.keys(yield* mcp.tools())).toEqual([])
+        // F-N3: an empty tool list is the honest answer for a prompts-only server, not an anomaly.
+        expect(yield* log.matching("contributed no tools")).toHaveLength(0)
+      }),
+    ),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "F2 an interrupted create leaves no MCP create failed line",
+  () =>
+    withCapturedLog((log) =>
+      Effect.gen(function* () {
+        // Row 18 F-N6 case 4 asks for a test that an interrupted create stays silent, and this pins that observable.
+        // What it does NOT cover, measured rather than assumed: removing the `Cause.hasInterruptsOnly` guard inside the
+        // F2 tap leaves this test green even with the delay below, because the interrupt is absorbed before the cause
+        // reaches that pipe (probed with an unconditional tap). The guard is therefore untested code with a reason, not
+        // tested code — see implementation/01_fix.md §Review fix round item 8.
+        const server = yield* lifecycleServer()
+        server.state.requestDelay = 5000
+        const mcp = yield* MCP.Service
+        const fiber = yield* Effect.forkScoped(mcp.add("interrupted", remote(server.url, 60000)))
+        yield* Effect.sleep("300 millis")
+        yield* Fiber.interrupt(fiber)
+        // Let any line the interrupted fiber still manages to write land before reading, so absence means absence.
+        yield* Effect.sleep("300 millis")
+        yield* Effect.logInfo("interrupt settle marker")
+
+        const lines = yield* log.matching("MCP create failed")
+        expect(lines).toHaveLength(0)
+        // The capture really was live at that point: a line logged from this fiber after the interrupt does reach it.
+        expect((yield* log.lines()).some((line) => line.includes("interrupt settle marker"))).toBe(true)
+      }),
+    ),
+  { timeout: 30_000 },
 )
