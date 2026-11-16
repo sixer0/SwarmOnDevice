@@ -6,7 +6,7 @@ Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); 
 
 | Versi | Tanggal | Cara rilis | Fokus |
 |---|---|---|---|
-| 1.3.2 | 2026-11-16 | Patch menu dari 1.2.8 ke atas (satu berkas) | Kasatmata: alat yang di-offer tiap turn, sebab kegagalan dan matinya koneksi MCP, stderr anak lokal; tanpa perubahan perilaku |
+| 1.3.2 | 2026-11-16 | Patch menu dari 1.2.8 ke atas (satu berkas) | Kasatmata: alat yang di-offer tiap turn, sebab kegagalan dan matinya koneksi MCP, stderr anak lokal; tanpa perubahan perilaku pada jalur misi, MCP, dan tampilan; satu fitur baru opsional: add-in Office (mati sampai di-Enable) |
 | 1.3.1 | 2026-11-15 | Patch menu dari 1.2.0 sampai 1.3.0 (satu berkas) | Perbaikan cepat Obsidian: membuka graph saat Obsidian tertutup |
 | 1.3.0 | 2026-11-15 | Patch menu dari 1.2.0 sampai 1.2.9 (satu berkas) | Masalah pengguna 1.2.9 (Obsidian, memori proyek di sesi, drift misi, salinan memori ke vault), backlog 1.2.9, perbaikan keamanan proxy swarm-web dan inbox vault (S-6); 1.2.10 tidak dirilis |
 | 1.2.9 | 2026-11-14 | Patch menu dari 1.2.0 sampai 1.2.8 (satu berkas) | Backlog 1.2.8: diagram dan alat Studio, memori, vault dan skill, Mission Control dan pemindahan misi; perbaikan keamanan id sesi Mission Control |
@@ -29,7 +29,7 @@ Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); 
 
 ## 1.3.2 (2026-11-16)
 
-Dibangun dari `3206f23757` (1.3.1). Hotfix kasatmata: rilis ini menambahkan baris log, bukan mengubah perilaku. Tidak ada yang berubah pada alur misi, MCP, vault atau tampilan; yang berubah adalah apa yang tercatat di `opencode.log` saat sesuatu terjadi.
+Hotfix logging dibangun dari `3206f23757` (1.3.1), digabung dengan pekerjaan add-in Office (merge `e4058bf99b`). Hotfix kasatmata: rilis ini menambahkan baris log, bukan mengubah perilaku. Tidak ada yang berubah pada alur misi, MCP, vault atau tampilan; yang berubah adalah apa yang tercatat di `opencode.log` saat sesuatu terjadi.
 
 **Diperbaiki**
 - Alat yang di-offer ke model kini tercatat. Setiap turn provider menulis satu baris `provider tool set` berisi `toolCount`, kontribusi tiap server MCP (`mcp.<nama-server>=<jumlah>`), `nonMcpCount`, dan `zeroToolServers` — daftar server yang **terkonfigurasi dan tidak dimatikan** tetapi tidak menyumbang satu alat pun. Sebelumnya tidak ada catatan tentang apa yang benar-benar dikirim, sehingga "alatnya tidak muncul" tidak bisa dibedakan dari "model tidak pernah memanggil". Barisnya dibatasi 2.048 byte, dan kalau terlalu banyak server, hitungan per server dikoersen jadi `mcpTotal` sementara yang terpotong selalu dinyatakan (`mcpCountsCoarsened`, `zeroToolServersOmitted`, `keysOmitted`) — tidak ada pemotongan yang diam-diam. Nama alat lengkap hanya ditulis pada kasus ada server yang nol kontribusi.
@@ -38,6 +38,9 @@ Dibangun dari `3206f23757` (1.3.1). Hotfix kasatmata: rilis ini menambahkan bari
 - Matinya sebuah koneksi kini tercatat alasannya. Koneksi yang masih hidup saat instance dimatikan dulu menghilang tanpa jejak; sekarang tiap klien yang hidup menulis satu baris `MCP connection closing` dengan `reason="instance disposed"` sebelum ditutup.
 - stderr anak lokal akhirnya sampai ke log. Sampai 1.3.1, stderr anak MCP ditampung lalu dibuang. Kini tiap baris dibaca sejak anaknya dibuat — bukan setelah handshake selesai — jadi `BRIDGE_START`, `HOST_UNREACHABLE` dan `TOKEN_REJECTED` dari bridge datum-studio tetap ada meskipun bridge mati di tengah handshake. Sebelum ditulis, nilai kredensial disamarkan jadi `[redacted]` (pola Bearer/Basic/API key/secret/password/token, kredensial di dalam URL, dan rangkaian token panjang); sisinya dibatasi: maksimal 500 byte per baris, maksimal 1.000 baris per klien lalu satu baris `MCP server stderr truncated`, dan kegagalan baca menyatakan dirinya sendiri, bukan berhenti diam-diam. Isi stderr lainnya ditulis apa adanya, hanya jalurnya yang disamarkan.
 - Nama alat yang tidak dikenal meninggalkan jejak. Panggilan yang tidak cocok dengan alat mana pun menulis satu baris `unknown tool name` dengan kandidat terdekat: `registered=…` kalau cuma satu, atau `candidates=… candidateCount=…` kalau lebih dari satu sama masuk akalnya — tidak lagi menunjuk satu secara sepihak. Jujur di sini: model sendiri sudah mendapat pesan dari AI SDK yang menyebut kunci yang terdaftar, jadi kontribusi 1.3.2 pada butir ini adalah jejak di log, bukan pesan baru untuk model.
+
+**Baru**
+- Add-in Office untuk Word dan Excel di macOS, mati sampai Anda menyalakannya lewat menu Swarm > Office Add-in > Enable. Panel add-in berbicara dengan Swarm lewat bridge HTTPS lokal di mesin ini, dan panel baru bisa memakai Swarm setelah Anda menyetujui pemasangannya di Swarm dengan memilih kode yang cocok dari tiga kode yang ditampilkan; sesi dari Office berjalan tanpa alat (tidak ada akses berkas, shell atau MCP) dan dengan prompt yang dirampingkan. Belum ada: Windows, PowerPoint, Outlook, dan Office di web. Hotfix log di atas tetap berlaku apa adanya; add-in ini satu-satunya perilaku baru di build gabungan ini, dan tidak menyala tanpa langkah Enable.
 
 **Batasan yang diketahui**
 - Rilis ini tidak bisa membuat model memanggil alat yang tidak ingin ia panggil. Buktinya justru menunjukkan alat-alatnya di-offer; yang belum pernah terbukti adalah panggilan keluarnya. 1.3.2 membuat keheningan itu mustahil tidak terlihat — ia tidak memperbaiki pembentukan misi.
@@ -48,7 +51,7 @@ Dibangun dari `3206f23757` (1.3.1). Hotfix kasatmata: rilis ini menambahkan bari
 - Backlog yang sudah dicadangkan untuk 1.3.2 tidak dikonsumsi build ini. Item vault Obsidian lewat tautan simbolik (butir kedua di bagian 1.3.1) dan seluruh bekas backlog 1.3.1 (daftar B13-xx di bagian 1.3.0) tetap berstatus backlog. Nomor 1.3.2 di berkas ini dipakai untuk hotfix kasatmata ini, supaya tabrakan penomorannya terlihat dan tidak diam-diam.
 
 **Catatan pemasangan**
-- Patch menu 1.3.2 diterima oleh aplikasi 1.2.8 ke atas lewat satu berkas, `swarm-1.2.8-to-1.3.2.swarmpatch`, dengan `--migration none`: tidak ada migrasi data. Versi 1.1.x tetap memakai DMG.
+- Patch menu 1.3.2 diterima oleh aplikasi 1.2.8 ke atas lewat satu berkas, `swarm-1.2.8-to-1.3.2.swarmpatch`, dengan `--migration none`: tidak ada migrasi data. Pembaruan ini juga membawa `Resources/office-addin/` (panel add-in Office); `~/.swarm/setup/` tetap tidak ditulis. Versi 1.1.x tetap memakai DMG.
 - Tanda tangan dan pemasangan tetap langkah manusia: `make` tidak pernah menandatangani dan tidak menyentuh kunci privat, dan gerbang pemasangan masih menunggu jawaban Anda. Setelah 1.3.2 terpasang, Undo mengembalikan ke **1.2.8**, bukan ke 1.3.1; pemulihan dari build yang salah adalah membangun ulang dari branch dan memasang manual.
 - Yang berubah bagi Anda hanya isinya `opencode.log`. Cara membacanya setelah pemasangan: cari baris `provider tool set` pada turn pertama, cek `mcp.datum-studio=` menyebut jumlah alat yang Anda harapkan, lalu cari `unknown tool name` bila panggilan tetap tidak muncul. Baris-baris inilah yang memutuskan bentuk 1.3.3, bukan perkiraan kita.
 

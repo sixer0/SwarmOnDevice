@@ -44,7 +44,10 @@ const HASHED_ASSET = /^[\w.-]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/
 // the reminder to bump the manifest. A release that never shipped (this branch's 1.3.1 row) may be renumbered in
 // place when the add-in first ships.
 /** @internal test seam */
-export const MANIFEST_VERSIONS: readonly { release: string; version: string }[] = [{ release: "1.3.1", version: "1.0.0.0" }]
+export const MANIFEST_VERSIONS: readonly { release: string; version: string }[] = [
+  { release: "1.3.1", version: "1.0.0.0" },
+  { release: "1.3.2", version: "1.0.0.1" },
+]
 
 type Paths = { desktop: string; addin: string }
 
