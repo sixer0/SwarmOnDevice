@@ -4,9 +4,9 @@
 // files that assign `values` or `numberFormat` (U-LINT-02); no formula property is
 // ever named (FR-15).
 import { OFFICE_CONTEXT_WHOLE } from "../constants"
-import { completeWrite, prepareWrite, type WriteAction } from "../excel"
+import { completeWrite, prepareWrite, type Refusal, type WriteAction } from "../excel"
 import type { ContextScope } from "../state/prompt"
-import { errorDetail, failWith, unsupported, type ExcelChanged, type ExcelHost } from "./types"
+import { errorDetail, failWith, refusedTarget, unsupported, type ExcelChanged, type ExcelHost } from "./types"
 
 // Reads the selection, then plans the write: target, refusals, assignments (FR-02:
 // every check completes before anything is assigned). A selection that cannot be
@@ -21,13 +21,26 @@ async function plan(context: Excel.RequestContext, action: WriteAction, reply: s
   if (located)
     return { kind: "failure" as const, failure: { ok: false as const, code: "office.error.selectionUnsupported" as const, detail: located } }
 
-  const prepared = prepareWrite(action, reply, {
+  const area = {
     rowCount: selection.rowCount,
     columnCount: selection.columnCount,
     rowIndex: selection.rowIndex,
     columnIndex: selection.columnIndex,
+  }
+  // Worksheet identity (M8-03a): the sheet part of the selection's address ("Sheet1",
+  // "'My Sheet'"); the cell part never contains "!".
+  const sheet = selection.address.slice(0, selection.address.lastIndexOf("!"))
+  const refused = (refusal: Refusal) => ({
+    kind: "refused" as const,
+    refused: {
+      ok: false as const,
+      host: "Excel" as const,
+      refusal,
+      target: refusedTarget(action, reply, refusal, sheet, area),
+    },
   })
-  if (!prepared.ok) return { kind: "refused" as const, refused: { ok: false as const, host: "Excel" as const, refusal: prepared.refusal } }
+  const prepared = prepareWrite(action, reply, area)
+  if (!prepared.ok) return refused(prepared.refusal)
 
   const target = prepared.target
   const anchor =
@@ -38,10 +51,7 @@ async function plan(context: Excel.RequestContext, action: WriteAction, reply: s
     await context.sync()
   }
   const complete = completeWrite(prepared, target.check === "none" ? undefined : range.values)
-  if (!complete.ok) return { kind: "refused" as const, refused: { ok: false as const, host: "Excel" as const, refusal: complete.refusal } }
-  // Worksheet identity (M8-03a): the sheet part of the selection's address ("Sheet1",
-  // "'My Sheet'"); the cell part never contains "!".
-  const sheet = selection.address.slice(0, selection.address.lastIndexOf("!"))
+  if (!complete.ok) return refused(complete.refusal)
   return {
     kind: "plan" as const,
     range,

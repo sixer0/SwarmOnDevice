@@ -125,7 +125,13 @@ describe.if(!CHILD)("index.ts wiring", () => {
     expect(block).toContain("pathEnv: () => shellEnv?.PATH ?? process.env.PATH,")
     expect(block).toContain(".catch((error) => logger.error(")
     // The same menuDeps object reaches createMenu at both call sites (locale rebuild and window start).
-    expect(source.split("createMenu(menuDeps)").length - 1).toBe(2)
+    // Office add-in M7-05 (IA-2, IM-08): both sites now call the one rebuildMenu helper, which spreads menuDeps into
+    // createMenu and is also the controller's onStateChange. Pin moved deliberately: createMenu(menuDeps) 2 -> 0,
+    // createMenu( 2 -> 1 (inside rebuildMenu), rebuildMenu() 0 -> 3 (the two sites plus onStateChange).
+    expect(source.split("createMenu(menuDeps)").length - 1).toBe(0)
+    expect(source.split("createMenu(").length - 1).toBe(1)
+    expect(source).toContain("const rebuildMenu = () =>\n    createMenu({\n      ...menuDeps,")
+    expect(source.split("rebuildMenu()").length - 1).toBe(3)
   })
 
   test("built as index.ts builds it, with the real nativeT: Install writes only the fixture wrapper; dialogs in English", async () => {

@@ -4,6 +4,7 @@ import {
   address,
   completeWrite,
   convertCell,
+  isExactNumber,
   isFormulaLeading,
   isNumberCell,
   prepareWrite,
@@ -142,7 +143,7 @@ describe("U-XL-07 FR-14.1 number pattern", () => {
     expect(EXCEL_NUMBER_PATTERN.flags).toBe("")
   })
 
-  test.each(["-1", "-12.5", "42", "0", "007", "3.14159"])("%p is a number", (text) => {
+  test.each(["-1", "-12.5", "42", "0", "3.14159"])("%p is a number", (text) => {
     expect(isNumberCell(text)).toBe(true)
     expect(convertCell(text)).toEqual({ kind: "number", value: Number(text) })
   })
@@ -171,6 +172,54 @@ describe("U-XL-07 FR-14.1 number pattern", () => {
   ])("%p is not a number", (text) => {
     expect(isNumberCell(text)).toBe(false)
     expect(convertCell(text).kind).toBe("text")
+  })
+})
+
+describe("U-XL-07a C66 exact-number rule (M8-01a, CP-M8 F-4)", () => {
+  test.each(["0", "0.5", "-0.25", "-0", "0.000123", "123456789012345", "-123456789012345", "1234567.12345678", "100"])(
+    "%p is a number",
+    (text) => {
+      expect(isExactNumber(text)).toBe(true)
+      expect(convertCell(text)).toEqual({ kind: "number", value: Number(text) })
+    },
+  )
+
+  test.each([
+    ["Indonesian phone", "0812345678901"],
+    ["leading zero code", "007"],
+    ["leading zero with fraction", "01.5"],
+    ["negative leading zero", "-0812"],
+    ["zeros only, leading zero", "00"],
+    ["16-digit NIK", "3171234567890001"],
+    ["16 significant digits", "1234567890123456"],
+    ["16 significant digits in a fraction", "0.1234567890123456"],
+    ["15 digits plus a trailing zero", "1234567890123450"],
+    ["overflow via a long digit string", "9".repeat(400)],
+    ["underflow to zero", `0.${"0".repeat(400)}1`],
+  ])("%s %p is text with numberFormat @", (_, text) => {
+    expect(EXCEL_NUMBER_PATTERN.test(text)).toBe(true)
+    expect(isExactNumber(text)).toBe(false)
+    expect(convertCell(text)).toEqual({ kind: "text", value: text, formulaLeading: false })
+    const result = plan(completeWrite(prepared(prepareWrite("replace", text, { rowCount: 1, columnCount: 1 }))))
+    expect(result.assignments).toEqual([
+      { property: "numberFormat", value: [["@"]] },
+      { property: "values", value: [[text]] },
+    ])
+  })
+
+  test("15 vs 16 significant digits", () => {
+    expect(isNumberCell("123456789012345")).toBe(true)
+    expect(isNumberCell("1234567890123456")).toBe(false)
+  })
+
+  test("a NIK and a phone in one row: both text, the amount a number", () => {
+    const ready = prepared(
+      prepareWrite("insert", "3171234567890001\t0812345678901\t250000", { rowCount: 1, columnCount: 1 }),
+    )
+    expect(plan(completeWrite(ready, empty(1, 3))).assignments).toEqual([
+      { property: "numberFormat", value: [["@", "@", null]] },
+      { property: "values", value: [["3171234567890001", "0812345678901", 250000]] },
+    ])
   })
 })
 
@@ -328,11 +377,13 @@ describe("U-XL-09 FR-15 property test: no formulas, every text cell guarded", ()
           const source = matrix.rows[r][c]
           if (typeof value === "number") {
             expect(EXCEL_NUMBER_PATTERN.test(source)).toBe(true)
+            expect(isExactNumber(source)).toBe(true)
+            expect(String(value)).toBe(String(Number(source)))
             expect(format?.[r][c] ?? null).toBeNull()
             return
           }
           expect(value).toBe(source)
-          expect(EXCEL_NUMBER_PATTERN.test(source)).toBe(false)
+          expect(isNumberCell(source)).toBe(false)
           expect(format?.[r][c]).toBe("@")
           expect(properties.indexOf("numberFormat")).toBeLessThan(properties.indexOf("values"))
         }),

@@ -61,7 +61,9 @@ export function createKeychain(input: { run: PatchRunner; log: OfficeLogSink; ho
       ...(result.startCode ? { startCode: result.startCode } : {}),
     }
     if (result.code === 0) input.log("info", SOURCE, "security command succeeded", context)
-    if (result.code !== 0) input.log("warn", SOURCE, "security command failed", { ...context, stderr: result.stderr.slice(0, 300) })
+    // F-M3-3: `security` stderr is never logged (it can name certificate paths in the home directory); the exit code
+    // and a fixed reason carry the diagnosis.
+    if (result.code !== 0) input.log("warn", SOURCE, "security command failed", { ...context, reason: "nonzero-exit" })
     return result
   }
 

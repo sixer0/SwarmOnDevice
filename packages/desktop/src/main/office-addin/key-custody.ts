@@ -50,6 +50,15 @@ function errorName(error: unknown) {
   return error instanceof Error ? error.name : typeof error
 }
 
+/**
+ * Log-safe fields of a thrown value (F-M3-2): its name and string `code` only. `message` and `stack` are never logged:
+ * they are free text that can carry local paths.
+ */
+export function errorFields(error: unknown) {
+  const code = errorCode(error)
+  return code ? { name: errorName(error), code } : { name: errorName(error) }
+}
+
 export function createKeyCustody(input: { safeStorage: SafeStorageLike; paths: CertPaths; log: OfficeLogSink }): KeyCustody {
   const retained = () => input.safeStorage.isEncryptionAvailable()
 
@@ -57,7 +66,7 @@ export function createKeyCustody(input: { safeStorage: SafeStorageLike; paths: C
     const blob = await readFile(input.paths.caKeyEnc).catch((error: unknown) => error)
     if (!(blob instanceof Uint8Array)) {
       if (errorCode(blob) === "ENOENT") return { state: "absent" }
-      input.log("error", SOURCE, "CA key blob could not be read", { code: errorCode(blob) ?? errorName(blob) })
+      input.log("error", SOURCE, "CA key blob could not be read", errorFields(blob))
       return { state: "unreadable" }
     }
     if (!retained()) {

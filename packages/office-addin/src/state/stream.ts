@@ -56,8 +56,21 @@ const CONSUMED = new Set([
 ])
 
 export function initialStream(): StreamState {
-  return { buffer: [], messages: {}, parts: {}, status: "idle", firstText: true, baseline: 0 }
+  return { buffer: [], messages: dict(), parts: dict(), status: "idle", firstText: true, baseline: 0 }
 }
+
+// Maps keyed by server ids (message and part ids) are null-prototype objects, so an id
+// such as "__proto__" or "constructor" is an ordinary own key and never reads or
+// writes Object.prototype (CP-M8 F-7). `put` copies; the state is never mutated.
+function dict<T>(): Record<string, T> {
+  return Object.create(null)
+}
+
+const put = <T>(entries: Record<string, T>, id: string, value: T) =>
+  Object.assign(dict<T>(), entries, { [id]: value })
+
+const own = <T>(entries: Record<string, T>, id: string) =>
+  Object.prototype.hasOwnProperty.call(entries, id) ? entries[id] : undefined
 
 const record = (value: unknown): Record<string, unknown> | undefined =>
   typeof value === "object" && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
@@ -76,7 +89,7 @@ function header(frame: unknown) {
 }
 
 const rendered = (state: StreamState, part: PartEntry) =>
-  part.type === "text" && state.messages[part.messageID]?.role === "assistant"
+  part.type === "text" && own(state.messages, part.messageID)?.role === "assistant"
 
 export function renderedLength(state: StreamState) {
   return Object.values(state.parts)
@@ -90,18 +103,15 @@ function apply(state: StreamState, frame: { type: string; properties: Record<str
     const id = text(info?.id)
     if (!info || !id) return state
     const time = record(info.time)
-    const previous = state.messages[id]
+    const previous = own(state.messages, id)
     return {
       ...state,
-      messages: {
-        ...state.messages,
-        [id]: {
-          role: text(info.role) ?? previous?.role,
-          providerID: text(info.providerID) ?? previous?.providerID,
-          modelID: text(info.modelID) ?? previous?.modelID,
-          completed: typeof time?.completed === "number" || previous?.completed === true,
-        },
-      },
+      messages: put(state.messages, id, {
+        role: text(info.role) ?? previous?.role,
+        providerID: text(info.providerID) ?? previous?.providerID,
+        modelID: text(info.modelID) ?? previous?.modelID,
+        completed: typeof time?.completed === "number" || previous?.completed === true,
+      }),
     }
   }
 
@@ -110,13 +120,13 @@ function apply(state: StreamState, frame: { type: string; properties: Record<str
     const id = text(part?.id)
     const messageID = text(part?.messageID)
     if (!part || !id || !messageID) return state
-    const previous = state.parts[id] ?? { messageID, text: "" }
+    const previous = own(state.parts, id) ?? { messageID, text: "" }
     const full = text(part.text)
     // A full `text` snapshot only replaces the accumulated deltas when it extends them.
     const next = full !== undefined && full.length > previous.text.length && full.startsWith(previous.text) ? full : previous.text
     return {
       ...state,
-      parts: { ...state.parts, [id]: { messageID, type: text(part.type) ?? previous.type, text: next } },
+      parts: put(state.parts, id, { messageID, type: text(part.type) ?? previous.type, text: next }),
     }
   }
 
@@ -125,8 +135,8 @@ function apply(state: StreamState, frame: { type: string; properties: Record<str
     const messageID = text(frame.properties.messageID)
     const delta = text(frame.properties.delta)
     if (frame.properties.field !== "text" || !id || !messageID || delta === undefined) return state
-    const previous = state.parts[id] ?? { messageID, text: "" }
-    return { ...state, parts: { ...state.parts, [id]: { ...previous, text: previous.text + delta } } }
+    const previous = own(state.parts, id) ?? { messageID, text: "" }
+    return { ...state, parts: put(state.parts, id, { ...previous, text: previous.text + delta }) }
   }
 
   if (frame.type === "session.idle") return { ...state, status: "idle" }

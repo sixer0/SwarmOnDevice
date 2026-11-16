@@ -77,6 +77,8 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps, patchEnabled: boolean):
     item.type = "checkbox"
     item.checked = officeState !== "off"
     if (officeState === "starting" || officeState === "stopping") item.enabled = false
+    // M7-05a (C65): no toggle handler (index.ts omits it with the v2 sidecar, SD §5.3) greys the checkbox out.
+    if (!deps.officeAddinToggle) item.enabled = false
   }
 
   if (entry.command) {

@@ -94,6 +94,8 @@ export function createPairingStore(options: PairingStoreOptions) {
   const entries = new Map<OfficeHost, PairingEntry>()
   // Writes run one after another so a later state never lands before an earlier one.
   const queue = { tail: Promise.resolve() }
+  // Bumped by clear(): a load() that started earlier discards what it read, so a clear issued during a load wins (F-1).
+  const generation = { value: 0 }
 
   const idle = (entry: PairingEntry) => now().getTime() - Date.parse(entry.lastUsedAt) > PAIRING_IDLE_MS
 
@@ -141,6 +143,7 @@ export function createPairingStore(options: PairingStoreOptions) {
 
     /** Reads the file: missing gives empty; corrupt or unknown version is renamed aside and gives empty (C12 OQ-T5); idle entries are dropped (SC-18). */
     async load() {
+      const started = generation.value
       entries.clear()
       const dirStat = await stat(options.dir).catch((error: NodeJS.ErrnoException) => {
         if (error.code === "ENOENT") return undefined
@@ -152,7 +155,8 @@ export function createPairingStore(options: PairingStoreOptions) {
         if (error.code === "ENOENT") return undefined
         throw error
       })
-      if (text === undefined) return
+      // A clear() ran while this load was reading: the cleared state stands (F-1).
+      if (text === undefined || generation.value !== started) return
       const parsed = parseStore(text)
       if (!parsed) {
         await quarantine("corrupt-or-unknown-version")
@@ -208,6 +212,7 @@ export function createPairingStore(options: PairingStoreOptions) {
 
     /** Disconnect (`pairings-cleared`, SC-16): empties the set and writes an empty store. */
     async clear() {
+      generation.value += 1
       entries.clear()
       await persist()
       options.log("pairings-cleared", {})

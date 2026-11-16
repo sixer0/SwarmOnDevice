@@ -4,11 +4,12 @@
 // SC-36 (literal addresses only) and stop() ending an open stream.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises"
+import https from "node:https"
 import net from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { BridgeHandle, BridgeStartConfig, LeafTls } from "../../src/main/office-bridge/protocol"
-import { createOfficeBridgeFactory, startOfficeBridge } from "../../src/main/office-bridge/server"
+import { createOfficeBridgeFactory, startOfficeBridge, type BridgeListener } from "../../src/main/office-bridge/server"
 import { throwawayLeaf } from "./tls-fixture"
 
 const PORT = 47317
@@ -153,5 +154,37 @@ describe.skipIf(!enabled)("office bridge bind (SWARM_OFFICE_IT=1, port 47317)", 
     expect(["done", "errored"]).toContain(end)
     expect(await probe("127.0.0.1")).toBe("ECONNREFUSED")
     expect(await probe("::1")).toBe("ECONNREFUSED")
+  })
+  test("M2-01a F-M2-2: squat ::1 with a client connected to 127.0.0.1 between the binds -> PORT_IN_USE promptly", async () => {
+    await squat("::1")
+    const clients: net.Socket[] = []
+    let index = 0
+    const factory = createOfficeBridgeFactory({
+      createListener: (options, handler) => {
+        const server = https.createServer(options, handler)
+        if (index++ === 0) return server
+        // The ::1 listener: before it binds (and fails), hold an idle TCP connection open on the IPv4 listener.
+        const listen = server.listen.bind(server)
+        return Object.assign(server, {
+          listen: (opts: net.ListenOptions, callback: () => void) => {
+            const client = net.connect({ host: "127.0.0.1", port: PORT })
+            clients.push(client)
+            client.once("connect", () => listen(opts, callback))
+            client.once("error", () => listen(opts, callback))
+            return server
+          },
+        }) as BridgeListener
+      },
+    })
+    const started = Date.now()
+    const result = await Promise.race([
+      factory(config(), deps),
+      new Promise((resolve) => setTimeout(() => resolve("hung"), 3000)),
+    ])
+    expect(result).toEqual({ ok: false, code: "PORT_IN_USE" })
+    expect(Date.now() - started).toBeLessThan(3000)
+    expect(clients.length).toBe(1)
+    clients.forEach((c) => c.destroy())
+    expect(await probe("127.0.0.1")).toBe("ECONNREFUSED")
   })
 })

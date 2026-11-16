@@ -44,8 +44,8 @@ test.if(!CHILD)("menu cases pass in an isolated child bun process (electron mock
   })
   rmSync(home, { recursive: true, force: true })
   const out = `${child.stdout}\n${child.stderr}`
-  // darwin: 3 menu.ts cases + 2 desktop-menu-actions cases.
-  const expected = process.platform === "darwin" ? 5 : 2
+  // darwin: 4 menu.ts cases (M7-05a added one, 3 -> 4) + 2 desktop-menu-actions cases.
+  const expected = process.platform === "darwin" ? 6 : 2
   expect({ status: child.status, out }).toMatchObject({ status: 0 })
   expect(out).toMatch(new RegExp(`\\b${expected} pass\\b`))
   expect(out).toMatch(/\b0 fail\b/)
@@ -65,7 +65,7 @@ test.if(!CHILD)("ipc.ts run-desktop-menu-action handler object has no Office key
   expect(src).not.toMatch(/officeAddin/i)
 })
 
-function buildMenu(state?: OfficeState) {
+function buildMenu(state?: OfficeState, toggle = true) {
   const calls: string[] = []
   const deps = {
     trigger: (id: string) => calls.push(`trigger:${id}`),
@@ -75,7 +75,7 @@ function buildMenu(state?: OfficeState) {
     updateFromFile: () => calls.push("updateFromFile"),
     undoLastUpdate: () => calls.push("undoLastUpdate"),
     officeAddinState: state ? () => state : undefined,
-    officeAddinToggle: () => calls.push("officeAddinToggle"),
+    officeAddinToggle: toggle ? () => calls.push("officeAddinToggle") : undefined,
     officeAddinDisconnect: () => calls.push("officeAddinDisconnect"),
     officeAddinClearCache: () => calls.push("officeAddinClearCache"),
   }
@@ -138,6 +138,15 @@ describe.if(CHILD && process.platform === "darwin")("menu.ts Office submenu (U-D
       expect({ state, enabled: m.enable?.enabled }).toEqual({ state, enabled: enableEnabled })
       expect({ state, enabled: m.disconnect?.enabled }).toEqual({ state, enabled: disconnectEnabled })
     }
+  })
+
+  test("M7-05a (C65): without a toggle handler (v2 sidecar) Enable is greyed out in every state", () => {
+    for (const state of ["off", "starting", "running", "failed", "stopping"] as const) {
+      const m = buildMenu(state, false)
+      expect({ state, enabled: m.enable?.enabled }).toEqual({ state, enabled: false })
+      expect({ state, checked: m.enable?.checked }).toEqual({ state, checked: state !== "off" })
+    }
+    expect(buildMenu("off", true).enable?.enabled).toBeUndefined()
   })
 
   test("each submenu click reaches only its own injected handler", () => {

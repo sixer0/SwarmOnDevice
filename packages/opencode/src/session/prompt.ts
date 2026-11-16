@@ -262,7 +262,8 @@ const layer = Layer.effect(
         : yield* MessageV2.toModelMessagesEffect(context, mdl)
       const text = yield* llm
         .stream({
-          agent: ag,
+          // M6-01c (C64): an Office session's title call keeps the shipped title prompt, never a configured one.
+          agent: OfficeProfile.isOfficeSession(input.session) ? OfficeProfile.agent(ag) : ag,
           user: firstInfo,
           system: [],
           small: true,
@@ -1281,11 +1282,15 @@ const layer = Layer.effect(
           }
           const maxSteps = agent.steps ?? Infinity
           const isLastStep = step >= maxSteps
-          msgs = yield* SessionReminders.apply({ messages: msgs, agent, session }).pipe(
-            Effect.provideService(RuntimeFlags.Service, flags),
-            Effect.provideService(FSUtil.Service, fsys),
-            Effect.provideService(Session.Service, sessions),
-          )
+          // SD-1 (M6-01b): no plan-mode or build-switch reminders for an Office add-in session; they can carry the
+          // plan file path, which holds the user's home folder.
+          msgs = OfficeProfile.isOfficeSession(session)
+            ? msgs
+            : yield* SessionReminders.apply({ messages: msgs, agent, session }).pipe(
+                Effect.provideService(RuntimeFlags.Service, flags),
+                Effect.provideService(FSUtil.Service, fsys),
+                Effect.provideService(Session.Service, sessions),
+              )
           noteRepeatedCalls(msgs)
 
           const msg: SessionV1.Assistant = {
@@ -1411,7 +1416,8 @@ const layer = Layer.effect(
             if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
             const result = yield* handle.process({
               user: lastUser,
-              agent,
+              // SD-1 (M6-01b): an Office session never gets a configured agent prompt, only the built-in one.
+              agent: OfficeProfile.isOfficeSession(session) ? OfficeProfile.agent(agent) : agent,
               permission: session.permission,
               sessionID,
               parentSessionID: session.parentID,

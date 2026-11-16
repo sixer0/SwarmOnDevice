@@ -8,6 +8,9 @@
  *  The literals equal the bridge's metadata values (REG §7.1); `packages/opencode` does not import
  *  `@swarm/office-addin` (AGENTS.md dependency direction), and a test pins the two equal. */
 
+import PROMPT_COMPACTION from "../agent/prompt/compaction.txt"
+import PROMPT_TITLE from "../agent/prompt/title.txt"
+
 export const OFFICE_ORIGIN_METADATA_KEY = "swarm.origin"
 export const OFFICE_ORIGIN_VALUE = "office-addin"
 
@@ -27,6 +30,19 @@ export function dateLine() {
  *  skills, env, instructions, remembered, mcpInstructions, delegation. */
 export function prefix() {
   return [undefined, [dateLine()], [] as string[], undefined, undefined, [] as string[]] as const
+}
+
+/** The prompts the hidden agents ship with (`agent/agent.ts`), which an Office session's compaction and title calls keep
+ *  even when the person's config overrides them (M6-01c, C64). */
+const SHIPPED_PROMPTS: Readonly<Record<string, string>> = { compaction: PROMPT_COMPACTION, title: PROMPT_TITLE }
+
+/** M6-01b/M6-01c (CP-M6 F-M6-2, C64): the agent an Office session's model call uses, with the shipped prompt instead
+ *  of a configured one. For `compaction` and `title` that is their own built-in prompt; every other agent gets none,
+ *  so the request takes the built-in provider prompt (`llm/request.ts`), which is what the shipped default agent
+ *  `build` gets (no shipped visible primary agent has a prompt of its own). So only a person's config is removed
+ *  (`agent.<name>.prompt`, `agent/agent.ts:388`, or a custom `default_agent`). Name, options and permissions stay. */
+export function agent<T extends { readonly name: string; readonly prompt?: string }>(info: T): T {
+  return { ...info, prompt: SHIPPED_PROMPTS[info.name] }
 }
 
 export * as OfficeProfile from "./office-profile"

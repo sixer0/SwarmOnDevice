@@ -26,7 +26,8 @@ const setup = async () => {
   const root = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), "pairing-"))
   roots.push(root)
   const dir = join(root, "office-addin")
-  const clock = { at: START }
+  // `at` is the wall clock (store timestamps, expiresAt ISO); `mono` is the monotonic clock (expiry, rate window).
+  const clock = { at: START, mono: 0 }
   const store = createPairingStore({ dir, now: () => new Date(clock.at), log: () => {} })
   await store.load()
   const events: PairRequest[] = []
@@ -44,8 +45,9 @@ const setup = async () => {
     },
     log: (level, _source, message, context) => logs.push({ level, message, context }),
     now: () => clock.at,
+    monotonic: () => clock.mono,
     setTimer: (run, ms) => {
-      const timer = { at: clock.at + ms, run, cancelled: false }
+      const timer = { at: clock.mono + ms, run, cancelled: false }
       timers.push(timer)
       return () => {
         timer.cancelled = true
@@ -55,7 +57,8 @@ const setup = async () => {
   /** Advances the clock and fires due timers. */
   const advance = async (ms: number) => {
     clock.at += ms
-    timers.filter((timer) => !timer.cancelled && timer.at <= clock.at).forEach((timer) => {
+    clock.mono += ms
+    timers.filter((timer) => !timer.cancelled && timer.at <= clock.mono).forEach((timer) => {
       timer.cancelled = true
       timer.run()
     })
@@ -149,8 +152,8 @@ describe("U-PS-07: request lifecycle", () => {
     const ctx = await setup()
     const body = body202(await ctx.pairing.request(word))
     await ctx.pairing.decide({ requestId: body.requestId, allow: true })
-    ctx.clock.at += OFFICE_PAIR_REQUEST_TTL_MS
-    const due = ctx.timers.filter((timer) => !timer.cancelled && timer.at <= ctx.clock.at)
+    ctx.clock.mono += OFFICE_PAIR_REQUEST_TTL_MS
+    const due = ctx.timers.filter((timer) => !timer.cancelled && timer.at <= ctx.clock.mono)
     expect(due.length).toBe(1)
     due[0].run()
     await ctx.pairing.sweep()
@@ -211,10 +214,10 @@ describe("U-PS-08: limits", () => {
     }
     expect(await ctx.pairing.request(word)).toEqual({ status: 429, body: { error: "PAIR_RATE_LIMITED" } })
     expect(ctx.events.length).toBe(5)
-    // First accepted request was at START; at START + 60 s it leaves the window.
-    ctx.clock.at = START + 59_999
+    // First accepted request was at monotonic 0; at 60 s it leaves the window.
+    ctx.clock.mono = 59_999
     expect((await ctx.pairing.request(word)).status).toBe(429)
-    ctx.clock.at = START + 60_000
+    ctx.clock.mono = 60_000
     expect((await ctx.pairing.request(word)).status).toBe(202)
   })
 
@@ -242,6 +245,46 @@ describe("/pair/verify (C35: store.verify only here)", () => {
       status: 401,
       body: { error: "TOKEN_INVALID" },
     })
+  })
+})
+
+describe("M4-02a: monotonic clock (CP-M4 F-2)", () => {
+  const HOUR = 60 * 60 * 1000
+
+  test("wall clock set back 1 h: a pending request still expires at 120 s monotonic", async () => {
+    const ctx = await setup()
+    const body = body202(await ctx.pairing.request(word))
+    ctx.clock.at -= HOUR
+    await ctx.advance(OFFICE_PAIR_REQUEST_TTL_MS - 1)
+    expect(await status(ctx, body.requestId)).toEqual({ status: 200, body: { state: "pending" } })
+    await ctx.advance(1)
+    expect(await status(ctx, body.requestId)).toEqual({ status: 200, body: { state: "expired" } })
+    // Pairing is not blocked: the expired request no longer counts as pending.
+    expect((await ctx.pairing.request(word)).status).toBe(202)
+  })
+
+  test("wall clock set back 1 h: the 5/60 s window still reopens after 60 s monotonic", async () => {
+    const ctx = await setup()
+    for (const _ of [1, 2, 3, 4, 5]) {
+      const body = body202(await ctx.pairing.request(word))
+      await ctx.pairing.decide({ requestId: body.requestId, allow: false })
+    }
+    ctx.clock.at -= HOUR
+    expect((await ctx.pairing.request(word)).status).toBe(429)
+    ctx.clock.mono = 60_000
+    expect((await ctx.pairing.request(word)).status).toBe(202)
+  })
+
+  test("wall clock set forward 1 h does not expire a pending request early; expiresAt follows the wall clock", async () => {
+    const ctx = await setup()
+    const first = body202(await ctx.pairing.request(word))
+    expect(first.expiresAt).toBe(new Date(START + OFFICE_PAIR_REQUEST_TTL_MS).toISOString())
+    ctx.clock.at += HOUR
+    await ctx.pairing.sweep()
+    expect(await status(ctx, first.requestId)).toEqual({ status: 200, body: { state: "pending" } })
+    await ctx.pairing.decide({ requestId: first.requestId, allow: true })
+    const read = await status(ctx, first.requestId)
+    expect(read.status === 200 && read.body.state).toBe("approved")
   })
 })
 

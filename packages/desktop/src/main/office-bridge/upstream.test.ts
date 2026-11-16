@@ -497,3 +497,38 @@ describe("P8 opener for the SSE relay (M5-03 contract)", () => {
     expect(sidecar.calls).toHaveLength(0)
   })
 })
+
+describe("M5-02a: every upstream 5xx becomes the bridge's own 503 (CP-M5 M5-F2)", () => {
+  const LEAK = '{"name":"UnknownError","data":{"message":"stack at /Users/someone/secret.ts:12"}}'
+  const routes = ADMISSIONS.map((admission) => [admission.route, admission] as const)
+  const statuses = [500, 502, 503, 504, 599]
+
+  test.each(routes.flatMap(([route, admission]) => statuses.map((status) => [route, status, admission] as const)))(
+    "%s forward step answering %i gives 503 SWARM_UNAVAILABLE with the bridge body",
+    async (route, status, admission) => {
+      const session = ["P4", "P5", "P6", "P7"].includes(route)
+      // Session routes: the ownership read succeeds, the forwarded call fails. P4 has no forward step, so its only
+      // upstream call (the ownership read) is the one that fails.
+      const sidecar = stub((call, index) =>
+        session && route !== "P4" && index === 0
+          ? ok(call)
+          : new Response(LEAK, { status, headers: { ...hostile, "content-type": "application/json" } }),
+      )
+      const result = await upstream(sidecar.fetch).forward(admission)
+      expect(result.status).toBe(503)
+      expect(result.kind).toBe("buffered")
+      expect(text(result)).toBe('{"error":"SWARM_UNAVAILABLE"}')
+      expect(text(result)).not.toContain("secret")
+      expect(result.headers["content-type"]).toBe("application/json; charset=utf-8")
+      expect(result.headers["content-length"]).toBe(String('{"error":"SWARM_UNAVAILABLE"}'.length))
+      expect(Object.keys(result.headers).some((name) => name.startsWith("access-control-"))).toBe(false)
+      expect(Object.keys(result.headers)).not.toContain("www-authenticate")
+      expect(sidecar.calls).toHaveLength(session && route !== "P4" ? 2 : 1)
+    },
+  )
+
+  test("4xx other than 401 still passes through (not a sidecar failure)", async () => {
+    const result = await upstream(stub(() => json({ name: "BadRequest" }, { status: 400 })).fetch).forward(ADMISSIONS[0])
+    expect(result.status).toBe(400)
+  })
+})

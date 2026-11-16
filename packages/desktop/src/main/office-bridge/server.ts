@@ -10,9 +10,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import https from "node:https"
 import type { Socket } from "node:net"
-import { chmod, lstat, mkdir } from "node:fs/promises"
+import { chmod, lstat, mkdir, readdir, realpath } from "node:fs/promises"
 import { join } from "node:path"
 import tls from "node:tls"
+import { BRIDGE_SECURITY_HEADERS } from "./static"
 import {
   isBridgePort,
   type BridgeCoreDeps,
@@ -56,7 +57,10 @@ export function bridgeExpectations(port: number): BridgeExpectations {
 export type BridgeDataPaths = {
   /** `<userData>/office-addin/`. */
   root: string
-  /** `<userData>/office-addin/workspace/`, the Office session directory (register §7). Created empty by the bridge. */
+  /**
+   * `<userData>/office-addin/workspace/`, the Office session directory (register §7). Created empty by the bridge. In the
+   * paths `prepareBridgeDataDir` returns (and routes receive) this is the realpath, the form the sidecar stores (C54).
+   */
   workspace: string
   /** `<userData>/office-addin/pairings.json` (owned by the pairing store, row M4-01). */
   pairings: string
@@ -69,11 +73,25 @@ export function bridgeDataPaths(userDataDir: string): BridgeDataPaths {
 
 /** Directories checked at start besides the root. `ca/` and `tls/` are written by main (register §6.1). */
 const CHECKED_SUBDIRS = ["ca", "tls", OFFICE_BRIDGE_WORKSPACE_DIR]
-/** Secret files that must be 0600 or narrower when present (SC-12): leaf key, encrypted CA key, pairings. */
+/** Secret files that must be 0600 or narrower and singly linked when present (SC-12): leaf key, encrypted CA key, pairings. */
 const CHECKED_SECRET_FILES = ["pairings.json", join("tls", "localhost.key.pem"), join("ca", "swarm-office-ca.key.enc")]
+/** Public files main writes 0644 (register §6.1): strict like the secrets, except group/other may read. */
+const PUBLIC_FILES = [join("ca", "swarm-office-ca.cert.pem"), join("ca", "fingerprint.json"), join("tls", "localhost.cert.pem")]
+/**
+ * Directories whose unknown entries are reported (C48). `workspace/` is excluded: the sidecar writes session files there
+ * with its own umask, and none of them is a bridge secret.
+ */
+const SCANNED_DIRS = ["", "ca", "tls"]
+/** Finder metadata; never a reason to warn (C48). */
+const IGNORED_NAMES = [".DS_Store"]
 
 export type DataDirResult =
-  | { ok: true; paths: BridgeDataPaths }
+  | {
+      ok: true
+      paths: BridgeDataPaths
+      /** Unknown entries (relative names, never a path) with group/other bits or another owner. A warning, not a refusal (C48). */
+      strays: string[]
+    }
   | { ok: false; code: "DATA_DIR_UNSAFE"; entry: string; mode: number }
 
 async function statOrUndefined(path: string) {
@@ -94,10 +112,16 @@ async function makeDir(path: string) {
 }
 
 /**
- * Check `office-addin/` before binding. Every existing directory must be a real directory (no symlink), owned by this
- * user, with no group/other bits; every existing secret file a regular file with no group/other bits. A wider mode is
- * refused, never repaired: main writes these paths (register §6.1 owner rule), so a wide mode means something else did.
+ * Check `office-addin/` before binding. Strict (refuse with DATA_DIR_UNSAFE, never repair) for the directories
+ * themselves (real directory, no symlink, this owner, no group/other bits), the known secret files (regular file, singly
+ * linked so the key is not exposed under another path, this owner, no group/other bits) and the three known public files
+ * (same, except group/other may read). Main writes these paths (register §6.1 owner rule), so a wide mode means
+ * something else did. Unknown entries in `office-addin/`, `ca/`, `tls/` that are group/other accessible or owned by
+ * someone else are returned as `strays` for one warning and do not stop the bridge (ruling C48); `.DS_Store` is ignored.
  * Missing `office-addin/` and `workspace/` are created with 0700.
+ *
+ * Residual risk (F-M2-3, accepted): macOS extended ACLs are not inspected. Adding an ACL entry needs the owner or root,
+ * which is outside the threat model (ADV-3 cannot write a 0700 tree).
  */
 export async function prepareBridgeDataDir(userDataDir: string): Promise<DataDirResult> {
   const paths = bridgeDataPaths(userDataDir)
@@ -110,16 +134,35 @@ export async function prepareBridgeDataDir(userDataDir: string): Promise<DataDir
     if (!stat.isDirectory() || (mode & 0o077) !== 0 || !ownedByUs(stat.uid))
       return { ok: false, code: "DATA_DIR_UNSAFE", entry: entry || ".", mode }
   }
-  for (const entry of CHECKED_SECRET_FILES) {
+  for (const entry of [...CHECKED_SECRET_FILES, ...PUBLIC_FILES]) {
     const stat = await statOrUndefined(join(paths.root, entry))
     if (!stat) continue
     const mode = stat.mode & 0o777
-    if (!stat.isFile() || (mode & 0o077) !== 0 || !ownedByUs(stat.uid))
+    const allowed = PUBLIC_FILES.includes(entry) ? 0o044 : 0
+    if (!stat.isFile() || stat.nlink !== 1 || (mode & 0o077 & ~allowed) !== 0 || !ownedByUs(stat.uid))
       return { ok: false, code: "DATA_DIR_UNSAFE", entry, mode }
   }
 
+  const known = [...CHECKED_SUBDIRS, ...CHECKED_SECRET_FILES, ...PUBLIC_FILES]
+  const strays: string[] = []
+  for (const dir of SCANNED_DIRS) {
+    const names = await readdir(join(paths.root, dir)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return []
+      throw error
+    })
+    for (const name of names) {
+      const entry = join(dir, name)
+      if (IGNORED_NAMES.includes(name) || known.includes(entry)) continue
+      const stat = await statOrUndefined(join(paths.root, entry))
+      if (stat && ((stat.mode & 0o077) !== 0 || !ownedByUs(stat.uid))) strays.push(entry)
+    }
+  }
+
   if (!(await statOrUndefined(paths.workspace))) await makeDir(paths.workspace)
-  return { ok: true, paths }
+  // C54: the sidecar stores a session's `directory` as its realpath, so the forced `?directory=` and the ownership
+  // compare must use the same resolved form, or a symlink anywhere in userData (macOS /var -> /private/var) makes every
+  // Office session look foreign. The workspace itself was lstat-checked above (no symlink); only ancestors resolve here.
+  return { ok: true, paths: { ...paths, workspace: await realpath(paths.workspace) }, strays }
 }
 
 // ── TLS ──
@@ -177,11 +220,11 @@ export type OfficeBridgeFactoryOptions = {
 
 function sendError(response: ServerResponse, status: number, code: string) {
   const body = JSON.stringify({ error: code })
+  // SC-07: the same header set as static/health responses (F-M2-1).
   response.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": Buffer.byteLength(body),
-    "cache-control": "no-store",
-    "x-content-type-options": "nosniff",
+    ...BRIDGE_SECURITY_HEADERS,
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Length": String(Buffer.byteLength(body)),
   })
   response.end(body)
 }
@@ -235,6 +278,8 @@ export function createOfficeBridgeFactory(options: OfficeBridgeFactoryOptions = 
       })
       return { ok: false, code: "DATA_DIR_UNSAFE" }
     }
+    if (dataDir.strays.length > 0)
+      log("warn", "office-bridge.start", "unexpected entries in data directory", { entries: dataDir.strays.join(",") })
 
     const leaf = { cert: config.cert, key: config.key }
     if (!leafUsable(leaf)) {
@@ -278,8 +323,11 @@ export function createOfficeBridgeFactory(options: OfficeBridgeFactoryOptions = 
       const error = await listen(listener, host, config.port)
       if (error) {
         log("error", "office-bridge.start", "listen failed", { host, port: config.port, code: error.code ?? "unknown" })
-        await Promise.all(bound.map(close))
+        // Same order as stop() (F-M2-2): close() only stops accepting and resolves after the last connection ends, so a
+        // client that connected between the two binds would hold PORT_IN_USE back until it leaves.
+        const closed = bound.map(close)
         for (const socket of sockets) socket.destroy()
+        await Promise.all(closed)
         await routes.stop?.()
         return { ok: false, code: "PORT_IN_USE" }
       }
@@ -299,17 +347,20 @@ export function createOfficeBridgeFactory(options: OfficeBridgeFactoryOptions = 
         // Validate first so a bad leaf never reaches either listener (both swap or neither does).
         const context = bridgeTlsOptions(next)
         tls.createSecureContext(context)
-        for (const { host, listener } of listeners) {
-          if (typeof listener.setSecureContext !== "function") {
-            log("warn", "office-bridge.tls", "setSecureContext unavailable in this runtime", {
-              host,
-              code: "TLS_SWAP_UNSUPPORTED",
-            })
-            continue
+        const swapped = listeners.filter(({ host, listener }) => {
+          if (typeof listener.setSecureContext === "function") {
+            listener.setSecureContext(context)
+            return true
           }
-          listener.setSecureContext(context)
-        }
-        log("info", "office-bridge.tls", "leaf swapped", { listeners: listeners.length })
+          log("warn", "office-bridge.tls", "setSecureContext unavailable in this runtime", {
+            host,
+            code: "TLS_SWAP_UNSUPPORTED",
+          })
+          return false
+        }).length
+        // F-M2-4: report what really happened, never a success the listeners did not see.
+        if (swapped === 0) return log("error", "office-bridge.tls", "leaf not swapped", { code: "TLS_SWAP_UNSUPPORTED" })
+        log("info", "office-bridge.tls", "leaf swapped", { listeners: swapped, of: listeners.length })
       },
       pairingsCleared() {
         routes.pairingsCleared?.()

@@ -9,6 +9,7 @@
 // Secrets: the plaintext token lives only in the approved record until the first status read (then dropped), and in
 // the 202/200 body. It never reaches a log line; neither do the request id or the code (SC-19, SC-33).
 import { randomBytes, randomInt } from "node:crypto"
+import { performance } from "node:perf_hooks"
 import {
   OFFICE_ERROR_FIELD_NOT_ALLOWED,
   OFFICE_ERROR_PAIR_RATE_LIMITED,
@@ -60,8 +61,13 @@ export type PairingOptions = {
   /** Main -> bridge `pair-decision`. Optional: a caller may feed `decide()` directly instead. */
   pairDecisions?: PairDecisionSource
   log?: BridgeLogSink
-  /** Injected clock (ms since epoch); defaults to `Date.now`. */
+  /** Wall clock (ms since epoch), used ONLY for the displayed `expiresAt` ISO string; defaults to `Date.now`. */
   now?: () => number
+  /**
+   * Monotonic clock (ms, arbitrary origin) for every expiry and rate-limit decision; defaults to `performance.now`.
+   * A wall-clock change (set back or forward) never moves a deadline or the rate window (CP-M4 F-2, M4-02a).
+   */
+  monotonic?: () => number
   /** Injected scheduler for the expiry sweep; defaults to an unref'd `setTimeout`. */
   setTimer?: (callback: () => void, ms: number) => PairTimerCancel
 }
@@ -69,7 +75,10 @@ export type PairingOptions = {
 type PairRecord = {
   requestId: string
   host: OfficeHost
-  expiresAt: number
+  /** Monotonic deadline (`monotonic()` at request + TTL). Every expiry check uses this. */
+  deadline: number
+  /** Wall-clock ISO expiry, for the 202 body only. */
+  expiresAt: string
   /** `issuing`: allow received, the store write is in flight; status reads still answer `pending`. */
   state: PairState | "issuing"
   /** Plaintext token, present only while `approved` and unread. */
@@ -107,6 +116,7 @@ const error = (status: 400 | 401 | 429, code: string): PairingResponse => ({ sta
 
 export function createPairing(options: PairingOptions) {
   const now = options.now ?? Date.now
+  const mono = options.monotonic ?? (() => performance.now())
   const setTimer = options.setTimer ?? defaultTimer
   const log = options.log ?? noLog
   const records = new Map<string, PairRecord>()
@@ -133,14 +143,14 @@ export function createPairing(options: PairingOptions) {
 
   /** Expires due records (an unread approved token is revoked from the store) and drops old finished records. */
   const sweep = async () => {
-    const at = now()
+    const at = mono()
     const revokes = [...records.values()].flatMap((record) => {
-      if (at >= record.expiresAt + PAIR_RECORD_RETAIN_MS) {
+      if (at >= record.deadline + PAIR_RECORD_RETAIN_MS) {
         records.delete(record.requestId)
         timers.get(record.requestId)?.()
         timers.delete(record.requestId)
       }
-      if (at < record.expiresAt) return []
+      if (at < record.deadline) return []
       if (record.state === "pending") {
         record.state = "expired"
         log("info", SOURCE, "pairing request expired", { host: record.host })
@@ -164,7 +174,7 @@ export function createPairing(options: PairingOptions) {
           timers.delete(record.requestId)
           void sweep()
         },
-        Math.max(0, record.expiresAt - now()),
+        Math.max(0, record.deadline - mono()),
       ),
     )
   }
@@ -196,7 +206,7 @@ export function createPairing(options: PairingOptions) {
     )
     // put() updates memory before the disk write, so a failed write or a request that expired (or a Disconnect /
     // stop) meanwhile must not leave a valid hash with no one to deliver its token to.
-    if (!stored || record.state !== "issuing" || now() >= record.expiresAt || state.stopped) {
+    if (!stored || record.state !== "issuing" || mono() >= record.deadline || state.stopped) {
       if (record.state === "issuing") record.state = "expired"
       await revoke(token, record.host)
       return
@@ -215,7 +225,7 @@ export function createPairing(options: PairingOptions) {
     async request(admission: PairRequestAdmission): Promise<PairingResponse> {
       if (!isOfficeHost(admission.host)) return error(400, OFFICE_ERROR_FIELD_NOT_ALLOWED)
       await sweep()
-      const at = now()
+      const at = mono()
       const pending = [...records.values()].some((record) => record.state === "pending" || record.state === "issuing")
       while (accepted.length > 0 && at - accepted[0] >= OFFICE_PAIR_RATE_WINDOW_MS) accepted.shift()
       if (pending || accepted.length >= OFFICE_PAIR_RATE_LIMIT || state.stopped) {
@@ -226,7 +236,8 @@ export function createPairing(options: PairingOptions) {
       const record: PairRecord = {
         requestId: generatePairRequestId(),
         host: admission.host,
-        expiresAt: at + OFFICE_PAIR_REQUEST_TTL_MS,
+        deadline: at + OFFICE_PAIR_REQUEST_TTL_MS,
+        expiresAt: new Date(now() + OFFICE_PAIR_REQUEST_TTL_MS).toISOString(),
         state: "pending",
       }
       records.set(record.requestId, record)
@@ -236,7 +247,7 @@ export function createPairing(options: PairingOptions) {
       options.pairRequests({ requestId: record.requestId, host: record.host, code })
       return {
         status: 202,
-        body: { requestId: record.requestId, code, expiresAt: new Date(record.expiresAt).toISOString() },
+        body: { requestId: record.requestId, code, expiresAt: record.expiresAt },
       }
     },
 

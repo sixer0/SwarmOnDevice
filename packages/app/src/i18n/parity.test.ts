@@ -165,9 +165,13 @@ const pluralCategories = new Map(
 //   - seventeen more for the Office Add-in native menu, three-code pairing dialog, install notice and Finder-guided
 //     fallback, disable dialog with its certificate checkbox, and errors (`desktop.menu.officeAddin*`,
 //     `desktop.officeAddin.*`), decision C13 (OQ-1, EN and ID only) of docs/2026-11-16_swarm_office_addin, register
-//     rev 4 §8.3, row 45 (M1-04): +17, ending at 366.
+//     rev 4 §8.3, row 45 (M1-04): +17, ending at 366;
+//     one more for the Finder-guided uninstall fallback (`desktop.officeAddin.error.uninstallFailed`), decision C49 of the
+//     same task, row M1-04b (EN and ID only): +1, ending at 367;
+//     two more for the Office-not-installed and certificate-removal errors (`desktop.officeAddin.error.notInstalled`,
+//     `desktop.officeAddin.error.certRemovalFailed`), decision C65 of the same task, row M1-04c (EN and ID only): +2, ending at 369.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// three-hundred-and-sixty-seventh entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// three-hundred-and-seventieth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -535,6 +539,9 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "desktop.officeAddin.disable.confirm",
   "desktop.officeAddin.disable.removeCertificate",
   "desktop.officeAddin.disable.confirmButton",
+  "desktop.officeAddin.error.uninstallFailed",
+  "desktop.officeAddin.error.notInstalled",
+  "desktop.officeAddin.error.certRemovalFailed",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.

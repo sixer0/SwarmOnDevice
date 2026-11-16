@@ -48,7 +48,7 @@ export type SseDownstream = {
 
 export type SseRelayResult =
   /** The stream ran and has ended; `by` names the side that closed first. */
-  | { kind: "ended"; by: "upstream" | "client" | "stop" | "upstream-error" }
+  | { kind: "ended"; by: "upstream" | "client" | "stop" | "revoked" | "upstream-error" }
   /** Refused before any byte was streamed; a JSON error body was sent. */
   | { kind: "rejected"; status: number; code: string }
 
@@ -77,7 +77,8 @@ export function createSseRelay(options: SseRelayOptions = {}) {
   const limit = options.limit ?? OFFICE_STREAM_LIMIT
   const log = options.log ?? (() => {})
   const counts = new Map<string, number>()
-  const open = new Set<() => void>()
+  /** Open streams: the teardown of each, keyed to its token key (lowercase hex SHA-256, as in `keyOf`). */
+  const open = new Map<(by: "stop" | "revoked") => void, string>()
   let stopped = false
 
   const keyOf = (token: string) => createHash("sha256").update(token).digest("hex")
@@ -104,13 +105,13 @@ export function createSseRelay(options: SseRelayOptions = {}) {
     counts.set(key, (counts.get(key) ?? 0) + 1)
 
     const abort = new AbortController()
-    let closedBy: "client" | "stop" | undefined
+    let closedBy: "client" | "stop" | "revoked" | undefined
     const onClientClose = () => {
       closedBy ??= "client"
       abort.abort()
     }
-    const stopThis = () => {
-      closedBy ??= "stop"
+    const stopThis = (by: "stop" | "revoked") => {
+      closedBy ??= by
       abort.abort()
       response.destroy()
     }
@@ -118,7 +119,7 @@ export function createSseRelay(options: SseRelayOptions = {}) {
     const socket = response.socket
     response.once("close", onClientClose)
     socket?.once("close", onClientClose)
-    open.add(stopThis)
+    open.set(stopThis, key)
 
     // Timeouts 0 on the downstream leg (spec §9.5); the 10 s upstream heartbeat keeps it alive.
     response.setTimeout(0)
@@ -191,7 +192,7 @@ export function createSseRelay(options: SseRelayOptions = {}) {
     // Upstream ended normally: end the client. Upstream failed: destroy the client so the pane reconnects.
     if (pumped === "upstream" && !response.writableEnded) response.end()
     if (pumped === "upstream-error" && !response.destroyed) response.destroy()
-    if (pumped !== "client" && pumped !== "stop") abort.abort()
+    if (pumped !== "client" && pumped !== "stop" && pumped !== "revoked") abort.abort()
     return finish({ kind: "ended", by: pumped })
   }
 
@@ -204,7 +205,23 @@ export function createSseRelay(options: SseRelayOptions = {}) {
     /** End every open stream and refuse new ones. Called from the routes' `stop` hook. */
     stop() {
       stopped = true
-      for (const stopThis of [...open]) stopThis()
+      for (const stopThis of [...open.keys()]) stopThis("stop")
+    },
+    /**
+     * Disconnect (M5-F1): end every open stream at once (downstream destroyed, upstream aborted) but keep accepting
+     * new ones; a new stream still needs a token admit() accepts.
+     */
+    closeAll() {
+      for (const stopThis of [...open.keys()]) stopThis("revoked")
+    },
+    /**
+     * Revocation sweep (M5-F1): end the streams whose token key matches. The key is the lowercase hex SHA-256 of the
+     * token, the same digest the pairing store keeps as `sha256:<hex>`; the relay never holds the raw token.
+     */
+    closeWhere(predicate: (tokenKey: string) => boolean) {
+      const matched = [...open.entries()].filter((entry) => predicate(entry[1]))
+      for (const entry of matched) entry[0]("revoked")
+      return matched.length
     },
   }
 }

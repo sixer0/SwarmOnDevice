@@ -133,7 +133,7 @@ export const dict = {
   "desktop.menu.officeAddin.clearCache": "Bersihkan tembolok add-in Office...",
   "desktop.officeAddin.pair.title": "Hubungkan add-in Office?",
   "desktop.officeAddin.pair.message":
-    "{{host}} ingin terhubung ke Swarm. Klik kode yang tampil di panel {{host}}. Klik Tolak jika bukan Anda yang memulai permintaan ini.",
+    "{{host}} ingin terhubung ke Swarm. Lanjutkan hanya jika Anda baru saja mengeklik Hubungkan di panel {{host}}, lalu klik kode yang tampil di sana. Jika tidak, klik Tolak.",
   "desktop.officeAddin.pair.deny": "Tolak",
   "desktop.officeAddin.installed":
     "Add-in Office sudah aktif. Tutup lalu buka kembali Word dan Excel, kemudian buka add-in dari Home > Add-ins > Developer Add-ins.",
@@ -152,6 +152,12 @@ export const dict = {
     "Nonaktifkan add-in Office? Word dan Excel tidak akan memuatnya lagi, dan semua panel yang terhubung akan diputuskan.",
   "desktop.officeAddin.disable.removeCertificate": "Hapus juga sertifikat Swarm dari rantai kunci",
   "desktop.officeAddin.disable.confirmButton": "Nonaktifkan",
+  "desktop.officeAddin.error.uninstallFailed":
+    "macOS tidak mengizinkan Swarm menghapus add-in dari {{path}}. Finder kini menampilkan foldernya: pindahkan swarm-office-addin.xml ke Tempat Sampah, lalu tutup dan buka kembali Word dan Excel.",
+  "desktop.officeAddin.error.notInstalled":
+    "Word dan Excel tidak ditemukan di Mac ini. Buka Word atau Excel sekali, lalu aktifkan kembali add-in Office. Folder yang diharapkan: {{path}}",
+  "desktop.officeAddin.error.certRemovalFailed":
+    "Swarm tidak dapat menghapus sertifikatnya dari rantai kunci. Swarm akan mencoba lagi saat Anda mengaktifkan add-in Office berikutnya.",
 
   "desktop.server.local": "Server lokal",
 

@@ -14,7 +14,7 @@
 // (Electron `safeStorage.encryptString` in production) as `ca/swarm-office-ca.key.enc`; without it (SC-22 fallback,
 // `safeStorage.isEncryptionAvailable() === false`) no CA key file is written at all.
 import { X509Certificate, createHash } from "node:crypto"
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises"
+import { chmod, lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { BitString, Integer, OctetString, Utf8String } from "asn1js"
@@ -91,6 +91,12 @@ export type CertPaths = {
   leafKey: string
   /** Leaf certificate PEM, mode 0644. */
   leafCert: string
+  /** `ca/previous/`, mode 0700: the old CA kept during a rotation until it is removed from the keychain (F-M3-1). */
+  previousDir: string
+  /** The old CA certificate PEM, mode 0644 (a certificate only, never a key). */
+  previousCert: string
+  /** The old CA SHA-1 and SHA-256, mode 0644: what `delete-certificate -Z` removes. */
+  previousFingerprint: string
 }
 
 export function certPaths(userDataDir: string): CertPaths {
@@ -106,6 +112,9 @@ export function certPaths(userDataDir: string): CertPaths {
     fingerprint: join(caDir, "fingerprint.json"),
     leafKey: join(tlsDir, "localhost.key.pem"),
     leafCert: join(tlsDir, "localhost.cert.pem"),
+    previousDir: join(caDir, "previous"),
+    previousCert: join(caDir, "previous", "swarm-office-ca.cert.pem"),
+    previousFingerprint: join(caDir, "previous", "fingerprint.json"),
   }
 }
 
@@ -305,12 +314,42 @@ async function writeAtomic(path: string, data: string | Uint8Array, mode: number
   await rename(temp, path)
 }
 
-/** Create `office-addin/`, `ca/` and `tls/` with mode 0700, tightening any that already exist. */
-export async function ensureCertDirs(paths: CertPaths) {
-  for (const dir of [paths.root, paths.caDir, paths.tlsDir]) {
-    await mkdir(dir, { recursive: true, mode: DIR_MODE })
-    await chmod(dir, DIR_MODE)
+/**
+ * Thrown when a certificate directory exists but is a symlink or not a directory (F-M3-4; same rule as the bridge's
+ * `prepareBridgeDataDir`, register §7.6 DATA_DIR_UNSAFE). Main never writes through such a path.
+ */
+export class CertDirUnsafeError extends Error {
+  readonly code = "DATA_DIR_UNSAFE"
+  constructor(readonly entry: string) {
+    super("certificate directory is a symlink or not a directory")
+    this.name = "CertDirUnsafeError"
   }
+}
+
+async function ensureDir(dir: string, entry: string) {
+  // lstat, not stat: a pre-placed symlink must be refused, not followed by mkdir/chmod.
+  const existing = await lstat(dir).catch(() => undefined)
+  if (existing && (existing.isSymbolicLink() || !existing.isDirectory())) throw new CertDirUnsafeError(entry)
+  if (!existing) await mkdir(dir, { recursive: true, mode: DIR_MODE })
+  await chmod(dir, DIR_MODE)
+}
+
+/**
+ * Create `office-addin/`, `ca/` and `tls/` with mode 0700, tightening any that already exist. Each level is checked
+ * with `lstat` first and a symlink or non-directory throws `CertDirUnsafeError` before anything is created or written.
+ */
+export async function ensureCertDirs(paths: CertPaths) {
+  await ensureDir(paths.root, ".")
+  await ensureDir(paths.caDir, "ca")
+  await ensureDir(paths.tlsDir, "tls")
+}
+
+/** Write the old CA certificate and its fingerprint to `ca/previous/` (rotation step 1, F-M3-1). */
+export async function writePreviousCa(paths: CertPaths, caPem: string, print: CaFingerprint) {
+  await ensureCertDirs(paths)
+  await ensureDir(paths.previousDir, "ca/previous")
+  await writeAtomic(paths.previousCert, caPem, PUBLIC_MODE)
+  await writeAtomic(paths.previousFingerprint, JSON.stringify(print, null, 2) + "\n", PUBLIC_MODE)
 }
 
 /**
@@ -338,7 +377,12 @@ export async function writeLeaf(paths: CertPaths, leaf: LeafTls) {
 }
 
 export async function readFingerprint(paths: CertPaths): Promise<CaFingerprint | undefined> {
-  const value: unknown = await readFile(paths.fingerprint, "utf8")
+  return readFingerprintFile(paths.fingerprint)
+}
+
+/** Read and validate a `fingerprint.json` (the current one or `ca/previous/`). */
+export async function readFingerprintFile(path: string): Promise<CaFingerprint | undefined> {
+  const value: unknown = await readFile(path, "utf8")
     .then((text) => JSON.parse(text))
     .catch(() => undefined)
   if (typeof value !== "object" || value === null) return undefined

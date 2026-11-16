@@ -21,7 +21,7 @@ function fakeRunner(codes: Record<string, number | null>) {
     calls.push({ file, args, options })
     const name = args[0] ?? ""
     const code = name in codes ? (codes[name] ?? null) : 0
-    const result: PatchRunResult = { code, signal: null, stdout: "", stderr: code === 0 ? "" : "SecTrustSettings failed" }
+    const result: PatchRunResult = { code, signal: null, stdout: "", stderr: code === 0 ? "" : `SecTrustSettings failed for ${home}/Library/x.pem` }
     return result
   }
   return { calls, run }
@@ -70,6 +70,22 @@ describe("trust", () => {
     await createKeychain({ run: runner.run, log: recordingLog().log, home }).trust(caCert)
     delete process.env.OPENCODE_SERVER_PASSWORD
     expect(runner.calls[0]!.options.env).toEqual({ HOME: home, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" })
+  })
+})
+
+describe("F-M3-3 log sanitisation", () => {
+  test("security stderr (which can name home-directory paths) is never logged", async () => {
+    const { log, entries } = recordingLog()
+    const runner = fakeRunner({ "add-trusted-cert": 1, "remove-trusted-cert": 1, "delete-certificate": 1, "verify-cert": 1 })
+    const keychain = createKeychain({ run: runner.run, log, home })
+    await keychain.trust(caCert)
+    await keychain.verify(leafCert)
+    await keychain.remove({ caCertPath: caCert, sha1 })
+    const text = JSON.stringify(entries)
+    expect(entries.length).toBeGreaterThan(0)
+    expect(text).not.toContain(home)
+    expect(text).not.toContain("SecTrustSettings")
+    expect(entries.some((entry) => entry[3]?.reason === "nonzero-exit")).toBe(true)
   })
 })
 

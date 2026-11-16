@@ -352,6 +352,13 @@ export function createUpstream(config: UpstreamConfig): Upstream {
       log("error", "office-bridge.upstream", "upstream rejected bridge credentials", { route: admission.route })
       return unavailable()
     }
+    // M5-02a (CP-M5 M5-F2): any upstream 5xx is the sidecar failing, on every route: the bridge's own 503 body, never
+    // the upstream status or body (same rule as the ownership read).
+    if (response.status >= 500) {
+      await response.body?.cancel().catch(() => {})
+      log("warn", "office-bridge.upstream", "upstream server error", { route: admission.route, status: response.status })
+      return unavailable()
+    }
 
     if (admission.route === "P8" && response.status === 200 && response.body)
       return { kind: "stream", status: 200, headers: responseHeaders(response.headers, undefined, true), body: response.body }

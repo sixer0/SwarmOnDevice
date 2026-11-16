@@ -2,15 +2,17 @@
 // No `security` command is executed: U-CE-05 checks the argv builders only.
 import { afterAll, describe, expect, test } from "bun:test"
 import { X509Certificate } from "node:crypto"
-import { chmod, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Integer, OctetString } from "asn1js"
 import { BasicConstraints, Certificate, ExtKeyUsage, AltName, NameConstraints } from "pkijs"
 import {
   CA_COMMON_NAME,
+  CertDirUnsafeError,
   SECURITY_BIN,
   certPaths,
+  ensureCertDirs,
   createCa,
   deleteCertificateArgv,
   fingerprint,
@@ -338,6 +340,33 @@ describe("U-CE-05 security(1) argv builders (not executed)", () => {
     expect(() => deleteCertificateArgv(CA_COMMON_NAME, home)).toThrow()
     expect(() => deleteCertificateArgv(sha1.toLowerCase(), home)).toThrow()
     expect(deleteCertificateArgv(sha1, home)).not.toContain("-c")
+  })
+})
+
+describe("F-M3-4 symlinked or non-directory certificate paths are refused", () => {
+  for (const entry of [".", "ca", "tls"]) {
+    test(`a symlink at ${entry} throws DATA_DIR_UNSAFE and nothing is written through it`, async () => {
+      const userData = await tempRoot()
+      const elsewhere = await tempRoot()
+      const paths = certPaths(userData)
+      if (entry !== ".") await mkdir(paths.root, { mode: 0o700 })
+      const at = entry === "." ? paths.root : join(paths.root, entry)
+      await symlink(elsewhere, at)
+
+      const error = await ensureCertDirs(paths).catch((thrown: unknown) => thrown)
+      expect(error).toBeInstanceOf(CertDirUnsafeError)
+      expect(error).toMatchObject({ code: "DATA_DIR_UNSAFE", entry })
+      await expect(writeCa({ paths, ca: await createCa(NOW) })).rejects.toBeInstanceOf(CertDirUnsafeError)
+      expect(await readdir(elsewhere)).toEqual([])
+      expect((await stat(elsewhere)).mode & 0o777).not.toBe(0)
+    })
+  }
+
+  test("a regular file where a directory belongs is refused", async () => {
+    const paths = certPaths(await tempRoot())
+    await mkdir(paths.root, { mode: 0o700 })
+    await writeFile(paths.caDir, "not a dir")
+    await expect(ensureCertDirs(paths)).rejects.toMatchObject({ code: "DATA_DIR_UNSAFE", entry: "ca" })
   })
 })
 

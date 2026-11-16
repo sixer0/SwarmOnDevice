@@ -142,7 +142,7 @@ describe("stream reducer (U-ST-13, D5a-D5d, D9)", () => {
       ]),
       start,
     )
-    expect(out.state.messages).toEqual({})
+    expect(Object.keys(out.state.messages)).toEqual([])
     expect(out.state.parts.p).toBeUndefined()
     expect(out.effects).toEqual([])
   })
@@ -165,6 +165,38 @@ describe("stream reducer (U-ST-13, D5a-D5d, D9)", () => {
     const after = feed(frames([message(ASSIST_MSG, "assistant")]), out.state)
     expect(replies(after.state)[0]?.text).toBe("Hello world")
     expect(after.markAt).toEqual([0])
+  })
+
+  test("M8-02a ids __proto__ and constructor are plain keys (CP-M8 F-7)", () => {
+    const out = feed([
+      { type: "sessionKnown", sessionID: SES },
+      { type: "beginTurn" },
+      ...frames([
+        // Unknown part id "constructor" before any update: must start from "", not Object.
+        delta("constructor", "__proto__", "A"),
+        message("__proto__", "assistant"),
+        part("constructor", "__proto__", "text"),
+        delta("constructor", "__proto__", "B"),
+        message("constructor", "assistant"),
+        part("__proto__", "constructor", "text", ""),
+        delta("__proto__", "constructor", "C"),
+        // A part id named like an Object.prototype member that was never announced.
+        delta("toString", "constructor", "x"),
+      ]),
+    ])
+    expect(replies(out.state)).toEqual([
+      { messageID: "__proto__", text: "AB", providerID: "gsp-ai-tail", modelID: "thinker", completed: false },
+      { messageID: "constructor", text: "C", providerID: "gsp-ai-tail", modelID: "thinker", completed: false },
+    ])
+    expect(Object.getPrototypeOf(out.state.messages)).toBeNull()
+    expect(Object.getPrototypeOf(out.state.parts)).toBeNull()
+    expect(Object.keys(out.state.messages)).toEqual(["__proto__", "constructor"])
+    expect(new Map(Object.entries(out.state.parts)).get("toString")?.text).toBe("x")
+    // Object.prototype was not touched.
+    expect(Object.prototype.hasOwnProperty.call(Object.prototype, "role")).toBe(false)
+    expect(({} as Record<string, unknown>).text).toBeUndefined()
+    // Text becomes renderable when part "constructor" is typed `text` (event 4).
+    expect(out.markAt).toEqual([4])
   })
 
   test("FR-42 session.error ends busy with office.error.generic; text kept", () => {

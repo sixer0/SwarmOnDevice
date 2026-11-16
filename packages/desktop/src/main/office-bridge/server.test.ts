@@ -2,7 +2,7 @@
 // record what the core asks of them. Real binds (both-or-none on 47317) are in test/office-bridge/bind.test.ts.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { EventEmitter } from "node:events"
-import { chmod, mkdir, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises"
+import { chmod, link, mkdir, mkdtemp, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { ServerOptions } from "node:https"
@@ -12,6 +12,7 @@ import {
   bridgeExpectations,
   bridgeTlsOptions,
   createOfficeBridgeFactory,
+  notFoundRoutes,
   prepareBridgeDataDir,
   type BridgeListener,
   type BridgeRequestHandler,
@@ -330,3 +331,234 @@ describe("createOfficeBridgeFactory", () => {
     expect(JSON.stringify(logs)).not.toContain("synthetic-test-password")
   })
 })
+
+// ── M2-01a (CP-M2 follow-ups F-M2-1..F-M2-4) ──
+
+function fakeResponse() {
+  const written: { status?: number; headers: Record<string, unknown>; body?: string } = { headers: {} }
+  const response = {
+    headersSent: false,
+    writeHead(status: number, headers: Record<string, unknown>) {
+      written.status = status
+      written.headers = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]))
+    },
+    end(body: string) {
+      written.body = body
+    },
+    destroy() {},
+  }
+  return { written, response }
+}
+
+describe("M2-01a", () => {
+  test("F-M2-1: the core 404 and the route-failure 503 carry the SC-07 header set", async () => {
+    await userData()
+    const { factory, made } = harness({}, { handle: () => Promise.reject(new Error("boom")) })
+    expect((await factory(config(), deps())).ok).toBe(true)
+    const failed = fakeResponse()
+    await made[0]!.handler({ method: "GET" } as never, failed.response as never)
+    const notFound = fakeResponse()
+    await notFoundRoutes({} as never).handle({ method: "GET" } as never, notFound.response as never)
+    for (const [written, status] of [
+      [failed.written, 503],
+      [notFound.written, 404],
+    ] as const) {
+      expect(written.status).toBe(status)
+      expect(written.headers["cross-origin-resource-policy"]).toBe("same-origin")
+      expect(written.headers["referrer-policy"]).toBe("no-referrer")
+      expect(written.headers["x-content-type-options"]).toBe("nosniff")
+      expect(written.headers["cache-control"]).toBe("no-store")
+      expect(written.headers["strict-transport-security"]).toBeUndefined()
+    }
+  })
+
+  test("F-M2-2: PORT_IN_USE returns promptly while a client holds a connection to the IPv4 listener", async () => {
+    await userData()
+    const socket = Object.assign(new EventEmitter(), { destroyed: false, destroy: () => void (socket.destroyed = true) })
+    let index = 0
+    const made: FakeListener[] = []
+    const factory = createOfficeBridgeFactory({
+      createListener: (options, handler) => {
+        const first = index++ === 0
+        const listener = new FakeListener(options, handler, first ? undefined : "EADDRINUSE")
+        // Like node: close() resolves only once the last connection has ended.
+        listener.close = (callback: () => void) => {
+          listener.closed++
+          const done = () => (socket.destroyed ? callback() : setTimeout(done, 5))
+          done()
+          return listener
+        }
+        if (first) {
+          const listen = listener.listen.bind(listener)
+          listener.listen = (opts: ListenCall, callback: () => void) =>
+            listen(opts, () => {
+              callback()
+              listener.emit("connection", socket)
+            })
+        }
+        made.push(listener)
+        return listener as unknown as BridgeListener
+      },
+    })
+    const result = await Promise.race([
+      factory(config(), deps()),
+      new Promise((resolve) => setTimeout(() => resolve("hung"), 1000)),
+    ])
+    expect(result).toEqual({ ok: false, code: "PORT_IN_USE" })
+    expect(socket.destroyed).toBe(true)
+    expect(made[0]!.closed).toBe(1)
+  })
+
+  test("F-M2-3: a hard-linked secret file is refused", async () => {
+    const dir = await userData()
+    const base = join(dir, "office-addin")
+    await mkdir(base, { mode: 0o700 })
+    await chmod(base, 0o700)
+    await writeFile(join(base, "pairings.json"), "{}", { mode: 0o600 })
+    await link(join(base, "pairings.json"), join(root, "outside-copy"))
+    const result = await prepareBridgeDataDir(dir)
+    expect(result).toEqual({ ok: false, code: "DATA_DIR_UNSAFE", entry: "pairings.json", mode: 0o600 })
+  })
+
+  test("C48: an unknown 0644 file in tls/, ca/ or the root is reported as a stray, not refused", async () => {
+    for (const entry of ["tls/stray.pem", "ca/stray.json", "stray.log"]) {
+      const dir = join(root, `u-${entry.replace(/\W/g, "")}`)
+      const base = join(dir, "office-addin")
+      for (const sub of ["", "ca", "tls"]) await mkdir(join(base, sub), { recursive: true, mode: 0o700 })
+      for (const sub of ["", "ca", "tls"]) await chmod(join(base, sub), 0o700)
+      await writeFile(join(base, entry), "x")
+      await chmod(join(base, entry), 0o644)
+      const result = await prepareBridgeDataDir(dir)
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.strays).toEqual([entry])
+    }
+  })
+
+  test("F-M2-3: public cert files may be 0644 but not group/other writable; workspace contents are not scanned", async () => {
+    const dir = await userData()
+    const base = join(dir, "office-addin")
+    for (const sub of ["", "ca", "tls", "workspace"]) await mkdir(join(base, sub), { recursive: true, mode: 0o700 })
+    for (const sub of ["", "ca", "tls", "workspace"]) await chmod(join(base, sub), 0o700)
+    for (const file of ["ca/swarm-office-ca.cert.pem", "ca/fingerprint.json", "tls/localhost.cert.pem", "workspace/note.md"]) {
+      await writeFile(join(base, file), "x")
+      await chmod(join(base, file), 0o644)
+    }
+    await writeFile(join(base, "tls/localhost.key.pem"), "k", { mode: 0o600 })
+    await chmod(join(base, "tls/localhost.key.pem"), 0o600)
+    expect((await prepareBridgeDataDir(dir)).ok).toBe(true)
+    await chmod(join(base, "ca/swarm-office-ca.cert.pem"), 0o666)
+    expect(await prepareBridgeDataDir(dir)).toEqual({
+      ok: false,
+      code: "DATA_DIR_UNSAFE",
+      entry: "ca/swarm-office-ca.cert.pem",
+      mode: 0o666,
+    })
+  })
+
+  test("F-M2-4: without setSecureContext no success is logged; with it, the swapped count is logged", async () => {
+    await userData()
+    const logs: { level: BridgeLogLevel; message: string; context?: Record<string, unknown> }[] = []
+    const { factory, made } = harness()
+    const result = await factory(config(), deps(logs))
+    if (!result.ok) throw new Error("start failed")
+    result.bridge.updateTls(await throwawayLeaf("b"))
+    expect(logs.filter((l) => l.message === "leaf swapped").map((l) => l.context)).toEqual([{ listeners: 2, of: 2 }])
+    for (const l of made) Object.assign(l, { setSecureContext: undefined })
+    logs.length = 0
+    result.bridge.updateTls(await throwawayLeaf("c"))
+    expect(logs.some((l) => l.message === "leaf swapped")).toBe(false)
+    expect(logs.filter((l) => l.level === "error").map((l) => l.message)).toEqual(["leaf not swapped"])
+    expect(logs.filter((l) => l.level === "warn").length).toBe(2)
+  })
+
+  test("C48: a stray .DS_Store (0644) starts the bridge with no warning", async () => {
+    const dir = await userData()
+    const base = join(dir, "office-addin")
+    for (const sub of ["", "tls"]) await mkdir(join(base, sub), { recursive: true, mode: 0o700 })
+    for (const sub of ["", "tls"]) await chmod(join(base, sub), 0o700)
+    for (const file of [".DS_Store", "tls/.DS_Store"]) {
+      await writeFile(join(base, file), "x")
+      await chmod(join(base, file), 0o644)
+    }
+    const logs: { level: BridgeLogLevel; message: string; context?: Record<string, unknown> }[] = []
+    const { factory } = harness()
+    expect((await factory(config(), deps(logs))).ok).toBe(true)
+    expect(logs.filter((l) => l.level !== "info")).toEqual([])
+  })
+
+  test("C48: an unknown 0644 file starts the bridge with one warning naming the entry, no path", async () => {
+    const dir = await userData()
+    const base = join(dir, "office-addin")
+    for (const sub of ["", "ca"]) await mkdir(join(base, sub), { recursive: true, mode: 0o700 })
+    for (const sub of ["", "ca"]) await chmod(join(base, sub), 0o700)
+    for (const file of ["notes.txt", "ca/extra.pem"]) {
+      await writeFile(join(base, file), "x")
+      await chmod(join(base, file), 0o644)
+    }
+    const logs: { level: BridgeLogLevel; message: string; context?: Record<string, unknown> }[] = []
+    const { factory } = harness()
+    expect((await factory(config(), deps(logs))).ok).toBe(true)
+    const warnings = logs.filter((l) => l.level === "warn")
+    expect(warnings.length).toBe(1)
+    expect(String(warnings[0]!.context?.entries).split(",").sort()).toEqual(["ca/extra.pem", "notes.txt"])
+    expect(JSON.stringify(logs)).not.toContain(root)
+  })
+
+  test("C48: a known secret file at 0644 still refuses with DATA_DIR_UNSAFE", async () => {
+    const dir = await userData()
+    const base = join(dir, "office-addin")
+    for (const sub of ["", "tls"]) await mkdir(join(base, sub), { recursive: true, mode: 0o700 })
+    for (const sub of ["", "tls"]) await chmod(join(base, sub), 0o700)
+    await writeFile(join(base, "tls/localhost.key.pem"), "k")
+    await chmod(join(base, "tls/localhost.key.pem"), 0o644)
+    const { factory, made } = harness()
+    expect(await factory(config(), deps())).toEqual({ ok: false, code: "DATA_DIR_UNSAFE" })
+    expect(made).toEqual([])
+  })
+
+  test("C48: a hard-linked or symlinked public cert file is refused", async () => {
+    const dir = await userData()
+    const base = join(dir, "office-addin")
+    for (const sub of ["", "ca"]) await mkdir(join(base, sub), { recursive: true, mode: 0o700 })
+    for (const sub of ["", "ca"]) await chmod(join(base, sub), 0o700)
+    await writeFile(join(base, "ca/fingerprint.json"), "{}", { mode: 0o644 })
+    await link(join(base, "ca/fingerprint.json"), join(root, "fp-link"))
+    expect((await prepareBridgeDataDir(dir)).ok).toBe(false)
+    await rm(join(base, "ca/fingerprint.json"))
+    await writeFile(join(root, "real.pem"), "x", { mode: 0o644 })
+    await symlink(join(root, "real.pem"), join(base, "ca/swarm-office-ca.cert.pem"))
+    expect((await prepareBridgeDataDir(dir)).ok).toBe(false)
+  })
+})
+
+describe("M2-01c (C54)", () => {
+  test("a symlinked userData gives routes the realpath of workspace/; root stays as configured", async () => {
+    const real = join(root, "userData-real")
+    const linked = join(root, "userData-link")
+    await mkdir(real, { recursive: true })
+    await symlink(real, linked)
+    const seen: { workspace?: string; root?: string } = {}
+    const factory = createOfficeBridgeFactory({
+      createListener: (options, handler) => new FakeListener(options, handler, undefined) as unknown as BridgeListener,
+      routes: (context) => {
+        seen.workspace = context.paths.workspace
+        seen.root = context.paths.root
+        return { handle: (_req, res) => void res.end() }
+      },
+    })
+    expect((await factory(config({ userDataDir: linked }), deps())).ok).toBe(true)
+    expect(seen.workspace).toBe(await realpath(join(real, "office-addin", "workspace")))
+    expect(seen.workspace).not.toContain("userData-link")
+    expect(seen.root).toBe(join(linked, "office-addin"))
+  })
+
+  test("a symlinked workspace/ itself is still refused, not resolved", async () => {
+    const dir = await userData()
+    await mkdir(join(dir, "office-addin"), { mode: 0o700 })
+    await chmod(join(dir, "office-addin"), 0o700)
+    await mkdir(join(root, "elsewhere"), { mode: 0o700 })
+    await symlink(join(root, "elsewhere"), join(dir, "office-addin", "workspace"))
+    expect(await prepareBridgeDataDir(dir)).toMatchObject({ ok: false, code: "DATA_DIR_UNSAFE", entry: "workspace" })
+  })
+})
+

@@ -3,10 +3,10 @@
 // the document is a string (Word) or a cell map (Excel), and every executor call is
 // recorded in `calls` so a test can assert what would reach Office.js.
 import { OFFICE_CONTEXT_WHOLE } from "../constants"
-import { address, completeWrite, prepareWrite, type ExcelValue, type WriteAction } from "../excel"
+import { address, completeWrite, prepareWrite, type ExcelValue, type Refusal, type WriteAction } from "../excel"
 import type { ContextScope } from "../state/prompt"
-import { unsupported, type ExcelChanged, type ExcelHost, type HostFailure, type WordHost } from "./types"
-import { planWordWrite, samePlan } from "./word"
+import { refusedTarget, unsupported, type ExcelChanged, type ExcelHost, type HostFailure, type WordAnchor, type WordHost } from "./types"
+import { planWordWrite, sameAnchor, samePlan } from "./word"
 
 export type MemoryFault = "read" | "write"
 
@@ -18,9 +18,14 @@ export type MemoryWordDoc = {
   body: string
   // Selection text as Word returns it ("" = collapsed; a whole paragraph ends with "\r").
   selection: string
+  // Location identity of the selection (M8-03c). A test moves the caret or picks another
+  // range with the same text by changing it; the preview anchor records it.
+  position: number
   supported: boolean
   fault?: MemoryFault
   calls: WordCall[]
+  // M8-03d: every anchor released, by `release` or consumed by `write` (as word.ts does).
+  releases: WordAnchor[]
 }
 
 const fault = (code: HostFailure["code"]): HostFailure => ({
@@ -29,8 +34,10 @@ const fault = (code: HostFailure["code"]): HostFailure => ({
   detail: { name: "MemoryFault", message: "simulated Office.js error" },
 })
 
-export function memoryWordHost(input: Partial<Omit<MemoryWordDoc, "calls">> = {}): WordHost & { doc: MemoryWordDoc } {
-  const doc: MemoryWordDoc = { body: "", selection: "", supported: true, ...input, calls: [] }
+export function memoryWordHost(
+  input: Partial<Omit<MemoryWordDoc, "calls" | "releases">> = {},
+): WordHost & { doc: MemoryWordDoc } {
+  const doc: MemoryWordDoc = { body: "", selection: "", position: 0, supported: true, ...input, calls: [], releases: [] }
   return {
     host: "Word",
     doc,
@@ -43,15 +50,22 @@ export function memoryWordHost(input: Partial<Omit<MemoryWordDoc, "calls">> = {}
     preview: async (action, reply) => {
       if (!doc.supported) return unsupported
       if (doc.fault === "read") return fault("office.error.readFailed")
-      return planWordWrite(action, reply, doc.selection)
+      return { ...planWordWrite(action, reply, doc.selection), anchor: { kind: "memory" as const, position: doc.position } }
     },
     write: async (action, reply, expected) => {
       if (!doc.supported) return unsupported
+      // Like word.ts, a write consumes the previewed anchor on every path.
+      if (expected?.anchor) doc.releases.push(expected.anchor)
       if (doc.fault) return fault("office.error.writeFailed")
+      const anchor = { kind: "memory" as const, position: doc.position }
       const plan = planWordWrite(action, reply, doc.selection)
-      if (expected && !samePlan(plan, expected)) return { ok: false, changed: true, plan }
+      const moved = expected?.anchor !== undefined && !sameAnchor(expected.anchor, anchor)
+      if (expected && (moved || !samePlan(plan, expected))) return { ok: false, changed: true, plan: { ...plan, anchor } }
       doc.calls.push({ method: "insertText", text: plan.text, location: plan.location })
       return { ok: true, host: "Word", plan }
+    },
+    release: async (plan) => {
+      if (plan.anchor) doc.releases.push(plan.anchor)
     },
   }
 }
@@ -109,7 +123,13 @@ function used(book: MemoryWorkbook): MemorySelection {
 
 function planFor(book: MemoryWorkbook, action: WriteAction, reply: string, selection: MemorySelection) {
   const prepared = prepareWrite(action, reply, selection)
-  if (!prepared.ok) return { ok: false as const, host: "Excel" as const, refusal: prepared.refusal }
+  const refused = (refusal: Refusal) => ({
+    ok: false as const,
+    host: "Excel" as const,
+    refusal,
+    target: refusedTarget(action, reply, refusal, book.sheet, selection),
+  })
+  if (!prepared.ok) return refused(prepared.refusal)
   const target = prepared.target
   const values =
     target.check === "none"
@@ -121,7 +141,7 @@ function planFor(book: MemoryWorkbook, action: WriteAction, reply: string, selec
           columnCount: target.columns,
         })
   const complete = completeWrite(prepared, values)
-  if (!complete.ok) return { ok: false as const, host: "Excel" as const, refusal: complete.refusal }
+  if (!complete.ok) return refused(complete.refusal)
   return { ok: true as const, host: "Excel" as const, action, target: `${book.sheet}!${complete.target.address}`, plan: complete }
 }
 

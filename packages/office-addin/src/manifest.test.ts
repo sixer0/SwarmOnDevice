@@ -74,4 +74,11 @@ describe("index.html", () => {
     expect(html).toContain(`<script src="${OFFICE_JS_URL}"></script>`)
     expect(html.indexOf(OFFICE_JS_URL)).toBeLessThan(html.indexOf("</head>"))
   })
+
+  test("loads the pane entry module after the root element, after Office.js", async () => {
+    const html = await Bun.file(join(root, "index.html")).text()
+    const entry = html.indexOf('<script type="module" src="/src/index.tsx"></script>')
+    expect(entry).toBeGreaterThan(html.indexOf('<div id="root"></div>'))
+    expect(entry).toBeGreaterThan(html.indexOf(OFFICE_JS_URL))
+  })
 })

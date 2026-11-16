@@ -11,18 +11,22 @@
 //
 // The timer takes an injected clock (TR-4: no fake timers); production uses `systemClock`, whose interval is unref'd.
 // This module imports `certs.ts` (and so `pkijs`) statically: it must itself be loaded by dynamic `import()` (IA-5).
-import { readFile, rm, writeFile } from "node:fs/promises"
+import { readFile, rm } from "node:fs/promises"
 import {
+  CertDirUnsafeError,
   createCa,
   fingerprint,
   issueLeaf,
   leafRenewalDue,
   readFingerprint,
+  readFingerprintFile,
   renewLeafIfDue,
   writeCa,
   writeLeaf,
+  writePreviousCa,
 } from "./certs"
 import type { CertPaths } from "./certs"
+import { errorFields } from "./key-custody"
 import type { KeyCustody, OfficeLogSink } from "./key-custody"
 import type { Keychain } from "./keychain"
 import { buildTlsUpdateCommand } from "../office-bridge/protocol"
@@ -44,14 +48,30 @@ export type RenewalResult =
   | { action: "none" }
   | { action: "renewed" }
   | { action: "rotated"; reason: "no-retained-key" | "key-unreadable"; trusted: boolean; oldRemoved: boolean }
-  | { action: "failed"; code: "CERT_MISSING" | "CERT_UNTRUSTED" }
+  | { action: "failed"; code: "CERT_MISSING" | "CERT_UNTRUSTED" | "DATA_DIR_UNSAFE" }
+
+/** Outcome of `finishPendingRemoval`. */
+export type PendingRemoval = "none" | "dropped" | "removed" | "kept"
 
 async function readText(path: string) {
   return readFile(path, "utf8").catch(() => undefined)
 }
 
-/** One renewal check at `now` (bridge start and every 24 h). Never throws for an expected state. */
+/**
+ * One renewal check at `now` (bridge start and every 24 h). It first finishes any CA removal a crashed rotation left
+ * in `ca/previous/` (F-M3-1). Never throws for an expected state; a symlinked or non-directory certificate path is
+ * `DATA_DIR_UNSAFE` (F-M3-4) and nothing is written through it.
+ */
 export async function checkLeaf(deps: RenewalDeps, now: Date): Promise<RenewalResult> {
+  return runCheck(deps, now).catch((error: unknown) => {
+    if (!(error instanceof CertDirUnsafeError)) throw error
+    deps.log("error", SOURCE, "certificate directory is unsafe", { code: error.code, entry: error.entry })
+    return { action: "failed", code: "DATA_DIR_UNSAFE" } as const
+  })
+}
+
+async function runCheck(deps: RenewalDeps, now: Date): Promise<RenewalResult> {
+  await finishPendingRemoval(deps)
   const caPem = await readText(deps.paths.caCert)
   if (!caPem) {
     deps.log("error", SOURCE, "CA certificate missing", { code: "CERT_MISSING" })
@@ -77,10 +97,14 @@ async function renewWithRetainedKey(deps: RenewalDeps, now: Date, caKey: string)
 }
 
 /**
- * New CA plus leaf (SC-22 renewal, C26(c) recovery). Order: generate in memory, keep the old CA certificate aside,
- * write the new CA (encrypted key only when safeStorage is available) and leaf, trust the new CA, remove the old CA by
- * hash, send `tls-update`. The old CA is removed even when the new trust is refused: it no longer signs anything and
- * would otherwise stay trusted with no record of its hash.
+ * New CA plus leaf (SC-22 renewal, C26(c) recovery). Crash-safe order (F-M3-1):
+ * 1. the old CA certificate and its fingerprint go to `ca/previous/` before anything is replaced;
+ * 2. the new CA (encrypted key only when safeStorage is available) and leaf are written;
+ * 3. the new CA is trusted;
+ * 4. the old CA is removed from the login keychain by its SHA-1, then `ca/previous/` is deleted;
+ * 5. `tls-update` is sent.
+ * A crash anywhere after step 1 leaves `ca/previous/`, and the next `checkLeaf` (bridge start) finishes step 4. The old
+ * CA is removed even when the new trust is refused: it no longer signs anything.
  */
 async function rotateCa(
   deps: RenewalDeps,
@@ -89,15 +113,15 @@ async function rotateCa(
   oldCaPem: string,
 ): Promise<RenewalResult> {
   deps.log("warn", SOURCE, "rotating the local CA", { reason })
-  const oldPrint = (await readFingerprint(deps.paths)) ?? fingerprint(oldCaPem)
+  await writePreviousCa(deps.paths, oldCaPem, (await readFingerprint(deps.paths)) ?? fingerprint(oldCaPem))
   const ca = await createCa(now)
   const leaf: LeafTls = await issueLeaf(ca, now)
   await deps.custody.discard()
-  const newPrint = await writeCa({ paths: deps.paths, ca, encryptKey: deps.custody.encryptKey() })
+  await writeCa({ paths: deps.paths, ca, encryptKey: deps.custody.encryptKey() })
   await writeLeaf(deps.paths, leaf)
 
   const trust = await deps.keychain.trust(deps.paths.caCert)
-  const oldRemoved = newPrint.sha1 === oldPrint.sha1 ? true : await removeOldCa(deps, oldCaPem, oldPrint.sha1)
+  const oldRemoved = (await finishPendingRemoval(deps)) === "removed"
   deps.send(buildTlsUpdateCommand(leaf))
   if (!trust.ok) {
     deps.log("error", SOURCE, "new CA not trusted after rotation", { code: trust.code, reason })
@@ -107,13 +131,38 @@ async function rotateCa(
   return { action: "rotated", reason, trusted: true, oldRemoved }
 }
 
-async function removeOldCa(deps: RenewalDeps, oldCaPem: string, sha1: string) {
-  // `remove-trusted-cert` takes a certificate file; the old one was replaced on disk, so a public copy is written
-  // next to it for the call and deleted afterwards (a certificate, never a key).
-  const path = `${deps.paths.caCert}.old-${crypto.randomUUID()}.pem`
-  await writeFile(path, oldCaPem, { mode: 0o644 })
-  const removal = await deps.keychain.remove({ caCertPath: path, sha1 }).finally(() => rm(path, { force: true }))
-  return removal.deleted
+/**
+ * Finish a rotation's old-CA removal from `ca/previous/` (F-M3-1). Also for Disable (M7-03) before it removes the
+ * current CA.
+ * - no backup: `none`.
+ * - incomplete backup, or the backup is still the current CA (the crash came before the new CA was written):
+ *   the backup is dropped and nothing is removed from the keychain (`dropped`).
+ * - otherwise `remove-trusted-cert` + `delete-certificate -Z <recorded SHA-1>`; the backup is deleted only when the
+ *   delete succeeded (`removed`), else kept for the next check (`kept`).
+ */
+export async function finishPendingRemoval(deps: RenewalDeps): Promise<PendingRemoval> {
+  const pending = await readFingerprintFile(deps.paths.previousFingerprint)
+  const pendingCert = await readText(deps.paths.previousCert)
+  if (!pending || !pendingCert) {
+    // An empty or half-written backup means the crash came before the CA was replaced: nothing to remove.
+    await rm(deps.paths.previousDir, { recursive: true, force: true })
+    if (!pending && !pendingCert) return "none"
+    deps.log("warn", SOURCE, "incomplete CA backup dropped", { reason: "backup-incomplete" })
+    return "dropped"
+  }
+  if ((await readFingerprint(deps.paths))?.sha1 === pending.sha1) {
+    await rm(deps.paths.previousDir, { recursive: true, force: true })
+    deps.log("info", SOURCE, "CA backup dropped: the CA was not replaced", { reason: "rotation-not-applied" })
+    return "dropped"
+  }
+  const removal = await deps.keychain.remove({ caCertPath: deps.paths.previousCert, sha1: pending.sha1 })
+  if (!removal.deleted) {
+    deps.log("error", SOURCE, "old CA still in the login keychain; kept for retry", { reason: "old-ca-delete-failed" })
+    return "kept"
+  }
+  await rm(deps.paths.previousDir, { recursive: true, force: true })
+  deps.log("info", SOURCE, "old CA removed from the login keychain", { trustRemoved: removal.trustRemoved })
+  return "removed"
 }
 
 // ── 24 h timer (SC-25) ──
@@ -158,11 +207,8 @@ export function startRenewalTimer(input: {
         if (!state.stopped) input.onResult?.(result)
       })
       .catch((error: unknown) => {
-        input.deps.log("error", SOURCE, "renewal check threw", {
-          name: error instanceof Error ? error.name : typeof error,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        })
+        // F-M3-2: name and code with a fixed reason only; never message or stack (free text with local paths).
+        input.deps.log("error", SOURCE, "renewal check threw", { ...errorFields(error), reason: "check-threw" })
         if (!state.stopped) input.onResult?.({ action: "failed", code: "CERT_MISSING" })
       })
       .finally(() => {

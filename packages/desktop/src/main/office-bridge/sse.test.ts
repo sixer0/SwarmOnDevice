@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { createHash } from "node:crypto"
 import { EventEmitter } from "node:events"
 import http from "node:http"
 import type { AddressInfo } from "node:net"
@@ -226,6 +227,38 @@ describe("teardown both ways", () => {
     expect(await second).toEqual({ kind: "ended", by: "upstream-error" })
     expect(b.destroyed).toBe(true)
     expect(relay.active(TOKEN)).toBe(0)
+  })
+
+  test("W4-RC-b: closeWhere() ends only the matching token's streams; closeAll() ends all but keeps accepting", async () => {
+    const relay = createSseRelay()
+    const ups = [fakeUpstream(), fakeUpstream()]
+    const downs = [new FakeDownstream(), new FakeDownstream()]
+    const runs = ups.map((upstream, index) =>
+      relay.relay({ token: index === 0 ? TOKEN : OTHER, response: downs[index], openUpstream: upstream.open }),
+    )
+    await tick()
+    const tokenKey = createHash("sha256").update(TOKEN).digest("hex")
+    expect(relay.closeWhere((key) => key === tokenKey)).toBe(1)
+    expect(await runs[0]).toEqual({ kind: "ended", by: "revoked" })
+    // The upstream body is cancelled, so no later frame can be read from it.
+    expect(ups[0].state.cancelled).toBe(true)
+    expect(() => ups[0].push("data: late\n\n")).toThrow()
+    await tick()
+    expect(downs[0].destroyed).toBe(true)
+    expect(downs[0].text()).not.toContain("late")
+    expect(ups[0].state.signal?.aborted).toBe(true)
+    expect(downs[1].destroyed).toBe(false)
+    expect(relay.active(OTHER)).toBe(1)
+
+    relay.closeAll()
+    expect(await runs[1]).toEqual({ kind: "ended", by: "revoked" })
+    expect(downs[1].destroyed).toBe(true)
+    const next = fakeUpstream()
+    const again = relay.relay({ token: TOKEN, response: new FakeDownstream(), openUpstream: next.open })
+    await tick()
+    expect(relay.active(TOKEN)).toBe(1)
+    next.close()
+    expect(await again).toEqual({ kind: "ended", by: "upstream" })
   })
 
   test("stop() ends every open stream, aborts every upstream and refuses new streams", async () => {

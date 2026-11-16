@@ -164,6 +164,16 @@ const it = testEffect(
   ] as const),
 )
 
+// The same graph with `experimentalPlanMode`, whose reminders name the plan file path (`reminders.ts:52-82`).
+const itPlanMode = testEffect(
+  LayerNode.compile(root, [
+    [SessionSummary.node, summary],
+    [LSP.node, lsp],
+    [MCP.node, mcp],
+    [RuntimeFlags.node, RuntimeFlags.layer({ experimentalEventSystem: true, experimentalPlanMode: true })],
+  ] as const),
+)
+
 const providerCfg = (url: string) => ({
   provider: {
     test: {
@@ -206,9 +216,9 @@ const systemOf = (body: unknown) =>
     .map((message) => (typeof message.content === "string" ? message.content : JSON.stringify(message.content)))
     .join("\n")
 
-/** Runs one turn of a build session and returns the system text the provider received. With `title`, the session
- *  keeps its default title so the first turn also fires the title model call (`prompt.ts` `ensureTitle`). */
-const systemFor = (metadata: Record<string, unknown> | undefined, opts?: { title?: boolean }) =>
+/** Writes the synthetic fixtures (global and project AGENTS.md, a project skill, the provider config plus `config`) and
+ *  returns the instance directory. */
+const fixtures = (config?: Record<string, unknown>) =>
   Effect.gen(function* () {
     yield* globalInstruction
     const dir = (yield* TestInstance).directory
@@ -216,13 +226,25 @@ const systemFor = (metadata: Record<string, unknown> | undefined, opts?: { title
     const fs = yield* FSUtil.Service
     yield* fs.writeWithDirs(
       path.join(dir, "swarm.json"),
-      JSON.stringify({ $schema: "https://opencode.ai/config.json", ...providerCfg(llm.url) }),
+      JSON.stringify({ $schema: "https://opencode.ai/config.json", ...providerCfg(llm.url), ...config }),
     )
     yield* fs.writeWithDirs(path.join(dir, "AGENTS.md"), `# Project\n\n${PROJECT_MARK}\n`)
     yield* fs.writeWithDirs(
       path.join(dir, ".swarm", "skills", SKILL_NAME, "SKILL.md"),
       `---\nname: ${SKILL_NAME}\ndescription: Synthetic SD-1 skill.\n---\n\n# Synthetic\n`,
     )
+    return dir
+  })
+
+/** Runs one turn of a build session and returns the system text the provider received. With `title`, the session
+ *  keeps its default title so the first turn also fires the title model call (`prompt.ts` `ensureTitle`). */
+const systemFor = (
+  metadata: Record<string, unknown> | undefined,
+  opts?: { title?: boolean; agent?: string; config?: Record<string, unknown> },
+) =>
+  Effect.gen(function* () {
+    const dir = yield* fixtures(opts?.config)
+    const llm = yield* TestLLMServer
     const sessions = yield* Session.Service
     const prompt = yield* SessionPrompt.Service
     const chat = yield* sessions.create({
@@ -234,7 +256,7 @@ const systemFor = (metadata: Record<string, unknown> | undefined, opts?: { title
       id: MessageID.ascending(),
       role: "user",
       sessionID: chat.id,
-      agent: "build",
+      agent: opts?.agent ?? "build",
       model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test-model") },
       time: { created: Date.now() },
     })
@@ -247,14 +269,16 @@ const systemFor = (metadata: Record<string, unknown> | undefined, opts?: { title
     })
     yield* llm.hang
     const fiber = yield* prompt.loop({ sessionID: chat.id as SessionID }).pipe(Effect.forkChild)
-    const count = opts?.title ? 2 : 1
+    // Hits accumulate on the shared server across runs in one test, so wait for this run's calls and read the latest.
+    const count = (yield* llm.calls) + (opts?.title ? 2 : 1)
     yield* awaitWithTimeout(llm.wait(count), "timed out waiting for the requests", "10 seconds")
     const hits = yield* llm.hits
     const titleHit = hits.find((hit) => isTitleCall(hit.body))
-    const mainHit = hits.find((hit) => !isTitleCall(hit.body))
+    const mainHit = hits.findLast((hit) => !isTitleCall(hit.body))
     yield* Fiber.interrupt(fiber)
     return {
       system: systemOf(mainHit?.body),
+      body: JSON.stringify(mainHit?.body ?? {}),
       dir,
       title: titleHit ? { system: systemOf(titleHit.body), body: JSON.stringify(titleHit.body) } : undefined,
     }
@@ -401,4 +425,198 @@ describe("SD-1 Office prompt profile", () => {
       }),
     20_000,
   )
+
+  // M6-01b (CP-M6 F-M6-2): no plan-mode or build-switch reminder reaches an Office session's model call.
+  it.instance(
+    "an Office session on the plan agent gets no plan reminder (classic plan mode)",
+    () =>
+      Effect.gen(function* () {
+        const office = yield* systemFor(OFFICE, { agent: "plan" })
+        expect(office.body).toContain("Summarise the selected paragraph.")
+        expect(office.body).not.toContain("Plan Mode - System Reminder")
+        for (const absent of stripped(office.dir)) expect(office.body).not.toContain(absent)
+      }),
+    20_000,
+  )
+
+  it.instance(
+    "a non-Office session on the plan agent keeps the plan reminder (regression)",
+    () =>
+      Effect.gen(function* () {
+        const control = yield* systemFor(undefined, { agent: "plan" })
+        expect(control.body).toContain("Plan Mode - System Reminder")
+      }),
+    20_000,
+  )
+
+  itPlanMode.instance(
+    "an Office session on the plan agent gets no plan-file reminder (experimental plan mode)",
+    () =>
+      Effect.gen(function* () {
+        const office = yield* systemFor(OFFICE, { agent: "plan" })
+        expect(office.body).toContain("Summarise the selected paragraph.")
+        expect(office.body).not.toContain("plan file")
+        expect(office.body).not.toContain(Global.Path.data)
+        for (const absent of stripped(office.dir)) expect(office.body).not.toContain(absent)
+        const user = os.userInfo().username
+        if (user.length >= 3) expect(office.body).not.toContain(user)
+      }),
+    20_000,
+  )
+
+  itPlanMode.instance(
+    "a non-Office session on the plan agent keeps the plan-file reminder (experimental plan mode, regression)",
+    () =>
+      Effect.gen(function* () {
+        const control = yield* systemFor(undefined, { agent: "plan" })
+        expect(control.body).toContain("No plan file exists yet. You should create your plan at")
+      }),
+    20_000,
+  )
+
+  // M6-01b (CP-M6 F-M6-2): a configured agent prompt (a custom default agent, or an override of build's prompt) never
+  // reaches an Office session; the built-in provider prompt is used instead.
+  const CUSTOM_DEFAULT = "SD1-CUSTOM-DEFAULT-AGENT-PROMPT"
+  const BUILD_OVERRIDE = "SD1-BUILD-PROMPT-OVERRIDE"
+  const agentConfig = {
+    default_agent: "sd1-custom",
+    agent: {
+      "sd1-custom": { mode: "primary", description: "Synthetic SD-1 default agent.", prompt: CUSTOM_DEFAULT },
+      build: { prompt: BUILD_OVERRIDE },
+    },
+  }
+  for (const agent of ["sd1-custom", "build"])
+    it.instance(
+      `an Office session on ${agent} gets the built-in prompt, not the configured one`,
+      () =>
+        Effect.gen(function* () {
+          const office = yield* systemFor(OFFICE, { agent, config: agentConfig })
+          expect(office.system.length).toBeGreaterThan(0)
+          expect(office.system).not.toContain(CUSTOM_DEFAULT)
+          expect(office.system).not.toContain(BUILD_OVERRIDE)
+          expect(office.system).toContain(`Today's date: ${new Date().toDateString()}`)
+          const control = yield* systemFor(undefined, { agent, config: agentConfig })
+          expect(control.system).toContain(agent === "build" ? BUILD_OVERRIDE : CUSTOM_DEFAULT)
+        }),
+      30_000,
+    )
+
+  // Runs `SessionCompaction.process` once for a fresh session and returns the body of that model call.
+  const compactionCall = (metadata: Record<string, unknown> | undefined, config?: Record<string, unknown>) =>
+    Effect.gen(function* () {
+      const dir = yield* fixtures(config)
+      const llm = yield* TestLLMServer
+      const sessions = yield* Session.Service
+      const compaction = yield* SessionCompaction.Service
+      const chat = yield* sessions.create({
+        title: "SD-1",
+        permission: [{ permission: "*", pattern: "*", action: metadata ? "deny" : "allow" }],
+        ...(metadata ? { metadata } : {}),
+      })
+      const msg = yield* sessions.updateMessage({
+        id: MessageID.ascending(),
+        role: "user",
+        sessionID: chat.id,
+        agent: "build",
+        model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test-model") },
+        time: { created: Date.now() },
+      })
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: msg.id,
+        sessionID: chat.id,
+        type: "text",
+        text: "Summarise the selected paragraph.",
+      })
+      const before = yield* llm.calls
+      yield* llm.text("Synthetic summary.")
+      yield* compaction.process({
+        parentID: msg.id,
+        messages: yield* sessions.messages({ sessionID: chat.id }),
+        sessionID: chat.id,
+        auto: false,
+      })
+      const hits = yield* llm.hits
+      expect(hits).toHaveLength(before + 1)
+      return { dir, body: JSON.stringify(hits.at(-1)?.body) }
+    })
+
+  // M6-01b (CP-M6 F-M6-3): the compaction call of an Office session (hidden agent `compaction`, `system: []`,
+  // src/session/compaction.ts) carries none of the stripped blocks.
+  it.instance(
+    "an Office session's compaction call carries none of the stripped blocks",
+    () =>
+      Effect.gen(function* () {
+        const call = yield* compactionCall(OFFICE)
+        expect(call.body).toContain("You are a context summarization agent.")
+        expect(call.body).toContain("Summarise the selected paragraph.")
+        for (const absent of [...stripped(call.dir), "Today's date:"]) expect(call.body).not.toContain(absent)
+        const user = os.userInfo().username
+        if (user.length >= 3) expect(call.body).not.toContain(user)
+      }),
+    20_000,
+  )
+
+  // M6-01c (C64): a configured prompt for the hidden `compaction` and `title` agents never reaches an Office session;
+  // the shipped prompt is used instead. A non-Office session still gets the configured one.
+  const COMPACTION_OVERRIDE = "SD1-COMPACTION-PROMPT-OVERRIDE"
+  const TITLE_OVERRIDE = "SD1-TITLE-PROMPT-OVERRIDE"
+  const hiddenConfig = { agent: { compaction: { prompt: COMPACTION_OVERRIDE }, title: { prompt: TITLE_OVERRIDE } } }
+
+  it.instance(
+    "an Office session's compaction call uses the shipped prompt, not the configured one",
+    () =>
+      Effect.gen(function* () {
+        const call = yield* compactionCall(OFFICE, hiddenConfig)
+        expect(call.body).not.toContain(COMPACTION_OVERRIDE)
+        expect(call.body).toContain("You are a context summarization agent.")
+        for (const absent of stripped(call.dir)) expect(call.body).not.toContain(absent)
+      }),
+    20_000,
+  )
+
+  it.instance(
+    "a non-Office session's compaction call keeps the configured prompt (regression)",
+    () =>
+      Effect.gen(function* () {
+        const call = yield* compactionCall(undefined, hiddenConfig)
+        expect(call.body).toContain(COMPACTION_OVERRIDE)
+        expect(call.body).not.toContain("You are a context summarization agent.")
+      }),
+    20_000,
+  )
+
+  it.instance(
+    "an Office session's title call uses the shipped prompt, not the configured one",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* systemFor(OFFICE, { title: true, config: hiddenConfig })
+        const call = result.title ?? { system: "", body: "" }
+        expect(call.system).toContain("You are a title generator")
+        expect(call.body).not.toContain(TITLE_OVERRIDE)
+        for (const absent of stripped(result.dir)) expect(call.body).not.toContain(absent)
+      }),
+    20_000,
+  )
+
+  it.instance(
+    "a non-Office session's title call keeps the configured prompt (regression)",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* systemFor(undefined, { title: true, config: hiddenConfig })
+        const call = result.title ?? { system: "", body: "" }
+        expect(call.system).toContain(TITLE_OVERRIDE)
+        expect(call.system).not.toContain("You are a title generator")
+      }),
+    20_000,
+  )
+
+  test("OfficeProfile.agent keeps the shipped hidden-agent prompts and drops every other prompt", () => {
+    expect(OfficeProfile.agent({ name: "compaction", prompt: "x" }).prompt).toContain(
+      "You are a context summarization agent.",
+    )
+    expect(OfficeProfile.agent({ name: "title", prompt: "x" }).prompt).toContain("You are a title generator")
+    expect(OfficeProfile.agent({ name: "build", prompt: "x" }).prompt).toBeUndefined()
+    expect(OfficeProfile.agent({ name: "sd1-custom", prompt: "x" }).prompt).toBeUndefined()
+  })
 })

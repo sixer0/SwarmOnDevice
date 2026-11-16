@@ -24,6 +24,7 @@ import { buildPrompt } from "@opencode-ai/core/session/compaction"
 import { SessionCompactionEvent } from "@opencode-ai/schema/session-compaction-event"
 import { LibraryRoot } from "@/skill/library-root"
 import { LIBRARY_SOURCE } from "@/tool/read"
+import { OfficeProfile } from "./office-profile"
 
 export const Event = SessionCompactionEvent
 
@@ -484,7 +485,10 @@ const layer = Layer.effect(
       })
       const result = yield* processor.process({
         user: userMessage,
-        agent,
+        // M6-01c (C64): an Office add-in session keeps the shipped compaction prompt, never a configured one.
+        agent: OfficeProfile.isOfficeSession(yield* session.get(input.sessionID).pipe(Effect.orDie))
+          ? OfficeProfile.agent(agent)
+          : agent,
         sessionID: input.sessionID,
         tools: {},
         system: [],

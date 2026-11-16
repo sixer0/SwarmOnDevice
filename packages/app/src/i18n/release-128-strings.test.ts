@@ -175,8 +175,8 @@ describe("1.2.8 i18n contract (N8-303)", () => {
     for (const key of Object.keys(NEW_APP)) expect({ key, present: Object.hasOwn(fr, key) }).toEqual({ key, present: false })
   })
 
-  test("the exemption pin is 366 at both sites (INTENT, office-addin row 45 / C13: 349 + 17, pinned in release-office-addin-strings.test.ts)", async () => {
+  test("the exemption pin is 369 at both sites (INTENT, office-addin C13 + C49 + C65: 349 + 17 + 1 + 2, pinned in release-office-addin-strings.test.ts)", async () => {
     const guard = await Bun.file(new URL("./parity-exemption-guard.test.ts", import.meta.url)).text()
-    expect(guard.split("toBe(366)").length - 1).toBe(2)
+    expect(guard.split("toBe(369)").length - 1).toBe(2)
   })
 })

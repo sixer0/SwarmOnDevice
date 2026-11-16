@@ -15,24 +15,62 @@ function installOffice(sets: string[]) {
   })
 }
 
-function installWord(doc: { selection: string; body: string; fail?: boolean }) {
+// Word fake. `position` is the selection's location identity (1.3 compareLocationWith);
+// `paragraphs` and `at` ([first, last] index) feed the WordApi 1.1 fallback anchor.
+type WordDoc = {
+  selection: string
+  body: string
+  fail?: boolean
+  position?: number
+  paragraphs?: string[]
+  at?: [number, number]
+}
+
+function installWord(doc: WordDoc) {
   const ops: Op[] = []
+  const pending: (() => void)[] = []
+  const paragraphs = (texts: () => string[]) => {
+    const collection = { items: [] as { text: string }[], load: () => undefined }
+    pending.push(() => (collection.items = texts().map((text) => ({ text }))))
+    return collection
+  }
   const selection = {
     text: "",
+    position: -1,
+    paragraphs: paragraphs(() => (doc.paragraphs ?? []).slice(doc.at?.[0] ?? 0, (doc.at?.[1] ?? 0) + 1)),
     load: () => ops.push(["load", "selection"]),
+    track: () => ops.push(["track"]),
     insertText: (text: string, location: string) => ops.push(["insertText", text, location]),
+    compareLocationWith: (other: { position: number }) => {
+      const result = { value: "" }
+      pending.push(() => (result.value = selection.position === other.position ? "Equal" : "Before"))
+      return result
+    },
   }
-  const body = { text: "", load: () => ops.push(["load", "body"]) }
+  const body = {
+    text: "",
+    load: () => ops.push(["load", "body"]),
+    paragraphs: paragraphs(() => doc.paragraphs ?? []),
+  }
   const context = {
     document: { getSelection: () => selection, body },
+    trackedObjects: { remove: () => ops.push(["untrack"]) },
     sync: async () => {
       if (doc.fail) throw Object.assign(new Error("GeneralException"), { code: "GeneralException" })
       selection.text = doc.selection
+      selection.position = doc.position ?? 0
       body.text = doc.body
+      pending.splice(0).forEach((fill) => fill())
       ops.push(["sync"])
     },
   }
-  Object.assign(globalThis, { Word: { run: (batch: (ctx: typeof context) => Promise<unknown>) => batch(context) } })
+  type Batch = (ctx: typeof context) => Promise<unknown>
+  const run = (first: Batch | object, second?: Batch) => {
+    if (typeof first === "function") return first(context)
+    ops.push(["run-with-tracked"])
+    return second!(context)
+  }
+  Object.assign(globalThis, { Word: { run } })
   return ops
 }
 
@@ -185,6 +223,80 @@ describe("Word executor", () => {
     expect(writes(ops)).toEqual([])
   })
 
+  test("M8-03c (1.3): a moved collapsed cursor needs a second confirm", async () => {
+    installOffice(["WordApi 1.1", "WordApi 1.3"])
+    installWord({ selection: "", body: "", position: 1 })
+    const preview = await wordHost().preview("insert", "x")
+    expect(preview).toMatchObject({ ok: true, selection: "", anchor: { kind: "tracked" } })
+    if (!preview.ok) throw new Error("expected a plan")
+    const moved = installWord({ selection: "", body: "", position: 2 })
+    const result = await wordHost().write("insert", "x", preview)
+    expect(result).toMatchObject({ ok: false, changed: true, plan: { selection: "", anchor: { kind: "tracked" } } })
+    expect(writes(moved)).toEqual([])
+    // The old anchor is released and the fresh selection is tracked for the second confirm.
+    expect(moved.filter((op) => op[0] === "untrack" || op[0] === "track")).toEqual([["untrack"], ["track"]])
+    if (!("changed" in result)) throw new Error("expected changed")
+    const again = installWord({ selection: "", body: "", position: 2 })
+    expect(await wordHost().write("insert", "x", result.plan)).toMatchObject({ ok: true })
+    expect(writes(again)).toEqual([["insertText", "x", "After"]])
+  })
+
+  test("M8-03c (1.3): another range with identical text needs a second confirm", async () => {
+    installOffice(["WordApi 1.1", "WordApi 1.3"])
+    installWord({ selection: "Heading\r", body: "", position: 1 })
+    const preview = await wordHost().preview("insert", "x")
+    if (!preview.ok) throw new Error("expected a plan")
+    const ops = installWord({ selection: "Heading\r", body: "", position: 5 })
+    expect(await wordHost().write("insert", "x", preview)).toMatchObject({ ok: false, changed: true })
+    expect(writes(ops)).toEqual([])
+  })
+
+  test("M8-03c (1.3): an unchanged selection writes once and releases the anchor", async () => {
+    installOffice(["WordApi 1.1", "WordApi 1.3"])
+    installWord({ selection: "Heading\r", body: "", position: 3 })
+    const preview = await wordHost().preview("insert", "x")
+    if (!preview.ok) throw new Error("expected a plan")
+    const ops = installWord({ selection: "Heading\r", body: "", position: 3 })
+    expect(await wordHost().write("insert", "x", preview)).toMatchObject({ ok: true })
+    expect(ops).toEqual([
+      ["run-with-tracked"],
+      ["load", "selection"],
+      ["sync"],
+      ["untrack"],
+      ["insertText", "x\n", "After"],
+      ["sync"],
+    ])
+  })
+
+  test("M8-03c (1.1 fallback): paragraph index catches a cursor moved to another paragraph", async () => {
+    installOffice(["WordApi 1.1"])
+    const paragraphs = ["Alpha", "Bravo", "Charlie"]
+    installWord({ selection: "", body: "", paragraphs, at: [0, 0] })
+    const preview = await wordHost().preview("insert", "x")
+    expect(preview).toMatchObject({ anchor: { kind: "paragraphs", start: 0, end: 0, count: 3 } })
+    if (!preview.ok) throw new Error("expected a plan")
+    const moved = installWord({ selection: "", body: "", paragraphs, at: [2, 2] })
+    expect(await wordHost().write("insert", "x", preview)).toMatchObject({
+      ok: false,
+      changed: true,
+      plan: { anchor: { kind: "paragraphs", start: 2, end: 2 } },
+    })
+    expect(writes(moved)).toEqual([])
+    const same = installWord({ selection: "", body: "", paragraphs, at: [0, 0] })
+    expect(await wordHost().write("insert", "x", preview)).toMatchObject({ ok: true })
+    expect(writes(same)).toEqual([["insertText", "x", "After"]])
+  })
+
+  test("M8-03c (1.1 fallback) known limit: identical paragraph text is not told apart", async () => {
+    installOffice(["WordApi 1.1"])
+    const paragraphs = ["Heading", "body", "Heading"]
+    installWord({ selection: "", body: "", paragraphs, at: [0, 0] })
+    const preview = await wordHost().preview("insert", "x")
+    if (!preview.ok) throw new Error("expected a plan")
+    installWord({ selection: "", body: "", paragraphs, at: [2, 2] })
+    expect(await wordHost().write("insert", "x", preview)).toMatchObject({ ok: true })
+  })
+
   test("Office errors map to readFailed / writeFailed; WordApi 1.1 missing is refused", async () => {
     installOffice(["WordApi 1.1"])
     installWord({ selection: "", body: "", fail: true })
@@ -274,6 +386,40 @@ describe("Excel executor", () => {
     expect(writes(same.ops)).toEqual([["numberFormat", "Sheet1!B2", [["@"]]], ["values", "Sheet1!B2", [["x"]]]])
   })
 
+  test("M8-03b: refusals carry the sheet-qualified target; only address is loaded for it", async () => {
+    installOffice(["ExcelApi 1.1"])
+    const busy = installExcel({ selection: [8, 1, 1, 3], cells: { C11: "busy" }, sheet: "Data" })
+    expect(await excelHost().preview("insert", "a\tb\tc\nd\te\tf\ng\th\ti")).toMatchObject({
+      ok: false,
+      refusal: { code: "office.error.targetNotEmpty", row: 1, column: 1 },
+      target: { address: "Data!B10:D12", rowIndex: 9, columnIndex: 1, rows: 3, columns: 3 },
+    })
+    // The selection is loaded for address and indexes only; values only for the target.
+    expect(busy.ops.filter((op) => op[0] === "load")).toEqual([
+      ["load", "Data!B9:D9", "address,rowCount,columnCount,rowIndex,columnIndex"],
+      ["load", "Data!B10:D12", "values"],
+    ])
+    const shape = installExcel({ selection: [0, 0, 500, 200] })
+    expect(await excelHost().write("replace", "a\tb\tc")).toMatchObject({
+      refusal: { code: "office.error.shapeMismatch" },
+      target: { address: "Sheet1!A1:GR500", rowIndex: 0, columnIndex: 0, rows: 500, columns: 200 },
+    })
+    expect(shape.ops.filter((op) => op[0] === "load")).toEqual([
+      ["load", "Sheet1!A1:GR500", "address,rowCount,columnCount,rowIndex,columnIndex"],
+    ])
+    expect(writes(shape.ops)).toEqual([])
+    installExcel({ selection: [0, 0, 1, 1] })
+    expect(await excelHost().preview("replace", "y".repeat(32_768))).toMatchObject({
+      refusal: { code: "office.error.writeFailed", reason: "cellTooLong" },
+      target: { address: "Sheet1!A1", rows: 1, columns: 1 },
+    })
+    installExcel({ selection: [1_048_575, 0, 1, 1] })
+    expect(await excelHost().preview("insert", "x")).toMatchObject({
+      refusal: { code: "office.error.writeFailed", reason: "outsideGrid" },
+      target: { address: "Sheet1!A1048576", rowIndex: 1_048_575, rows: 1, columns: 1 },
+    })
+  })
+
   test("M8-03a: quoted sheet names keep their identity", async () => {
     installOffice(["ExcelApi 1.1"])
     installExcel({ selection: [0, 0, 1, 1], sheet: "'Q1 Data'" })
@@ -310,6 +456,38 @@ describe("Excel executor", () => {
 
 // ---------- in-memory Excel adapter parity ----------
 
+describe("M8-03c in-memory Word adapter: location identity", () => {
+  test("a moved collapsed cursor needs a second confirm, then writes", async () => {
+    const host = memoryWordHost({ selection: "", position: 1 })
+    const preview = await host.preview("insert", "x")
+    if (!preview.ok) throw new Error("expected a plan")
+    host.doc.position = 7
+    const result = await host.write("insert", "x", preview)
+    expect(result).toMatchObject({ ok: false, changed: true, plan: { anchor: { kind: "memory", position: 7 } } })
+    expect(host.doc.calls).toEqual([])
+    if (!("changed" in result)) throw new Error("expected changed")
+    expect(await host.write("insert", "x", result.plan)).toMatchObject({ ok: true })
+    expect(host.doc.calls).toEqual([{ method: "insertText", text: "x", location: "After" }])
+  })
+
+  test("another range with identical text needs a second confirm", async () => {
+    const host = memoryWordHost({ selection: "Heading\r", position: 1 })
+    const preview = await host.preview("replace", "x")
+    if (!preview.ok) throw new Error("expected a plan")
+    host.doc.position = 9
+    expect(await host.write("replace", "x", preview)).toMatchObject({ ok: false, changed: true })
+    expect(host.doc.calls).toEqual([])
+  })
+
+  test("an unchanged selection writes once", async () => {
+    const host = memoryWordHost({ selection: "Heading\r", position: 4 })
+    const preview = await host.preview("insert", "x")
+    if (!preview.ok) throw new Error("expected a plan")
+    expect(await host.write("insert", "x", preview)).toMatchObject({ ok: true })
+    expect(host.doc.calls).toEqual([{ method: "insertText", text: "x\n", location: "After" }])
+  })
+})
+
 describe("in-memory Excel adapter", () => {
   test("same plan as the executor; writes cells, formats and selects the target", async () => {
     const host = memoryExcelHost({ selection: { rowIndex: 2, columnIndex: 7, rowCount: 1, columnCount: 2 } })
@@ -340,6 +518,7 @@ describe("in-memory Excel adapter", () => {
     const busy = memoryExcelHost({ cells: { A2: "keep" } })
     expect(await busy.write("insert", "x")).toMatchObject({ refusal: { code: "office.error.targetNotEmpty" } })
     expect(busy.book.calls).toEqual([])
+    expect(await busy.preview("insert", "x")).toMatchObject({ target: { address: "Sheet1!A2", rowIndex: 1, columnIndex: 0 } })
     expect(await memoryExcelHost({ selection: "multi" }).read("selection")).toMatchObject({
       code: "office.error.selectionUnsupported",
     })

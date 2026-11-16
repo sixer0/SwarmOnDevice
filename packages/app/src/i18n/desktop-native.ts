@@ -382,7 +382,7 @@ export const DESKTOP_NATIVE_ENGLISH = {
   "desktop.menu.officeAddin.clearCache": "Clear Office Add-in Cache...",
   "desktop.officeAddin.pair.title": "Connect the Office Add-in?",
   "desktop.officeAddin.pair.message":
-    "{{host}} wants to connect to Swarm. Click the code that is shown in the {{host}} pane. Click Deny if you did not start this request.",
+    "{{host}} wants to connect to Swarm. Only continue if you just clicked Connect in the {{host}} pane, then click the code shown there. Otherwise click Deny.",
   "desktop.officeAddin.pair.deny": "Deny",
   "desktop.officeAddin.installed":
     "The Office Add-in is on. Quit and reopen Word and Excel, then open it from Home > Add-ins > Developer Add-ins.",
@@ -401,6 +401,14 @@ export const DESKTOP_NATIVE_ENGLISH = {
     "Turn off the Office Add-in? Word and Excel will no longer load it, and every connected pane is disconnected.",
   "desktop.officeAddin.disable.removeCertificate": "Also remove the Swarm certificate from the keychain",
   "desktop.officeAddin.disable.confirmButton": "Turn Off",
+  // C49 (M1-04b): the uninstall mirror of installFailed, for the Finder-guided removal (U11).
+  "desktop.officeAddin.error.uninstallFailed":
+    "macOS did not let Swarm remove the add-in from {{path}}. Finder now shows the folder: move swarm-office-addin.xml to the Trash, then quit and reopen Word and Excel.",
+  // C65 (M1-04c): Office not installed (no wef parent folders) and the certificate removal failure on Disable.
+  "desktop.officeAddin.error.notInstalled":
+    "Word and Excel were not found on this Mac. Open Word or Excel once, then turn the Office Add-in on again. Expected folders: {{path}}",
+  "desktop.officeAddin.error.certRemovalFailed":
+    "Swarm could not remove its certificate from the keychain. It will try again the next time you turn the Office Add-in on.",
   // Install DATUM Studio for Claude (1.2.0 rows 34/34b). Appended for the same positional reason as above.
   "desktop.menu.installDatumStudio": "Install DATUM Studio for Claude...",
   "desktop.datumStudio.confirm.message": "Install the datum-studio command for Claude?",

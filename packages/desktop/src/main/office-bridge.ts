@@ -23,7 +23,8 @@ import {
   type PairDecision,
   type PairDecisionSource,
 } from "./office-bridge/protocol"
-import { createOfficeBridgeFactory, notFoundRoutes, type BridgeRoutesFactory } from "./office-bridge/server"
+import { createBridgeRoutes } from "./office-bridge/routes"
+import { createOfficeBridgeFactory, type BridgeRoutesFactory } from "./office-bridge/server"
 import { paneRootFor } from "./office-bridge/static"
 
 // ── Routes seam (W4 integration row) ──
@@ -34,7 +35,7 @@ import { paneRootFor } from "./office-bridge/static"
  * not mounted alone: the Host/Origin checks of admit run before the static stage, so a static-only mount would serve
  * the pane without them. Until then every request is `404 ROUTE_NOT_ALLOWED`.
  */
-export const officeBridgeRoutes: BridgeRoutesFactory = notFoundRoutes
+export const officeBridgeRoutes: BridgeRoutesFactory = createBridgeRoutes() // W4-RC: composed pipeline (routes.ts)
 
 // ── Runner (Electron-free; tests drive it with a fake port and factory) ──
 
