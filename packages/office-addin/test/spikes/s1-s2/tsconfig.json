@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "paths": {
+      "pkijs": ["../../../../desktop/node_modules/pkijs"],
+      "asn1js": ["../../../../desktop/node_modules/asn1js"]
+    }
+  },
+  "include": ["*.ts"]
+}

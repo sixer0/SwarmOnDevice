@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Swarm S3 spike</title>
+    <!-- RC-1 / C8 host only (SC-39). Classic script: it must run before pane.js (a deferred module). -->
+    <script src="https://officeapis.public.onecdn.static.microsoft/1/office.js"></script>
+    <script type="module" src="./pane.js"></script>
+    <style>
+      body { font: 12px -apple-system, system-ui, sans-serif; margin: 8px; color: #1b1b1b; background: #fff; }
+      h1 { font-size: 14px; margin: 0 0 6px; }
+      h2 { font-size: 12px; margin: 10px 0 4px; }
+      fieldset { border: 1px solid #ccc; padding: 6px; margin: 0 0 8px; }
+      button { font: inherit; margin: 2px 2px 2px 0; padding: 3px 6px; }
+      textarea { width: 100%; box-sizing: border-box; font: 11px ui-monospace, Menlo, monospace; }
+      pre { white-space: pre-wrap; word-break: break-all; font: 11px ui-monospace, Menlo, monospace; background: #f4f4f4; padding: 6px; min-height: 120px; }
+      #status { font-weight: 600; }
+      #channel { margin: 0 0 6px; color: #555; }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Swarm spike S3 <span id="status">loading Office.js...</span></h1>
+    <!-- Row 33b: command channel state (polls /s3/next every second after onReady). -->
+    <p id="channel">channel: waiting for Office.onReady</p>
+
+    <fieldset>
+      <button id="env">0. Environment</button>
+      <button id="select-log">Select log</button>
+      <button id="clear-log">Clear log</button>
+    </fieldset>
+
+    <fieldset id="word" hidden>
+      <h2>Word</h2>
+      <button id="w-selection">W1 Selection text</button>
+      <button id="w-body">W2 Body text</button>
+      <button id="w-after">W3 insertText After</button>
+      <button id="w-replace">W4 insertText Replace</button>
+      <label for="w-text">Text to insert (line breaks kept, H-1)</label>
+      <textarea id="w-text" rows="3">S3-LINE-1
+S3-LINE-2</textarea>
+    </fieldset>
+
+    <fieldset id="excel" hidden>
+      <h2>Excel</h2>
+      <button id="x-selection">X1 Selected range</button>
+      <button id="x-used">X2 Used range</button>
+      <button id="x-format">X3 numberFormat probe</button>
+      <button id="x-insert">X4 Write insert</button>
+      <button id="x-replace">X5 Write replace</button>
+      <label for="x-text">Reply text (FR-13: tabs split cells, lines split rows)</label>
+      <textarea id="x-text" rows="3"></textarea>
+    </fieldset>
+
+    <pre id="log"></pre>
+  </body>
+</html>

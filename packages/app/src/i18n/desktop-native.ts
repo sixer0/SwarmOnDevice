@@ -373,6 +373,34 @@ export const DESKTOP_NATIVE_ENGLISH = {
   // Placed after every positionally mapped key (hr, hu, is and lt map the first 90 by position and carry this
   // one as a named key) and before the DATUM block, which datum-studio-strings.test.ts pins as the tail.
   "desktop.menu.recheckTools": "Re-check Tools",
+  // Office Add-in (docs/2026-11-16_swarm_office_addin, row 45 / M1-04, decision C13: EN and ID only), register rev 4 §8.3.
+  // Placed after the positionally mapped keys and before the DATUM block, which datum-studio-strings.test.ts pins as the
+  // tail. The pairing dialog's three codes are untranslated digits, so there is no Allow key (RC-1 row 23).
+  "desktop.menu.officeAddin": "Office Add-in",
+  "desktop.menu.officeAddin.enable": "Enabled",
+  "desktop.menu.officeAddin.disconnect": "Disconnect All Panes",
+  "desktop.menu.officeAddin.clearCache": "Clear Office Add-in Cache...",
+  "desktop.officeAddin.pair.title": "Connect the Office Add-in?",
+  "desktop.officeAddin.pair.message":
+    "{{host}} wants to connect to Swarm. Click the code that is shown in the {{host}} pane. Click Deny if you did not start this request.",
+  "desktop.officeAddin.pair.deny": "Deny",
+  "desktop.officeAddin.installed":
+    "The Office Add-in is on. Quit and reopen Word and Excel, then open it from Home > Add-ins > Developer Add-ins.",
+  "desktop.officeAddin.error.portInUse":
+    "Another app is using the port the Office Add-in needs. Quit that app, then turn the Office Add-in on again.",
+  "desktop.officeAddin.error.certUntrusted":
+    "The Office Add-in certificate is not trusted, so Word and Excel cannot open the pane. Turn the Office Add-in off and on again to trust it again.",
+  "desktop.officeAddin.error.startFailed":
+    "The Office Add-in could not start. Turn it off and on again, or relaunch Swarm.",
+  "desktop.officeAddin.error.installFailed":
+    "macOS did not let Swarm copy the add-in into {{path}}. Finder now shows the add-in file and the folder: drag swarm-office-addin.xml into the folder, then quit and reopen Word and Excel.",
+  "desktop.officeAddin.clearCache.confirm":
+    "Clear the Office add-in cache? Quit Word and Excel first. Connected panes are disconnected and must connect again.",
+  "desktop.officeAddin.clearCache.confirmButton": "Clear Cache",
+  "desktop.officeAddin.disable.confirm":
+    "Turn off the Office Add-in? Word and Excel will no longer load it, and every connected pane is disconnected.",
+  "desktop.officeAddin.disable.removeCertificate": "Also remove the Swarm certificate from the keychain",
+  "desktop.officeAddin.disable.confirmButton": "Turn Off",
   // Install DATUM Studio for Claude (1.2.0 rows 34/34b). Appended for the same positional reason as above.
   "desktop.menu.installDatumStudio": "Install DATUM Studio for Claude...",
   "desktop.datumStudio.confirm.message": "Install the datum-studio command for Claude?",

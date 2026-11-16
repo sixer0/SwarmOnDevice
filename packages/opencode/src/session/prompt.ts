@@ -59,6 +59,7 @@ import { eq } from "drizzle-orm"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
+import { OfficeProfile } from "./office-profile"
 import { LLMEvent } from "@opencode-ai/llm"
 
 // @ts-ignore
@@ -1372,21 +1373,26 @@ const layer = Layer.effect(
               // The session's first message, fixed for the session (prompt cache, P-05): memory ranks on its text and
               // `<suggested_skills>` matches its text and file parts (SK-g, R20-C08).
               const firstParts = msgs.find((msg) => msg.info.role === "user")?.parts ?? []
-              const [skills, env, instructions, remembered, mcpInstructions, delegation] = yield* Effect.all([
-                sys.skills(agent, SystemPrompt.skillFocus(firstParts)),
-                sys.environment(model),
-                instruction.system().pipe(Effect.orDie),
-                // Ranked on the session's first message and folder, fixed for the session (prompt cache, P-05).
-                memory.prompt(model, {
-                  sessionID,
-                  query: firstParts
-                    .flatMap((part) => (part.type === "text" && !part.synthetic ? [part.text] : []))
-                    .join("\n"),
-                  directory: session.directory,
-                }),
-                sys.mcp(agent, session.permission),
-                delegationBlocks(agent),
-              ])
+              // SD-1: an Office add-in session gets one date line and none of the producers below run (no files read,
+              // no remote instruction URLs fetched).
+              const [skills, env, instructions, remembered, mcpInstructions, delegation] =
+                OfficeProfile.isOfficeSession(session)
+                  ? OfficeProfile.prefix()
+                  : yield* Effect.all([
+                      sys.skills(agent, SystemPrompt.skillFocus(firstParts)),
+                      sys.environment(model),
+                      instruction.system().pipe(Effect.orDie),
+                      // Ranked on the session's first message and folder, fixed for the session (prompt cache, P-05).
+                      memory.prompt(model, {
+                        sessionID,
+                        query: firstParts
+                          .flatMap((part) => (part.type === "text" && !part.synthetic ? [part.text] : []))
+                          .join("\n"),
+                        directory: session.directory,
+                      }),
+                      sys.mcp(agent, session.permission),
+                      delegationBlocks(agent),
+                    ])
               frozenSystem = {
                 key: systemKey,
                 parts: [
@@ -1417,6 +1423,7 @@ const layer = Layer.effect(
               tools,
               model,
               toolChoice: format.type === "json_schema" ? "required" : undefined,
+              officeProfile: OfficeProfile.isOfficeSession(session),
             })
 
             if (structured !== undefined) {

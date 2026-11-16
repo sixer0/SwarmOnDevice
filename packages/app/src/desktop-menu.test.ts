@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { DESKTOP_MENU } from "./desktop-menu"
+import { DESKTOP_MENU, desktopMenuVisible } from "./desktop-menu"
 import { DESKTOP_NATIVE_ENGLISH } from "./i18n/desktop-native"
 
 describe("desktop menu", () => {
@@ -32,7 +32,8 @@ describe("desktop menu", () => {
 
     expect(app?.platforms).toEqual(["macos"])
     // 1.2.6 row 91 (C9, SEC-05): +1 for "Re-check Tools" (16 -> 17).
-    expect(items).toHaveLength(17)
+    // Office add-in M1-03 (SD-RC-3, IA-3): +1 for the "Office Add-in" submenu entry (17 -> 18).
+    expect(items).toHaveLength(18)
     expect(actions.slice(start, start + 3)).toEqual(["app.checkForUpdates", "app.updateFromFile", "app.undoLastUpdate"])
 
     const patch = items.filter((item) => item.type === "item" && item.enabled === "patch")
@@ -77,5 +78,50 @@ describe("desktop menu", () => {
       (item) => item.type === "item" && item.action === "app.recheckTools",
     )
     expect(all).toHaveLength(1)
+  })
+
+  // Office add-in M1-03 (SD-RC-3, IA-3, SD §13.1): one macOS-only submenu below Re-check Tools in the app menu.
+  test("places the Office Add-in submenu below Re-check Tools in the macOS app menu only", () => {
+    const app = DESKTOP_MENU.find((menu) => menu.id === "app")
+    const items = app?.items ?? []
+    const at = items.findIndex((item) => item.type === "item" && item.action === "app.recheckTools")
+    const office = items[at + 1]
+
+    expect(office).toEqual({
+      type: "item",
+      labelKey: "desktop.menu.officeAddin",
+      platforms: ["macos"],
+      items: [
+        { type: "item", labelKey: "desktop.menu.officeAddin.enable", action: "app.officeAddinToggle", checked: "officeAddin" },
+        {
+          type: "item",
+          labelKey: "desktop.menu.officeAddin.disconnect",
+          action: "app.officeAddinDisconnect",
+          enabled: "officeAddinRunning",
+        },
+        { type: "item", labelKey: "desktop.menu.officeAddin.clearCache", action: "app.officeAddinClearCache" },
+      ],
+    })
+
+    const officeActions = ["app.officeAddinToggle", "app.officeAddinDisconnect", "app.officeAddinClearCache"]
+    const topLevel = DESKTOP_MENU.flatMap((menu) => menu.items ?? []).filter(
+      (item) => item.type === "item" && item.action !== undefined && officeActions.includes(item.action),
+    )
+    expect(topLevel).toHaveLength(0)
+  })
+
+  // C15 RM-28: the Windows renderer filter (windows-app-menu.tsx) must still drop the macOS-only submenu.
+  test("keeps the Office Add-in submenu out of the Windows menu", () => {
+    const windows = DESKTOP_MENU.filter((menu) => desktopMenuVisible(menu, "windows")).flatMap((menu) =>
+      (menu.items ?? []).filter((entry) => desktopMenuVisible(entry, "windows")),
+    )
+    const app = DESKTOP_MENU.find((menu) => menu.id === "app")
+    const office = (app?.items ?? []).find((item) => item.type === "item" && item.labelKey === "desktop.menu.officeAddin")
+
+    expect(office).toBeDefined()
+    expect(desktopMenuVisible(office ?? {}, "windows")).toBe(false)
+    expect(windows.length).toBeGreaterThan(0)
+    expect(windows.filter((entry) => entry.type === "item" && (entry.items || entry.checked))).toHaveLength(0)
+    expect(windows.filter((entry) => entry.type === "item" && entry.action?.startsWith("app.officeAddin"))).toHaveLength(0)
   })
 })

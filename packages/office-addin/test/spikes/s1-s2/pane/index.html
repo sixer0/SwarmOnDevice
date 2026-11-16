@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Swarm spike S1/S2</title>
+    <!-- Register 6.2 / RC-1 Office.js source -->
+    <script src="https://officeapis.public.onecdn.static.microsoft/1/office.js"></script>
+    <style>
+      body { font: 14px -apple-system, system-ui, sans-serif; margin: 16px; color: #1b1b1b; background: #fff; }
+      h1 { font-size: 16px; margin: 0 0 12px; }
+      dt { font-weight: 600; margin-top: 8px; }
+      dd { margin: 2px 0 0; font-family: ui-monospace, monospace; word-break: break-all; }
+      .bad { color: #a30000; }
+    </style>
+  </head>
+  <body>
+    <h1>Swarm spike S1/S2: hello pane</h1>
+    <dl>
+      <dt>Office.onReady</dt><dd id="state">waiting</dd>
+      <dt>host</dt><dd id="host">-</dd>
+      <dt>platform</dt><dd id="platform">-</dd>
+      <dt>diagnostics.version</dt><dd id="version">-</dd>
+      <dt>page origin</dt><dd id="origin">-</dd>
+    </dl>
+    <p><a href="/s3/index.html">Open the S3 probe pane (row 33)</a></p>
+    <script>
+      const set = (id, value) => { document.getElementById(id).textContent = String(value) }
+      set("origin", location.origin)
+      const report = (data) =>
+        fetch("/pane/log", { method: "POST", body: JSON.stringify(data) }).catch(() => undefined)
+      if (typeof Office === "undefined") {
+        set("state", "office.js did not load (offline or blocked)")
+        document.getElementById("state").className = "bad"
+        report({ state: "no-office-js", origin: location.origin, ua: navigator.userAgent })
+      }
+      if (typeof Office !== "undefined") {
+        Office.onReady((info) => {
+          const diag = Office.context && Office.context.diagnostics
+          const data = {
+            state: "ready",
+            host: info.host,
+            platform: info.platform,
+            version: diag ? diag.version : null,
+            origin: location.origin,
+            ua: navigator.userAgent,
+          }
+          set("state", "ready")
+          set("host", info.host)
+          set("platform", info.platform)
+          set("version", data.version)
+          report(data)
+        })
+      }
+    </script>
+  </body>
+</html>

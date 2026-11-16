@@ -127,6 +127,31 @@ export const dict = {
   "desktop.datumStudio.done.pathHint":
     "{{path}}\n\n{{dir}} belum ada di PATH. Tambahkan baris ini ke profil shell Anda:\nexport PATH=\"{{dir}}:$PATH\"\n\nUntuk menambahkannya ke Claude Code, jalankan baris ini di Terminal:\n{{claude}}",
   "desktop.datumStudio.failed.message": "DATUM Studio tidak dapat dipasang untuk Claude",
+  "desktop.menu.officeAddin": "Add-in Office",
+  "desktop.menu.officeAddin.enable": "Aktif",
+  "desktop.menu.officeAddin.disconnect": "Putuskan semua panel",
+  "desktop.menu.officeAddin.clearCache": "Bersihkan tembolok add-in Office...",
+  "desktop.officeAddin.pair.title": "Hubungkan add-in Office?",
+  "desktop.officeAddin.pair.message":
+    "{{host}} ingin terhubung ke Swarm. Klik kode yang tampil di panel {{host}}. Klik Tolak jika bukan Anda yang memulai permintaan ini.",
+  "desktop.officeAddin.pair.deny": "Tolak",
+  "desktop.officeAddin.installed":
+    "Add-in Office sudah aktif. Tutup lalu buka kembali Word dan Excel, kemudian buka add-in dari Home > Add-ins > Developer Add-ins.",
+  "desktop.officeAddin.error.portInUse":
+    "Aplikasi lain sedang memakai porta yang dibutuhkan add-in Office. Tutup aplikasi itu, lalu aktifkan kembali add-in Office.",
+  "desktop.officeAddin.error.certUntrusted":
+    "Sertifikat add-in Office tidak dipercaya, sehingga Word dan Excel tidak dapat membuka panel. Nonaktifkan lalu aktifkan kembali add-in Office agar sertifikatnya dipercaya lagi.",
+  "desktop.officeAddin.error.startFailed":
+    "Add-in Office tidak dapat dimulai. Nonaktifkan lalu aktifkan kembali, atau luncurkan ulang Swarm.",
+  "desktop.officeAddin.error.installFailed":
+    "macOS tidak mengizinkan Swarm menyalin add-in ke {{path}}. Finder kini menampilkan berkas add-in dan foldernya: seret swarm-office-addin.xml ke folder tersebut, lalu tutup dan buka kembali Word dan Excel.",
+  "desktop.officeAddin.clearCache.confirm":
+    "Bersihkan tembolok add-in Office? Tutup Word dan Excel terlebih dahulu. Panel yang terhubung akan diputuskan dan harus dihubungkan lagi.",
+  "desktop.officeAddin.clearCache.confirmButton": "Bersihkan tembolok",
+  "desktop.officeAddin.disable.confirm":
+    "Nonaktifkan add-in Office? Word dan Excel tidak akan memuatnya lagi, dan semua panel yang terhubung akan diputuskan.",
+  "desktop.officeAddin.disable.removeCertificate": "Hapus juga sertifikat Swarm dari rantai kunci",
+  "desktop.officeAddin.disable.confirmButton": "Nonaktifkan",
 
   "desktop.server.local": "Server lokal",
 

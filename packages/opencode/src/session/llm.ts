@@ -45,6 +45,8 @@ export type StreamInput = {
   tools: Record<string, Tool>
   retries?: number
   toolChoice?: "auto" | "required" | "none"
+  /** SD-1 (IA-1): an Office add-in session; `llm/request.ts` then leaves out `<gsp_workflow>`. */
+  officeProfile?: boolean
 }
 
 export type StreamRequest = StreamInput & {

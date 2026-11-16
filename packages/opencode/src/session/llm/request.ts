@@ -33,6 +33,7 @@ type PrepareInput = {
   readonly plugin: Plugin.Interface
   readonly flags: RuntimeFlags.Info
   readonly isWorkflow: boolean
+  readonly officeProfile?: boolean
 }
 
 export type Prepared = {
@@ -58,8 +59,9 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   const system = [
     [
       ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
-      // GSP workflow and language rule: build and general only, on every model (specs S4.3, S5.1).
-      ...SystemPrompt.workflow(input.agent.name),
+      // GSP workflow and language rule: build and general only, on every model (specs S4.3, S5.1). Never for an Office
+      // add-in session (SD-1, IA-1).
+      ...(input.officeProfile ? [] : SystemPrompt.workflow(input.agent.name)),
       ...input.system,
       ...(input.user.system ? [input.user.system] : []),
     ]

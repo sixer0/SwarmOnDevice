@@ -162,8 +162,12 @@ const pluralCategories = new Map(
 //     `session.mission.move.error.approval` is added (EN and ID only): +2 +1 -1, ending at 329;
 //     1.2.9 row 79b (C112): the tidy approve button `session.mission.tidy.approve` becomes `.one`/`.other` (EN and ID only), +2 -1, ending at 330;
 //     1.2.10 (row 41 of docs/2026-11-15_swarm_1_2_10_patch, N10-100): +19 keys (the Obsidian outcome texts, the changed-step drift line, the memory vault copy/remove/confirm/rule/refusal texts, EN and ID only), ending at 349.
+//   - seventeen more for the Office Add-in native menu, three-code pairing dialog, install notice and Finder-guided
+//     fallback, disable dialog with its certificate checkbox, and errors (`desktop.menu.officeAddin*`,
+//     `desktop.officeAddin.*`), decision C13 (OQ-1, EN and ID only) of docs/2026-11-16_swarm_office_addin, register
+//     rev 4 §8.3, row 45 (M1-04): +17, ending at 366.
 // Widening this list is a decision, not drift: `parity-exemption-guard.test.ts` fails the suite on any
-// three-hundred-and-fiftieth entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
+// three-hundred-and-sixty-seventh entry, on any non-literal/wildcard, and if `en` or `id` ever stops carrying an exempt key.
 const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "command.project.openNumber",
   "settings.tab.servers",
@@ -514,6 +518,23 @@ const UNTRANSLATED_KEY_PRESENCE_EXEMPTION: readonly string[] = [
   "memory.refused.classified",
   "memory.refused.notDeviceOnly",
   "memory.refused.archived",
+  "desktop.menu.officeAddin",
+  "desktop.menu.officeAddin.enable",
+  "desktop.menu.officeAddin.disconnect",
+  "desktop.menu.officeAddin.clearCache",
+  "desktop.officeAddin.pair.title",
+  "desktop.officeAddin.pair.message",
+  "desktop.officeAddin.pair.deny",
+  "desktop.officeAddin.installed",
+  "desktop.officeAddin.error.portInUse",
+  "desktop.officeAddin.error.certUntrusted",
+  "desktop.officeAddin.error.startFailed",
+  "desktop.officeAddin.error.installFailed",
+  "desktop.officeAddin.clearCache.confirm",
+  "desktop.officeAddin.clearCache.confirmButton",
+  "desktop.officeAddin.disable.confirm",
+  "desktop.officeAddin.disable.removeCertificate",
+  "desktop.officeAddin.disable.confirmButton",
 ]
 // Locales the exemption never applies to. `en` is every domain's source, and `id` is the second
 // maintained locale: it already carries every exempt key, so it stays fully enforced like the rest.
