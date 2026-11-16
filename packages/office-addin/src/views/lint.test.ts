@@ -52,15 +52,33 @@ describe("U-LINT-02 source rules", () => {
 })
 
 describe("U-LINT-03 no secrets in the built pane (AC-39)", () => {
-  // Runs over dist/pane after `vite build`; without a build there is nothing to scan.
+  // Runs over dist/pane after `vite build`; without a build the lint fails (F-6).
   // Secret VALUES are refused. Three NAMES appear by construction and are allowed only in their
   // known non-secret form (M8-05 report, finding F-1): the `swo1_` prefix constant (token format
   // check), the hey-api client's default auth header name, and the generated SDK's header-parameter
   // descriptors `key:"x-swarm-desktop-nonce"` (the pane never sets that header; the bridge strips it).
+  // F-6 (C66): a missing or stale dist/pane fails instead of passing with nothing scanned. Stale means older than any
+  // pane build input (the list of desktop scripts/check-office-addin-stage.ts PANE_SOURCES).
+  test("dist/pane exists and is not older than the pane sources (F-6)", async () => {
+    const built = Bun.file(`${pkg}/dist/pane/index.html`)
+    expect(await built.exists(), "dist/pane missing: run `bun run build` in packages/office-addin").toBe(true)
+    const inputs = [
+      ...(await Array.fromAsync(new Glob("{src,public}/**/*").scan({ cwd: pkg }))),
+      "index.html",
+      "vite.config.ts",
+      "package.json",
+    ]
+    // Test files are not build inputs.
+    const stale = inputs
+      .filter((file) => !/\.test\.tsx?$/.test(file))
+      .filter((file) => Bun.file(`${pkg}/${file}`).lastModified > built.lastModified)
+    expect(stale, "dist/pane is older than these sources: run `bun run build` in packages/office-addin").toEqual([])
+  })
+
   test("dist/pane holds no token, Authorization header, desktop nonce or Basic-auth user", async () => {
     const dist = `${pkg}/dist/pane`
     const files = await Array.fromAsync(new Glob("**/*").scan({ cwd: dist })).catch(() => [] as string[])
-    if (files.length === 0) return
+    expect(files.length, "dist/pane is empty: run `bun run build` in packages/office-addin").toBeGreaterThan(0)
     const found = await Promise.all(
       files.map(async (file) => {
         const text = await Bun.file(`${dist}/${file}`).text()

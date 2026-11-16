@@ -15,7 +15,7 @@ import type { CertPaths } from "./certs"
 
 export type SafeStorageLike = Pick<SafeStorage, "isEncryptionAvailable" | "encryptString" | "decryptString">
 
-export type OfficeLogLevel = "info" | "warn" | "error"
+type OfficeLogLevel = "info" | "warn" | "error"
 /** Structured, persistent log sink (production: `logging.ts` `write`, an electron-log file). Never pass key material. */
 export type OfficeLogSink = (level: OfficeLogLevel, source: string, message: string, context?: Record<string, unknown>) => void
 
@@ -24,7 +24,7 @@ export type OfficeLogSink = (level: OfficeLogLevel, source: string, message: str
  * - `absent`: no key file. Normal in the SC-22 mode; in the SC-21 mode the caller reports `CERT_MISSING`.
  * - `unreadable`: a key file exists but cannot be decrypted or is not a key (C26(c): regenerate and re-trust).
  */
-export type CaKeyRead = { state: "ok"; key: string } | { state: "absent" } | { state: "unreadable" }
+type CaKeyRead = { state: "ok"; key: string } | { state: "absent" } | { state: "unreadable" }
 
 export type KeyCustody = {
   /** True in the SC-21 mode (`safeStorage` available): the CA key is retained, encrypted. */

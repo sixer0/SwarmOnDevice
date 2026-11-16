@@ -21,9 +21,10 @@ const DRAW_LIMIT = 64
 const CODE_PATTERN = new RegExp(`^\\d{${OFFICE_PAIR_CODE_DIGITS}}$`)
 
 /** Uniform integer in [0, max). */
+/** @internal test seam */
 export type PairRandomInt = (max: number) => number
 
-export type PairDialogKeys = "desktop.officeAddin.pair.title" | "desktop.officeAddin.pair.message" | "desktop.officeAddin.pair.deny"
+type PairDialogKeys = "desktop.officeAddin.pair.title" | "desktop.officeAddin.pair.message" | "desktop.officeAddin.pair.deny"
 
 export type PairDialogDeps = {
   /** The Swarm window to attach a sheet to, or null for an app-modal dialog (DLG-1). */
@@ -40,12 +41,12 @@ export type PairDialogDeps = {
 }
 
 /** What the user did. `expired`: the request lifetime passed first; main sends no decision (the bridge would discard it). */
-export type PairDialogChoice = "code" | "decoy" | "deny" | "error"
-export type PairDialogOutcome =
+type PairDialogChoice = "code" | "decoy" | "deny" | "error"
+type PairDialogOutcome =
   | { kind: "decided"; choice: PairDialogChoice; decision: PairDecision }
   | { kind: "expired"; requestId: string }
 
-export type PairDialogLayout = {
+type PairDialogLayout = {
   /** Codes then Deny, in display order. */
   buttons: string[]
   /** Index of the correct code in `buttons`. */
@@ -59,6 +60,7 @@ function drawCode(randomInt: PairRandomInt) {
 }
 
 /** Two decoys, each uniform over the codes not yet taken (rejection sampling keeps uniformity). */
+/** @internal test seam */
 export function pairDecoys(code: string, randomInt: PairRandomInt = cryptoRandomInt): [string, string] {
   if (!CODE_PATTERN.test(code)) throw new Error("pair-dialog: invalid code")
   const taken = new Set([code])
@@ -78,6 +80,7 @@ export function pairDecoys(code: string, randomInt: PairRandomInt = cryptoRandom
 }
 
 /** Fisher-Yates shuffle of the three codes, then Deny last. */
+/** @internal test seam */
 export function pairDialogLayout(code: string, denyLabel: string, randomInt: PairRandomInt = cryptoRandomInt): PairDialogLayout {
   const codes = [code, ...pairDecoys(code, randomInt)]
   for (let i = codes.length - 1; i > 0; i--) {
@@ -90,7 +93,7 @@ export function pairDialogLayout(code: string, denyLabel: string, randomInt: Pai
   return { buttons, correctIndex: codes.indexOf(code), denyIndex: buttons.length - 1 }
 }
 
-export function pairDialogOptions(
+function pairDialogOptions(
   request: PairRequest,
   layout: PairDialogLayout,
   t: NonNullable<PairDialogDeps["t"]>,

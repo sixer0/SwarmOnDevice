@@ -10,11 +10,12 @@ import { join } from "node:path"
 import { OFFICE_PAIR_IDLE_DAYS } from "@swarm/office-addin/constants"
 import { OFFICE_HOSTS, type OfficeHost } from "./protocol"
 
-export const PAIRING_STORE_VERSION = 1
-export const PAIRING_STORE_FILE = "pairings.json"
+const PAIRING_STORE_VERSION = 1
+const PAIRING_STORE_FILE = "pairings.json"
+/** @internal test seam */
 export const PAIRING_IDLE_MS = OFFICE_PAIR_IDLE_DAYS * 24 * 60 * 60 * 1000
 
-export type PairingEntry = {
+type PairingEntry = {
   host: OfficeHost
   /** `sha256:` plus 64 lowercase hex characters of the full token. */
   hash: string
@@ -23,9 +24,9 @@ export type PairingEntry = {
 }
 
 /** Structured log sink. Fields never carry a token, a hash or file contents. */
-export type PairingStoreLog = (event: string, fields: Record<string, string | number>) => void
+type PairingStoreLog = (event: string, fields: Record<string, string | number>) => void
 
-export type PairingStoreOptions = {
+type PairingStoreOptions = {
   /** `<userData>/office-addin`. Created with mode 0700 when missing; an existing directory must not be group/other accessible. */
   dir: string
   log: PairingStoreLog
@@ -34,6 +35,7 @@ export type PairingStoreOptions = {
 }
 
 /** Thrown by `load()` when the data directory is accessible to group or other (SC-12, register §7.6 DATA_DIR_UNSAFE). */
+/** @internal test seam */
 export class PairingStoreDirUnsafeError extends Error {
   readonly code = "DATA_DIR_UNSAFE"
   constructor(readonly mode: number) {
@@ -45,6 +47,7 @@ export function pairingsPath(dir: string) {
   return join(dir, PAIRING_STORE_FILE)
 }
 
+/** @internal test seam */
 export function hashToken(token: string) {
   return `sha256:${createHash("sha256").update(token, "utf8").digest("hex")}`
 }

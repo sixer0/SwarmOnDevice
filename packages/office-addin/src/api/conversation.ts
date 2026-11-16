@@ -14,15 +14,15 @@ import type { ApiFailure, OfficeApi } from "./client"
 import { openEventStream, type EventStream, type StreamClose } from "./events"
 import { performanceMarker, type Marker } from "./marks"
 
-export type SendInput = { title: string; host: OfficeHost; parts: TextPart[] }
+type SendInput = { title: string; host: OfficeHost; parts: TextPart[] }
 
-export type SendResult =
+type SendResult =
   // `created` = a new session was made by this send; the shell stores its id (FR-33).
   | { ok: true; sessionID: string; created: boolean }
   // `stage` says which call failed; `stream` = the event stream could not be opened.
   | (ApiFailure & { stage: "stream" | "create" | "prompt" })
 
-export type ConversationOptions = {
+type ConversationOptions = {
   api: OfficeApi
   mark?: Marker
   // Every reducer state change (render the replies from it).
@@ -122,4 +122,4 @@ export function createConversation(options: ConversationOptions) {
   }
 }
 
-export type Conversation = ReturnType<typeof createConversation>
+type Conversation = ReturnType<typeof createConversation>

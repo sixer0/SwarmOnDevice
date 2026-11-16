@@ -44,7 +44,7 @@ export type StreamEvent =
   | { type: "beginTurn" }
 
 // Bounds memory if the create call never returns; far above one prompt's traffic.
-export const STREAM_BUFFER_LIMIT = 10_000
+const STREAM_BUFFER_LIMIT = 10_000
 
 const CONSUMED = new Set([
   "message.updated",
@@ -91,7 +91,7 @@ function header(frame: unknown) {
 const rendered = (state: StreamState, part: PartEntry) =>
   part.type === "text" && own(state.messages, part.messageID)?.role === "assistant"
 
-export function renderedLength(state: StreamState) {
+function renderedLength(state: StreamState) {
   return Object.values(state.parts)
     .filter((part) => rendered(state, part))
     .reduce((sum, part) => sum + part.text.length, 0)

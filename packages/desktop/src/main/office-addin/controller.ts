@@ -62,15 +62,17 @@ import {
 
 const SOURCE = "office-addin.controller"
 /** SD §5.4 step 5: wait for `ready` or `failed` (the sidecar's `server.ts:22` value). */
-export const BRIDGE_START_TIMEOUT_MS = 60_000
+const BRIDGE_START_TIMEOUT_MS = 60_000
 /** SD §5.3 "Quit": `stop`, then a kill after 6 s (`server.ts:23`). */
-export const BRIDGE_STOP_TIMEOUT_MS = 6_000
+const BRIDGE_STOP_TIMEOUT_MS = 6_000
 /** Env keys the bridge may inherit (SC-34, SD-AC-14). No proxy, no API keys, no OPENCODE_* variable. */
+/** @internal test seam */
 export const BRIDGE_ENV_ALLOW = ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TZ"] as const
 
 // ── Injected surfaces (TR-5: no Electron runtime import; M7-05 adapts the real modules) ──
 
 /** The part of Electron's UtilityProcess the controller uses. */
+/** @internal test seam */
 export type BridgeChild = {
   postMessage(message: BridgeCommand): void
   on(event: "message", listener: (message: unknown) => void): unknown
@@ -80,39 +82,41 @@ export type BridgeChild = {
   stderr?: NodeJS.ReadableStream | null
 }
 
+/** @internal test seam */
 export type ForkBridge = (
   modulePath: string,
   args: string[],
   options: { env: Record<string, string>; serviceName: string; stdio: "pipe" },
 ) => BridgeChild
 
-export type OfficeDialog = {
+type OfficeDialog = {
   /** App-modal `dialog.showMessageBox(options)`. */
   showMessageBox(options: MessageBoxOptions): Promise<{ response: number; checkboxChecked: boolean }>
 }
 
-export type OfficeShell = {
+type OfficeShell = {
   /** Reveal a file selected in Finder (`shell.showItemInFolder`). */
   showItemInFolder(path: string): void
   /** Open a folder in Finder (`shell.openPath`); resolves to an error string, empty on success. */
   openPath(path: string): Promise<string>
 }
 
-export type OfficeSettings = {
+type OfficeSettings = {
   /** `officeAddinEnabled` (OFFICE_ADDIN_ENABLED_KEY, default false; M7-05 adds the key). */
   enabled(): boolean
   setEnabled(value: boolean): void | Promise<void>
 }
 
 /** Sidecar credentials from main's `serverReady` (spec §6). Rejects or resolves undefined when the sidecar is not up. */
-export type SidecarCredentials = { url: string; username: string; password: string }
+type SidecarCredentials = { url: string; username: string; password: string }
 
+/** @internal test seam */
 export type ControllerClock = RenewalClock & {
   /** One-shot timer; returns a cancel function. */
   after(ms: number, fn: () => void): () => void
 }
 
-export const systemControllerClock: ControllerClock = {
+const systemControllerClock: ControllerClock = {
   now: () => new Date(),
   every(ms, tick) {
     const timer = setInterval(tick, ms)
@@ -125,7 +129,7 @@ export const systemControllerClock: ControllerClock = {
   },
 }
 
-export type OfficeResources = {
+type OfficeResources = {
   /** `app.isPackaged`. */
   packaged: boolean
   /** `process.resourcesPath` (packaged: holds `office-addin/pane` and `office-addin/manifest`, register §3). */
@@ -134,6 +138,7 @@ export type OfficeResources = {
   devPackageDir: string
 }
 
+/** @internal test seam */
 export type OfficeAddinControllerDeps = {
   userDataDir: string
   resources: OfficeResources
@@ -167,8 +172,8 @@ export type OfficeAddinControllerDeps = {
   stopTimeoutMs?: number
 }
 
-export type EnableStep = "server" | "ca" | "trust" | "verify" | "leaf" | "start" | "install" | "persist"
-export type ControllerFailureCode =
+type EnableStep = "server" | "ca" | "trust" | "verify" | "leaf" | "start" | "install" | "persist"
+type ControllerFailureCode =
   | BridgeFailureCode
   | "INSTALL_FAILED"
   | "SERVER_UNAVAILABLE"
@@ -179,29 +184,29 @@ export type ControllerFailureCode =
   /** Neither Word nor Excel has a container (C63). */
   | "OFFICE_NOT_INSTALLED"
 
-export type EnableResult =
+type EnableResult =
   | { ok: true; install: "installed" | "guided"; refused: string[] }
   /** busy: a transition runs; aborted: quit interrupted it (M7-04a); unsupported: the v2 sidecar (C5, F-M7-5). */
   | { ok: false; reason: "busy" | "aborted" | "unsupported" }
   | { ok: false; step: EnableStep; code: ControllerFailureCode }
 
-export type DisableResult =
+type DisableResult =
   | { ok: true; removedCertificate: boolean; uninstallRefused: string[] }
   | { ok: false; reason: "busy" | "cancelled" }
 
-export type LaunchResult =
+type LaunchResult =
   | { ok: true; resynced: string[] }
   | { ok: false; reason: "busy" | "disabled" | "unsupported" }
   | { ok: false; code: ControllerFailureCode }
 
 /** Where the empty pairing set went: the running bridge, the file (bridge stopped), nowhere (no data dir), or skipped. */
-export type DisconnectResult = { cleared: "bridge" | "file" | "none" } | { cleared: "skipped"; reason: "transition" | "error" }
+type DisconnectResult = { cleared: "bridge" | "file" | "none" } | { cleared: "skipped"; reason: "transition" | "error" }
 
-export type ClearCacheResult =
+type ClearCacheResult =
   | { ok: false; reason: "cancelled" | "busy" }
   | { ok: true; removed: number; refused: string[]; failed: number; pairings: DisconnectResult }
 
-export type OfficeAddinMenuHandlers = {
+type OfficeAddinMenuHandlers = {
   officeAddinState: () => BridgeLifecycleState
   officeAddinToggle: () => void
   officeAddinDisconnect: () => void
@@ -230,6 +235,7 @@ export type OfficeAddinController = {
 // ── Pure helpers (exported for tests) ──
 
 /** SC-34 / SD-AC-14: only the allow-listed keys, never a secret. */
+/** @internal test seam */
 export function bridgeEnv(baseEnv: NodeJS.ProcessEnv) {
   return Object.fromEntries(
     BRIDGE_ENV_ALLOW.flatMap((key) => {
@@ -242,6 +248,7 @@ export function bridgeEnv(baseEnv: NodeJS.ProcessEnv) {
 /**
  * The certs.ts `certPaths()` layout (register §6.1), computed here so the controller needs no static X.509 import
  * (certs.ts loads pkijs, IA-5). controller.test.ts asserts it equals `certPaths()` so the two cannot drift.
+  * @internal test seam
  */
 export function officeCertPaths(userDataDir: string): CertPaths {
   const root = join(userDataDir, OFFICE_BRIDGE_DATA_DIR)
@@ -263,16 +270,18 @@ export function officeCertPaths(userDataDir: string): CertPaths {
 }
 
 /** Register §6.3 / SD §12.3 Office web-host cache root (capital `M` as given by the source). */
+/** @internal test seam */
 export function defaultCacheRoot(home: string) {
   return join(home, "Library", "Containers", "com.Microsoft.OsfWebHost", "Data")
 }
 
 /** Register §6.3 wef folders. */
-export function defaultWefRoots(home: string) {
+function defaultWefRoots(home: string) {
   return ["com.microsoft.Word", "com.microsoft.Excel"].map((id) => join(home, "Library", "Containers", id, "Data", "Documents", "wef"))
 }
 
 /** C33: packaged `process.resourcesPath`; dev a staging dir under userData whose `office-addin/pane` links to the build. */
+/** @internal test seam */
 export function officeResourcePaths(resources: OfficeResources, userDataDir: string) {
   if (resources.packaged) {
     return {
@@ -290,10 +299,10 @@ export function officeResourcePaths(resources: OfficeResources, userDataDir: str
 }
 
 /** M7-04a (F-M7-1): `office-addin/enable-pending.json` while an Enable has not committed or rolled back. */
-export const ENABLE_MARKER_FILE = "enable-pending.json"
+const ENABLE_MARKER_FILE = "enable-pending.json"
 
 /** What an interrupted Enable may have left: our new CA and whether its trust was (possibly) added. */
-export type EnableMarker = {
+type EnableMarker = {
   version: 1
   /** `office-addin/` did not exist before this Enable: reconcile removes it entirely. */
   rootCreated: boolean
@@ -328,6 +337,7 @@ const ERROR_KEYS: Record<ControllerFailureCode, DesktopNativeKey> = {
 }
 
 /** Error dialog key for a failure code. */
+/** @internal test seam */
 export function errorKey(code: ControllerFailureCode): DesktopNativeKey {
   return ERROR_KEYS[code]
 }

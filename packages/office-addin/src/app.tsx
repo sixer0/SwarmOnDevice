@@ -16,7 +16,7 @@ import { SessionBar } from "./views/session-bar"
 import { StateBlock } from "./views/state-block"
 import { Thread, type PreviewSlot } from "./views/thread"
 
-export type AppProps = {
+type AppProps = {
   controller: PaneController
   locale: Locale
   // True under `prefers-reduced-motion: reduce`: no blink, pulse or rotation class is applied.

@@ -13,9 +13,10 @@ export type ContextScope = typeof OFFICE_CONTEXT_SELECTION | typeof OFFICE_CONTE
 
 export type TextPart = { type: "text"; text: string }
 // FR-27 / REG §7.4: the body carries `parts` only, 1 or 2 text parts.
+/** @internal test seam */
 export type PromptBody = { parts: TextPart[] }
 
-export type ComposedPrompt = {
+type ComposedPrompt = {
   body: PromptBody
   // Context tag of the sent turn (FR-24, FR-58): "none" when no context part was sent.
   tag: ContextScope | "none"
@@ -53,6 +54,7 @@ export function bodyBytes(body: PromptBody) {
 }
 
 // FR-25: exactly 2 MiB is allowed; one byte more is refused with office.error.tooLarge.
+/** @internal test seam */
 export function checkBodySize(body: PromptBody) {
   return bodyBytes(body) <= OFFICE_BODY_LIMIT_BYTES ? ("ok" as const) : ("office.error.tooLarge" as const)
 }

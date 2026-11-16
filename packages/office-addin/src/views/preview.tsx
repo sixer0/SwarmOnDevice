@@ -24,12 +24,13 @@ import type { PaneController, PreviewRequest } from "./controller"
 import type { PreviewSlot } from "./thread"
 
 // Mini grid limits (design §6.3).
-export const GRID_ROWS = 8
-export const GRID_COLUMNS = 5
+const GRID_ROWS = 8
+const GRID_COLUMNS = 5
 // Replace shows at most this many characters of the text that goes away (design §6.2).
-export const REMOVED_CHARS = 120
+const REMOVED_CHARS = 120
 // M8-07a (F-2): "Show all" renders the full grid up to this many cells; above it the full
 // payload is shown as tab-separated text in a scrollable box instead.
+/** @internal test seam */
 export const GRID_ALL_CELLS = 2000
 
 // M8-07a (F-3, TB-3): invisible and format characters in the text to be written: every Unicode
@@ -39,10 +40,12 @@ export const GRID_ALL_CELLS = 2000
 const INVISIBLE = /[\p{Cf}\u{E0000}-\u{E007F}]/gu
 const INVISIBLE_SPLIT = /([\p{Cf}\u{E0000}-\u{E007F}])/u
 
+/** @internal test seam */
 export function invisibleCount(text: string) {
   return text.match(INVISIBLE)?.length ?? 0
 }
 
+/** @internal test seam */
 export function markerOf(char: string) {
   return `⟨U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}⟩`
 }
@@ -54,7 +57,7 @@ export function visibleText(text: string) {
 
 // The text with every invisible character replaced by a styled marker (odd split indexes are the
 // captured characters).
-export function Visible(props: { text: string }) {
+function Visible(props: { text: string }) {
   return (
     <Index each={props.text.split(INVISIBLE_SPLIT)}>
       {(part, index) => (
@@ -95,7 +98,7 @@ const INVISIBLE_NOTE_ID = "swarm-office-preview-invisible"
 
 type Plan = WordPlan | ExcelPlan
 
-export type PreviewView =
+type PreviewView =
   | { phase: "reading" }
   | { phase: "plan"; plan: Plan; changed: boolean }
   | { phase: "refused"; refusal: Refusal; changed: boolean; target?: RefusedTarget }
@@ -104,13 +107,14 @@ const isFailure = (value: object): value is HostFailure => "code" in value && !(
 
 // ---------- Word ----------
 
-export function wordTargetKey(plan: WordPlan): MessageKey {
+function wordTargetKey(plan: WordPlan): MessageKey {
   if (plan.selection === "") return "office.preview.targetCursor"
   if (plan.location === "Replace") return "office.preview.targetReplace"
   return "office.preview.targetAfter"
 }
 
 // Lines of the written text (H-1: one paragraph per line); 0 for an empty text.
+/** @internal test seam */
 export function paragraphCount(text: string) {
   if (text === "") return 0
   return text.split("\n").length
@@ -152,7 +156,7 @@ function WordBody(props: { plan: WordPlan; reply: string }) {
 
 // ---------- Excel ----------
 
-export type GridInput = {
+type GridInput = {
   cells: CellPlan[][]
   // Zero-based origin of the target; absent when the adapter refused before giving a target.
   rowIndex?: number
@@ -164,7 +168,7 @@ export type GridInput = {
   onShowAll?: () => void
 }
 
-export function exceedsGrid(cells: CellPlan[][]) {
+function exceedsGrid(cells: CellPlan[][]) {
   return cells.length > GRID_ROWS || cells.some((row) => row.length > GRID_COLUMNS)
 }
 
@@ -176,7 +180,7 @@ function columnLetters(index: number): string {
 const cellText = (cell: CellPlan) => (cell.kind === "number" ? String(cell.value) : cell.value)
 const keptAsText = (cell: CellPlan) => cell.kind === "text" && cell.formulaLeading
 
-export function formulaAsTextCount(cells: CellPlan[][]) {
+function formulaAsTextCount(cells: CellPlan[][]) {
   return cells.flat().filter(keptAsText).length
 }
 
@@ -379,7 +383,7 @@ async function writePlan(adapter: HostAdapter, request: PreviewRequest, plan: Pl
   return adapter.write(request.action, request.text, plan.host === "Excel" ? plan.target : undefined)
 }
 
-export function PreviewBlock(props: {
+function PreviewBlock(props: {
   request: PreviewRequest
   close: () => void
   port: WritePort

@@ -33,7 +33,7 @@ function Tag(props: { tag: TurnTag; excel: boolean }) {
 
 const endKey = (end: TurnEnd): MessageKey => (end === "stopped" ? "office.reply.stopped" : "office.reply.interrupted")
 
-export type ReplyActions = {
+type ReplyActions = {
   busy: boolean
   readOnly: boolean
   onPreview: (request: PreviewRequest) => void

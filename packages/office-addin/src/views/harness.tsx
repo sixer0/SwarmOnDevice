@@ -21,7 +21,7 @@ import type { PreviewSlot } from "./thread"
 
 export const TOKEN = "swo1_" + "A".repeat(43)
 
-export function manualTimers() {
+function manualTimers() {
   const intervals = new Map<number, { fn: () => void; ms: number }>()
   const timeouts = new Map<number, () => void>()
   const next = { id: 0 }
@@ -54,6 +54,7 @@ export const settle = async (rounds = 20) => {
   for (const _ of Array.from({ length: rounds })) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+/** @internal test seam */
 export type MountOptions = {
   host?: "Word" | "Excel" | "PowerPoint"
   token?: boolean
@@ -213,6 +214,7 @@ export const frames = {
 
 // M8-07: the Excel preview grid alone, one row of cells converted as the planner does (U-UI-23
 // cases a TSV reply cannot carry, such as a leading tab).
+/** @internal test seam */
 export function renderGrid(values: string[]) {
   const container = document.createElement("div")
   document.body.append(container)

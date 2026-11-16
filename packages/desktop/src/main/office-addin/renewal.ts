@@ -32,6 +32,7 @@ import type { Keychain } from "./keychain"
 import { buildTlsUpdateCommand } from "../office-bridge/protocol"
 import type { BridgeTlsUpdateCommand, LeafTls } from "../office-bridge/protocol"
 
+/** @internal test seam */
 export const RENEWAL_INTERVAL_MS = 24 * 60 * 60 * 1000
 const SOURCE = "office-addin.renewal"
 
@@ -51,7 +52,7 @@ export type RenewalResult =
   | { action: "failed"; code: "CERT_MISSING" | "CERT_UNTRUSTED" | "DATA_DIR_UNSAFE" }
 
 /** Outcome of `finishPendingRemoval`. */
-export type PendingRemoval = "none" | "dropped" | "removed" | "kept"
+type PendingRemoval = "none" | "dropped" | "removed" | "kept"
 
 async function readText(path: string) {
   return readFile(path, "utf8").catch(() => undefined)
@@ -173,7 +174,7 @@ export type RenewalClock = {
   every(ms: number, tick: () => void): () => void
 }
 
-export const systemClock: RenewalClock = {
+const systemClock: RenewalClock = {
   now: () => new Date(),
   every(ms, tick) {
     const timer = setInterval(tick, ms)

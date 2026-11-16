@@ -12,9 +12,10 @@ export function buildTarget(env: Record<string, string | undefined> = process.en
   return hit
 }
 
-export type PrebuildChecks = { setup: boolean; cli: boolean; datum: boolean }
+export type PrebuildChecks = { setup: boolean; cli: boolean; datum: boolean; officeAddin: boolean }
 
 // check-setup-stage covers resources/swarm-setup, a darwin-arm64-only slot that linux and win32 do not ship (R5.11).
+// M9-01 (U5, IM-16/IM-17): the Office add-in stage ships in the macOS package only.
 export function prebuildChecks(target: BuildTarget): PrebuildChecks {
-  return { setup: target === "darwin-arm64", cli: true, datum: true }
+  return { setup: target === "darwin-arm64", cli: true, datum: true, officeAddin: target === "darwin-arm64" }
 }

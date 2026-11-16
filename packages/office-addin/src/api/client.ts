@@ -34,11 +34,11 @@ import type { OfficeHost, TextPart } from "../state/prompt"
 export type Fetch = (input: Request) => Promise<Response>
 
 export type ApiFailure = { ok: false; status: number; code?: string }
-export type ApiResult<T> = { ok: true; status: number; data: T } | ApiFailure
+type ApiResult<T> = { ok: true; status: number; data: T } | ApiFailure
 
 export type HistoryEntry = SessionMessagesResponses[200][number]
 
-export type OfficeApiOptions = {
+type OfficeApiOptions = {
   // Returns the stored pairing token, or undefined before pairing (REG §5).
   token: () => string | undefined
   // Injected for tests; defaults to the global fetch.
@@ -65,7 +65,7 @@ async function readJson(response: Response) {
 
 // Adds the two Office headers to one request. Exported for the event stream, which opens
 // its own fetch per subscription.
-export function officeFetch(base: Fetch, token: () => string | undefined): Fetch {
+function officeFetch(base: Fetch, token: () => string | undefined): Fetch {
   return (input) => {
     const request = new Request(input)
     request.headers.set(OFFICE_CSRF_HEADER, OFFICE_CSRF_HEADER_VALUE)

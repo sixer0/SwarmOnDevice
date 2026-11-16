@@ -20,16 +20,16 @@ describe("buildTarget", () => {
 })
 
 describe("prebuildChecks", () => {
-  test("darwin-arm64 runs all three checks, as the darwin host did before", () => {
-    expect(prebuildChecks("darwin-arm64")).toEqual({ setup: true, cli: true, datum: true })
+  test("darwin-arm64 runs all four checks (M9-01 adds the Office add-in stage)", () => {
+    expect(prebuildChecks("darwin-arm64")).toEqual({ setup: true, cli: true, datum: true, officeAddin: true })
   })
 
-  test("linux-x64 runs check-cli and check-datum, not check-setup (R5.11)", () => {
-    expect(prebuildChecks("linux-x64")).toEqual({ setup: false, cli: true, datum: true })
+  test("linux-x64 runs check-cli and check-datum, not check-setup (R5.11) nor the Office add-in check (U5)", () => {
+    expect(prebuildChecks("linux-x64")).toEqual({ setup: false, cli: true, datum: true, officeAddin: false })
   })
 
-  test("win32-x64 runs check-cli and check-datum, not check-setup (R5.11)", () => {
-    expect(prebuildChecks("win32-x64")).toEqual({ setup: false, cli: true, datum: true })
+  test("win32-x64 runs check-cli and check-datum, not check-setup (R5.11) nor the Office add-in check (U5)", () => {
+    expect(prebuildChecks("win32-x64")).toEqual({ setup: false, cli: true, datum: true, officeAddin: false })
   })
 
   test("the choice does not depend on the host", () => {

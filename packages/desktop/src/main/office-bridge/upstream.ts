@@ -26,9 +26,11 @@ import {
 import type { Admission } from "./admit"
 import type { BridgeLogSink } from "./protocol"
 
+/** @internal test seam */
 export type ProxyAdmission = Extract<Admission, { kind: "proxy" }>
-export type ProxyRoute = ProxyAdmission["route"]
+type ProxyRoute = ProxyAdmission["route"]
 
+/** @internal test seam */
 export type UpstreamInit = {
   method: "GET" | "POST"
   headers: Record<string, string>
@@ -46,7 +48,7 @@ export type UpstreamInit = {
 /** The injected fetch. Production passes the runtime `fetch`; tests pass a stub that records the request. */
 export type UpstreamFetch = (url: string, init: UpstreamInit) => Promise<Response>
 
-export type UpstreamConfig = {
+type UpstreamConfig = {
   /** `serverUrl` from `start`; must be `http://127.0.0.1:<port>` (SC-35). Anything else fails closed with 503. */
   serverUrl: string
   /** Sidecar Basic-auth user and password from `start`. Never logged (spec §6). */
@@ -59,39 +61,41 @@ export type UpstreamConfig = {
 }
 
 /** A buffered response, ready for `writeHead(status, headers)` + `end(body)`. */
-export type UpstreamBuffered = { kind: "buffered"; status: number; headers: Record<string, string>; body: Uint8Array }
+type UpstreamBuffered = { kind: "buffered"; status: number; headers: Record<string, string>; body: Uint8Array }
 /** P8 only: the upstream event stream, unread, with the downstream headers. Piping and teardown belong to sse.ts. */
-export type UpstreamStream = {
+type UpstreamStream = {
   kind: "stream"
   status: number
   headers: Record<string, string>
   body: ReadableStream<Uint8Array>
 }
+/** @internal test seam */
 export type UpstreamResult = UpstreamBuffered | UpstreamStream
 
 /** Upstream request for one admission (exported for tests and sse.ts). */
-export type UpstreamRequest = { url: string; init: UpstreamInit }
+type UpstreamRequest = { url: string; init: UpstreamInit }
 
 // ── Register values ──
 
 /** Response headers kept from upstream (SC-05). `Cache-Control` is always replaced by the bridge's own value (§9.3). */
-export const OFFICE_UPSTREAM_RESPONSE_HEADERS = ["content-type"] as const
+const OFFICE_UPSTREAM_RESPONSE_HEADERS = ["content-type"] as const
 
 /** Security headers on every non-static bridge response (SC-07, REG §4.1). */
-export const OFFICE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
+const OFFICE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
   "x-content-type-options": "nosniff",
   "cross-origin-resource-policy": "same-origin",
   "referrer-policy": "no-referrer",
 }
-export const OFFICE_CACHE_CONTROL = "no-store"
-export const OFFICE_SSE_CACHE_CONTROL = "no-cache, no-transform"
-export const OFFICE_SSE_CONTENT_TYPE = "text/event-stream"
+const OFFICE_CACHE_CONTROL = "no-store"
+const OFFICE_SSE_CACHE_CONTROL = "no-cache, no-transform"
+const OFFICE_SSE_CONTENT_TYPE = "text/event-stream"
 const JSON_TYPE = "application/json"
 const ERROR_TYPE = "application/json; charset=utf-8"
 
 const encoder = new TextEncoder()
 
 /** `http://127.0.0.1:<port>` from the `start` URL, or undefined for anything else (SC-35). */
+/** @internal test seam */
 export function sidecarOrigin(serverUrl: string) {
   const url = (() => {
     try {
@@ -108,6 +112,7 @@ export function sidecarOrigin(serverUrl: string) {
 }
 
 /** Register §7.3 upstream path for a route. Session ids were validated by admit (`OFFICE_SESSION_ID_PATTERN`). */
+/** @internal test seam */
 export function upstreamPath(admission: ProxyAdmission) {
   if (admission.route === "P1") return "/global/health"
   if (admission.route === "P2" || admission.route === "P3") return "/session"
@@ -119,7 +124,7 @@ export function upstreamPath(admission: ProxyAdmission) {
 }
 
 /** The query the bridge builds (SC-29): forced `directory` on every route (REG §7.1), `roots=true` on P3, `limit`. */
-export function upstreamQuery(admission: ProxyAdmission, workspace: string) {
+function upstreamQuery(admission: ProxyAdmission, workspace: string) {
   const query = new URLSearchParams()
   query.set("directory", workspace)
   if (admission.route === "P3") query.set("roots", "true")
@@ -129,7 +134,7 @@ export function upstreamQuery(admission: ProxyAdmission, workspace: string) {
 }
 
 /** The bridge-built body (§9.2): P2 forced to ruleset + metadata, P6 `{ parts }`, nothing on other routes. */
-export function upstreamBody(admission: ProxyAdmission) {
+function upstreamBody(admission: ProxyAdmission) {
   if (admission.route === "P2")
     return {
       ...(admission.title === undefined ? {} : { title: admission.title }),
@@ -161,6 +166,7 @@ function upstreamHeaders(admission: ProxyAdmission, auth: string, hasBody: boole
  * Builds the upstream request for one admission. Returns undefined when the `start` URL is not the loopback sidecar
  * (SC-35); the caller answers 503.
  */
+/** @internal test seam */
 export function buildUpstreamRequest(
   admission: ProxyAdmission,
   config: Pick<UpstreamConfig, "serverUrl" | "username" | "password" | "workspace">,
@@ -190,7 +196,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
 /** Exact deep equality with `OFFICE_SESSION_RULESET`: same order, each rule exactly `{permission, pattern, action}`. */
-export function isOfficeRuleset(value: unknown) {
+function isOfficeRuleset(value: unknown) {
   if (!Array.isArray(value) || value.length !== OFFICE_SESSION_RULESET.length) return false
   return OFFICE_SESSION_RULESET.every((rule, index) => {
     const other: unknown = value[index]
@@ -265,12 +271,12 @@ async function readJson(response: Response) {
 
 // ── Forwarding ──
 
-export type P8Admission = Extract<ProxyAdmission, { route: "P8" }>
+type P8Admission = Extract<ProxyAdmission, { route: "P8" }>
 
 /** The opener sse.ts (M5-03) calls: `OpenUpstream = (signal: AbortSignal) => Promise<Response>`. */
-export type UpstreamEventOpener = (signal: AbortSignal) => Promise<Response>
+type UpstreamEventOpener = (signal: AbortSignal) => Promise<Response>
 
-export type Upstream = {
+type Upstream = {
   /** Stages 14-16 for one proxied admission. Never throws: failures become a bridge error result. */
   forward(admission: ProxyAdmission, signal?: AbortSignal): Promise<UpstreamResult>
   /**

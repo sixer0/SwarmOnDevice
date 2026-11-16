@@ -35,16 +35,17 @@ import { paneRootFor } from "./office-bridge/static"
  * not mounted alone: the Host/Origin checks of admit run before the static stage, so a static-only mount would serve
  * the pane without them. Until then every request is `404 ROUTE_NOT_ALLOWED`.
  */
-export const officeBridgeRoutes: BridgeRoutesFactory = createBridgeRoutes() // W4-RC: composed pipeline (routes.ts)
+const officeBridgeRoutes: BridgeRoutesFactory = createBridgeRoutes() // W4-RC: composed pipeline (routes.ts)
 
 // ── Runner (Electron-free; tests drive it with a fake port and factory) ──
 
+/** @internal test seam */
 export type OfficeBridgeParentPort = {
   postMessage(message: BridgeMessage): void
   on(event: "message", listener: (event: { data: unknown }) => void): void
 }
 
-export type OfficeBridgeRunnerOptions = {
+type OfficeBridgeRunnerOptions = {
   /** Core factory. Default: `createOfficeBridgeFactory({ routes: officeBridgeRoutes })`. */
   factory?: BridgeFactory
   /** Structured log sink. Default: JSON lines on stdout/stderr. */
@@ -62,7 +63,7 @@ type State =
   | { phase: "stopping"; done: Promise<void> }
   | { phase: "stopped" }
 
-export const stdioBridgeLog: BridgeLogSink = (level, source, message, context) => {
+const stdioBridgeLog: BridgeLogSink = (level, source, message, context) => {
   const line = JSON.stringify({ timestamp: new Date().toISOString(), level, source, message, ...(context ? { context } : {}) })
   if (level === "info") {
     process.stdout.write(line + "\n")
@@ -95,6 +96,7 @@ function decisionHub() {
   return { source, emit }
 }
 
+/** @internal test seam */
 export function runOfficeBridge(port: OfficeBridgeParentPort, options: OfficeBridgeRunnerOptions = {}) {
   const factory = options.factory ?? createOfficeBridgeFactory({ routes: officeBridgeRoutes })
   const log = options.log ?? stdioBridgeLog

@@ -22,7 +22,7 @@ export function isOfficeSession(session: { readonly metadata?: Readonly<Record<s
 
 /** The one line an Office session keeps from the environment block: the same text as `system.ts`'s `<env>` date line,
  *  with no user name, path, platform or host. */
-export function dateLine() {
+function dateLine() {
   return `Today's date: ${new Date().toDateString()}`
 }
 

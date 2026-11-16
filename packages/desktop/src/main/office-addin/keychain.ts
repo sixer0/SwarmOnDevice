@@ -13,13 +13,14 @@ import type { OfficeLogSink } from "./key-custody"
 import type { PatchRunResult, PatchRunner } from "../patch-common"
 
 /** `add-trusted-cert` may wait on a macOS login-password dialog (U-2); give the user time. */
+/** @internal test seam */
 export const TRUST_TIMEOUT_MS = 180_000
-export const SECURITY_TIMEOUT_MS = 30_000
+const SECURITY_TIMEOUT_MS = 30_000
 const MAX_BUFFER = 64 * 1024
 const SOURCE = "office-addin.keychain"
 
-export type TrustResult = { ok: true } | { ok: false; code: "CERT_UNTRUSTED" }
-export type RemovalResult = {
+type TrustResult = { ok: true } | { ok: false; code: "CERT_UNTRUSTED" }
+type RemovalResult = {
   /** `remove-trusted-cert` exited 0. */
   trustRemoved: boolean
   /** `delete-certificate -Z` exited 0, or reported the item already gone. */
@@ -39,6 +40,7 @@ export type Keychain = {
 const ITEM_NOT_FOUND = 44
 
 /** Refuse anything that could leave the user domain or the login keychain (SC-23), whatever built the argv. */
+/** @internal test seam */
 export function assertUserDomainArgv(argv: readonly string[]) {
   if (argv.includes("-d")) throw new Error("security argv must not use the admin trust domain (-d)")
   if (argv.some((arg) => arg.startsWith("/Library/Keychains/") || arg.includes("System.keychain"))) {

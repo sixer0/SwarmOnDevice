@@ -15,9 +15,9 @@ import {
 import type { OfficeHost } from "./prompt"
 import { isToken } from "./storage"
 
-export type ConnectionName = (typeof OFFICE_CONNECTION_STATES)[number]
+type ConnectionName = (typeof OFFICE_CONNECTION_STATES)[number]
 
-export const OFFICE_JS_TIMEOUT_MS = 10_000
+const OFFICE_JS_TIMEOUT_MS = 10_000
 
 export type ConnectionState = {
   name: ConnectionName
@@ -30,7 +30,7 @@ export type ConnectionState = {
   notice?: "office.connect.expired"
 }
 
-export type ToastKey = "office.error.pairRateLimited" | "office.error.generic" | "office.error.tooLarge"
+type ToastKey = "office.error.pairRateLimited" | "office.error.generic" | "office.error.tooLarge"
 
 export type Effect =
   | { type: "startOfficeTimer"; ms: number }
@@ -73,6 +73,7 @@ export function initialState(now: number): ConnectionState {
 }
 
 // Controls the view may enable in a state (FS §8.1 "Controls enabled").
+/** @internal test seam */
 export function enabledControls(state: ConnectionState) {
   if (state.name === "unavailable") return ["retry"] as const
   if (state.name === "unpaired" || state.name === "denied") return ["connect"] as const

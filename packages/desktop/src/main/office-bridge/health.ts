@@ -6,23 +6,26 @@ import { OFFICE_ERROR_ROUTE_NOT_ALLOWED, OFFICE_PATH_BRIDGE_HEALTH } from "@swar
 import { errorResponse, jsonResponse, type BridgeRequestLine, type BridgeResponse } from "./static"
 
 export type BridgeSwarmState = "ready" | "starting" | "down"
+/** @internal test seam */
 export const BRIDGE_SWARM_STATES: readonly BridgeSwarmState[] = ["ready", "starting", "down"]
 
-export type BridgeHealthBody = {
+type BridgeHealthBody = {
   bridge: "ok"
   swarm: BridgeSwarmState
 }
 
-export function isBridgeSwarmState(value: unknown): value is BridgeSwarmState {
+function isBridgeSwarmState(value: unknown): value is BridgeSwarmState {
   return BRIDGE_SWARM_STATES.some((state) => state === value)
 }
 
 /** True when the request targets `/bridge/health` (any query is ignored for matching; admit rejects queries). */
+/** @internal test seam */
 export function isHealthRequest(request: BridgeRequestLine) {
   return request.url.split(/[?#]/, 1)[0] === OFFICE_PATH_BRIDGE_HEALTH
 }
 
 /** The registered body only. An unknown state reports `down` rather than echoing the input. */
+/** @internal test seam */
 export function healthBody(swarm: unknown): BridgeHealthBody {
   return { bridge: "ok", swarm: isBridgeSwarmState(swarm) ? swarm : "down" }
 }

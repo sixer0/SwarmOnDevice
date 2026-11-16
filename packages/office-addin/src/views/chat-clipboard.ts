@@ -3,7 +3,7 @@
 // user-activation grant, H-UI-3), a hidden read-only textarea and `execCommand("copy")` inside
 // the same click. Both are injected so the fallback is testable without a real clipboard.
 
-export type ClipboardEnv = {
+type ClipboardEnv = {
   clipboard?: { writeText: (text: string) => Promise<void> }
   document: Pick<Document, "createElement" | "body" | "execCommand">
 }

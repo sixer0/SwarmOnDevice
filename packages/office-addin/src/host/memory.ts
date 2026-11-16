@@ -8,13 +8,13 @@ import type { ContextScope } from "../state/prompt"
 import { refusedTarget, unsupported, type ExcelChanged, type ExcelHost, type HostFailure, type WordAnchor, type WordHost } from "./types"
 import { planWordWrite, sameAnchor, samePlan } from "./word"
 
-export type MemoryFault = "read" | "write"
+type MemoryFault = "read" | "write"
 
 // ---------- Word ----------
 
-export type WordCall = { method: "insertText"; text: string; location: "After" | "Replace" }
+type WordCall = { method: "insertText"; text: string; location: "After" | "Replace" }
 
-export type MemoryWordDoc = {
+type MemoryWordDoc = {
   body: string
   // Selection text as Word returns it ("" = collapsed; a whole paragraph ends with "\r").
   selection: string
@@ -72,13 +72,13 @@ export function memoryWordHost(
 
 // ---------- Excel ----------
 
-export type ExcelCall =
+type ExcelCall =
   | { method: "numberFormat" | "values"; address: string; value: (string | number | null)[][] }
   | { method: "select"; address: string }
 
-export type MemorySelection = { rowIndex: number; columnIndex: number; rowCount: number; columnCount: number }
+type MemorySelection = { rowIndex: number; columnIndex: number; rowCount: number; columnCount: number }
 
-export type MemoryWorkbook = {
+type MemoryWorkbook = {
   // Cell values keyed by A1 address ("B2"); a missing key is an empty cell "".
   cells: Map<string, ExcelValue>
   formats: Map<string, string>

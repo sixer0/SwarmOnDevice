@@ -40,7 +40,7 @@ export const BRIDGE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
  * Fixed MIME map (SD §9.4). An extension not listed here is never served (404), so no file is ever sent as a sniffable
  * or default type. Text types carry an explicit charset.
  */
-export const PANE_MIME_TYPES: Readonly<Record<string, string>> = {
+const PANE_MIME_TYPES: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
@@ -59,6 +59,7 @@ export function paneRootFor(resourcesDir: string) {
 }
 
 /** Stage 5 test: `GET`/`HEAD` on `/` or under `/pane`. Anything else is not the static branch and goes on to stage 6. */
+/** @internal test seam */
 export function isStaticRequest(request: BridgeRequestLine) {
   if (request.method !== "GET" && request.method !== "HEAD") return false
   const path = pathOf(request.url)

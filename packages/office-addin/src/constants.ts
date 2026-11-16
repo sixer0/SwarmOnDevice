@@ -9,7 +9,7 @@
 // Section 4: network
 export const OFFICE_BRIDGE_PORT = 46317
 export const OFFICE_ORIGIN = "https://localhost:46317"
-export const OFFICE_BIND_ADDRESSES = ["127.0.0.1", "::1"] as const
+const OFFICE_BIND_ADDRESSES = ["127.0.0.1", "::1"] as const
 
 export const OFFICE_PATH_PANE = "/pane"
 export const OFFICE_PATH_PANE_PAGE = "/pane/index.html"
@@ -18,9 +18,13 @@ export const OFFICE_PATH_PAIR_REQUEST = "/pair/request"
 export const OFFICE_PATH_PAIR_STATUS = "/pair/status"
 export const OFFICE_PATH_PAIR_VERIFY = "/pair/verify"
 export const OFFICE_PATH_BRIDGE_HEALTH = "/bridge/health"
+/** @internal test seam */
 export const OFFICE_PANE_URL = "https://localhost:46317/pane/index.html"
+/** @internal test seam */
 export const OFFICE_ICON_32_URL = "https://localhost:46317/pane/icons/icon-32.png"
+/** @internal test seam */
 export const OFFICE_ICON_64_URL = "https://localhost:46317/pane/icons/icon-64.png"
+/** @internal test seam */
 export const OFFICE_PROXY_BASE_URL = "https://localhost:46317/swarm"
 
 // Section 5: headers and pairing
@@ -52,6 +56,7 @@ export const OFFICE_PANE_CSP =
   "default-src 'self'; script-src 'self' https://officeapis.public.onecdn.static.microsoft; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // Section 6.2: Office.js source (RC-1)
+/** @internal test seam */
 export const OFFICE_JS_URL = "https://officeapis.public.onecdn.static.microsoft/1/office.js"
 
 // Section 5: pane storage keys
@@ -62,6 +67,7 @@ export const OFFICE_CONTEXT_SCOPE_KEY = "swarm.office.contextScope"
 
 // Section 5 (rev 3 D7): session key = `${OFFICE_SESSION_STORAGE_PREFIX}<docKey>`, docKey is
 // the lowercase hex SHA-256 of Office.context.document.url as returned (bare POSIX path).
+/** @internal test seam */
 export const OFFICE_SESSION_KEY_FORMAT = "swarm.office.session.<docKey>"
 
 // Section 8.5: performance marks (rev 3 D9: firstText is the first rendered delta of an
@@ -103,11 +109,15 @@ export const OFFICE_ERROR_BODY_TOO_LARGE = "BODY_TOO_LARGE"
 export const OFFICE_ERROR_PAIR_RATE_LIMITED = "PAIR_RATE_LIMITED"
 export const OFFICE_ERROR_STREAM_LIMIT = "STREAM_LIMIT"
 export const OFFICE_ERROR_SWARM_UNAVAILABLE = "SWARM_UNAVAILABLE"
+/** @internal test seam */
 export const OFFICE_ERROR_PORT_IN_USE = "PORT_IN_USE"
-export const OFFICE_ERROR_CERT_UNTRUSTED = "CERT_UNTRUSTED"
-export const OFFICE_ERROR_CERT_MISSING = "CERT_MISSING"
+const OFFICE_ERROR_CERT_UNTRUSTED = "CERT_UNTRUSTED"
+const OFFICE_ERROR_CERT_MISSING = "CERT_MISSING"
+/** @internal test seam */
 export const OFFICE_ERROR_DATA_DIR_UNSAFE = "DATA_DIR_UNSAFE"
+/** @internal test seam */
 export const OFFICE_ERROR_BRIDGE_EXITED = "BRIDGE_EXITED"
+/** @internal test seam */
 export const OFFICE_ERROR_START_TIMEOUT = "START_TIMEOUT"
 
 // Section 8.2: pane names

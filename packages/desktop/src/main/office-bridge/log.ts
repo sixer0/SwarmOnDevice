@@ -16,7 +16,7 @@ import {
  * P1-P8 are the proxied routes of register §7.3. The bridge-local ids name the other answered routes; `unmatched`
  * is everything else (a rejected path is never logged as text).
  */
-export type BridgeRouteId =
+type BridgeRouteId =
   | "P1"
   | "P2"
   | "P3"
@@ -33,7 +33,7 @@ export type BridgeRouteId =
   | "pair-verify"
   | "unmatched"
 
-export type BridgeLogRecord = {
+type BridgeLogRecord = {
   method: string
   route: BridgeRouteId
   status: number
@@ -66,6 +66,7 @@ const LOCAL_ROUTES: readonly { id: BridgeRouteId; path: string }[] = [
  * Route id for logging only. Admit (row M5-01) owns the authoritative allow-list match with the session-id pattern;
  * this classifier is looser on purpose and never decides access. The query is cut off before matching.
  */
+/** @internal test seam */
 export function routeIdFor(method: string, url: string): BridgeRouteId {
   const path = url.startsWith("/") ? url.split(/[?#]/, 1)[0] : ""
   if (path === "/") return "root"

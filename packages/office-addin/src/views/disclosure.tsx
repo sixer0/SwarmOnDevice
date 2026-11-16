@@ -10,6 +10,7 @@ import { Show } from "solid-js"
 import { INTERNAL_PROVIDER_IDS } from "../constants"
 import { useI18n } from "../i18n"
 
+/** @internal test seam */
 export function isInternalProvider(providerID: string | undefined) {
   return INTERNAL_PROVIDER_IDS.some((id) => id === providerID)
 }

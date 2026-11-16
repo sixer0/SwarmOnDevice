@@ -8,7 +8,7 @@ import {
   OFFICE_PERF_MARK_SEND,
 } from "../constants"
 
-export const OFFICE_PERF_MARKS = [
+const OFFICE_PERF_MARKS = [
   OFFICE_PERF_MARK_SEND,
   OFFICE_PERF_MARK_REQUEST,
   OFFICE_PERF_MARK_FIRST_TEXT,

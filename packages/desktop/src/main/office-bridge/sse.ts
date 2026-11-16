@@ -16,6 +16,7 @@ import type { BridgeLogSink } from "./protocol"
 import { BRIDGE_SECURITY_HEADERS } from "./static"
 
 /** Downstream headers of P8 (spec §9.3, §9.5; S-19). Upstream headers are never copied: the set is fixed here. */
+/** @internal test seam */
 export const SSE_RESPONSE_HEADERS: Readonly<Record<string, string>> = {
   ...BRIDGE_SECURITY_HEADERS,
   "Content-Type": "text/event-stream",
@@ -23,6 +24,7 @@ export const SSE_RESPONSE_HEADERS: Readonly<Record<string, string>> = {
 }
 
 /** The upstream opener injected by the upstream builder (M5-02). `signal` aborts the upstream request. */
+/** @internal test seam */
 export type OpenUpstream = (signal: AbortSignal) => Promise<Response>
 
 /** The part of `ServerResponse` the relay uses; `node:http` `ServerResponse` satisfies it. */
@@ -46,13 +48,13 @@ export type SseDownstream = {
   off(event: "close" | "drain", listener: () => void): unknown
 }
 
-export type SseRelayResult =
+type SseRelayResult =
   /** The stream ran and has ended; `by` names the side that closed first. */
   | { kind: "ended"; by: "upstream" | "client" | "stop" | "revoked" | "upstream-error" }
   /** Refused before any byte was streamed; a JSON error body was sent. */
   | { kind: "rejected"; status: number; code: string }
 
-export type SseRelayOptions = {
+type SseRelayOptions = {
   /** Concurrent streams per token. Defaults to OFFICE_STREAM_LIMIT (4, SC-31). */
   limit?: number
   log?: BridgeLogSink
@@ -226,4 +228,4 @@ export function createSseRelay(options: SseRelayOptions = {}) {
   }
 }
 
-export type SseRelay = ReturnType<typeof createSseRelay>
+type SseRelay = ReturnType<typeof createSseRelay>

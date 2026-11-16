@@ -50,7 +50,7 @@ export const realTimers: Timers = {
   clearTimeout: (id) => globalThis.clearTimeout(id as ReturnType<typeof setTimeout>),
 }
 
-export type PaneDeps = {
+type PaneDeps = {
   api: OfficeApi
   store: PaneStore
   // Built after Office.onReady for a Word or Excel host.
@@ -97,7 +97,7 @@ const CONTEXT_PREFIX = /^\[Office context: (\w+) (selection|whole)\]\n/
 
 // History (P5) to plain thread items: user turns show the instruction (the last text part) and
 // a tag from the context part; assistant turns show their `text` parts only (FR-40, D5b).
-export function historyItems(entries: HistoryEntry[]): HistoryItem[] {
+function historyItems(entries: HistoryEntry[]): HistoryItem[] {
   return entries.flatMap((entry): HistoryItem[] => {
     const texts = entry.parts.flatMap((part) => (part.type === "text" && !part.synthetic ? [part.text] : []))
     if (entry.info.role === "user") {
@@ -127,7 +127,7 @@ export function historyItems(entries: HistoryEntry[]): HistoryItem[] {
   })
 }
 
-export type StatusTone = "grey" | "red" | "amber" | "green"
+type StatusTone = "grey" | "red" | "amber" | "green"
 export type Status = { tone: StatusTone; pulse: boolean; label?: MessageKey }
 
 // Header status (FR-55). Mapping: T2 (Office.js missing) keeps `loading` but stops the pulse (mockup S2).
@@ -144,13 +144,14 @@ export function statusOf(state: ConnectionState): Status {
 // FR-25 on the typed text alone (M8-06): Send is disabled once the instruction by itself would
 // make the body exceed 2 MiB. A UTF-8 character is at most 3 bytes per UTF-16 unit (JSON escapes
 // of control characters can reach 6), so short drafts skip the encode on every keystroke.
+/** @internal test seam */
 export function draftTooLarge(draft: string) {
   if (draft.length * 6 + 64 <= OFFICE_BODY_LIMIT_BYTES) return false
   return bodyBytes({ parts: [{ type: "text", text: draft }] }) > OFFICE_BODY_LIMIT_BYTES
 }
 
 // Copy label time (design §4.2): "Copied" for 2 s.
-export const COPIED_MS = 2000
+const COPIED_MS = 2000
 
 // Sheet-qualified Excel address ("Sheet1!B2:E9") to the cells part shown in the tag.
 const cells = (address: string) => address.slice(address.lastIndexOf("!") + 1)

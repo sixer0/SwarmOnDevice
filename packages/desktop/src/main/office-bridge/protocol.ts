@@ -15,15 +15,15 @@ export const OFFICE_HOSTS: readonly OfficeHost[] = ["Word", "Excel"]
 // ── Failure codes (register §7.6) ──
 
 /** Codes the bridge reports to main in `failed` at start (register §7.6 "(bridge start)"; rev 5 adds DATA_DIR_UNSAFE, SC-12, C25). */
-export type BridgeStartFailureCode = "PORT_IN_USE" | "CERT_UNTRUSTED" | "CERT_MISSING" | "DATA_DIR_UNSAFE"
-export const BRIDGE_START_FAILURE_CODES: readonly BridgeStartFailureCode[] = ["PORT_IN_USE", "CERT_UNTRUSTED", "CERT_MISSING", "DATA_DIR_UNSAFE"]
+type BridgeStartFailureCode = "PORT_IN_USE" | "CERT_UNTRUSTED" | "CERT_MISSING" | "DATA_DIR_UNSAFE"
+const BRIDGE_START_FAILURE_CODES: readonly BridgeStartFailureCode[] = ["PORT_IN_USE", "CERT_UNTRUSTED", "CERT_MISSING", "DATA_DIR_UNSAFE"]
 
 /** Main-side only: the utility process exited unexpectedly (SD-RC-4). Never sent over the wire. */
-export type BridgeExitedCode = "BRIDGE_EXITED"
+type BridgeExitedCode = "BRIDGE_EXITED"
 export const BRIDGE_EXITED: BridgeExitedCode = "BRIDGE_EXITED"
 
 /** Main-side only: the 60 s start timeout elapsed with no `ready` or `failed` (C25). Never sent over the wire. */
-export type BridgeStartTimeoutCode = "START_TIMEOUT"
+type BridgeStartTimeoutCode = "START_TIMEOUT"
 export const START_TIMEOUT: BridgeStartTimeoutCode = "START_TIMEOUT"
 
 /** Every failure code main can hold for the bridge (the `failed` lifecycle state's cause). */
@@ -32,7 +32,7 @@ export type BridgeFailureCode = BridgeStartFailureCode | BridgeExitedCode | Brid
 // ── Lifecycle (spec §5.2; internal to main, no IPC channel exposes it: C11 OQ-3, IA-6) ──
 
 export type BridgeLifecycleState = "off" | "starting" | "running" | "failed" | "stopping"
-export const BRIDGE_LIFECYCLE_STATES: readonly BridgeLifecycleState[] = ["off", "starting", "running", "failed", "stopping"]
+const BRIDGE_LIFECYCLE_STATES: readonly BridgeLifecycleState[] = ["off", "starting", "running", "failed", "stopping"]
 
 /** Main's view of the bridge. `failed` carries the code that drives the error dialog (spec §5.3). */
 export type BridgeLifecycle =
@@ -87,11 +87,11 @@ export type PairDecision = {
 
 // ── Wire messages (register §3 "Main-to-bridge messages") ──
 
-export type BridgeStartCommand = { type: "start" } & BridgeStartConfig
+type BridgeStartCommand = { type: "start" } & BridgeStartConfig
 export type BridgeTlsUpdateCommand = { type: "tls-update" } & LeafTls
-export type BridgePairDecisionCommand = { type: "pair-decision" } & PairDecision
-export type BridgePairingsClearedCommand = { type: "pairings-cleared" }
-export type BridgeStopCommand = { type: "stop" }
+type BridgePairDecisionCommand = { type: "pair-decision" } & PairDecision
+type BridgePairingsClearedCommand = { type: "pairings-cleared" }
+type BridgeStopCommand = { type: "stop" }
 
 /** main -> bridge. */
 export type BridgeCommand =
@@ -101,9 +101,9 @@ export type BridgeCommand =
   | BridgePairingsClearedCommand
   | BridgeStopCommand
 
-export type BridgeReadyMessage = { type: "ready"; port: number }
-export type BridgeFailedMessage = { type: "failed"; code: BridgeStartFailureCode }
-export type BridgePairRequestMessage = { type: "pair-request" } & PairRequest
+type BridgeReadyMessage = { type: "ready"; port: number }
+type BridgeFailedMessage = { type: "failed"; code: BridgeStartFailureCode }
+type BridgePairRequestMessage = { type: "pair-request" } & PairRequest
 
 /** bridge -> main. */
 export type BridgeMessage = BridgeReadyMessage | BridgeFailedMessage | BridgePairRequestMessage
@@ -118,6 +118,7 @@ export type PairDecisionSource = {
   subscribe(listener: (decision: PairDecision) => void): () => void
 }
 
+/** @internal test seam */
 export type BridgeLogLevel = "info" | "warn" | "error"
 
 /** Structured log line. Callers pass only method, route id, status, host, duration and codes (SC-33). */
@@ -167,29 +168,29 @@ export function isOfficeHost(value: unknown): value is OfficeHost {
   return value === "Word" || value === "Excel"
 }
 
-export function isBridgeStartFailureCode(value: unknown): value is BridgeStartFailureCode {
+function isBridgeStartFailureCode(value: unknown): value is BridgeStartFailureCode {
   return BRIDGE_START_FAILURE_CODES.some((code) => code === value)
 }
 
-export function isPairRequest(value: unknown): value is PairRequest {
+function isPairRequest(value: unknown): value is PairRequest {
   if (!isRecord(value)) return false
   if (typeof value.requestId !== "string" || !REQUEST_ID_RE.test(value.requestId)) return false
   if (!isOfficeHost(value.host)) return false
   return typeof value.code === "string" && PAIR_CODE_RE.test(value.code)
 }
 
-export function isPairDecision(value: unknown): value is PairDecision {
+function isPairDecision(value: unknown): value is PairDecision {
   if (!isRecord(value)) return false
   if (typeof value.requestId !== "string" || !REQUEST_ID_RE.test(value.requestId)) return false
   return typeof value.allow === "boolean"
 }
 
-export function isLeafTls(value: unknown): value is LeafTls {
+function isLeafTls(value: unknown): value is LeafTls {
   if (!isRecord(value)) return false
   return isNonEmptyString(value.cert) && isNonEmptyString(value.key)
 }
 
-export function isBridgeStartConfig(value: unknown): value is BridgeStartConfig {
+function isBridgeStartConfig(value: unknown): value is BridgeStartConfig {
   if (!isRecord(value)) return false
   const strings = ["serverUrl", "username", "password", "userDataDir", "resourcesDir"] as const
   if (!strings.every((k) => isNonEmptyString(value[k]))) return false

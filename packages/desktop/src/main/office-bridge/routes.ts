@@ -39,6 +39,7 @@ import {
 import { createUpstream, type UpstreamFetch } from "./upstream"
 
 /** The request fields the pipeline reads. `node:http` `IncomingMessage` satisfies it. */
+/** @internal test seam */
 export type RouteRequest = {
   method?: string
   url?: string
@@ -54,9 +55,9 @@ export type RouteRequest = {
 }
 
 /** The response fields the pipeline writes. `node:http` `ServerResponse` satisfies it (SSE relay + buffered writes). */
-export type RouteResponse = SseDownstream & BridgeResponseTarget
+type RouteResponse = SseDownstream & BridgeResponseTarget
 
-export type BridgeRoutesOptions = {
+type BridgeRoutesOptions = {
   /** Upstream fetch. Default: the runtime `fetch` (Node/Electron utility process; Bun in tests). */
   fetch?: UpstreamFetch
   /** Pairing clock and expiry scheduler (tests). */
@@ -68,7 +69,7 @@ export type BridgeRoutesOptions = {
   bodyLimit?: number
 }
 
-export const BRIDGE_HEALTH_PROBE_TIMEOUT_MS = 3_000
+const BRIDGE_HEALTH_PROBE_TIMEOUT_MS = 3_000
 
 // The body is copied into an ArrayBuffer-backed view: `BodyInit` does not take a view over a SharedArrayBuffer.
 const runtimeFetch: UpstreamFetch = (url, init) =>
@@ -133,6 +134,7 @@ function sendError(response: RouteResponse, status: number, code: string) {
 }
 
 /** The composed pipeline over one bridge start. Exported for tests; production goes through `createBridgeRoutes`. */
+/** @internal test seam */
 export function composeBridgeRoutes(context: BridgeRoutesContext, options: BridgeRoutesOptions = {}) {
   const log = context.log
   const limit = options.bodyLimit ?? OFFICE_BODY_LIMIT_BYTES

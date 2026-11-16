@@ -2,6 +2,7 @@
 // answers like the bridge (REG §5, §7.3, §7.6). `/swarm/event` returns a live SSE body the
 // test pushes frames into. Test-only; never imported by product code.
 
+/** @internal test seam */
 export type Recorded = {
   method: string
   path: string
@@ -103,6 +104,7 @@ export function session(id: string) {
 }
 
 // Every key at any depth of a JSON value.
+/** @internal test seam */
 export function keysDeep(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(keysDeep)
   if (typeof value !== "object" || value === null) return []

@@ -28,25 +28,26 @@ import {
 // ── Register values ──
 
 /** Literal bind addresses (SC-36). Never `0.0.0.0` or `::`. Order is the bind order. */
-export const OFFICE_BRIDGE_LISTEN_ADDRESSES = ["127.0.0.1", "::1"] as const
-export type OfficeBridgeListenAddress = (typeof OFFICE_BRIDGE_LISTEN_ADDRESSES)[number]
+const OFFICE_BRIDGE_LISTEN_ADDRESSES = ["127.0.0.1", "::1"] as const
+type OfficeBridgeListenAddress = (typeof OFFICE_BRIDGE_LISTEN_ADDRESSES)[number]
 
 /** SC-32: TLS 1.2 minimum (1.3 negotiated when the client offers it), HTTP/1.1 only. No HSTS anywhere in this module. */
-export const OFFICE_BRIDGE_TLS_MIN_VERSION = "TLSv1.2"
-export const OFFICE_BRIDGE_ALPN = ["http/1.1"]
+const OFFICE_BRIDGE_TLS_MIN_VERSION = "TLSv1.2"
+const OFFICE_BRIDGE_ALPN = ["http/1.1"]
 
 /** Register §3: `<userData>/office-addin/` and its subdirectories, mode 0700 (SC-12). */
 export const OFFICE_BRIDGE_DATA_DIR = "office-addin"
-export const OFFICE_BRIDGE_WORKSPACE_DIR = "workspace"
-export const OFFICE_BRIDGE_DIR_MODE = 0o700
+const OFFICE_BRIDGE_WORKSPACE_DIR = "workspace"
+const OFFICE_BRIDGE_DIR_MODE = 0o700
 
 /** Host and Origin allow-values for a port (TS-RC-1; register §4). `[::1]:<port>` is deliberately absent (SC-09). */
-export type BridgeExpectations = {
+type BridgeExpectations = {
   port: number
   hosts: readonly string[]
   origin: string
 }
 
+/** @internal test seam */
 export function bridgeExpectations(port: number): BridgeExpectations {
   if (!isBridgePort(port)) throw new RangeError(`office bridge port out of range: ${port}`)
   return { port, hosts: [`localhost:${port}`, `127.0.0.1:${port}`], origin: `https://localhost:${port}` }
@@ -54,6 +55,7 @@ export function bridgeExpectations(port: number): BridgeExpectations {
 
 // ── Data directory (SC-12, C25) ──
 
+/** @internal test seam */
 export type BridgeDataPaths = {
   /** `<userData>/office-addin/`. */
   root: string
@@ -66,6 +68,7 @@ export type BridgeDataPaths = {
   pairings: string
 }
 
+/** @internal test seam */
 export function bridgeDataPaths(userDataDir: string): BridgeDataPaths {
   const root = join(userDataDir, OFFICE_BRIDGE_DATA_DIR)
   return { root, workspace: join(root, OFFICE_BRIDGE_WORKSPACE_DIR), pairings: join(root, "pairings.json") }
@@ -85,7 +88,7 @@ const SCANNED_DIRS = ["", "ca", "tls"]
 /** Finder metadata; never a reason to warn (C48). */
 const IGNORED_NAMES = [".DS_Store"]
 
-export type DataDirResult =
+type DataDirResult =
   | {
       ok: true
       paths: BridgeDataPaths
@@ -123,6 +126,7 @@ async function makeDir(path: string) {
  * Residual risk (F-M2-3, accepted): macOS extended ACLs are not inspected. Adding an ACL entry needs the owner or root,
  * which is outside the threat model (ADV-3 cannot write a 0700 tree).
  */
+/** @internal test seam */
 export async function prepareBridgeDataDir(userDataDir: string): Promise<DataDirResult> {
   const paths = bridgeDataPaths(userDataDir)
   if (!(await statOrUndefined(paths.root))) await makeDir(paths.root)
@@ -168,6 +172,7 @@ export async function prepareBridgeDataDir(userDataDir: string): Promise<DataDir
 // ── TLS ──
 
 /** The options both listeners share, and the exact set `setSecureContext` receives on a swap (SC-38). */
+/** @internal test seam */
 export function bridgeTlsOptions(leaf: LeafTls): tls.SecureContextOptions {
   return { cert: leaf.cert, key: leaf.key, minVersion: OFFICE_BRIDGE_TLS_MIN_VERSION }
 }
@@ -184,9 +189,11 @@ function leafUsable(leaf: LeafTls) {
 
 // ── Seams ──
 
+/** @internal test seam */
 export type BridgeRequestHandler = (request: IncomingMessage, response: ServerResponse) => void | Promise<void>
 
 /** What later rows inject: one handler for both listeners (SC-38), plus hooks the handle forwards. */
+/** @internal test seam */
 export type BridgeRoutes = {
   handle: BridgeRequestHandler
   /** Called by `BridgeHandle.pairingsCleared` (pairing row M4-02). */
@@ -207,13 +214,14 @@ export type BridgeRoutesContext = {
 export type BridgeRoutesFactory = (context: BridgeRoutesContext) => BridgeRoutes
 
 /** The subset of `https.Server` the core uses. Injected only by unit tests; production uses `https.createServer`. */
+/** @internal test seam */
 export type BridgeListener = Pick<https.Server, "listen" | "once" | "off" | "on" | "close" | "address"> & {
   setSecureContext?: (options: tls.SecureContextOptions) => void
 }
 
-export type BridgeListenerFactory = (options: https.ServerOptions, handler: BridgeRequestHandler) => BridgeListener
+type BridgeListenerFactory = (options: https.ServerOptions, handler: BridgeRequestHandler) => BridgeListener
 
-export type OfficeBridgeFactoryOptions = {
+type OfficeBridgeFactoryOptions = {
   routes?: BridgeRoutesFactory
   createListener?: BridgeListenerFactory
 }
@@ -230,6 +238,7 @@ function sendError(response: ServerResponse, status: number, code: string) {
 }
 
 /** Default routes: nothing is exposed until the pipeline rows are wired in. */
+/** @internal test seam */
 export const notFoundRoutes: BridgeRoutesFactory = () => ({
   handle: (_request, response) => sendError(response, 404, "ROUTE_NOT_ALLOWED"),
 })
@@ -383,4 +392,5 @@ export function createOfficeBridgeFactory(options: OfficeBridgeFactoryOptions = 
 }
 
 /** The core with default (404-only) routes. The integration row passes the composed pipeline instead. */
+/** @internal test seam */
 export const startOfficeBridge: BridgeFactory = createOfficeBridgeFactory()

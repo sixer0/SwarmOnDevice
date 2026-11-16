@@ -32,16 +32,18 @@ import {
 } from "./protocol"
 
 /** How long a finished record (denied, expired, consumed) still answers its own state after `expiresAt`. */
+/** @internal test seam */
 export const PAIR_RECORD_RETAIN_MS = OFFICE_PAIR_REQUEST_TTL_MS
 
+/** @internal test seam */
 export type PairRequestAdmission = Extract<Admission, { kind: "local"; route: "pair-request" }>
-export type PairStatusAdmission = Extract<Admission, { kind: "local"; route: "pair-status" }>
-export type PairVerifyAdmission = Extract<Admission, { kind: "local"; route: "pair-verify" }>
+type PairStatusAdmission = Extract<Admission, { kind: "local"; route: "pair-status" }>
+type PairVerifyAdmission = Extract<Admission, { kind: "local"; route: "pair-verify" }>
 
-export type PairState = "pending" | "approved" | "denied" | "expired" | "consumed"
+type PairState = "pending" | "approved" | "denied" | "expired" | "consumed"
 
-export type PairRequestBody = { requestId: string; code: string; expiresAt: string }
-export type PairStatusBody = { state: PairState; token?: string }
+type PairRequestBody = { requestId: string; code: string; expiresAt: string }
+type PairStatusBody = { state: PairState; token?: string }
 
 /** What the routes layer writes. Bodies are JSON; every pairing response must be sent with `cache-control: no-store`. */
 export type PairingResponse =
@@ -53,7 +55,7 @@ export type PairingResponse =
 /** Cancel handle of a scheduled callback. */
 export type PairTimerCancel = () => void
 
-export type PairingOptions = {
+type PairingOptions = {
   /** The pairing store (M4-01). Only `put`, `verify`, `revoke` and `clear` are used; `lookup` belongs to admit(). */
   store: Pick<PairingStore, "put" | "verify" | "revoke" | "clear">
   /** Bridge -> main `pair-request` (protocol.ts). Called once per accepted `POST /pair/request`. */
@@ -88,17 +90,18 @@ type PairRecord = {
 const SOURCE = "office-bridge.pairing"
 
 /** `swo1_` + base64url(32 random bytes), 48 characters (register §5). */
+/** @internal test seam */
 export function generatePairToken() {
   return OFFICE_TOKEN_PREFIX + randomBytes(32).toString("base64url")
 }
 
 /** base64url of 16 random bytes, 22 characters (register §5). */
-export function generatePairRequestId() {
+function generatePairRequestId() {
   return randomBytes(16).toString("base64url")
 }
 
 /** 4 uniformly random decimal digits (register §5; not a secret, for visual matching only). */
-export function generatePairCode() {
+function generatePairCode() {
   return randomInt(0, 10 ** OFFICE_PAIR_CODE_DIGITS)
     .toString()
     .padStart(OFFICE_PAIR_CODE_DIGITS, "0")
@@ -305,4 +308,4 @@ export function createPairing(options: PairingOptions) {
   }
 }
 
-export type Pairing = ReturnType<typeof createPairing>
+type Pairing = ReturnType<typeof createPairing>

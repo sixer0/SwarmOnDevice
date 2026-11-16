@@ -8,7 +8,7 @@ import type { ContextScope } from "../state/prompt"
 
 export type { WriteAction }
 
-export type ErrorDetail = { name: string; code?: string; message: string }
+type ErrorDetail = { name: string; code?: string; message: string }
 
 export type HostFailure = {
   ok: false
@@ -24,9 +24,9 @@ export type HostFailure = {
 
 // ---------- Word ----------
 
-export type WordLocation = "After" | "Replace"
+type WordLocation = "After" | "Replace"
 
-export type WordRead = { ok: true; host: "Word"; scope: ContextScope; text: string }
+type WordRead = { ok: true; host: "Word"; scope: ContextScope; text: string }
 
 // What a Word write will do, from the selection read at action time (FR-63 preview).
 export type WordPlan = {
@@ -56,10 +56,10 @@ export type WordAnchor =
   | { kind: "paragraphs"; start: number; end: number; count: number }
   | { kind: "memory"; position: number }
 
-export type WordWritten = { ok: true; host: "Word"; plan: WordPlan }
+type WordWritten = { ok: true; host: "Word"; plan: WordPlan }
 
 // FR-49 / SC-44: the selection moved since the preview; nothing was written.
-export type WordChanged = { ok: false; changed: true; plan: WordPlan }
+type WordChanged = { ok: false; changed: true; plan: WordPlan }
 
 export type WordHost = {
   host: "Word"
@@ -77,7 +77,7 @@ export type WordHost = {
 
 // ---------- Excel ----------
 
-export type ExcelRead = {
+type ExcelRead = {
   ok: true
   host: "Excel"
   scope: ContextScope
@@ -99,9 +99,9 @@ export type ExcelPlan = { ok: true; host: "Excel"; action: WriteAction; target: 
 // values of the selection are loaded for it.
 export type RefusedTarget = { address: string; rowIndex: number; columnIndex: number; rows: number; columns: number }
 
-export type ExcelRefused = { ok: false; host: "Excel"; refusal: Refusal; target: RefusedTarget }
+type ExcelRefused = { ok: false; host: "Excel"; refusal: Refusal; target: RefusedTarget }
 
-export type ExcelWritten = { ok: true; host: "Excel"; plan: WritePlan; selected: boolean }
+type ExcelWritten = { ok: true; host: "Excel"; plan: WritePlan; selected: boolean }
 
 export type ExcelChanged = { ok: false; changed: true; plan: ExcelPlan | ExcelRefused }
 

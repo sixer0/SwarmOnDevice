@@ -667,7 +667,7 @@ test("prebuild runs the darwin stage gates in the documented order, the DATUM ga
   ])
   // A darwin build (target unset) still runs all three.
   const { buildTarget, prebuildChecks } = await import("./scripts/prebuild-target")
-  expect(prebuildChecks(buildTarget({}))).toEqual({ setup: true, cli: true, datum: true })
+  expect(prebuildChecks(buildTarget({}))).toEqual({ setup: true, cli: true, datum: true, officeAddin: true })
   // All gates come before the server build, so a missing stage fails the build before any heavy step.
   expect(source.indexOf("check-datum-stage.ts stage")).toBeLessThan(source.indexOf("build-node.ts"))
 })
@@ -794,6 +794,8 @@ const DARWIN_RESOURCES = [
   { from: "resources/swarm-cli", to: "swarm-cli" },
   { from: ".library-stage", to: "knowledge-library" },
   ...DATUM_SLOTS,
+  // M9-01 (IM-16, U5): the Office add-in stage, macOS list only.
+  { from: ".office-addin-stage", to: "office-addin" },
   {
     from: "native/",
     to: "native/",

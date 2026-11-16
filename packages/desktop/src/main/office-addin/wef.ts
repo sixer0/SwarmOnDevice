@@ -17,10 +17,11 @@ import { dirname, join, resolve } from "node:path"
 import { OFFICE_MANIFEST_FILE } from "@swarm/office-addin/constants"
 
 // C31: the filename is defined once in office-addin/src/constants.ts; this name stays for existing callers.
+/** @internal test seam */
 export const WEF_MANIFEST_FILE = OFFICE_MANIFEST_FILE
 
 /** What `lstat` saw, without following a symlink (M7-02a, F-M7-3). */
-export type WefKind = "file" | "dir" | "symlink" | "other" | "missing"
+type WefKind = "file" | "dir" | "symlink" | "other" | "missing"
 
 export type WefFs = {
   mkdir: (dir: string) => Promise<unknown>
@@ -71,9 +72,9 @@ export const nodeWefFs: WefFs = {
   rename: (from, to) => rename(from, to),
 }
 
-export type WefFailure = { path: string; code: string; message: string }
+type WefFailure = { path: string; code: string; message: string }
 
-export type WefResult = {
+type WefResult = {
   ok: boolean
   // Roots (install/uninstall) or entries (cache clear) that completed.
   done: string[]
@@ -101,7 +102,7 @@ export function errorCode(error: unknown) {
   return error.code
 }
 
-export function isRefusal(error: unknown) {
+function isRefusal(error: unknown) {
   const code = errorCode(error)
   return code === "EPERM" || code === "EACCES"
 }
@@ -116,6 +117,7 @@ export function sha256(bytes: Uint8Array) {
 }
 
 // F-M7-2: the nearest real directory (lstat, not a symlink) at or above `target`.
+/** @internal test seam */
 export async function nearestRealDirectory(target: string, fs: WefFs = nodeWefFs): Promise<string> {
   const kind = await fs.lstat(target).catch((): WefKind => "missing")
   if (kind === "dir") return target

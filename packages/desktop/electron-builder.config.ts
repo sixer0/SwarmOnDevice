@@ -60,6 +60,17 @@ export function datumHooks(script: string) {
   }
 }
 
+// M9-01 (IM-19, SD §12.1): the Office add-in folder's gate runs in afterPack only, on the mac target; prebuild.ts runs
+// its stage check before the build (prebuildChecks().officeAddin), so beforePack has nothing to add.
+/** @internal test seam */
+export function officeAddinHooks(script: string) {
+  const run = bunScript("check-office-addin-stage", script)
+  return {
+    beforePack: async () => {},
+    afterPack: (context: PackContext) => run("verify", context.packager.getResourcesDir(context.appOutDir)),
+  }
+}
+
 // The builder takes one beforePack and one afterPack. beforePack runs the hooks in order and stops at the first
 // rejection, so no later gate and no copy run. afterPack runs every hook even when one fails, so the library's
 // cleanup still happens, then rethrows the first error.
@@ -257,6 +268,8 @@ const getBase = (appId: string): Configuration => ({
     { from: "datum/datum-house-style", to: "datum-house-style", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
     { from: ".datum-runtime-stage", to: "datum-runtime", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
     { from: ".datum-studio-stage", to: "datum-studio" },
+    // Office add-in (M9-01, IM-16, U5): staged by scripts/stage-office-addin.ts, macOS list only.
+    { from: ".office-addin-stage", to: "office-addin" },
     {
       from: "native/",
       to: "native/",
@@ -267,6 +280,7 @@ const getBase = (appId: string): Configuration => ({
   ...composeHooks(
     libraryHooks(path.join(packageDir, "scripts", "stage-library.ts"), path.join(packageDir, ".library-stage")),
     datumHooks(path.join(packageDir, "scripts", "check-datum-stage.ts")),
+    ...(isMac ? [officeAddinHooks(path.join(packageDir, "scripts", "check-office-addin-stage.ts"))] : []),
   ),
   // Electron fuse lockdown (NR-09 / research 03e C4-1). Names verified against the
   // installed app-builder-lib@26.15.2 FuseOptionsV1 (configuration.d.ts:475-505);

@@ -30,14 +30,15 @@ import {
 import { OFFICE_HOSTS, type OfficeHost } from "./protocol"
 
 /** Session ids are `ses_` + 12 hex time digits + 14 base62 characters (`packages/opencode/src/id/id.ts` `create`). */
-export const OFFICE_SESSION_ID_PATTERN = /^ses_[0-9A-Za-z]{26}$/
+const OFFICE_SESSION_ID_PATTERN = /^ses_[0-9A-Za-z]{26}$/
 /** Pairing request ids: 16 random bytes, base64url, no padding (spec §11.1). */
-export const OFFICE_PAIR_REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/
+const OFFICE_PAIR_REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/
 /** P3 `limit` range upper bound (REG §7.3: 1-50). */
-export const OFFICE_SESSION_LIST_LIMIT_MAX = 50
+const OFFICE_SESSION_LIST_LIMIT_MAX = 50
 /** Headers that ask an intermediary to change the method (ST-14). Their presence alone rejects the request. */
-export const OFFICE_METHOD_OVERRIDE_HEADERS = ["x-http-method-override", "x-http-method", "x-method-override"]
+const OFFICE_METHOD_OVERRIDE_HEADERS = ["x-http-method-override", "x-http-method", "x-method-override"]
 
+/** @internal test seam */
 export type AdmitRequest = {
   method: string
   /** The request target exactly as received (Node `req.url`): origin-form path plus optional query. */
@@ -59,10 +60,10 @@ export type AdmitConfig = {
   bodyLimit?: number
 }
 
-export type AdmitTextPart = { type: "text"; text: string }
+type AdmitTextPart = { type: "text"; text: string }
 
 /** Inbound headers the upstream builder may forward (SC-28); Content-Type is set by the builder itself. */
-export type AdmitForwardHeaders = { accept?: string; lastEventId?: string }
+type AdmitForwardHeaders = { accept?: string; lastEventId?: string }
 
 type Proxied = { kind: "proxy"; token: string; tokenHost: OfficeHost; forward: AdmitForwardHeaders }
 
@@ -83,7 +84,7 @@ export type Admission =
   | (Proxied & { route: "P7"; sessionID: string })
   | (Proxied & { route: "P8" })
 
-export type AdmitReject = Extract<Admission, { kind: "reject" }>
+type AdmitReject = Extract<Admission, { kind: "reject" }>
 
 /** Converts Node's flat `rawHeaders` (`[name, value, name, value, ...]`) into pairs. */
 export function headerPairs(raw: readonly string[]) {

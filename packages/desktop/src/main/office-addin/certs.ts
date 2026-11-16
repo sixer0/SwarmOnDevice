@@ -36,12 +36,13 @@ import type { LeafTls } from "../office-bridge/protocol"
 
 // ── Register §6.1 values ──
 
+/** @internal test seam */
 export const CA_COMMON_NAME = "Swarm Office Add-in Local CA"
-export const LEAF_COMMON_NAME = "localhost"
-export const CA_VALIDITY_DAYS = 3650
-export const LEAF_VALIDITY_DAYS = 397
+const LEAF_COMMON_NAME = "localhost"
+const CA_VALIDITY_DAYS = 3650
+const LEAF_VALIDITY_DAYS = 397
 /** Re-issue the leaf when fewer than this many days remain (SC-25, register §6.1 "Leaf renewal"). */
-export const LEAF_RENEW_BEFORE_DAYS = 30
+const LEAF_RENEW_BEFORE_DAYS = 30
 export const SECURITY_BIN = "/usr/bin/security"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -99,6 +100,7 @@ export type CertPaths = {
   previousFingerprint: string
 }
 
+/** @internal test seam */
 export function certPaths(userDataDir: string): CertPaths {
   const root = join(userDataDir, "office-addin")
   const caDir = join(root, "ca")
@@ -121,12 +123,12 @@ export function certPaths(userDataDir: string): CertPaths {
 // ── Generation ──
 
 /** A freshly generated CA. `key` is the PKCS#8 PEM; keep it in memory only (SC-21). */
-export type CaMaterial = {
+type CaMaterial = {
   cert: string
   key: string
 }
 
-export type CaFingerprint = {
+type CaFingerprint = {
   /** Uppercase hex, no separators; the form `security delete-certificate -Z` takes. */
   sha1: string
   sha256: string
@@ -337,6 +339,7 @@ async function ensureDir(dir: string, entry: string) {
 /**
  * Create `office-addin/`, `ca/` and `tls/` with mode 0700, tightening any that already exist. Each level is checked
  * with `lstat` first and a symlink or non-directory throws `CertDirUnsafeError` before anything is created or written.
+  * @internal test seam
  */
 export async function ensureCertDirs(paths: CertPaths) {
   await ensureDir(paths.root, ".")
@@ -421,7 +424,7 @@ export async function renewLeafIfDue(input: {
 // ── security(1) argv builders (register §6.1 rev 3; D3, C22; SC-23). Built only; executed by M3-02. ──
 // Login keychain only, user trust domain: no argv here ever contains `-d`.
 
-export function loginKeychain(home = homedir()) {
+function loginKeychain(home = homedir()) {
   return join(home, "Library", "Keychains", "login.keychain-db")
 }
 

@@ -8,6 +8,7 @@ import { OFFICE_HOST_METADATA_KEY, OFFICE_RECENT_CHATS_LIMIT, OFFICE_SESSION_STO
 import type { OfficeHost } from "./prompt"
 import { storageKey, type PaneStore } from "./storage"
 
+/** @internal test seam */
 export type DocumentSessions = PaneStore & {
   // Reads Office.context.document.url now. Called on every use; never memoised.
   documentUrl: () => string | null | undefined

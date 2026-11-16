@@ -359,7 +359,9 @@ describe("AC-A03.64", () => {
   // 1.2.9 export can never be parked in the baseline. Raising BASELINE_MAX needs a C-decision.
   // Row 74a (C104, review F1): browser harnesses (test-browser/, *.render.*, *.fixture.*) now read as tests, which
   // admits 21 older names exported at BASE and drops 2 stale fixture entries: 4433 - 2 + 21 = 4452.
-  const BASELINE_MAX = 4452
+  // Office add-in M9-03 (C75): --prune-stale drops 2 (PreviewRequest, PatchRunResult) and C75 drops 5 entries held only
+  // by same-named branch identifiers (RequestContext, setReadOnly, REQUEST_ID_RE, ThemeSource, ReadOnly): 4452 - 7 = 4445.
+  const BASELINE_MAX = 4445
   const BASE = "d4282fcfd8"
   // Row 25 split route.ts (C31): names exported by the two new files were exported by route.ts at BASE.
   const route = "packages/datum-studio/vendor/src/lib/studio/engine/diagram/build"
