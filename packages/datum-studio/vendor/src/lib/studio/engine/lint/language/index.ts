@@ -37,7 +37,7 @@ export function lintLanguage(s: NormDocSnapshot, params: ParamMap): LintIssue[] 
   let ctx: ScanContext | undefined;
   let ctxError: unknown;
   try {
-    ctx = buildContext(extractLayers(s), params, language);
+    ctx = buildContext(extractLayers(s), params, language, s);
   } catch (e) {
     ctxError = e;
   }

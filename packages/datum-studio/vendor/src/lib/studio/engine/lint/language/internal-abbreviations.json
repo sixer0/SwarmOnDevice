@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "terms": [
+    {
+      "term": "EKAS",
+      "say": "pustaka pengetahuan teknis GSP",
+      "sayNext": "pustaka teknis",
+      "why": "singkatan internal divisi teknis untuk pustaka pengetahuan teknis GSP; skill gsp-document-prose aturan 12, spek KL-3"
+    }
+  ]
+}

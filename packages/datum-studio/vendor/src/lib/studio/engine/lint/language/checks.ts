@@ -9,12 +9,15 @@
  * Kanal (doc/etalase, K2 panjang) tidak tercatat di DocMeta, jadi metrik
  * diterapkan ke seluruh lapisan prosa dokumen; detail menyebut hal ini.
  */
-import type { LintIssue } from "../../../contract";
+import type { LintIssue, NormDocSnapshot } from "../../../contract";
 import { PROVENANCE_GLYPHS, PROVENANCE_MARKS } from "../../../contract/enums";
 import type { ParamMap } from "../../../contract";
 import { fmtFixed, numberConvention } from "../../bind/format";
+import { internalAbbreviation } from "./internal-abbreviation";
+import { lowercaseAfterStop } from "./lowercase-after-stop";
 import { numberParam, stringParam } from "./params";
 import type { Layers, TextUnit } from "./prose";
+import { sentenceWithoutPredicate } from "./sentence-without-predicate";
 import { countSemicolons, countSentenceCommas, countWords, opener, splitSentences, wholeWordRe } from "./tokenize";
 
 export interface ScanContext {
@@ -25,6 +28,8 @@ export interface ScanContext {
   sentences: ReadonlyArray<{ text: string; unit: TextUnit }>;
   /** Total kata lapisan prosa. */
   proseWords: number;
+  /** Snapshot asal (Swarm 1.3.3 row 103): C-37 membaca judul dan keterangan, yang tidak ada di lapisan prosa. */
+  snapshot?: NormDocSnapshot;
 }
 
 export type Scanner = (ctx: ScanContext) => LintIssue[];
@@ -251,13 +256,16 @@ export const LANGUAGE_SCANNERS: Readonly<Record<string, Scanner>> = {
   "C-INFO-OPENER": cInfoOpener,
   "C-SG-L2-09": cL209,
   "C-SG-L2-04": cL204,
+  "C-35": lowercaseAfterStop, // Swarm 1.3.3 row 84 (ST-12); row 85 menambah "C-36" di bawah baris ini
+  "C-36": sentenceWithoutPredicate, // Swarm 1.3.3 row 85 (ST-12)
+  "C-37": internalAbbreviation, // Swarm 1.3.3 row 103 (KL-3)
 };
 
 /** Butir yang leksikonnya khusus bahasa Indonesia (tidak dijalankan pada meta.language EN). */
 export const ID_ONLY_CHECKS: ReadonlySet<string> = new Set(["C-20", "C-34"]);
 
-export function buildContext(layers: Layers, params: ParamMap, language: "ID" | "EN"): ScanContext {
+export function buildContext(layers: Layers, params: ParamMap, language: "ID" | "EN", snapshot?: NormDocSnapshot): ScanContext {
   const sentences = layers.prose.flatMap((unit) => splitSentences(unit.text).map((text) => ({ text, unit })));
   const proseWords = layers.prose.reduce((a, u) => a + countWords(u.text), 0);
-  return { layers, params, language, sentences, proseWords };
+  return { layers, params, language, sentences, proseWords, ...(snapshot ? { snapshot } : {}) };
 }
