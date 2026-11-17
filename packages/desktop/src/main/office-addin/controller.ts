@@ -116,6 +116,9 @@ export type ControllerClock = RenewalClock & {
   after(ms: number, fn: () => void): () => void
 }
 
+/** M12 S12-02: pause before a pair sheet replaces an information sheet. @internal test seam */
+export const PAIR_AFTER_INFO_MS = 700
+
 const systemControllerClock: ControllerClock = {
   now: () => new Date(),
   every(ms, tick) {
@@ -470,7 +473,7 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
    * gates pairing: the callers fire and forget.
    */
   const showInfo = async (options: MessageBoxOptions): Promise<void> => {
-    while (state.pairOpen) await state.pairQueue
+    while (state.pairOpen) await state.pairQueue.catch(() => undefined)
     const win = deps.pairDialog.window()
     if (!win) {
       await showBox(options)
@@ -489,10 +492,13 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
 
   /** Close every open informational sheet so the pair dialog is not queued behind it (it is shown again later). */
   const preemptInfos = () => {
+    let closed = 0
     for (const box of state.infos) {
       box.preempted = true
       box.abort.abort()
+      closed += 1
     }
+    return closed
   }
 
   /** Error dialog, every string via `nativeT` (`errorKey`). Not awaited by the flows. */
@@ -534,8 +540,11 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
       return
     }
     state.pairOpen = true
-    preemptInfos()
+    const replaced = preemptInfos()
     state.pairQueue = (async () => {
+      // M12 S12-02: a pair sheet that takes the place of an information sheet waits a moment, so a click meant for
+      // that sheet's OK cannot land on a pairing code.
+      if (replaced > 0) await new Promise<void>((resolve) => clock.after(PAIR_AFTER_INFO_MS, resolve))
       const outcome = await showPairDialog(request, deps.pairDialog).catch((error: unknown) => {
         log("error", SOURCE, "pair dialog failed", errorFields(error))
         return undefined

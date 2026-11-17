@@ -325,6 +325,15 @@ describe("U-UI-14 Copy (FR-57, AC-49)", () => {
     expect(pane.copied).toEqual(["BRAVO LINE TWO."])
   })
 
+  test("M12 G3: a reply of blank lines only has Copy, Insert and Replace disabled", async () => {
+    const pane = await track(connected)
+    await send(pane, "x")
+    reply(pane, { text: "\n \n\n" })
+    await settle()
+    for (const control of ["copy", "insert", "replace"])
+      expect(pane.q(`[data-control=${control}]`)!.getAttribute("aria-disabled")).toBe("true")
+  })
+
   test("an empty reply has Copy disabled; a refused clipboard keeps the Copy label", async () => {
     const storage = memoryStore()
     await storedSession(storage, "ses_e")

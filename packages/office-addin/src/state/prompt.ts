@@ -89,9 +89,11 @@ export function sessionTitle(instruction: string) {
 // removed (M8-02b, C91: thinker replies start with "\n\n"), and trailing line breaks
 // removed. The first non-empty line keeps its own indentation; inner breaks are kept.
 // The thread may still show the raw reply.
-export function writeText(reply: string) {
+// For the Excel matrix (`tabRows`) a leading line holding a tab is a row of empty cells, not a blank line, so only
+// lines of spaces are dropped there (M12 CR-3: the matrix keeps its shape).
+export function writeText(reply: string, opts: { tabRows?: boolean } = {}) {
   return reply
     .replaceAll("\r\n", "\n")
-    .replace(/^(?:[ \t]*\n)+/, "")
+    .replace(opts.tabRows ? /^(?: *\n)+/ : /^(?:[ \t]*\n)+/, "")
     .replace(/[\r\n]+$/, "")
 }

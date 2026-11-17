@@ -139,6 +139,11 @@ describe("U-XL-06 FR-13 tab reply", () => {
     expect(replyToMatrix("\n\nBRAVO LINE TWO.")).toEqual({ rows: [["BRAVO LINE TWO."]], m: 1, n: 1 })
   })
 
+  test("M12 CR-3: a leading row of tabs is a row of empty cells and is kept", () => {
+    expect(replyToMatrix("\t\n1\t2")).toEqual({ rows: [["", ""], ["1", "2"]], m: 2, n: 2 })
+    expect(replyToMatrix("\n\t\t\na\tb\tc")).toEqual({ rows: [["", "", ""], ["a", "b", "c"]], m: 2, n: 3 })
+  })
+
   test("TSV round trip of FR-10 output", () => {
     const tsv = valuesToTsv([
       ["Name", "Qty"],

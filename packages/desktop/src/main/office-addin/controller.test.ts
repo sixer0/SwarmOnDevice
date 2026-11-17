@@ -16,6 +16,7 @@ import type { BridgeCommand, BridgeFactory, PairRequest, PairRequestSink } from 
 import {
   BRIDGE_ENV_ALLOW,
   bridgeEnv,
+  PAIR_AFTER_INFO_MS,
   createOfficeAddinController,
   defaultCacheRoot,
   errorKey,
@@ -1312,8 +1313,11 @@ describe("pair dialogs do not wait behind informational dialogs (M7-04c)", () =>
 
     // The user is still in Finder; a pane clicks Connect.
     h.pairSinks.at(-1)!({ requestId: REQUEST_ID, host: "Word", code: "0427" })
+    // M12 S12-02: the info sheet closes at once, the pair sheet follows after PAIR_AFTER_INFO_MS.
+    await waitFor(() => s.shown[0]!.aborted() && h.timers.some((timer) => timer.ms === PAIR_AFTER_INFO_MS))
+    expect(s.shown).toHaveLength(1)
+    h.timers.find((timer) => timer.ms === PAIR_AFTER_INFO_MS)!.fn()
     await waitFor(() => s.shown.length === 2)
-    expect(s.shown[0]!.aborted()).toBe(true)
     const pair = s.shown[1]!
     expect(pair.options.buttons).toContain("0427")
 
@@ -1343,7 +1347,9 @@ describe("pair dialogs do not wait behind informational dialogs (M7-04c)", () =>
     s.shown[0]!.resolve(0)
     await settle()
     h.pairSinks.at(-1)!({ requestId: REQUEST_ID, host: "Word", code: "0427" })
+    // No information sheet was open: no pause.
     await waitFor(() => s.shown.length === 2)
+    expect(h.timers.some((timer) => timer.ms === PAIR_AFTER_INFO_MS)).toBe(false)
     h.pairSinks.at(-1)!({ requestId: REQUEST_ID_2, host: "Excel", code: "1234" })
     await settle()
     expect(h.forks[0]!.sent.filter((command) => command.type === "pair-decision")).toEqual([

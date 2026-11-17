@@ -6,6 +6,7 @@
 // block itself is rendered by the App's `preview` render prop, implemented by M8-06/M8-07.
 import { For, Match, Show, Switch, type JSX } from "solid-js"
 import { useI18n, type MessageKey } from "../i18n"
+import { writeText } from "../state/prompt"
 import type { Reply } from "../state/stream"
 import type { PreviewRequest, ThreadItem, TurnEnd, TurnTag } from "./controller"
 import { ProviderLine } from "./disclosure"
@@ -46,7 +47,8 @@ type ReplyActions = {
 function Actions(props: { reply: Reply; actions: ReplyActions }) {
   const { t } = useI18n()
   const copied = () => props.actions.copied === props.reply.messageID
-  const empty = () => props.reply.text === ""
+  // M12 G3: a reply that is only blank lines writes nothing, so Insert, Replace and Copy stay off for it.
+  const empty = () => writeText(props.reply.text) === ""
   const writeOff = () => props.actions.busy || props.actions.readOnly || empty()
   const why = () => (props.actions.readOnly ? t("office.doc.readOnly") : undefined)
   const open = (action: "insert" | "replace") => () => {
