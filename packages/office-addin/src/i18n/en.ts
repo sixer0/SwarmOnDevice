@@ -87,4 +87,10 @@ export const dict = {
   "office.error.shapeMismatch": "The reply is {{replyRows}} x {{replyCols}} but the selection is {{selRows}} x {{selCols}}. Select one cell or a range of the same size.",
   "office.error.targetNotEmpty": "Some target cells are not empty. Nothing was written.",
   "office.error.pairRateLimited": "Too many connection requests. Wait a minute, then try again.",
+  // Revision 7 (C93, M8-07c): singular forms, chosen by the translator when {{count}} is 1.
+  "office.context.tagChars.one": "{{scope}} · {{count}} character",
+  "office.preview.chars.one": "{{count}} character",
+  "office.preview.paragraphs.one": "{{count}} paragraph",
+  "office.preview.formulaAsText.one": "{{count}} cell looks like a formula. It is written as text and will not calculate.",
+  "office.preview.invisible.one": "{{count}} hidden character will be written. It is shown as a marker below. Click Write again to confirm.",
 } as const

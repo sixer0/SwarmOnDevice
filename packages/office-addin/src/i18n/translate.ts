@@ -33,6 +33,9 @@ export function createTranslate(locale: Locale): Translate {
           Object.entries(params).map(([name, value]) => [name, typeof value === "number" ? numbers.format(value) : value]),
         )
       : undefined
-    return translate(key, values) ?? en[key]
+    // Rev 7 (C93): a key with a `.one` sibling uses it when `count` is exactly 1 ("1 paragraph").
+    const one = `${key}.one`
+    const chosen = params?.count === 1 && one in strings ? (one as MessageKey) : key
+    return translate(chosen, values) ?? en[chosen]
   }
 }

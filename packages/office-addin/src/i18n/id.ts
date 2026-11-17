@@ -88,4 +88,10 @@ export const dict: Record<keyof typeof en, string> = {
   "office.error.shapeMismatch": "Balasan berukuran {{replyRows}} x {{replyCols}}, sedangkan pilihan {{selRows}} x {{selCols}}. Pilih satu sel atau rentang yang sama ukurannya.",
   "office.error.targetNotEmpty": "Beberapa sel tujuan tidak kosong. Tidak ada yang ditulis.",
   "office.error.pairRateLimited": "Terlalu banyak permintaan koneksi. Tunggu sebentar, lalu coba lagi.",
+  // Revision 7 (C93, M8-07c): Indonesian has no plural inflection; same text as the base key.
+  "office.context.tagChars.one": "{{scope}} · {{count}} karakter",
+  "office.preview.chars.one": "{{count}} karakter",
+  "office.preview.paragraphs.one": "{{count}} paragraf",
+  "office.preview.formulaAsText.one": "{{count}} sel tampak seperti rumus. Sel tersebut ditulis sebagai teks dan tidak akan dihitung.",
+  "office.preview.invisible.one": "{{count}} karakter tersembunyi akan ikut ditulis. Karakter itu ditampilkan sebagai penanda di bawah. Klik Tulis sekali lagi untuk mengonfirmasi.",
 }

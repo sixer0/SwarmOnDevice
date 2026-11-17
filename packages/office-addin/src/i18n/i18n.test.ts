@@ -62,11 +62,11 @@ describe("U-I18N-02 detection", () => {
   })
 })
 
-describe("U-I18N-03 register rev 4 + rev 6 (84 keys)", () => {
-  test("en.ts and id.ts each hold exactly 84 office.* keys (81 rev 4 + 3 rev 6, C70)", () => {
-    expect(Object.keys(en).length).toBe(84)
+describe("U-I18N-03 register rev 4 + rev 6 + rev 7 (89 keys)", () => {
+  test("en.ts and id.ts each hold exactly 89 office.* keys (81 rev 4 + 3 rev 6, C70 + 5 rev 7, C93)", () => {
+    expect(Object.keys(en).length).toBe(89)
     expect(Object.keys(en).every((key) => key.startsWith("office."))).toBe(true)
-    expect(Object.keys(id).length).toBe(84)
+    expect(Object.keys(id).length).toBe(89)
     expect(params(en["office.reply.preview"])).toEqual(["action"])
   })
 
@@ -101,5 +101,50 @@ describe("register rev 6 (C70, M8-07b)", () => {
     expect(params(en["office.preview.invisible"])).toEqual(["count"])
     expect(params(id["office.preview.invisible"])).toEqual(["count"])
     expect(id["office.preview.invisible"]).toContain(id["office.reply.confirm"].split(" ")[0]!)
+  })
+})
+
+describe("register rev 7 (C93, M8-07c): singular forms", () => {
+  const en1 = createTranslate("en")
+  const id1 = createTranslate("id")
+  test("en: count 1 is singular, count 2 (and 0) plural", () => {
+    expect(en1("office.preview.paragraphs", { count: 1 })).toBe("1 paragraph")
+    expect(en1("office.preview.paragraphs", { count: 2 })).toBe("2 paragraphs")
+    expect(en1("office.preview.paragraphs", { count: 0 })).toBe("0 paragraphs")
+    expect(en1("office.preview.chars", { count: 1 })).toBe("1 character")
+    expect(en1("office.preview.chars", { count: 2 })).toBe("2 characters")
+    expect(en1("office.context.tagChars", { scope: "Selection", count: 1 })).toBe("Selection · 1 character")
+    expect(en1("office.context.tagChars", { scope: "Selection", count: 2 })).toBe("Selection · 2 characters")
+    expect(en1("office.preview.formulaAsText", { count: 1 })).toBe(
+      "1 cell looks like a formula. It is written as text and will not calculate.",
+    )
+    expect(en1("office.preview.formulaAsText", { count: 2 })).toBe(
+      "2 cells look like formulas. They are written as text and will not calculate.",
+    )
+    expect(en1("office.preview.invisible", { count: 1 })).toBe(
+      "1 hidden character will be written. It is shown as a marker below. Click Write again to confirm.",
+    )
+    expect(en1("office.preview.invisible", { count: 2 })).toBe(
+      "2 hidden characters will be written. They are shown as markers below. Click Write again to confirm.",
+    )
+  })
+
+  test("id: no plural inflection; the .one keys equal the base keys", () => {
+    const singular = Object.keys(id).filter((key) => key.endsWith(".one"))
+    expect(singular.length).toBe(5)
+    for (const key of singular) expect(id[key as keyof typeof id]).toBe(id[key.slice(0, -4) as keyof typeof id])
+    expect(id1("office.preview.paragraphs", { count: 1 })).toBe("1 paragraf")
+    expect(id1("office.preview.paragraphs", { count: 2 })).toBe("2 paragraf")
+    expect(id1("office.preview.formulaAsText", { count: 1 })).toBe(
+      "1 sel tampak seperti rumus. Sel tersebut ditulis sebagai teks dan tidak akan dihitung.",
+    )
+  })
+
+  test("every .one key has a base key with the same params", () => {
+    for (const key of Object.keys(en).filter((name) => name.endsWith(".one"))) {
+      const base = key.slice(0, -4) as keyof typeof en
+      expect(en[base]).toBeDefined()
+      expect(params(en[key as keyof typeof en])).toEqual(params(en[base]))
+    }
   })
 })
