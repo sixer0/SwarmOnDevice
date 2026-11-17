@@ -26,6 +26,8 @@ import { applyMigrations } from "./migrations/index.ts"
 import { MissionStore, pinBuiltinMissionTypes } from "./mission/mission-store.ts"
 import { revisionOutputState } from "./mission/output-gate.ts"
 import { assertStoreRoot, isInside, resolveStoreRel, STORE_DB_FILE } from "./paths.ts"
+import { reclaimStoreSpace, type ReclaimSpaceOptions, type ReclaimSpaceResult } from "./store-vacuum.ts"
+import { listMarkedRevisions, markRevisions, purgeMarkedRevisions, restoreRevisionBackup, retentionLog, revisionKeepSet, type KeptRevision, type MarkedRevision, type MarkResult, type PurgeResult, type RestoreResult } from "./revision-retention.ts"
 import { OUTPUT_VERIFICATION_REPORT_MAX_BYTES, TEMPLATE_GUARD_REPORT_MAX_BYTES } from "./types.ts"
 import type {
   AssetMeta,
@@ -168,11 +170,20 @@ function missingRequiredOf(report: unknown): string[] {
 /** One serial async queue: each job runs after the previous one settled. */
 class SerialQueue {
   private tail: Promise<unknown> = Promise.resolve()
+  /** Row 83: jobs queued or running (the space reclaim refuses while this is above zero). */
+  private count = 0
+  get pending(): number {
+    return this.count
+  }
   run<T>(job: () => Promise<T>): Promise<T> {
+    this.count++
     const p = this.tail.then(job, job)
+    const done = () => {
+      this.count--
+    }
     this.tail = p.then(
-      () => undefined,
-      () => undefined,
+      () => done(),
+      () => done(),
     )
     return p
   }
@@ -272,7 +283,7 @@ export class SqliteStudioStore implements StudioStore {
   /** Row 119a: the mission contract API over this store (writes take a tx of `transaction()`). */
   get missions(): MissionStore {
     if (!this.missionStore) {
-      this.missionStore = new MissionStore({ reader: () => this.q(), log: (level, source, err, context) => this.emit(level, source, err, context), outputGate: () => this.missionGuard })
+      this.missionStore = new MissionStore({ reader: () => this.q(), log: (level, source, err, context) => this.emit(level, source, err, context), outputGate: () => this.missionGuard, storeRoot: () => this.root })
     }
     return this.missionStore
   }
@@ -1236,6 +1247,79 @@ export class SqliteStudioStore implements StudioStore {
   /** Row 37 owns the export folder (target guard, assets/docs copy, export.json, reopen counts). */
   async exportTo(target: string): Promise<ExportManifest> {
     return exportStoreTo({ root: this.requireRoot(), release: this.release, now: this.clock, snapshotTo: (f) => this.snapshotTo(f) }, target)
+  }
+
+  // ── revision retention (1.3.3 row 82, ST-11, decision C6) ─────────────────
+  // Operator functions. None is on the `StudioStore` interface, none is called by `open`, a timer or a tool; a test
+  // pins that nothing under src/ or vendor/scripts/ outside src/store/ calls them. None runs VACUUM (row 83).
+  // The rule and the procedure are in revision-retention.ts.
+
+  /** The keep-set: every revision that may never be marked or purged, with the clauses that protect it. Read only. */
+  async retentionKeepSet(opts: { keepRecent?: number } = {}): Promise<KeptRevision[]> {
+    return [...revisionKeepSet(this.q(), opts.keepRecent).values()]
+  }
+
+  /** Mark every revision outside the keep-set and un-mark every revision inside it. Deletes nothing; idempotent. */
+  markRevisionsForRetention(opts: { keepRecent?: number } = {}): Promise<MarkResult> {
+    return this.transaction(async (tx) => markRevisions(tx, opts))
+  }
+
+  /** The marked revisions, oldest mark first, with the moment each becomes purgeable. Read only. */
+  async listMarkedRevisions(opts: { windowDays?: number; withBytes?: boolean } = {}): Promise<MarkedRevision[]> {
+    return listMarkedRevisions(this.q(), { ...opts, now: this.clock() })
+  }
+
+  /**
+   * Operator request only. Removes the marked revisions whose mark is older than the window, after writing the
+   * backup file `backupFile` (outside the store) with exactly those rows and reading it back; one write
+   * transaction, so it commits whole or not at all. Refuses when any marked revision is referenced again.
+   */
+  purgeMarkedRevisions(opts: { backupFile: string; requestedBy: string; windowDays?: number; keepRecent?: number; limit?: number }): Promise<PurgeResult> {
+    const storeRoot = this.requireRoot()
+    return this.transaction(async (tx) => purgeMarkedRevisions(tx, { ...opts, storeRoot, release: this.release }))
+  }
+
+  /** Operator request only. Puts the revisions of a purge backup file back (all or none); present ones are skipped. */
+  restorePurgedRevisions(opts: { backupFile: string; requestedBy: string }): Promise<RestoreResult> {
+    return this.transaction(async (tx) => restoreRevisionBackup(tx, { ...opts, release: this.release }))
+  }
+
+  /** The record of purges and restores kept in `store_meta`, oldest first. Read only. */
+  async revisionRetentionLog(): Promise<Array<Record<string, unknown>>> {
+    return retentionLog(this.q())
+  }
+
+  // ── space reclaim (1.3.3 row 83, ST-11, decision C6 item d) ──────────────────
+  // Operator request only: not on the `StudioStore` interface, not called by `open`, a timer or a tool (pinned by
+  // store-vacuum.test.ts). The procedure and its numbers are in store-vacuum.ts.
+
+  /**
+   * Full VACUUM of the store file, giving the pages freed by a purge back to the file system. Exclusive: refuses
+   * with STORE_NESTED_TX inside a transaction, with STORE_BUSY (`write-in-progress`) while any job of the serial
+   * write queue is running or waiting, and with STORE_BUSY (`session-lock-held`) while a mission row lock is held.
+   * The host lock file (held by this open store) keeps every other process out. Refuses with CONSTRAINT
+   * (`insufficient-disk-space`) and the numbers when the temporary and WAL copies do not fit. Returns size, pages
+   * and free list before and after, and the duration of each step. The whole call blocks the queue: writes asked
+   * for meanwhile wait until it ends.
+   */
+  async reclaimSpace(opts: ReclaimSpaceOptions): Promise<ReclaimSpaceResult> {
+    if (typeof opts?.requestedBy !== "string" || opts.requestedBy.trim() === "" || opts.requestedBy.length > 200) throw new StoreError("SCHEMA_INVALID", "reclaimSpace needs requestedBy: who asked for it")
+    const root = this.requireRoot()
+    if (this.txContext.getStore()) throw new StoreError("STORE_NESTED_TX", "reclaimSpace inside a transaction")
+    const pendingJobs = this.queue.pending
+    if (pendingJobs > 0) throw new StoreError("STORE_BUSY", `space reclaim refused: ${pendingJobs} write job(s) running or queued`, { reason: "write-in-progress", pendingJobs })
+    return this.queue.run(async () => {
+      const writer = this.requireWriter()
+      try {
+        const r = reclaimStoreSpace(writer, join(root, STORE_DB_FILE), root, { ...opts, now: this.clock })
+        this.emit("info", "StudioStore.reclaimSpace", null, { requestedBy: opts.requestedBy, before: r.before.fileBytes, after: r.after.fileBytes, durationMs: r.durationMs })
+        return r
+      } catch (e) {
+        const err = mapSqliteError(e)
+        this.emit(err instanceof StoreError && (err.code === "STORE_BUSY" || err.code === "CONSTRAINT") ? "warn" : "error", "StudioStore.reclaimSpace", e, {})
+        throw err
+      }
+    })
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

@@ -119,13 +119,14 @@ describe('W4-L2: batas ukuran dan pemindai linear', () => {
   });
 
   it('render > 25 MB: tanpa unduhan, ringkasan VERIFY_TOO_LARGE, tulisan tetap ok', async () => {
-    const m = clientServer({ exists: true });
+    // Swarm 1.3.3 row 78 (ST-11): reached through studio_write (a full write still renders); studio_edit no longer renders.
+    const m = clientServer();
     const f = async (url: string, init: any) => {
       if (new URL(url).pathname === `/api/studio/documents/${DOCID}/render`) return reply({ status: 200, body: { outputs: [{ id: 'cmwfiledocx000000000000w2a', format: 'DOCX', sha256: 'b'.repeat(64), byteSize: 30 * 1024 * 1024 }] } });
       return m.f(url, init);
     };
     const { call } = await connect({ fetch: f as any, env });
-    const r = await call('studio_edit', { documentId: DOCID, meta: { rev: 'B' } });
+    const r = await call('studio_write', WRITE_ARGS);
     expect(r.data.ok, r.text).toBe(true);
     expect(r.data.verify.error).toBe('VERIFY_TOO_LARGE');
     expect(m.calls.some((c) => c.method === 'GET' && c.url.includes('/api/studio/files/'))).toBe(false);

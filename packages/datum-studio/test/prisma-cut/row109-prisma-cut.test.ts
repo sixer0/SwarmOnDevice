@@ -170,7 +170,8 @@ describe("row 109: documents, revisions, search (submit pipeline over the store)
     expect(after.document - before.document).toBe(1);
     expect(after.revision - before.revision).toBe(1);
     expect(after.doc_block - before.doc_block).toBeGreaterThanOrEqual(2);
-    expect(after.block - before.block).toBe(after.doc_block - before.doc_block);
+    // Row 80 (ST-11, C6): one stored copy per block. Was `block` delta == `doc_block` delta (double write).
+    expect(after.block - before.block).toBe(0);
     const detail = await store.getDocument(documentId);
     expect(detail?.document.current_revision_no).toBe(1);
     expect(detail?.document.mission_folder).toBe("2026-11-07_row109-katup");

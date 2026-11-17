@@ -204,8 +204,8 @@ describe("N8-484 SEC05: store migration 0008", () => {
     const migrations = (await import("../../src/store/migrations/index.ts")) as S
     const { MIGRATION_0008_ID } = (await import("../../src/store/migrations/0008_datum_decision_provenance.ts")) as S
     expect(MIGRATION_0008_ID).toBe("20261114000000_datum_decision_provenance")
-    expect(migrations.MIGRATIONS.at(-1)).toMatchObject({ seq: 8, id: MIGRATION_0008_ID })
-    expect(migrations.latestSchemaId()).toBe(MIGRATION_0008_ID)
+    // 1.3.3 row 5: 0009 (mission row contract) now follows 0008; 0008 keeps seq 8 (the "last" pin moved to the row 5 test).
+    expect(migrations.MIGRATIONS[7]).toMatchObject({ seq: 8, id: MIGRATION_0008_ID })
 
     const { Database } = await import("bun:sqlite")
     const raw = new Database(":memory:")
@@ -225,7 +225,7 @@ describe("N8-484 SEC05: store migration 0008", () => {
     const plain = JSON.stringify([{ id: "A", label: "a", consequence: "c" }, { id: "B", label: "b", consequence: "d" }])
     db.run("INSERT INTO mission_decision_request (mission_id, request_id, question, options, status, requested_by, answer_option, answered_by, answer_decision_id, time_created, time_closed) VALUES ('m', 'D-1', 'q', ?, 'answered', 'a', 'approve', 'user', 'U1', 1, 2)", [tidyOptions])
     db.run("INSERT INTO mission_decision_request (mission_id, request_id, question, options, status, requested_by, time_created) VALUES ('m', 'D-2', 'q', ?, 'open', 'a', 1)", [plain])
-    expect(migrations.applyMigrations(db, { release: "1.2.8", now })).toEqual([MIGRATION_0008_ID])
+    expect(migrations.applyMigrations(db, { release: "1.2.8", now })).toEqual([MIGRATION_0008_ID, "20261117000000_datum_mission_row_contract", "20261117120000_datum_revision_retention", "20261117180000_datum_purge_fk_indexes"]) // 1.3.3 row 5: + 0009, 1.3.3 row 82: + 0010, 1.3.3 row 144: + 0011
     const rows = db.all<S>("SELECT request_id, options, topic, proposal, answered_via, answered_attested FROM mission_decision_request ORDER BY request_id")
     expect(JSON.parse(rows[0]!.options)).toEqual([{ id: "approve", label: "Approve", consequence: "c" }, { id: "decline", label: "No", consequence: "d" }])
     expect(rows[0]!.topic).toBe("project-tidy")
