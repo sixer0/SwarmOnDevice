@@ -104,7 +104,7 @@ describe("health gating (blueprint: no entries when health fails)", () => {
         mcp: Record<string, { command?: string[]; env?: Record<string, string> }>
       }
       expect(cfg.mcp.graft?.command).toEqual([okLaunch().nodePath, okLaunch().cliPath, "mcp"])
-      expect(cfg.mcp.graft?.env?.DO_NOT_TRACK).toBe("1")
+      expect(cfg.mcp.graft?.environment?.DO_NOT_TRACK).toBe("1")
       expect(cfg.mcp["swarm-web"]).toBeUndefined()
     } finally {
       rmSync(b, { recursive: true, force: true })
@@ -125,10 +125,10 @@ describe("health gating (blueprint: no entries when health fails)", () => {
       const sw = cfg.mcp["swarm-web"]
       expect(sw.command[0]?.endsWith("/.swarm/setup/bin/swarm-web-proxy")).toBe(true) // PC-PATH-14 absolute
       expect(sw.timeout).toBe(30000)
-      expect(sw.env.SWARM_SEARXNG_URL).toBe("http://127.0.0.1:9021")
-      expect(sw.env.SWARM_WEB_AUDIT_LOG?.endsWith("/.swarm/logs/web-audit.log")).toBe(true) // PC-PATH-10 default
-      expect(sw.env.SWARM_VAULT_DIR?.endsWith("/.swarm/vault")).toBe(true) // PC-PATH-13 default
-      expect(sw.env.SWARM_FIRECRAWL_TOKEN).toBeUndefined() // P-8: secret never in the file
+      expect(sw.environment.SWARM_SEARXNG_URL).toBe("http://127.0.0.1:9021")
+      expect(sw.environment.SWARM_WEB_AUDIT_LOG?.endsWith("/.swarm/logs/web-audit.log")).toBe(true) // PC-PATH-10 default
+      expect(sw.environment.SWARM_VAULT_DIR?.endsWith("/.swarm/vault")).toBe(true) // PC-PATH-13 default
+      expect(sw.environment.SWARM_FIRECRAWL_TOKEN).toBeUndefined() // P-8: secret never in the file
     } finally {
       rmSync(b, { recursive: true, force: true })
     }

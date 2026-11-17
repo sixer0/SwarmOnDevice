@@ -26,7 +26,7 @@ describe("swarmWebMcpEntry (§6.1 shape)", () => {
     expect(entry.command[0]?.endsWith("/.swarm/setup/bin/swarm-web-proxy")).toBe(true) // PC-PATH-14 verbatim
     expect(entry.enabled).toBe(true)
     expect(entry.timeout).toBe(30000)
-    expect(entry.env === undefined).toBe(true) // SWARM_* inherit from the parent env at spawn; nothing in the file
+    expect(entry.environment === undefined).toBe(true) // SWARM_* inherit from the parent env at spawn; nothing in the file
   })
   it("explicit binaryPath override lands verbatim in command[0]", () => {
     expect(swarmWebMcpEntry("/opt/custom/swarm-web-proxy").command[0]).toBe("/opt/custom/swarm-web-proxy")
@@ -45,7 +45,7 @@ describe("graftMcpEntry (PC-MCP-01 via r88 resolvers; init unreachable)", () => 
     expect(res.ok).toBe(true)
     if (!res.ok) return
     expect(res.entry.command).toEqual([okLaunch().nodePath, okLaunch().cliPath, "mcp"])
-    expect(res.entry.env).toEqual({ DO_NOT_TRACK: "1" })
+    expect(res.entry.environment).toEqual({ DO_NOT_TRACK: "1" })
     expect(res.entry.command.some((a) => a.includes("init"))).toBe(false) // P-10 structural
     expect(res.entry.command.slice(0, 2).every((a) => a.startsWith("/"))).toBe(true) // binaries absolute, no PATH consult; argv[2] is the subcommand word
   })

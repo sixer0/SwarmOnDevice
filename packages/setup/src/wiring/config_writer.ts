@@ -235,7 +235,7 @@ function desiredEntries(
   }
 
   if (el.swarmWeb) {
-    entries[MCP_SERVER_NAME] = { ...swarmWebMcpEntry(underHome(PROXY_BINARY_PATH, base)), env: estateEnv(opts, base) }
+    entries[MCP_SERVER_NAME] = { ...swarmWebMcpEntry(underHome(PROXY_BINARY_PATH, base)), environment: estateEnv(opts, base) }
     appendChainEvent(
       {
         ts: opts.now?.() ?? new Date().toISOString(),
