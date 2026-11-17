@@ -176,19 +176,39 @@ export function subagentOutputMissingText(sessionID: SessionID, missing: readonl
 }
 
 /** S-03a: why a subagent run ended without an answer (register N-102). */
-export type NoResultReason = "length" | "tool-calls" | "no-text" | "unfinished"
+export type NoResultReason = "length" | "tool-calls" | "no-text" | "unfinished" | TurnEndReason
+
+/** 1.3.3 MC-2: the `finish` values of a turn that ended without work (register section 3; written by the processor). */
+type TurnEndReason = "text-tool-call" | "tools-unavailable" | "empty-step"
+
+/** Reads a turn-end reason from `finish`; exact values only. Kept local: the processor module must not be loaded from a tool. */
+function turnEnd(finish: string | undefined): { reason: TurnEndReason; server?: string } | undefined {
+  if (finish === "text-tool-call" || finish === "empty-step" || finish === "tools-unavailable") return { reason: finish }
+  const prefix = "tools-unavailable:"
+  if (finish?.startsWith(prefix) && finish.length > prefix.length)
+    return { reason: "tools-unavailable", server: finish.slice(prefix.length) }
+  return undefined
+}
 
 const NO_RESULT_WHY: Record<NoResultReason, string> = {
   length: "it hit the output token limit before writing an answer.",
   "tool-calls": "its last step was a tool call and it never wrote a final answer.",
   "no-text": "it finished without writing any text.",
   unfinished: "its run ended before it finished.",
+  "text-tool-call":
+    "it wrote a tool call as text instead of calling the tool, was corrected, did it again and was stopped. No tool ran; the text below is not an answer.",
+  "tools-unavailable": "tools it needed were not available, so its run was stopped before the work was done.",
+  "empty-step": "it kept returning empty steps, with no tool call and no answer, and was stopped.",
 }
 
 /** The task result for a subagent run with no answer: SUBAGENT_NO_RESULT, the reason and the task_id, never "". */
-export function subagentNoResultText(sessionID: SessionID, reason: NoResultReason, partial?: string) {
+export function subagentNoResultText(sessionID: SessionID, reason: NoResultReason, partial?: string, server?: string) {
+  const why =
+    reason === "tools-unavailable" && server
+      ? `the tools of the server "${server}" were not available, so its run was stopped before the work was done.`
+      : NO_RESULT_WHY[reason]
   return [
-    `${SUBAGENT_NO_RESULT} ${reason} (task_id: ${sessionID}): ${NO_RESULT_WHY[reason]}`,
+    `${SUBAGENT_NO_RESULT} ${reason} (task_id: ${sessionID}): ${why}`,
     "Do not treat this task as done. Check what it was meant to produce, then pass this task_id to continue it or carry on another way.",
     partial ? `What the subagent had so far:\n${partial}` : "The subagent left no partial result.",
   ].join("\n\n")
@@ -225,6 +245,14 @@ export function taskOutcome(sessionID: SessionID, result: SessionV1.WithParts) {
   const last = result.parts.findLast((item) => item.type === "text" && item.text.trim() !== "")
   const text = last?.type === "text" ? last.text : undefined
   const finish = result.info.finish
+  // 1.3.3 row 128: a turn that ended without work is not an answer, whatever text it left (often the written call).
+  const ended = turnEnd(finish)
+  if (ended)
+    return {
+      type: "empty" as const,
+      reason: ended.reason as NoResultReason,
+      text: subagentNoResultText(sessionID, ended.reason, text, ended.server),
+    }
   const finished = !!finish && !["tool-calls", "unknown"].includes(finish)
   if (finished && text !== undefined) return { type: "completed" as const, text }
   // S-03a: no answer, or a run that stopped mid-way. The parent gets the reason, never an empty completed result.

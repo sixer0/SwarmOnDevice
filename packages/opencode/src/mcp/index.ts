@@ -193,6 +193,43 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("MCP
   name: Schema.String,
 }) {}
 
+/**
+ * Row 7 (1.3.3, MC-2 item 1): a server that gave tools to this instance has none now, after the reconnect in flight
+ * (if any) was awaited. `tools()` ends with this instead of returning a list without that server, so no model step
+ * runs without tools it had a moment ago (the reproduced MC-1 trigger: hang trace `zeroToolServers=datum-studio`).
+ *
+ * It is raised as a defect (`Effect.die`), which keeps `Interface.tools` and its three callers unchanged; read it back
+ * from a cause or a caught value with `toolsUnavailable`. The session ends the step with `tools-unavailable:<server>`.
+ */
+export class ToolsUnavailableError extends Schema.TaggedErrorClass<ToolsUnavailableError>()(
+  "MCP.ToolsUnavailableError",
+  {
+    server: Schema.String,
+  },
+) {
+  override get message() {
+    return `MCP server ${this.server} has no tools after reconnect`
+  }
+}
+
+/** Row 7: the `ToolsUnavailableError` inside a cause, a squashed error or a thrown value, if that is what it is. */
+export function toolsUnavailable(input: unknown): ToolsUnavailableError | undefined {
+  if (input instanceof ToolsUnavailableError) return input
+  if (!Cause.isCause(input)) return undefined
+  for (const reason of input.reasons) {
+    const value = Cause.isFailReason(reason) ? reason.error : Cause.isDieReason(reason) ? reason.defect : undefined
+    if (value instanceof ToolsUnavailableError) return value
+  }
+  return undefined
+}
+
+/**
+ * Row 7: the longest `tools()` waits for a reconnect in flight when the server sets no `timeout` of its own. The wait
+ * is the server's connect timeout (`mcp.timeout`, else this), the same bound `create` gives the connect itself; the
+ * register names no constant for it. A reconnect that is still running when the wait ends counts as lost tools.
+ */
+export const TOOLS_RECONNECT_WAIT_MS = DEFAULT_TIMEOUT
+
 type MCPClient = Client
 
 function createClient(directory: string) {
@@ -307,6 +344,11 @@ interface State {
   reconnects: Record<string, number>
   /** M-02: the reconnect in flight, which a pending call waits for before its one retry. */
   reconnecting: Record<string, Promise<MCPClient | undefined> | undefined>
+  /**
+   * Row 7: servers that have had at least one tool in this instance. Cleared when the person disconnects the server or
+   * the live server itself announces an empty list; a closed connection does not clear it.
+   */
+  offered: Record<string, true>
   /** U20 / M12 CR-1: aborts a background graft build when the instance closes. */
   builds: AbortController
 }
@@ -770,6 +812,9 @@ const layer = Layer.effect(
         if (s.clients[name] !== client || s.status[name]?.status !== "connected") return
 
         s.defs[name] = listed
+        // Row 7: an empty list announced by the live server is its own statement, not lost tools.
+        if (listed.length > 0) s.offered[name] = true
+        else delete s.offered[name]
         await bridge.promise(events.publish(ToolsChanged, { server: name }).pipe(Effect.ignore))
       })
     }
@@ -865,6 +910,7 @@ const layer = Layer.effect(
           instructions: {},
           reconnects: {},
           reconnecting: {},
+          offered: {},
           builds: new AbortController(),
         }
 
@@ -887,6 +933,7 @@ const layer = Layer.effect(
               if (result.mcpClient) {
                 s.clients[key] = result.mcpClient
                 s.defs[key] = result.defs!
+                if (result.defs!.length > 0) s.offered[key] = true
                 if (result.instructions) s.instructions[key] = result.instructions
                 watch(s, key, result.mcpClient, bridge, mcp.timeout)
               }
@@ -953,6 +1000,7 @@ const layer = Layer.effect(
       s.status[name] = { status: "connected" }
       s.clients[name] = client
       s.defs[name] = listed
+      if (listed.length > 0) s.offered[name] = true
       if (instructions) s.instructions[name] = instructions
       else delete s.instructions[name]
       watch(s, name, client, bridge, timeout)
@@ -1037,6 +1085,8 @@ const layer = Layer.effect(
       const s = yield* InstanceState.get(state)
       yield* closeClient(s, name)
       delete s.clients[name]
+      // Row 7: the person turned it off, so its tools are no longer expected.
+      delete s.offered[name]
       s.status[name] = { status: "disabled" }
     })
 
@@ -1053,6 +1103,54 @@ const layer = Layer.effect(
       const config = cfg.mcp ?? {}
       const global = (yield* cfgSvc.getGlobal()).mcp ?? {}
       const defaultTimeout = cfg.experimental?.mcp_timeout
+
+      // Row 7 (1.3.3, MC-2 item 1): `onclose` drops a server's client and tool list at once and only then starts the
+      // reconnect, so a list built in that window used to leave the server out without a word. Wait for the reconnect
+      // first, each bounded by that server's connect timeout, so a bridge that never comes back cannot hold a step.
+      const pending = Object.entries(s.reconnecting).flatMap(([name, promise]) => (promise ? [{ name, promise }] : []))
+      if (pending.length > 0) {
+        const started = Date.now()
+        yield* Effect.forEach(
+          pending,
+          ({ name, promise }) => {
+            const entry = s.config[name] ?? config[name]
+            const wait = (entry && isMcpConfigured(entry) ? entry.timeout : undefined) ?? TOOLS_RECONNECT_WAIT_MS
+            return Effect.promise(
+              (signal) =>
+                new Promise<void>((resolve) => {
+                  const done = () => {
+                    clearTimeout(timer)
+                    resolve()
+                  }
+                  const timer = setTimeout(done, wait)
+                  void promise.then(done, done)
+                  signal.addEventListener("abort", done, { once: true })
+                }),
+            )
+          },
+          { concurrency: "unbounded", discard: true },
+        )
+        yield* Effect.logInfo("MCP tools waited for reconnect", {
+          servers: pending.map((item) => item.name).join(","),
+          waitedMs: Date.now() - started,
+        })
+      }
+
+      // Row 7: a server that had tools and has none now fails the build by name. Not expected to have tools: a server
+      // that never had any, one no longer configured, and one that is disabled (by config or by the person).
+      for (const name of Object.keys(s.offered).sort()) {
+        const entry = s.config[name] ?? config[name]
+        if (!entry || !isMcpConfigured(entry)) continue
+        const state = s.status[name]?.status
+        if (state === undefined || state === "disabled") continue
+        if (state === "connected" && s.clients[name] && (s.defs[name]?.length ?? 0) > 0) continue
+        yield* Effect.logWarning("MCP tools unavailable", {
+          server: name,
+          status: state,
+          reconnecting: s.reconnecting[name] !== undefined,
+        })
+        return yield* Effect.die(new ToolsUnavailableError({ server: name }))
+      }
 
       for (const [clientName, client] of Object.entries(s.clients)) {
         if (s.status[clientName]?.status !== "connected") continue

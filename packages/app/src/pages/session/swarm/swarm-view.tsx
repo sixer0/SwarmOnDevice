@@ -48,7 +48,7 @@ function LaneGlyph(props: { lane: SwarmLane }) {
             <IconV2 name="close" />
           </span>
         </Match>
-        <Match when={props.lane.status === "stopped"}>
+        <Match when={["stopped", "textCall", "noTools", "emptyStep"].includes(props.lane.status)}>
           <span class="size-2 bg-v2-text-text-faint" />
         </Match>
         <Match when={props.lane.status === "done"}>
@@ -82,6 +82,9 @@ function useLaneLine(swarm: SwarmController) {
     }
     if (lane.status === "failed") return language.t("session.swarm.lane.failed", { detail: lane.detail ?? "" })
     if (lane.status === "stopped") return language.t("session.swarm.lane.stopped")
+    if (lane.status === "textCall") return language.t("session.swarm.lane.textCall")
+    if (lane.status === "noTools") return language.t("session.swarm.lane.noTools", { detail: lane.detail ?? "" })
+    if (lane.status === "emptyStep") return language.t("session.swarm.lane.emptyStep")
     if (lane.status === "unread") return language.t("session.swarm.lane.reading")
     return language.t("session.swarm.lane.done", { count: lane.model.steps.length })
   }
