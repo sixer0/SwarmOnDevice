@@ -1,0 +1,26 @@
+{
+  "caption": {"text": "Unggahan multipart selesai lebih dulu, lalu hasil verifikasi dikirim ke API."},
+  "source": {"text": "hal 183 Gambar 18.7; notasi UML 2.5.1 subset sequence"},
+  "spec": {
+    "family": "sequence",
+    "labels_verified": false,
+    "legend": [
+      "kepala terisi = panggilan sinkron",
+      "kepala terbuka = balasan",
+      "waktu hanya ke bawah",
+      "lanjut ke Gambar 3.2"
+    ],
+    "nodes": [
+      {"class": {}, "id": "iw", "label": ":IngestWorker", "sub": "C08 · Rust"},
+      {"class": {}, "id": "api", "label": ":EvidenceAPI", "sub": "C05/K1"},
+      {"class": {}, "id": "os", "label": ":ObjectStore", "sub": "C09 · MinIO"}
+    ],
+    "edges": [
+      {"from": "iw", "kind": "data", "label": "1 CommitEvidence", "to": "api"},
+      {"from": "iw", "kind": "data", "label": "2 UploadPart", "to": "os"},
+      {"from": "os", "kind": "control", "label": "3 ETag(i)", "to": "iw"},
+      {"from": "iw", "kind": "data", "label": "4 Complete", "to": "os"},
+      {"from": "os", "kind": "control", "label": "5 versionId", "to": "iw"}
+    ]
+  }
+}

@@ -95,8 +95,8 @@ describe("row 97b: every call shape quoted exists in the HEAD tools", () => {
   test("defects and notices the section names are classed that way by the preview route", async () => {
     const { previewIssueClass } = await import("../../src/mcp-host/local-api/routes/figure-preview-figure")
     expect(typeof previewIssueClass).toBe("function")
-    const defects = ["GEOM_ENTRY_COLLISION", "CAPTION_WRAP", "CAPTION_TRUNCATED", "LABEL_LEADER", "LABEL_DROPPED", "TEXT_OUTSIDE", "FLOW_SERIALISED"]
-    const notices = ["EDGE_LANES", "LABEL_MOVED", "AUTO_FIT", "ELK_LAYOUT"]
+    const defects = ["GEOM_ENTRY_COLLISION", "CAPTION_WRAP", "CAPTION_TRUNCATED", "LABEL_DROPPED", "TEXT_OUTSIDE", "FLOW_SERIALISED"]
+    const notices = ["EDGE_LANES", "LABEL_MOVED", "LABEL_LEADER", "AUTO_FIT", "ELK_LAYOUT"]
     for (const c of defects) expect([c, previewIssueClass(c)]).toEqual([c, "defect"])
     for (const c of notices) expect([c, previewIssueClass(c)]).toEqual([c, "notice"])
     for (const c of [...defects.slice(1), ...notices]) expect(flat).toContain(`\`${c}\``)

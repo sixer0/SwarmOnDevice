@@ -49,7 +49,8 @@ import {
   mergeRun,
 } from "./defaults";
 import { type FigureAltInput, figureAltText, stripSourceLabel } from "../../front/alt-text";
-import { apparatusLabelRunText, artifactLabelText, provenanceMarkLabelText, type WrapperLang, wrapperLangOf } from "../../front/texts";
+import { apparatusLabelRunText, artifactLabelText, keyLineText, provenanceMarkLabelText, type WrapperLang, wrapperLangOf } from "../../front/texts";
+import { mapKeyRowText } from "../../diagram/core/sheet";
 import { FIGURE_PREPARE_FAILED, type FigurePrepareFailure, failRender, figurePrepareFailureOf, warnRender } from "./log";
 import { type FigureImage, type FigureMediaEntry, addMedia, figureImageFromBytes, figureMediaRelId, resolveRasterAsset } from "./media";
 import { DOCPR_ID_BASE, drawingParagraphXml, inlineRunsXml, paragraphXml, textRun } from "./ooxml";
@@ -221,8 +222,21 @@ function apparatusRunsXml(i: Inline, base: RunProps, label: RunProps, p: ParamMa
     .join("");
 }
 
-export function keyRowXml(keyRow: FigureCommon["keyRow"], ctx: RenderContext, runDefaults?: RunProps, adjust?: ParaAdjust): string {
-  if (!keyRow) return "";
+/**
+ * Swarm 1.3.3 row 45 (ST-3.6, one key row form): the DOCX key row words its rows as the HTML/PDF row
+ * (`html/tables/apparatus.ts` `idKeyLine`) and the SVG key line do: an Indonesian document names the
+ * DATUM edge kinds by line pattern (`keyLineText`, row by row). Before, only DOCX printed `DATA = ...`.
+ */
+function idKeyRow(keyRow: NonNullable<FigureCommon["keyRow"]>, lang: WrapperLang): NonNullable<FigureCommon["keyRow"]> {
+  if (lang !== "ID") return keyRow;
+  const word = (t: string): string => mapKeyRowText(t, (row) => keyLineText(row, lang));
+  if ("text" in keyRow) return { ...keyRow, text: word(keyRow.text) };
+  return { ...keyRow, runs: keyRow.runs.map((r) => ("t" in r ? { ...r, t: word(r.t) } : r)) };
+}
+
+export function keyRowXml(keyRowIn: FigureCommon["keyRow"], ctx: RenderContext, runDefaults?: RunProps, adjust?: ParaAdjust): string {
+  if (!keyRowIn) return "";
+  const keyRow = idKeyRow(keyRowIn, langOf(ctx));
   const p = ctx.tpl.params;
   const role = figureRole(ctx.tpl, "figure.keyRow");
   const base = mergeRun(role.run, runDefaults);

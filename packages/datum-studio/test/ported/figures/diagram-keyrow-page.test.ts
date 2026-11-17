@@ -36,12 +36,18 @@ function diagramBlockV2(keyRow: boolean): DiagramV2 {
 }
 
 describe('D-288 baris KUNCI satu aparatus', () => {
-  it('compose: blok diagram dengan keyRow menandai spec keyRowOnPage; tanpa keyRow tidak', () => {
+  // Swarm 1.3.3 row 45 (ST-3.6, one key row form): re-pinned. Old form: a block with `legend[]` and no `keyRow` had no
+  // block key row and no `keyRowOnPage` (the SVG drew "KEY  <rows>" in capitals), and a block with both carried the
+  // authored sentence ("KUNCI  garis penuh isi · merah jalur tolak"). New form: both blocks carry the spec's rows
+  // ("KUNCI  " + legend rows joined by "  ·  ") and are marked, so the page prints the one key row.
+  it('compose: blok diagram ber-legend selalu membawa baris KUNCI dari legend dan menandai spec keyRowOnPage', () => {
     const withKey = mapBlock(diagramBlockV2(true), 'p1', CTX) as DiagramBlock;
     const without = mapBlock(diagramBlockV2(false), 'p2', CTX) as DiagramBlock;
-    expect(withKey.keyRow).toBeDefined();
+    const want = { runs: [{ t: 'KUNCI  ' }, { t: LEGEND.join('  ·  ') }] };
+    expect(withKey.keyRow).toEqual(want);
+    expect(without.keyRow).toEqual(want);
     expect((withKey.spec as { keyRowOnPage?: boolean }).keyRowOnPage).toBe(true);
-    expect((without.spec as { keyRowOnPage?: boolean }).keyRowOnPage).toBeUndefined();
+    expect((without.spec as { keyRowOnPage?: boolean }).keyRowOnPage).toBe(true);
     // legenda tetap di spec (DATUM-34 membaca legend)
     expect((withKey.spec as StudioDiagramV1).legend).toEqual(LEGEND);
   });

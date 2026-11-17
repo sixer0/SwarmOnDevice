@@ -248,7 +248,7 @@ describe("row 57c defect 3: the annotation association (C101, C111)", () => {
     expect(assoc.arrow_end).toBe("none")
     const svg = await auto(FIGS.vis3_process_166)
     const ls = links(svg)
-    const cat = bands(svg).find((b) => b.text === "CAT")!
+    const cat = bands(svg).find((b) => b.text === "cat")! // Swarm 1.3.3 row 43: the label prints as the fixture writes it
     expect(cat).toBeDefined()
     const own = ls.find((l) => attr(l.el, "data-index") === String((GA.process.edges as J[]).indexOf(assoc)))
     expect(own && attr(own.el, "marker-end")).toBeUndefined()

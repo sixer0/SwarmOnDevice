@@ -1,0 +1,46 @@
+{
+  "type": "diagram",
+  "caption": {
+    "text": "Tiap gedung tetap terhubung lewat dua duct berbeda meski satu core atau satu link gagal."
+  },
+  "source": {
+    "text": "SUMBER: GSP Diagram Manual Rev B hlm 45; nilai dari kunci register net.*; PROVENANS: data uji fiktif."
+  },
+  "keyRow": {
+    "text": "Garis penuh = link aktif tiap core ke distribusi lewat duct D1; garis titik = jalur cadangan lewat duct D2; aksen = core aktif C1."
+  },
+  "spec": {
+    "family": "layered",
+    "classification": "BIASA",
+    "labels_verified": true,
+    "sources": ["GSP Diagram Manual Rev B hlm 45"],
+    "legend": [
+      "Garis penuh: link aktif tiap core ke distribusi lewat duct D1.",
+      "Garis titik: jalur cadangan lewat duct D2.",
+      "Aksen: core aktif C1; tanpa aksen: standby VRRP."
+    ],
+    "nodes": [
+      {"id": "core-1", "label": "Core C1", "sub": "48x25G + 8x100G", "shape": "box", "class": {"tier": 0, "accent": true}},
+      {"id": "core-2", "label": "Core C2", "sub": "VRRP standby", "shape": "box", "class": {"tier": 0, "secondary": true}},
+      {"id": "dist-b1", "label": "B1 · Dist+AS x3", "sub": "PoE+, 312 PC + 96 phone", "shape": "box", "class": {"tier": 1}},
+      {"id": "dist-b2", "label": "B2 · Dist+AS x4", "sub": "mGig PoE++, konsol 64 + AP 8", "shape": "box", "class": {"tier": 1}},
+      {"id": "dist-b3", "label": "B3 · Dist+Ring x12", "sub": "ERPS 1G, kamera 184 + radar 16", "shape": "box", "class": {"tier": 1}}
+    ],
+    "edges": [
+      {"from": "core-1", "to": "core-2", "kind": "data", "label": "100G"},
+      {"from": "dist-b1", "to": "core-1", "kind": "data", "label": "25G"},
+      {"from": "dist-b2", "to": "core-1", "kind": "data", "label": "25G"},
+      {"from": "dist-b3", "to": "core-1", "kind": "data", "label": "25G"},
+      {"from": "dist-b1", "to": "core-2", "kind": "sync", "label": "25G"},
+      {"from": "dist-b2", "to": "core-2", "kind": "sync", "label": "25G"},
+      {"from": "dist-b3", "to": "core-2", "kind": "sync", "label": "25G"}
+    ],
+    "zones": [],
+    "notes": [
+      "ISL antar core: 2 x 100G DAC; label tepi dipersingkat menjadi 100G.",
+      "Uplink tiap gedung: 2 x 25G OS2 LR; satu jalur lewat duct D1 north, jalur cadangan lewat duct D2 south (NET-06).",
+      "Perangkat identik menjadi satu node bercount pada label (NET-07); oversub access 7.2 : 1, batas 20 : 1.",
+      "View logis dan IP plan adalah figure terpisah (NET-01)."
+    ]
+  }
+}

@@ -158,31 +158,36 @@ async function carryCorpus(): Promise<Render[]> {
  * red-base worktree with REL129_A02_PRINT=1 (C12: legacy flows stay byte-identical). Edit only as INTENT of a listed
  * AC line.
  */
+// Swarm 1.3.3 row 43 (ST-3.4, INTENT; controller routing): edge labels and the key row print in the letter case of the
+// spec. 22 of the 24 pins move by the case of those texts only (checked text by text against a frozen copy with the
+// three switches off: same elements, same attributes, capitals of the new text equal the old text). The two
+// dg_flow_wrapped pins moved in row 129: besides the case, their bytes carry row 54's CATATAN note row (sheet 66.675 ->
+// 71.437 mm, key row one lattice step lower); checked line by line against the golden of the base bytes.
 const LEGACY_PINS: Record<string, string> = {
-  "parity:diagram/dg_flow.json@rel": "fc48425d8f2eded6",
-  "parity:diagram/dg_flow.json@draft": "fc48425d8f2eded6",
-  "parity:diagram/dg_flow_wrapped.json@rel": "bb2a06d4d8d55c6b",
-  "parity:diagram/dg_flow_wrapped.json@draft": "bb2a06d4d8d55c6b",
-  "char:fixtures/syn127/f6_fan_in_specs.json#/specs/5/spec@sync": "555deb241743acbb",
-  "char:fixtures/syn127/f6_fan_in_specs.json#/specs/5/spec@auto": "555deb241743acbb",
-  "char:fixtures/syn127/m03_render_fail_doc.json#/chapters/0/chapter/sections/0/blocks/1/spec@sync": "3f0f35339e73c5b0",
-  "char:fixtures/syn127/m03_render_fail_doc.json#/chapters/0/chapter/sections/0/blocks/1/spec@auto": "3f0f35339e73c5b0",
-  "char:fixtures/syn127/t11_flow_inline_v2.json#/block/spec@sync": "5850dd65ccaf081a",
-  "char:fixtures/syn127/t11_flow_inline_v2.json#/block/spec@auto": "5850dd65ccaf081a",
-  "char:fixtures/syn127/t12_standalone_key_source.json#/block/spec@sync": "463526c2b27cc56e",
-  "char:fixtures/syn127/t12_standalone_key_source.json#/block/spec@auto": "463526c2b27cc56e",
-  "char:fixtures/syn128/hn13_import.md#/fence0@sync": "ed4f6e318a6f4bd4",
-  "char:fixtures/syn128/hn13_import.md#/fence0@auto": "ed4f6e318a6f4bd4",
-  "char:fixtures/syn128/hn13_import.md#/fence1/spec@sync": "02b521566ecaa5a5",
-  "char:fixtures/syn128/hn13_import.md#/fence1/spec@auto": "02b521566ecaa5a5",
-  "char:fixtures/syn128/hna_flow_v2.json#/block/spec@sync": "44e280ba26404ba0",
-  "char:fixtures/syn128/hna_flow_v2.json#/block/spec@auto": "44e280ba26404ba0",
-  "char:fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec@sync": "44e280ba26404ba0",
-  "char:fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec@auto": "44e280ba26404ba0",
-  "char:fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec@sync": "44e280ba26404ba0",
-  "char:fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec@auto": "44e280ba26404ba0",
-  "carry:B4_carry_flow@128": "463f9660c1b7d3dd",
-  "carry:B4_carry_flow@166": "165891c2ff7beeff",
+  "parity:diagram/dg_flow.json@rel": "8c84a166322a3c17",
+  "parity:diagram/dg_flow.json@draft": "8c84a166322a3c17",
+  "parity:diagram/dg_flow_wrapped.json@rel": "604ba56606c780df",
+  "parity:diagram/dg_flow_wrapped.json@draft": "604ba56606c780df",
+  "char:fixtures/syn127/f6_fan_in_specs.json#/specs/5/spec@sync": "2abff819a8f7191b",
+  "char:fixtures/syn127/f6_fan_in_specs.json#/specs/5/spec@auto": "2abff819a8f7191b",
+  "char:fixtures/syn127/m03_render_fail_doc.json#/chapters/0/chapter/sections/0/blocks/1/spec@sync": "98e6f79b270246ea",
+  "char:fixtures/syn127/m03_render_fail_doc.json#/chapters/0/chapter/sections/0/blocks/1/spec@auto": "98e6f79b270246ea",
+  "char:fixtures/syn127/t11_flow_inline_v2.json#/block/spec@sync": "1c2744724d263612",
+  "char:fixtures/syn127/t11_flow_inline_v2.json#/block/spec@auto": "1c2744724d263612",
+  "char:fixtures/syn127/t12_standalone_key_source.json#/block/spec@sync": "855c3c19d237f9e2",
+  "char:fixtures/syn127/t12_standalone_key_source.json#/block/spec@auto": "855c3c19d237f9e2",
+  "char:fixtures/syn128/hn13_import.md#/fence0@sync": "f9021aec5e40c83b",
+  "char:fixtures/syn128/hn13_import.md#/fence0@auto": "f9021aec5e40c83b",
+  "char:fixtures/syn128/hn13_import.md#/fence1/spec@sync": "bdc7cc9589673602",
+  "char:fixtures/syn128/hn13_import.md#/fence1/spec@auto": "bdc7cc9589673602",
+  "char:fixtures/syn128/hna_flow_v2.json#/block/spec@sync": "a5a8183f52799fa3",
+  "char:fixtures/syn128/hna_flow_v2.json#/block/spec@auto": "a5a8183f52799fa3",
+  "char:fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec@sync": "a5a8183f52799fa3",
+  "char:fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec@auto": "a5a8183f52799fa3",
+  "char:fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec@sync": "a5a8183f52799fa3",
+  "char:fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec@auto": "a5a8183f52799fa3",
+  "carry:B4_carry_flow@128": "02bfcc7621351c9d",
+  "carry:B4_carry_flow@166": "7e728b9f7ca54089",
 }
 
 describe("AC-A02 zero-length points in link paths", () => {

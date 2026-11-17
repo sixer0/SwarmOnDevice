@@ -3,7 +3,7 @@
  *
  * Masukan: posisi bawaan tiap label (`labelPos` Garis A), jalur konektor, kotak simpul, rintangan
  * lain (teks simpul, label zona/lajur), dan batas lembar (tepi kaki). Kotak label = pita knockout
- * dengan lebar mono terukur 0,6 em (`textfit` "data", huruf kapital evidence_rail) + 1,6 mm.
+ * dengan lebar mono terukur 0,6 em (`textfit` "data", huruf seperti tertulis di spec, baris 43) + 1,6 mm.
  *
  * Urutan:
  * 1. Label yang posisi bawaannya bebas tabrakan (simpul, rintangan, label bawaan lain, tepi lembar)
@@ -29,7 +29,7 @@
  */
 import type { DiagramEdgeKind, DiagramLabelAt } from "../../../contract";
 import { measure } from "../../chart/core/textfit";
-import { LABEL_AT_FRACTION, pt2mm, role } from "../core/tokens";
+import { LABEL_AT_FRACTION, pt2mm, role, roleUpper } from "../core/tokens";
 import { headQuad, polyHitsBox, STUB_SEGMENT_MIN_MM, type Box, type HeadSize } from "./lint";
 
 type Pt = readonly [number, number];
@@ -73,8 +73,20 @@ export interface EdgeLabelCtx {
   obstacles: readonly Box[];
   /** Label bernomor diizinkan (bawaan benar). Tidak -> posisi terbaik di jalur, mode `unplaced`. */
   allowNumbered?: boolean;
-  /** Row 57c: container rules (lane rules, phase separators, pool borders) a band may not cross. */
-  rules?: ReadonlyArray<{ a: Pt; b: Pt; half: number }>;
+  /**
+   * Row 57c: container rules (lane rules, phase separators, pool borders) a band may not cross.
+   * Swarm 1.3.3 row 42 (ST-3 item 3): `strict` marks a rule a band may not cover at all, also where a connector runs
+   * along it (a zone frame: a label on a connector that follows the frame would still print on the frame line).
+   */
+  rules?: ReadonlyArray<ContainerRule>;
+}
+
+/** A container rule for the label placement: centre line `a`-`b`, `half` = half its width plus any clearance (mm). */
+export interface ContainerRule {
+  a: Pt;
+  b: Pt;
+  half: number;
+  strict?: boolean;
 }
 
 const railPt = (): number => role("evidence_rail").size;
@@ -109,14 +121,50 @@ export function labelAtBaseline(points: ReadonlyArray<Pt>, at: DiagramLabelAt): 
   return [x, y + railMm() * 0.3];
 }
 
-/** Lebar teks evidence_rail (mono kapital 0,6 em), mm. */
+/**
+ * Swarm 1.3.3 rows 42 and 43 (ST-3 item 4, letter case): the text of an edge label as it is printed, for measuring.
+ * An edge label prints in the letter case of the spec (`roleUpper("evidence_rail")` is false, core/tokens.ts), so the
+ * width is measured on the text as written. Every width in this file goes through here (`railTextWidthMm`,
+ * `knockWidthMm`, `layoutNotes`); a label budget (row 44) that counts glyphs or millimetres reads the same text.
+ */
+export function railPrintedText(text: string): string {
+  return roleUpper("evidence_rail") ? text.toUpperCase() : text;
+}
+
+/** Lebar teks evidence_rail (mono 0,6 em, huruf seperti dicetak: `railPrintedText`), mm. */
 export function railTextWidthMm(text: string): number {
-  return measure(text.toUpperCase(), railPt(), "data");
+  return measure(railPrintedText(text), railPt(), "data");
 }
 
 /** Lebar pita knockout: lebar mono terukur + 1,6 mm. */
 export function knockWidthMm(text: string): number {
   return railTextWidthMm(text) + 1.6;
+}
+
+/**
+ * Swarm 1.3.3 row 44 (ST-3 item 5, gap matrix N5): the remedy for an edge label that found no free place on, beside or
+ * by a leader off its connector. It replaces the fixed "maks ~20 karakter" with the room of the label's own connector:
+ * the longest straight run, less what must stay visible at its ends (the source piece `STUB_SEGMENT_MIN_MM` or the tail
+ * head, the end head plus `HEAD_LINE_MM`, `HEAD_LINE_MM` at a bend) and the band's 1.6 mm, in printed characters
+ * (`railTextWidthMm` of one mono glyph). The other two remedies are the ones the engine already names: the detail goes to
+ * the companion table, or the figure is split.
+ */
+export function edgeLabelRemedy(e: Pick<EdgeLabelInput, "points" | "heads">): string {
+  const runs = straightRuns(e.points);
+  const headL = e.heads?.end ? e.heads.end.L : 0;
+  const tailL = e.heads?.start ? e.heads.start.L : 0;
+  const room = Math.max(
+    0,
+    ...runs.map(([a, c], i) => {
+      const lead = i === 0 ? (tailL > 0 ? tailL + HEAD_LINE_MM : STUB_SEGMENT_MIN_MM) : HEAD_LINE_MM;
+      const trail = i === runs.length - 1 ? headL + HEAD_LINE_MM : HEAD_LINE_MM;
+      return Math.hypot(c[0] - a[0], c[1] - a[1]) - lead - trail;
+    }),
+  );
+  const n = Math.floor((room - 1.6) / railTextWidthMm("0") + 1e-9);
+  const rest = "pindahkan rinciannya ke tabel pendamping, atau pecah menjadi 2 diagram";
+  if (n < 1) return `garis label tepi ini terlalu pendek untuk teks (${room.toFixed(1)} mm bebas): ${rest}`;
+  return `persingkat label tepi menjadi paling banyak ${n} karakter (ruang bebas di garisnya ${room.toFixed(1)} mm), ${rest}`;
 }
 
 /** Kotak pita knockout untuk pusat `cx`, garis dasar `by`, lebar `kw`. */
@@ -315,10 +363,15 @@ export function spotClear(points: ReadonlyArray<Pt>, heads: EdgeLabelInput["head
   return true;
 }
 
-/** Row 57c: an axis rule crosses band `b` where no connector runs along it (the lint's rule test, on input points). */
-function ruleCrosses(r: { a: Pt; b: Pt; half: number }, b: Box, edges: readonly EdgeLabelInput[]): boolean {
+/**
+ * Row 57c: an axis rule crosses band `b` where no connector runs along it (the lint's rule test, on input points).
+ * Swarm 1.3.3 row 42: a `strict` rule (zone frame) crosses wherever it meets the band. Exported so the first-render
+ * position (build/svg.ts `labelPos`) can apply the same test to `zoneFrameRules` (build/fitlabels.ts).
+ */
+export function ruleCrosses(r: ContainerRule, b: Box, edges: readonly EdgeLabelInput[]): boolean {
   const t = clipSeg(r.a, r.b, [b[0] - r.half, b[1] - r.half, b[2] + r.half, b[3] + r.half]);
   if (!t) return false;
+  if (r.strict) return true; // row 42: a zone frame stays visible also under a connector that follows it
   const hor = Math.abs(r.a[1] - r.b[1]) < 1e-6;
   const ver = Math.abs(r.a[0] - r.b[0]) < 1e-6;
   if (!hor && !ver) return true;
@@ -612,6 +665,46 @@ function withLeader(
   edges: readonly EdgeLabelInput[] = [],
   placed: ReadonlyMap<number, Box> = new Map(),
 ): Cand | null {
+  // Swarm 1.3.3 row 44 (ST-3 item 5): the first `LEADER_NEAR_RINGS` rings are searched as before, so a label that found a
+  // leader there keeps it (byte-identical renders). Only when none of them is free does the search go on, ring by ring,
+  // as far as the drawing area reaches (`leaderRings`): the budget is the space, not a fixed count.
+  return leaderSearch(e, kw, ctx, sc, self, edges, placed, 0, LEADER_NEAR_RINGS, true) ?? leaderSearch(e, kw, ctx, sc, self, edges, placed, LEADER_NEAR_RINGS, leaderRings(e, kw, ctx, edges), false);
+}
+
+/** Row 44: rings of the leader search before this row (`k < 10`), kept as the first pass. */
+const LEADER_NEAR_RINGS = 10;
+
+/**
+ * Row 44: how many rings the leader search needs to reach the edge of the drawing area from the label's connector:
+ * vertically to `yMin` / `yMax` (an open `yMax` = the lowest node, obstacle or connector point plus one band), sideways to
+ * 0 / `W`. Ring k of a horizontal segment sits `bh / 2 + 1 + k * 1.1 bh` off the line, of a vertical one `kw / 2 + 1 + 3 k`.
+ */
+function leaderRings(e: EdgeLabelInput, kw: number, ctx: EdgeLabelCtx, edges: readonly EdgeLabelInput[]): number {
+  const bh = railMm() * 1.7;
+  const yMin = ctx.yMin ?? 0;
+  const yMax = Number.isFinite(ctx.yMax) ? ctx.yMax : Math.max(yMin, ...ctx.nodeBoxes.map((b) => b[3]), ...ctx.obstacles.map((b) => b[3]), ...edges.flatMap((x) => x.points.map((p) => p[1]))) + bh;
+  const xs = e.points.map((p) => p[0]);
+  const ys = e.points.map((p) => p[1]);
+  const vReach = Math.max(Math.max(...ys) - yMin, yMax - Math.min(...ys));
+  const hReach = Math.max(Math.max(...xs), ctx.W - Math.min(...xs));
+  const n = Math.max(Math.ceil((vReach - bh / 2 - 1) / (bh * 1.1)), Math.ceil((hReach - kw / 2 - 1) / 3.0)) + 1;
+  return Math.max(LEADER_NEAR_RINGS, n);
+}
+
+/** Leader candidates on rings `k0 <= k < k1` (see `withLeader`); `slide` adds the spot slid past a hit node. */
+function leaderSearch(
+  e: EdgeLabelInput,
+  kw: number,
+  ctx: EdgeLabelCtx,
+  sc: Scorer,
+  self: number,
+  edges: readonly EdgeLabelInput[],
+  placed: ReadonlyMap<number, Box>,
+  k0: number,
+  k1: number,
+  slide: boolean,
+): Cand | null {
+  if (k1 <= k0) return null;
   const s = railMm();
   const bh = s * 1.7;
   let best: { c: Cand; len: number } | null = null;
@@ -630,12 +723,13 @@ function withLeader(
       if (nearOutline || underHead) continue;
       const centres: Array<[number, number]> = [];
       for (const sign of [-1, 1]) {
-        for (let k = 0; k < 10; k++) {
+        for (let k = k0; k < k1; k++) {
           for (const along of [0, -1, 1]) {
             if (horiz) centres.push([ax + along * (kw / 2 + 1.0), ay + sign * (bh / 2 + 1.0 + k * bh * 1.1)]);
             else centres.push([ax + sign * (kw / 2 + 1.0 + k * 3.0), ay + along * (bh + 1.0)]);
           }
         }
+        if (!slide) continue;
         // geser melewati simpul yang terkena sampai bebas (mis. keluar dari badan rak)
         let cx = horiz ? ax : ax + sign * (kw / 2 + 1.0);
         let cy = horiz ? ay + sign * (bh / 2 + 1.0) : ay;

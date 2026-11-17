@@ -5,15 +5,17 @@
 import type { DiagramZone, RoutedEdge, StudioDiagramV1 } from "../../../contract";
 import { FONT_ASCENT_EM, FONT_DESCENT_EM, measure } from "../../chart/core/textfit";
 import { EDGE_KINDS, LATTICE_Y, pt2mm, role, STROKE_PRIMARY, svgText, type Sheet, type SheetNode } from "../core";
+import { pyNum } from "../core/pyfmt";
 import { edgeArrowsOfPaths, edgeLineDash, type EdgeArrows } from "../core/svg";
-import { ARROW_SIZES_MM } from "../core/tokens";
+import { ARROW_SIZES_MM, PAPER, STROKE_HAIR } from "../core/tokens";
 import { decorationOf, type Box, type HeadSize } from "../fit/lint";
-import { labelAtBaseline, placeEdgeLabels, type EdgeLabelInput, type EdgeLabelPlan, layoutNotes } from "../fit/labels";
+import { edgeLabelRemedy, labelAtBaseline, placeEdgeLabels, type ContainerRule, type EdgeLabelInput, type EdgeLabelPlan, layoutNotes } from "../fit/labels";
 import { diagramFitAllows, diagramFitNote } from "../fit/state";
 import { capLineMm, capWidthMm, nodeTextLayout } from "../fit/text";
 import { flowDirectionOf } from "../layout-a/flow";
 
-const SUGGEST_EDGE = "persingkat label tepi (maks ~20 karakter)";
+/** Swarm 1.3.3 row 42 (ST-3 item 3): what the author can do about a clamped container label. */
+const SUGGEST_ZONE = "persingkat label zona, atau beri zona ruang dari tepi lembar";
 
 /** Kotak teks satu baris (garis dasar `y`, anchor) untuk ukuran `sizeMm`. */
 function textBox(x: number, y: number, w: number, sizeMm: number, anchor: "start" | "middle" | "end"): Box {
@@ -34,6 +36,44 @@ export interface ZoneGeom {
   label: string;
   lx: number;
   ly: number;
+  /**
+   * Swarm 1.3.3 row 42 (ST-3 item 3): the plain ground of the label (`zoneLabelGroundSvg`), to be drawn after every
+   * zone frame and right before the label text. Absent for a legacy flow (`clear` false: frozen at its 1.2.5 bytes,
+   * C10(a), C12).
+   */
+  ground?: string;
+}
+
+/** Row 42: width (mm) of a container label as drawn (role `table_header`; the case follows the role's `upper`). */
+export function zoneLabelWidthMm(label: string): number {
+  return headerWidth(label);
+}
+
+/** Row 42: the ground runs this far (mm) past the label on its left and right. */
+const ZONE_GROUND_PAD_MM = 0.4;
+/**
+ * Row 42: the ground starts this share of the font size above the baseline: the cap height of the condensed face plus
+ * the hair frame line the capitals sit under. It ends `FONT_DESCENT_EM` below the baseline.
+ */
+const ZONE_GROUND_RISE_EM = 0.8;
+
+/**
+ * Swarm 1.3.3 row 42 (ST-3 item 3, gap matrix N17: "label wadah menimpa garis bingkai wadah"): a paper rect under a
+ * container label, so a frame line, lane rule or lifeline drawn before it does not run through the letters. The label
+ * baseline sits `pt2mm(5)` under the frame's top line, so the capitals touch that line: the ground knocks the line out
+ * over the label's width (the label reads as a tab in the frame) and leaves the frame's left side (1 mm away) whole.
+ * `dy` = the caller's baseline shift (build/svg.ts draws a `group` label 0.8 mm lower). The rect is clipped to the sheet.
+ * `stroke="none"` keeps the geometry lint from reading it as an edge-label band (a filled rect without a stroke
+ * attribute right before a text, fit/lint.ts `prevKnock`), as a frame or as a container rule; it carries no
+ * `data-mark` (decoration, G-2).
+ */
+export function zoneLabelGroundSvg(g: Pick<ZoneGeom, "label" | "lx" | "ly">, sheetW: number, dy = 0): string {
+  const size = pt2mm(role("table_header").size);
+  const x0 = Math.max(0, g.lx - ZONE_GROUND_PAD_MM);
+  const x1 = Math.max(x0, Math.min(sheetW, g.lx + headerWidth(g.label) + ZONE_GROUND_PAD_MM));
+  const y0 = Math.max(0, g.ly + dy - ZONE_GROUND_RISE_EM * size);
+  const y1 = g.ly + dy + FONT_DESCENT_EM * size;
+  return `<rect x="${pyNum(x0, 2)}" y="${pyNum(y0, 2)}" width="${pyNum(x1 - x0, 2)}" height="${pyNum(Math.max(0, y1 - y0), 2)}" fill="${PAPER}" stroke="none"/>`;
 }
 
 /**
@@ -101,12 +141,57 @@ export function zoneGeom(z: DiagramZone, members: readonly SheetNode[], sheet: S
     const nx = Math.min(Math.max(lx, 0.5), Math.max(0.5, sheet.widthMm - lw - 0.5));
     const ny = Math.max(ly, FONT_ASCENT_EM * size + 0.4);
     if (Math.abs(nx - lx) > 1e-9 || Math.abs(ny - ly) > 1e-9) {
-      diagramFitNote("ZONE_LABEL_CLAMP", `label zona '${label}' dijepit ke dalam lembar`);
+      // Swarm 1.3.3 row 42 (ST-3 item 3): a clamp is never silent. The note says how far the label moved and what the
+      // author can do; a label wider than the sheet cannot be clamped into it and is reported as that.
+      const mm = (v: number) => pyNum(Math.abs(v), 1);
+      const moved = [Math.abs(nx - lx) > 1e-9 ? `${mm(nx - lx)} mm ke ${nx < lx ? "kiri" : "kanan"}` : "", Math.abs(ny - ly) > 1e-9 ? `${mm(ny - ly)} mm ke bawah` : ""].filter(Boolean).join(", ");
+      const detail =
+        lw > sheet.widthMm - 1.0 + 1e-9
+          ? `label zona '${label}' lebih lebar dari lembar (${mm(lw)} mm, lembar ${mm(sheet.widthMm)} mm): digeser ${moved}, tetap keluar lembar`
+          : `label zona '${label}' dijepit ke dalam lembar (digeser ${moved})`;
+      diagramFitNote("ZONE_LABEL_CLAMP", detail, SUGGEST_ZONE);
       lx = nx;
       ly = ny;
     }
   }
-  return { x: zx, y: zy, w: zw, h: zh, label, lx, ly };
+  const g: ZoneGeom = { x: zx, y: zy, w: zw, h: zh, label, lx, ly };
+  // Row 42: the ground of the label; a `group` label is drawn 0.8 mm lower (build/svg.ts row 55b).
+  if (clear) g.ground = zoneLabelGroundSvg(g, sheet.widthMm, (z as { style?: unknown }).style === "group" ? 0.8 : 0);
+  return g;
+}
+
+/**
+ * Row 42: least gap (mm) between an edge-label band and the stroke of a zone frame side: two print units (coordinates
+ * are printed to 0.01 mm), so a band that clears the line in the plan still clears it on paper. Lane rules and pool
+ * borders keep no extra gap (row 57c); a larger value here moves labels that do not touch a frame (0.2 mm moved
+ * `JALUR UTAMA` of the parity fixture dg_topology, 0.06 mm off its zone frame, and changed that locked fit render).
+ */
+const ZONE_RULE_CLEAR_MM = 0.02;
+
+/**
+ * Swarm 1.3.3 row 42 (ST-3 item 3, gap matrix N17: "label garis menimpa garis bingkai wadah"): the four sides of every
+ * zone frame as build/svg.ts draws it (clipped to the sheet on the left, top and right, row 55c), as container rules for
+ * the edge-label placement (`EdgeLabelCtx.rules`). They are `strict`: unlike a lane rule, a band may not cover a frame
+ * side even where a connector runs along it (R2 u1/1, u1/2: a connector routed on the frame's top line carried its
+ * label there). The dashed frame is not a rule for the geometry lint's scanner, so it is handed over here. None for a legacy flow (`zoneClearOn` false: frozen at its 1.2.5 bytes, C10(a), C12).
+ */
+export function zoneFrameRules(s: StudioDiagramV1, sheet: Sheet, fit: boolean): ContainerRule[] {
+  if (!zoneClearOn(s)) return [];
+  const out: ContainerRule[] = [];
+  const inset = STROKE_HAIR / 2;
+  const half = STROKE_HAIR / 2 + ZONE_RULE_CLEAR_MM;
+  for (const z of s.zones ?? []) {
+    const members = (z.members ?? []).map((m) => sheet.nodes.get(m)).filter((m): m is SheetNode => m !== undefined);
+    if (!members.length) continue;
+    const g = zoneGeom(z, members, sheet, fit, true);
+    const x0 = g.x < 0 ? inset : g.x;
+    const y0 = g.y < 0 ? inset : g.y;
+    const x1 = g.x + g.w > sheet.widthMm ? sheet.widthMm - inset : g.x + g.w;
+    const y1 = g.y + g.h;
+    const c: Array<readonly [number, number]> = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    for (let i = 0; i < 4; i++) out.push({ a: c[i], b: c[(i + 1) % 4], half, strict: true });
+  }
+  return out;
 }
 
 function zoneLabelBox(g: ZoneGeom): Box {
@@ -191,16 +276,19 @@ export function fitEdgeLabels(a: FitLabelInputs): EdgeLabelPlan {
     nodeBoxes,
     obstacles,
     allowNumbered: diagramFitAllows("numbered"),
-    rules: deco.rules,
+    // Swarm 1.3.3 row 42 (ST-3 item 3): zone frames are container rules too (not for a legacy flow).
+    rules: [...deco.rules, ...zoneFrameRules(a.s, a.sheet, true)],
   });
   const moved = plan.placed.filter((p) => p.mode === "moved").length;
   if (moved) diagramFitNote("LABEL_MOVED", `${moved} label tepi dipindah ke posisi bebas tabrakan`);
+  // Swarm 1.3.3 row 44 (ST-3 item 5): the remedy names the room of the label's own connector (`edgeLabelRemedy`), not a
+  // fixed "~20 characters"; a leader is a notice (row 46), numbered / unplaced are the refusal stage and name the label.
   plan.placed.forEach((p, i) => {
-    if (p.mode === "leader") diagramFitNote("LABEL_LEADER", `label tepi '${edges[i].label}' digeser dengan garis penunjuk`, SUGGEST_EDGE);
+    if (p.mode === "leader") diagramFitNote("LABEL_LEADER", `label tepi '${edges[i].label}' digeser dengan garis penunjuk`, edgeLabelRemedy(edges[i]));
     if (p.mode === "numbered") {
-      diagramFitNote("LABEL_NUMBERED", `label tepi '${edges[i].label}' tidak mendapat posisi bebas; diganti nomor ${p.number} + catatan`, SUGGEST_EDGE);
+      diagramFitNote("LABEL_NUMBERED", `label tepi '${edges[i].label}' tidak mendapat posisi bebas; diganti nomor ${p.number} + catatan`, edgeLabelRemedy(edges[i]));
     }
-    if (p.mode === "unplaced") diagramFitNote("LABEL_UNPLACED", `label tepi '${edges[i].label}' tidak mendapat posisi bebas tabrakan`, SUGGEST_EDGE);
+    if (p.mode === "unplaced") diagramFitNote("LABEL_UNPLACED", `label tepi '${edges[i].label}' tidak mendapat posisi bebas tabrakan`, edgeLabelRemedy(edges[i]));
   });
   return plan;
 }

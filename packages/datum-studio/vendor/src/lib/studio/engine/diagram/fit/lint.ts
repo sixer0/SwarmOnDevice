@@ -129,6 +129,8 @@ export const HEADER_CLEAR_MM = 0.3;
  * (row 57b `headTrimMm`, under 1 mm). An end under the label block of an event (`data-label-pos="below"`) belongs to it.
  */
 const EDGE_END_ON_NODE_MM = 1.2;
+/** Row 48: a lifeline starts on the bottom side of its actor, corners included (mm; two-decimal SVG coordinates). */
+const LIFELINE_AT_NODE_MM = 0.05;
 
 /**
  * Swarm 1.2.8 row 68a (C166 (1), (3)): `edgeThroughNode` also counts a connector that runs through the body of its OWN
@@ -301,6 +303,12 @@ interface Scan {
   linkHeads: Array<{ end: HeadSize | null; start: HeadSize | null }>;
   /** Row 57c: container rules (solid unmarked `<line>` / stroked unfilled `<rect>` sides: lane rules, phase separators, pool borders). */
   rules: Array<{ a: Pt; b: Pt; half: number }>;
+  /**
+   * Swarm 1.3.3 row 135 (ST-3 item 3): the four sides of each zone / group frame (dashed unfilled `<rect>` without mark or
+   * node id) of a figure that draws its zone labels after the frames. Kept apart from `rules`: they are strict (no
+   * "a connector runs along it" exemption) and `decorationOf` does not hand them on.
+   */
+  zoneRules: Array<{ a: Pt; b: Pt; half: number }>;
   /** Row 55c: container frames (also dashed zone / group outlines) as centre-line boxes, for `frameOutside`. */
   frames: Box[];
 }
@@ -328,6 +336,10 @@ function scan(svg: string): Scan {
   const markers = new Map<string, HeadSize>();
   const linkHeads: Scan["linkHeads"] = [];
   const rules: Scan["rules"] = [];
+  const zoneRules: Scan["zoneRules"] = [];
+  // Row 135: a zone frame followed at once by its label text is a legacy flow (build/svg.ts draws frame, label per zone
+  // only when `zoneClearOn` is false); those are frozen at their 1.2.5 bytes and reports (C10(a), C12), so no rule.
+  let lastWasZoneFrame = false;
   const frames: Box[] = [];
   // Row 57c: a leader line is drawn right before its label band; it is not a container rule.
   let lastWasRule = false;
@@ -346,6 +358,8 @@ function scan(svg: string): Scan {
     if (k[1] !== undefined) {
       const knock = prevKnock;
       prevKnock = false;
+      if (lastWasZoneFrame) zoneRules.splice(-4);
+      lastWasZoneFrame = false;
       if (knock && pendingBand && !inDefs && !symStack.length) bands.push({ ...pendingBand, text: unesc(k[2].replace(/<[^>]+>/g, "")) });
       pendingBand = null;
       if (inDefs) continue;
@@ -446,6 +460,7 @@ function scan(svg: string): Scan {
     lastWasRule = false;
     const wasFrameLine = lastWasFrameLine;
     lastWasFrameLine = false;
+    lastWasZoneFrame = false;
     // pita knockout: rect berisi tanpa goresan/tanda tepat sebelum <text> (core/svg labelKnockoutSvg)
     prevKnock =
       tag === "rect" &&
@@ -472,6 +487,13 @@ function scan(svg: string): Scan {
       } else if (tag === "rect" && (a.fill === undefined || a.fill === "none") && (sw > 0.3 || a["stroke-dasharray"] !== undefined)) {
         const x = Number(a.x ?? 0), y = Number(a.y ?? 0);
         frames.push([x, y, x + Number(a.width ?? 0), y + Number(a.height ?? 0)]);
+        // Row 135: a dashed frame is a zone or group outline (build/svg.ts zone loop); a band on one of its sides is a
+        // `labelCollision`, so the default pipeline enters the fit pass, where row 42's `zoneFrameRules` moves the label.
+        if (a["stroke-dasharray"] !== undefined) {
+          const c: Pt[] = [[x, y], [x + Number(a.width ?? 0), y], [x + Number(a.width ?? 0), y + Number(a.height ?? 0)], [x, y + Number(a.height ?? 0)]];
+          for (let i = 0; i < 4; i++) zoneRules.push({ a: c[i], b: c[(i + 1) % 4], half: sw / 2 });
+          lastWasZoneFrame = true;
+        }
       }
     }
     // Row 57c: container rules = solid decoration without a mark (lane rules, phase separators, pool borders).
@@ -539,7 +561,7 @@ function scan(svg: string): Scan {
     if (!Number.isFinite(box[0])) continue;
     nodes.push({ id: nodeId ?? null, outline, circle, ...(rx !== undefined ? { rx } : {}), half, box, ...(a.stroke === "none" ? { hidden: true } : {}) });
   }
-  return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, frames };
+  return { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, zoneRules, frames };
 }
 
 function segX(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
@@ -877,9 +899,16 @@ function connectorEnds(
   frames: readonly Box[],
 ): DiagramGeomDefect[] {
   const out: DiagramGeomDefect[] = [];
-  // a sequence lifeline (unmarked vertical line hanging from a node's bottom) carries the messages that end on it
+  // a sequence lifeline (unmarked vertical line hanging from a node's bottom) carries the messages that end on it.
+  // Swarm 1.3.3 row 48 (ST-3 item 8): the node's own x extent counts, edges included. The sequence layout snaps the
+  // actor box and the lifeline to the lattice separately, so with 4 actors on 128 mm or 5 on 166 mm the lifeline hangs
+  // from a bottom corner of its actor (x = box edge); the strict test dropped those lifelines and every message end on
+  // them was refused as `edgeEndOffNode`. A vertical line beside a node (not touching its bottom side) is still none.
   const lifelines = frames.filter(
-    (f) => Math.abs(f[2] - f[0]) < 1e-6 && f[3] > f[1] && nodes.some((n) => n.id !== null && Math.abs(f[1] - n.box[3]) < 0.1 && f[0] > n.box[0] && f[0] < n.box[2]),
+    (f) =>
+      Math.abs(f[2] - f[0]) < 1e-6 &&
+      f[3] > f[1] &&
+      nodes.some((n) => n.id !== null && Math.abs(f[1] - n.box[3]) < 0.1 && f[0] >= n.box[0] - LIFELINE_AT_NODE_MM && f[0] <= n.box[2] + LIFELINE_AT_NODE_MM),
   );
   const onLifeline = (p: Pt) => lifelines.some((f) => Math.abs(p[0] - f[0]) <= EDGE_END_ON_NODE_MM && p[1] >= f[1] - 1e-6 && p[1] <= f[3] + 1e-6);
   // an event's label block (texts after its outline in `<g data-label-pos="below">`) extends the node downwards
@@ -1074,6 +1103,7 @@ function labelCollisions(
   heads: ReadonlyArray<{ end: HeadSize | null; start: HeadSize | null }>,
   nodes: readonly NodeShape[],
   rules: ReadonlyArray<{ a: Pt; b: Pt; half: number }>,
+  zoneRules: ReadonlyArray<{ a: Pt; b: Pt; half: number }>,
 ): Array<{ text: string; other: string }> {
   const out: Array<{ text: string; other: string }> = [];
   const e = LABEL_COLLISION_EPS_MM;
@@ -1102,7 +1132,10 @@ function labelCollisions(
       return n.outline.some((pl) => pl.some((p, k) => k + 1 < pl.length && segInBox(p, pl[k + 1], n.half, b)));
     });
     if (node) out.push({ text, other: node.id ?? "garis tepi simpul" });
-    if (rules.some((r) => ruleVisibleInBand(r, b, links))) out.push({ text, other: "garis wadah" });
+    // Row 135: a zone frame side counts wherever it meets the band, also under a connector that follows it (as the
+    // placement's strict rule, fit/labels.ts `ruleCrosses`); one finding per band.
+    if (rules.some((r) => ruleVisibleInBand(r, b, links)) || zoneRules.some((r) => clipT(r.a, r.b, [b[0] - r.half, b[1] - r.half, b[2] + r.half, b[3] + r.half]) !== null))
+      out.push({ text, other: "garis wadah" });
   }
   return out;
 }
@@ -1283,7 +1316,7 @@ function emptyCounts(): Record<DiagramDefectKind, number> {
 
 /** Lint geometri SVG diagram (tanpa browser). `score` = jumlah semua cacat. */
 export function lintDiagramGeometry(svg: string): DiagramGeomLint {
-  const { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, frames } = scan(svg);
+  const { W, H, texts, nodes, links, linkHalf, linkOrder, linkCurved, linkStart, bands, linkHeads, rules, zoneRules, frames } = scan(svg);
   const defects: DiagramGeomDefect[] = [];
   // teks-teks
   for (let i = 0; i < texts.length; i++) {
@@ -1408,7 +1441,7 @@ export function lintDiagramGeometry(svg: string): DiagramGeomLint {
     defects.push({ kind: "arrowTangent", text: `konektor ${t.link}`, other: nodeName(t.node), amount: Number(t.deg.toFixed(1)) });
   }
   // Row 57c: label bands against arrowheads, node outlines and container rules.
-  for (const c of labelCollisions(bands, links, linkHeads, nodes, rules)) {
+  for (const c of labelCollisions(bands, links, linkHeads, nodes, rules, zoneRules)) {
     defects.push({ kind: "labelCollision", text: c.text, other: c.other });
   }
   // Row 55c (C133): a container frame clipped by the figure box (pool past the edge at 128 mm).
