@@ -403,7 +403,7 @@
     },
     "packages/desktop": {
       "name": "@opencode-ai/desktop",
-      "version": "1.3.2",
+      "version": "1.3.3",
       "dependencies": {
         "@zip.js/zip.js": "2.7.62",
         "asn1js": "3.0.10",
