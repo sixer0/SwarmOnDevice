@@ -121,7 +121,7 @@ const COPYRIGHT = "Copyright (c) 2025 opencode (MIT). Swarm modifications Copyri
 // Swarm release number (SP-BC 4.1, S6, G1c). It fills only Info.plist SwarmRelease, which the
 // swarm-patch applier reads with plutil. Since 1.2.0 (U4) CFBundleShortVersionString and
 // package.json carry the same number as the release.
-export const SWARM_RELEASE = "1.3.2"
+export const SWARM_RELEASE = "1.3.3"
 
 // osx-sign tests each regex against the absolute path of every file it would sign (MacTargetHelper.js:52-70, :90-98).
 export const DATUM_RUNTIME_SIGN_IGNORE = "\\.app/Contents/Resources/datum-runtime/"
@@ -171,8 +171,17 @@ const notices = [
   { from: "../../NOTICE", to: "NOTICE" },
   { from: "../../THIRD_PARTY_LICENSES.txt", to: "THIRD_PARTY_LICENSES.txt" },
 ]
+// Row 96 (KL-1, C27): the knowledge-library scripts ride beside the staged library in Resources/knowledge-library/scripts,
+// outside the asar. stage-library.ts verify checks them byte for byte (SHIPPED_SCRIPTS); test files, testdata and the
+// repo snapshot of the indexes stay out, since staging writes fresh indexes at the library root.
+const knowledgeLibraryScripts = {
+  from: "datum/knowledge-library",
+  to: "knowledge-library",
+  filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc", "!scripts/test_*.py", "!scripts/testdata{,/**}", "!scripts/indeks_*"],
+}
 const datumResources = [
   { from: "datum/datum-house-style", to: "datum-house-style", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+  { from: "datum/gsp-diagram-standard", to: "gsp-diagram-standard", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc", "!scripts/test_*.py", "!scripts/testdata{,/**}"] },
   { from: ".datum-runtime-stage", to: "datum-runtime", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
   { from: ".datum-studio-stage", to: "datum-studio" },
 ]
@@ -186,6 +195,7 @@ const portableResources = (target: Exclude<BuildTarget, "darwin-arm64">) => [
     : { from: "resources/rg-win32-x64/rg.exe", to: "rg.exe" },
   { from: "resources/swarm-cli", to: "swarm-cli" },
   { from: ".library-stage", to: "knowledge-library" },
+  knowledgeLibraryScripts,
   ...datumResources,
 ]
 
@@ -262,10 +272,12 @@ const getBase = (appId: string): Configuration => ({
     { from: "resources/swarm-cli", to: "swarm-cli" },
     // Copied after beforePack writes the staging and before afterPack verifies it, so the seal covers it.
     { from: ".library-stage", to: "knowledge-library" },
+    knowledgeLibraryScripts,
     // DATUM (row 45, packaging spec §3.1): the skill copy straight from the repo, the Python runtime and the Studio
     // stage pre-staged by the recipe (stage-datum-runtime.ts, stage-datum-studio.ts). None sits under resources/,
     // so no `files` pattern reaches them. The filters are a second line of defence; datumHooks are the gate.
     { from: "datum/datum-house-style", to: "datum-house-style", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+  { from: "datum/gsp-diagram-standard", to: "gsp-diagram-standard", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc", "!scripts/test_*.py", "!scripts/testdata{,/**}"] },
     { from: ".datum-runtime-stage", to: "datum-runtime", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
     { from: ".datum-studio-stage", to: "datum-studio" },
     // Office add-in (M9-01, IM-16, U5): staged by scripts/stage-office-addin.ts, macOS list only.
@@ -323,7 +335,7 @@ const getBase = (appId: string): Configuration => ({
     notarize: false,
     target: ["dmg", "zip"],
     // bundleShortVersion stays unset on purpose (U4): electron-builder takes it from package.json
-    // (1.3.2, equal to the release); this custom key carries the release for swarm-patch.
+    // (1.3.3, equal to the release); this custom key carries the release for swarm-patch.
     extendInfo: {
       SwarmRelease: SWARM_RELEASE,
     },
