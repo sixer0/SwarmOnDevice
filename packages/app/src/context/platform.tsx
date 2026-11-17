@@ -49,6 +49,13 @@ type PlatformBase = {
   /** Reveal a local path in the system file manager; false when the path does not exist (desktop only) */
   revealPath?(path: string): Promise<boolean>
 
+  /**
+   * 1.3.3 row 72 (MC-8): open a mission deliverable's project copy in the system's default app. Main opens only
+   * `<a folder this window listed in Mission Control>/deliverables/<mission>/<document>`; false = refused or failed
+   * (desktop only).
+   */
+  openDeliverable?(path: string): Promise<boolean>
+
   /** Open the project's vault hub note in Obsidian; main checks the path and builds the URL (desktop only, N8-116) */
   openObsidianNote?(hubPath: string): Promise<"opened" | "missing" | "outside" | "no-app" | "failed" | "registered" | "close-obsidian" | "not-registered">
 

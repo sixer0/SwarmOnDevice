@@ -9,6 +9,7 @@ import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { PERSON_KEY, personCaller } from "./_attested-person.ts"
+import { giveProjectCopy } from "../mc8-deliverable-gate/_project-copy.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -215,6 +216,7 @@ describe("row 136b: one verified/Final rule (guard on)", () => {
     expect(set.outputs.map((o) => o.outputId)).not.toContain(superseded)
     expect(set.outputs.map((o) => o.outputId)).not.toContain(draft)
 
+    await giveProjectCopy(store, doc) // 1.3.3 row 70 (MC-8): needs-review needs the project copy; this test is about the one rule
     await toReview("1")
     const done = await setRow("1", "done")
     quote("row 1 done (gate)", { code: code(done) })
@@ -250,8 +252,14 @@ describe("row 136b: one verified/Final rule (guard on)", () => {
     const reads = await deliverablesRead()
     const seen: S[] = []
     for (const [rowId, docs] of Object.entries(byRow)) {
-      await toReview(rowId)
-      const r = await setRow(rowId, "done")
+      // 1.3.3 row 70 (MC-8): rendered documents get their project copy; row 2's document was never rendered, so it has
+      // none and needs-review is now refused for it (it succeeded before): that row goes running -> done with a note.
+      for (const doc of docs) if (doc !== notRendered) await giveProjectCopy(store, doc)
+      if (rowId === "2") {
+        expect(code(await setRow(rowId, "running"))).toBe("OK")
+        expect(code(await setRow(rowId, "needs-review"))).toBe("DELIVERABLE_NOT_IN_PROJECT")
+      } else await toReview(rowId)
+      const r = rowId === "2" ? await call("studio_mission_update_row", { mission: M, rows: [{ id: rowId, status: "done", note: "checked: render not made yet" }] }) : await setRow(rowId, "done")
       const refused = new Set(r.ok === false ? (r.error.details.deliverables as S[]).map((x) => x.documentId) : [])
       for (const doc of docs) {
         const d = reads.find((x) => x.documentId === doc)!

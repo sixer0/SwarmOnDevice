@@ -8,15 +8,35 @@
 // (desktop reveal-path: showItemInFolder only, never opens or launches). Folder lines (files in 11_deliverables/ that
 // no Studio output claims) have no status badge; a .command, .app and every non-document type is reveal only.
 // No new panel: one button per line in the existing Deliverables section.
+// 1.3.3 row 72 (MC-8 item 5, U16): under a line, the copies in <project>/deliverables/<mission>/ (row 71
+// `projectFiles`) as links with two actions: Open (the system's default app, desktop `open-deliverable`, which checks
+// the path again) and Preview (PDF or HTML in the existing file tab). Each link names its revision (letter and Studio
+// number); the latest is marked, older revisions sit in a closed <details>. `MissionDeliverableLinks` (props only) and
+// `MissionDeliverableLinksFor` (app contexts) are the pieces row 73 mounts on the decision card and the row view.
 import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
 import { fileManagerApp, type FileManagerOS } from "@/utils/file-manager"
+import { showToast } from "@/utils/toast"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { For, Show, createMemo } from "solid-js"
-import { activateDeliverable, deliverableLines, finalTally, lineMeta, type DeliverableLine } from "./mission-deliverables-model"
+import {
+  activateDeliverable,
+  deliverableLines,
+  finalTally,
+  latestLinks,
+  lineMeta,
+  linkActions,
+  linkGroups,
+  missionDeliverableLinks,
+  runDeliverableLink,
+  type DeliverableLine,
+  type DeliverableLink,
+  type DeliverableLinkActions,
+} from "./mission-deliverables-model"
 import { useSessionLayout } from "../session-layout"
+import { registerStudioOutputs } from "../studio-output-registry"
 import type { DeliverableStatus, MissionVM } from "./mission-model"
 
 export type MissionDeliverablesKey =
@@ -29,6 +49,10 @@ export type MissionDeliverablesKey =
   | "session.mission.deliverable.unverified"
   | "session.mission.deliverable.notInProject"
   | "session.mission.deliverable.open"
+  | "session.mission.deliverable.openSystem"
+  | "session.mission.deliverable.preview"
+  | "session.mission.deliverable.latest"
+  | "session.mission.deliverable.olderRevisions"
   | "session.mission.deliverable.revealOnly"
   | "session.header.reveal.finder"
   | "session.header.reveal.fileExplorer"
@@ -52,6 +76,107 @@ export type MissionDeliverablesProps = {
   directory?: string
   /** picks the reveal label (fileManagerApp); absent = the desktop platform's OS */
   os?: FileManagerOS
+  /** 1.3.3 row 72: `(abs) => platform.openDeliverable(abs)`; absent = the platform's own (desktop) or no Open */
+  openSystem?: (absPath: string) => void
+  /** 1.3.3 row 72: the folder the file tab reads; absent = `directory`. Preview needs the project copy inside it. */
+  sessionDirectory?: string
+}
+
+export type MissionDeliverableLinksProps = DeliverableLinkActions & {
+  links: readonly DeliverableLink[]
+  /** the mission id, for the not-in-project text */
+  mission: string
+  t: MissionDeliverablesTranslate
+  /** only the revision the mission refers to (a compact place); default: older revisions in a closed <details> */
+  latestOnly?: boolean
+}
+
+const LINK_ACTION =
+  "rounded-sm px-1 text-11-regular text-v2-text-text-base underline decoration-v2-border-border-base underline-offset-2 hover:bg-v2-overlay-simple-overlay-hover"
+
+/**
+ * 1.3.3 row 72: the project copies of a deliverable as links, grouped by revision. Props only (no context), so it
+ * renders in a test and on any existing view. Text nodes only; every path was shaped by `deliverableLinks`.
+ */
+export function MissionDeliverableLinks(props: MissionDeliverableLinksProps) {
+  const groups = createMemo(() => linkGroups(props.links))
+  const current = createMemo(() => groups().filter((group) => group.latest))
+  const older = createMemo(() => (props.latestOnly ? [] : groups().filter((group) => !group.latest)))
+  const actions = (): DeliverableLinkActions => ({ openSystem: props.openSystem, previewFile: props.previewFile })
+  const name = (key: MissionDeliverablesKey, link: DeliverableLink) =>
+    [props.t(key), link.format, link.revision].filter(Boolean).join(" ")
+  const group = (item: ReturnType<typeof linkGroups>[number]) => {
+    const here = () => item.links.filter((link) => link.present)
+    const absent = () => item.links.filter((link) => !link.present)
+    return (
+      <div
+        data-deliverable-revision={item.revision}
+        data-latest={item.latest ? "true" : "false"}
+        class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-11-regular text-v2-text-text-faint"
+      >
+        <span data-deliverable-revision-label class="tabular-nums text-v2-text-text-muted">
+          {item.revision}
+        </span>
+        <Show when={item.latest}>
+          <span data-deliverable-latest class="text-v2-state-fg-success">
+            {props.t("session.mission.deliverable.latest")}
+          </span>
+        </Show>
+        <For each={here()}>
+          {(link) => (
+            <span data-deliverable-link={link.path} data-format={link.format} class="flex items-center gap-0.5">
+              <span class="font-mono text-v2-text-text-muted">{link.format}</span>
+              <Show when={linkActions(link, actions()).includes("open")}>
+                <button
+                  type="button"
+                  data-deliverable-open
+                  aria-label={name("session.mission.deliverable.openSystem", link)}
+                  class={LINK_ACTION}
+                  onClick={() => runDeliverableLink(link, "open", actions())}
+                >
+                  {props.t("session.mission.deliverable.openSystem")}
+                </button>
+              </Show>
+              <Show when={linkActions(link, actions()).includes("preview")}>
+                <button
+                  type="button"
+                  data-deliverable-preview
+                  aria-label={name("session.mission.deliverable.preview", link)}
+                  class={LINK_ACTION}
+                  onClick={() => runDeliverableLink(link, "preview", actions())}
+                >
+                  {props.t("session.mission.deliverable.preview")}
+                </button>
+              </Show>
+            </span>
+          )}
+        </For>
+        <Show when={absent().length > 0}>
+          <span data-deliverable-link-absent data-format={absent().map((link) => link.format).join(" ")}>
+            <span class="font-mono">{absent().map((link) => link.format).join(" ")}</span>{" "}
+            {props.t("session.mission.deliverable.notInProject", { mission: props.mission })}
+          </span>
+        </Show>
+      </div>
+    )
+  }
+  return (
+    <Show when={groups().length > 0}>
+      <div data-deliverable-links class="flex min-w-0 flex-col gap-0.5">
+        <For each={current()}>{group}</For>
+        <Show when={older().length > 0}>
+          <details data-deliverable-older class="min-w-0">
+            <summary class="cursor-pointer text-11-regular text-v2-text-text-faint">
+              {props.t("session.mission.deliverable.olderRevisions", { count: older().length })}
+            </summary>
+            <div class="flex min-w-0 flex-col gap-0.5 pt-0.5">
+              <For each={older()}>{group}</For>
+            </div>
+          </details>
+        </Show>
+      </div>
+    </Show>
+  )
 }
 
 const STATUS_KEY: Record<DeliverableStatus, MissionDeliverablesKey> = {
@@ -70,7 +195,9 @@ const META = "block truncate text-11-regular text-v2-text-text-faint [font-weigh
 
 /** Props-only body (no context), so it renders in a test without the app providers. */
 export function MissionDeliverablesList(props: MissionDeliverablesProps & { t: MissionDeliverablesTranslate }) {
-  const lines = createMemo(() => deliverableLines(props.mission, props.selected, props.directory))
+  const lines = createMemo(() =>
+    deliverableLines(props.mission, props.selected, props.directory, props.sessionDirectory ?? props.directory),
+  )
   const tally = createMemo(() => finalTally(props.mission))
   const missionId = () => props.mission?.id ?? ""
 
@@ -98,7 +225,8 @@ export function MissionDeliverablesList(props: MissionDeliverablesProps & { t: M
         <ul class="m-0 flex list-none flex-col gap-1 p-0">
           <For each={lines()}>
             {(line) => (
-              <li class="flex min-w-0 items-center gap-1">
+              <li class="flex min-w-0 flex-col gap-0.5">
+                <div class="flex min-w-0 items-center gap-1">
                 <button
                   type="button"
                   data-mission-deliverable={line.documentId}
@@ -127,7 +255,7 @@ export function MissionDeliverablesList(props: MissionDeliverablesProps & { t: M
                         {lineMeta(line)}
                       </span>
                     </Show>
-                    <Show when={!line.path && !folder(line)}>
+                    <Show when={!line.path && !folder(line) && line.links.length === 0}>
                       <span data-mission-deliverable-absent class={META}>
                         {props.t("session.mission.deliverable.notInProject", { mission: missionId() })}
                       </span>
@@ -164,6 +292,21 @@ export function MissionDeliverablesList(props: MissionDeliverablesProps & { t: M
                     <IconV2 name="folder" size="small" />
                   </button>
                 </Show>
+                </div>
+                <Show when={line.links.length > 0}>
+                  <div class="min-w-0 pl-[52px]">
+                    <MissionDeliverableLinks
+                      links={line.links}
+                      mission={missionId()}
+                      t={props.t}
+                      openSystem={props.openSystem}
+                      previewFile={props.openFile ? (path) => {
+                        props.openFile?.(path)
+                        props.openPane?.(path)
+                      } : undefined}
+                    />
+                  </div>
+                </Show>
               </li>
             )}
           </For>
@@ -192,14 +335,108 @@ export function MissionDeliverables(props: MissionDeliverablesProps) {
     if (tab) layout.tabs().setActive(tab)
   }
   const revealFile = (abs: string) => void platform?.revealPath?.(abs).catch(() => false)
+  const linkContext = useDeliverableLinkContext()
+  // 1.3.3 row 72: a previewed project copy is a listed Studio deliverable, so its HTML opens rendered (C192 registry).
+  const openFile = props.openFile
+    ? (path: string) => {
+        linkContext.register(path)
+        props.openFile?.(path)
+      }
+    : undefined
   return (
     <MissionDeliverablesList
       {...props}
+      openFile={openFile}
+      openSystem={props.openSystem ?? linkContext.openSystem}
+      sessionDirectory={props.sessionDirectory ?? linkContext.sessionDirectory ?? props.directory}
       openPane={props.openPane ?? (layout ? openPane : undefined)}
       revealFile={props.revealFile ?? (platform?.revealPath ? revealFile : undefined)}
       directory={props.directory ?? sdk?.().directory}
       os={props.os ?? platform?.os ?? "unknown"}
       t={(key, params) => language.t(key, params)}
+    />
+  )
+}
+
+/**
+ * 1.3.3 row 72: what the app contexts give a deliverable link. Open goes to the desktop's `open-deliverable` channel
+ * (main refuses anything that is not `<a folder this window listed>/deliverables/<mission>/<document>`); a refusal or
+ * a failure shows the generic request-failed toast and is logged by the desktop, never retried here. Outside the
+ * providers (render tests) and on the web there is no Open.
+ */
+function useDeliverableLinkContext() {
+  const platform = optional(usePlatform)
+  const sdk = optional(useSDK)
+  const language = optional(useLanguage)
+  const failed = () => {
+    if (language) showToast({ variant: "error", title: language.t("common.requestFailed") })
+  }
+  const open = platform?.openDeliverable
+  return {
+    sessionDirectory: sdk?.().directory,
+    openSystem: open
+      ? (abs: string) =>
+          void open(abs)
+            .then((ok) => {
+              if (!ok) failed()
+            })
+            .catch(failed)
+      : undefined,
+    register: (path: string) => registerStudioOutputs(sdk?.().directory, [path]),
+  }
+}
+
+export type MissionDeliverableLinksForProps = {
+  mission: MissionVM | null | undefined
+  /** the links of this row's deliverable(s) ... */
+  rowId?: string
+  /** ... or of one document */
+  documentId?: string
+  /** `(p) => tabs().open(file.tab(p))`; absent = the session layout's own tabs (no Preview outside the providers) */
+  openFile?: (path: string) => void
+  /** the mission's project folder when it is not the session's (mission-control `deliverablesFolder`) */
+  directory?: string
+  latestOnly?: boolean
+}
+
+/**
+ * 1.3.3 row 73's mount: the deliverable links of a row or a document on an existing view (decision card, row view),
+ * from the same model and with the same two actions as the Deliverables list. Renders nothing without a project copy.
+ */
+export function MissionDeliverableLinksFor(props: MissionDeliverableLinksForProps) {
+  const language = useLanguage()
+  const context = useDeliverableLinkContext()
+  const layout = optional(useSessionLayout)
+  const files = optional(useFile)
+  const links = createMemo(() =>
+    missionDeliverableLinks(
+      props.mission,
+      { rowId: props.rowId, documentId: props.documentId },
+      props.directory ?? context.sessionDirectory,
+      context.sessionDirectory ?? props.directory,
+    ),
+  )
+  const openTab = (path: string) => {
+    if (props.openFile) return props.openFile(path)
+    const tab = files?.tab(path)
+    if (tab) void layout?.tabs().open(tab)
+  }
+  const previewFile = (path: string) => {
+    context.register(path)
+    openTab(path)
+    if (!layout) return
+    if (!layout.view().reviewPanel.opened()) layout.view().reviewPanel.open()
+    const tab = files?.tab(path)
+    if (tab) layout.tabs().setActive(tab)
+  }
+  return (
+    <MissionDeliverableLinks
+      links={props.latestOnly ? latestLinks(links()) : links()}
+      mission={props.mission?.id ?? ""}
+      t={(key, params) => language.t(key, params)}
+      openSystem={context.openSystem}
+      previewFile={props.openFile || (layout && files) ? previewFile : undefined}
+      latestOnly={props.latestOnly}
     />
   )
 }

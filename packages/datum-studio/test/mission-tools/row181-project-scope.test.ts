@@ -128,7 +128,10 @@ describe("row 181 (3): studio_mission_create defaults project.dir to the session
   test("project without dir keeps its other fields; a given dir is kept unchanged", async () => {
     expect((await call({ mission: mission("2026-11-08_no-dir", undefined, { project: { swarmProjectId: "prj-181" } }) })).ok).toBe(true)
     expect(M.get("2026-11-08_no-dir")!.mission.project).toEqual({ dir: SESSION_DIR, swarmProjectId: "prj-181" })
-    expect((await call({ mission: mission("2026-11-08_given-dir", "/elsewhere/proj") })).ok).toBe(true)
-    expect(M.get("2026-11-08_given-dir")!.mission.project).toEqual({ dir: "/elsewhere/proj" })
+    expect((await call({ mission: mission("2026-11-08_given-dir", `${SESSION_DIR}/proj`) })).ok).toBe(true)
+    expect(M.get("2026-11-08_given-dir")!.mission.project).toEqual({ dir: `${SESSION_DIR}/proj` })
+    // 1.3.3 row 147 (security review M1): a given dir outside the session folder is refused, not kept.
+    expect(await call({ mission: mission("2026-11-08_outside-dir", "/elsewhere/proj") })).toMatchObject({ ok: false, code: "PATH_OUTSIDE_ROOT" })
+    expect(M.get("2026-11-08_outside-dir")).toBeFalsy()
   })
 })

@@ -7,6 +7,14 @@
  *   Row 136b (C151, M5): the outputs, each output's `verified`, and the deliverable's `verified` / `final` come from
  *   the store's ONE rule (`revisionOutputState`, store/mission/output-gate.ts) - the same set and state the row done
  *   gate uses. The app shows these values and does not derive them.
+ * - 1.3.3 row 71 (MC-8 items 4-6): a deliverable that has project copies (the row's stored `deliverables`, written by
+ *   row 68 after a verified render) also carries `hasProjectCopy: true` and `projectFiles`. One item per copied file,
+ *   older revisions stay listed. `present` is an existence check (regular file) made on every read; the sha256 is NOT
+ *   re-hashed on read (slow; the stored `sha256` is the one recorded at the copy, the done gate re-hashes). A deliverable
+ *   without a copy has `hasProjectCopy: false` and no `projectFiles` key.
+ *   1.3.3 row 147 (S9): presence and `absolutePath` follow the store's ONE containment rule (deliverable-path.ts):
+ *   a path outside `deliverables/<mission>/`, or a symbolic link at any segment below the project folder, has no
+ *   `absolutePath` and is never present, as the done gate and the copier judge it.
  * - G2 `activityAt`: per listed mission, the newest of mission.time_updated, its documents' time_updated, their outputs'
  *   time_created and the G4 verification time (ISO).
  * - G3 messages tail: the newest N messages of a mission in ascending seq (the store's `listMessages` returns the oldest).
@@ -20,9 +28,11 @@
 import { DATUM_FILENAME_PATTERN } from "../../../vendor/src/lib/studio/contract/env"
 import { finalFileNameOfRow } from "../../../vendor/src/lib/studio/services/storage/files"
 import { outputFileOf } from "../../store-bridge/rows.ts"
+import { deliverablePath, parseRowDeliverables } from "../../store/mission/deliverable-path.ts"
 import { WORK_REPORT_CONTRACT_KIND, type MissionReader, type MissionStore } from "../../store/mission/index.ts"
-import { revisionOutputState } from "../../store/mission/output-gate.ts"
-import type { MissionMessage } from "../../store/mission/types.ts"
+import { revisionOutputState, ROW_DELIVERABLE_KEY } from "../../store/mission/output-gate.ts"
+import { nativeProjectDir } from "../../store/mission/mission-store.ts"
+import type { MissionMessage, RowDeliverable } from "../../store/mission/types.ts"
 import type { StoreTx } from "../../store/types.ts"
 
 /** G4 state of one output (C127 ruling 1: any state other than verified shows Unverified). */
@@ -75,6 +85,23 @@ export type DeliverableOutputWire = {
   verified: boolean
 }
 
+/** 1.3.3 row 71: one project copy of a deliverable (row 68's stored item plus the absolute path and a presence flag). */
+export type ProjectFileWire = {
+  /** Project-relative, `/` separators, starts with `deliverables/<mission id>/` (as stored). */
+  path: string
+  /** `<mission project folder>/<path>` as a disk path, for the "open" action; absent when the stored path would leave the folder. */
+  absolutePath?: string
+  format: RowDeliverable["format"]
+  docRev?: string
+  revisionNo?: number
+  /** Recorded at the copy; not re-hashed on read. */
+  sha256: string
+  /** True on the items of the highest Studio revision listed for the document. */
+  latest: boolean
+  /** The file exists in the project folder right now (existence only, no hash). */
+  present: boolean
+}
+
 export type DeliverableWire = {
   documentId: string
   docNumber: string
@@ -88,7 +115,18 @@ export type DeliverableWire = {
   verified: boolean
   /** Row 136b: spec output verification §7.2 Final (the row done gate's rule): >= 1 PRIMARY, all verified, a verified PRIMARY PDF/HTML. */
   final: boolean
+  /**
+   * 1.3.3 row 147 (S6; first added by row 70 at row 66's request): the done verdict of the document's row, the store's
+   * whole `closeChecks` sequence run read-only (`MissionStore.closeRefusal`): output gate, project copy, knowledge.
+   * true = `done` of that row would pass now (a person's label check pending closes with its marker). It is the ROW's
+   * verdict: false says nothing about which document holds it back. Present on owned documents bound to a row by docKey.
+   */
+  mayClose?: boolean
   outputs: DeliverableOutputWire[]
+  /** 1.3.3 row 71: true when row 68 recorded at least one project copy for this document. */
+  hasProjectCopy: boolean
+  /** 1.3.3 row 71: the project copies, newest revision first; absent when `hasProjectCopy` is false. */
+  projectFiles?: ProjectFileWire[]
   /** Row 86 (MC-08): present (true) only on a document another mission owns, listed through `mission_document`. */
   linked?: true
   /** Row 86 (MC-08): the owning mission (`document.mission_folder`, null = none) of a linked document. */
@@ -106,10 +144,46 @@ const DATUM_NAME = new RegExp(DATUM_FILENAME_PATTERN)
 type R = Record<string, unknown>
 
 /**
+ * 1.3.3 row 71: the project copies of a mission by document id, from the rows' stored `deliverables` (row 5) and the
+ * mission's project folder. Existence is checked per file, nothing is hashed. Items without `documentId` (support
+ * files) are not part of a document and are skipped. `exists` replaces the presence probe of a path the containment
+ * rule accepted (tests); it never lets a refused path through.
+ */
+export function readProjectCopies(q: MissionReader, mission: string, exists?: (p: string) => boolean): Map<string, ProjectFileWire[]> {
+  const out = new Map<string, ProjectFileWire[]>()
+  const m = q.get<{ project_dir: string }>("SELECT project_dir FROM mission WHERE id = ?", [mission])
+  if (!m) return out
+  const dir = nativeProjectDir(m.project_dir)
+  for (const r of q.all<{ deliverables: string }>("SELECT deliverables FROM mission_row WHERE mission_id = ? ORDER BY ord", [mission])) {
+    for (const it of parseRowDeliverables(r.deliverables)) {
+      if (typeof it.documentId !== "string") continue
+      const at = deliverablePath(dir, mission, it.path)
+      // Outside the folder or through a link: no path to open and never present, whatever `exists` says.
+      const abs = at.ok || at.reason === "not-file" ? at.abs : undefined
+      const file: ProjectFileWire = {
+        path: it.path,
+        ...(abs ? { absolutePath: abs } : {}),
+        format: it.format,
+        ...(typeof it.docRev === "string" ? { docRev: it.docRev } : {}),
+        ...(typeof it.revisionNo === "number" ? { revisionNo: it.revisionNo } : {}),
+        sha256: it.sha256,
+        latest: it.latest === true,
+        present: abs !== undefined && (exists ? exists(abs) : at.ok && at.present),
+      }
+      const l = out.get(it.documentId)
+      if (l) l.push(file)
+      else out.set(it.documentId, [file])
+    }
+  }
+  for (const l of out.values()) l.sort((a, b) => (b.revisionNo ?? 0) - (a.revisionNo ?? 0) || FORMAT_ORDER.indexOf(a.format) - FORMAT_ORDER.indexOf(b.format))
+  return out
+}
+
+/**
  * G1: deliverables of one mission (rowIds = the mission's row ids, for the row link). Synchronous over the reader:
  * the output set and every verified/final value come from `revisionOutputState` (row 136b).
  */
-export function readDeliverables(q: MissionReader, mission: string, rowIds: ReadonlySet<string>): DeliverableWire[] {
+export function readDeliverables(q: MissionReader, mission: string, rowIds: ReadonlySet<string>, close: Pick<MissionStore, "closeRefusal">): DeliverableWire[] {
   const owned = q.all<R>(
     `SELECT d.id, d.doc_number, d.title, d.mission_doc_key, d.time_updated, r.id AS revision_id, r.revision_no, r.doc_rev
        FROM document d JOIN revision r ON r.document_id = d.id AND r.revision_no = d.current_revision_no
@@ -129,6 +203,14 @@ export function readDeliverables(q: MissionReader, mission: string, rowIds: Read
       ORDER BY l.time_linked DESC, d.id`,
     [mission, mission, WORK_REPORT_CONTRACT_KIND],
   )
+  const copies = readProjectCopies(q, mission)
+  // Row 147 (S6): one read-only run of the store's done gate per bound row.
+  const closeVerdicts = new Map<string, boolean>()
+  const mayClose = (rowId: string): boolean => {
+    const v = closeVerdicts.get(rowId) ?? close.closeRefusal(mission, rowId, q) === null
+    closeVerdicts.set(rowId, v)
+    return v
+  }
   const docs: R[] = [...owned, ...linked.map((d): R => ({ ...d, linked: true }))]
   return docs.map((d) => {
     const state = revisionOutputState(q, String(d.id), String(d.revision_id))
@@ -158,6 +240,7 @@ export function readDeliverables(q: MissionReader, mission: string, rowIds: Read
       })
       // one output per (role, format, figure label) after the rule; badge order by format, newest first inside it
       .sort((a, b) => FORMAT_ORDER.indexOf(a.format) - FORMAT_ORDER.indexOf(b.format))
+    const projectFiles = copies.get(String(d.id))
     return {
       documentId: String(d.id),
       docNumber: String(d.doc_number),
@@ -169,7 +252,10 @@ export function readDeliverables(q: MissionReader, mission: string, rowIds: Read
       updatedAt: iso(d.time_updated),
       verified: state.verified,
       final: state.final,
+      ...(m && rowId && docKey && ROW_DELIVERABLE_KEY.exec(docKey)?.[1] === rowId ? { mayClose: mayClose(rowId) } : {}),
       outputs,
+      hasProjectCopy: projectFiles !== undefined,
+      ...(projectFiles ? { projectFiles } : {}),
       ...(isLinked ? { linked: true as const, ownerMission: (d.mission_folder as string | null) ?? null } : {}),
     }
   })

@@ -11,6 +11,7 @@ import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { PERSON_KEY, personCaller } from "../mission-tools/_attested-person.ts"
+import { giveProjectCopy } from "../mc8-deliverable-gate/_project-copy.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -182,6 +183,9 @@ describe("row 174: a superseded draft no longer blocks the row (F146b-3)", () =>
     current = await deliverable("row-1-kajian", "Kajian kini", "# Kajian\n\nPengukuran titik uji dicatat tiap bulan.\n")
     await render(current, ["html"])
     await verifyAll(current)
+    // 1.3.3 row 70 (MC-8): needs-review needs the project copy of both bound documents; this test is about retire
+    await giveProjectCopy(store, oldDraft)
+    await giveProjectCopy(store, current)
     await toReview("1")
     const r = await setRow("1", "done")
     quote("row 1 done with old draft linked", { code: code(r), deliverables: r.error?.details?.deliverables?.map((d: S) => d.docKey) })
@@ -227,12 +231,16 @@ describe("row 174: a superseded draft no longer blocks the row (F146b-3)", () =>
     await verifyAll(a)
     // `other` (row-2-memo, never rendered) is the current, unverified deliverable; retiring the verified one does not help
     expect(code(await patch({ id: "2", retire: [a], note: "uji" }))).toBe("OK")
-    await toReview("2")
-    const r = await setRow("2", "done")
+    // 1.3.3 row 70 (MC-8): `other` was never rendered, so it has no project copy and needs-review is now refused (it
+    // succeeded before); the row goes running -> done with a note, the output gate's refusal is unchanged.
+    expect(code(await setRow("2", "running"))).toBe("OK")
+    expect(code(await setRow("2", "needs-review"))).toBe("DELIVERABLE_NOT_IN_PROJECT")
+    const note = "checked: memo not rendered yet"
+    const r = await call("studio_mission_update_row", { mission: M, rows: [{ id: "2", status: "done", note }] })
     quote("row 2 done, unverified current", { code: code(r), deliverables: r.error?.details?.deliverables })
     expect(code(r)).toBe("OUTPUT_UNVERIFIED")
     expect(r.error.details.deliverables[0]).toMatchObject({ documentId: other, final: false })
     // a decision does not lift it either (D-6)
-    expect(code(await setRow("2", "done", { decision: "U1" }))).toBe("OUTPUT_UNVERIFIED")
+    expect(code(await call("studio_mission_update_row", { mission: M, rows: [{ id: "2", status: "done", note }], decision: "U1" }))).toBe("OUTPUT_UNVERIFIED")
   })
 })

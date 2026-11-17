@@ -34,7 +34,7 @@ export const missionDocsExporter: MissionExporter = async ({ mission, files, sto
     const render: Record<ExportFileKey, () => string> = {
       blueprint: () => renderBlueprint(got.mission),
       // Row 86 (MC-08): status_tasks.md lists the deliverables (owned and linked) read in the same job.
-      status: () => renderStatus(got.mission, got.derived, snap, readDeliverables(tx, mission, new Set(got.mission.rows.map((r) => r.id)))),
+      status: () => renderStatus(got.mission, got.derived, snap, readDeliverables(tx, mission, new Set(got.mission.rows.map((r) => r.id)), M)),
       decisions: () => renderDecisions(got.mission),
       delegation: () => renderDelegation(got.mission, events),
     }

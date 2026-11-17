@@ -15,14 +15,19 @@ import path from "node:path"
 import { BACKUP_DIR_NAME, prepareDownloadDir, REAL_NODE_FS, McpToolError, writeFileGuarded, type NodeFs } from "../../../vendor/scripts/studio/mcp/safety"
 import { StoreError, type MissionStore, type StoreTx } from "../../store/index.ts"
 import type { MissionDoc, MissionWriteOptions, NewDecisionRequest, NewMissionMessage, RowPatch, SessionLink } from "../../store/mission/types.ts"
-import { nativeProjectDir, ROW_RUNNING_DONE_RULE, storeProjectDir, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
+import { mergeRowKnowledge, nativeProjectDir, ROW_RUNNING_DONE_RULE, storeProjectDir, type RowPatchJobResult } from "../../store/mission/mission-store.ts"
+import { projectDirOutsideRoot } from "../../store/mission/deliverable-path.ts"
 import type { HostToolExtension, HostToolSession } from "../tool-table.ts"
 import { ACTOR_PATTERN, EXPORT_FILES, MISSION_TOOL_NAMES, MISSION_TOOL_SCHEMAS, type ExportFile, type GetInclude } from "./schemas.ts"
 import { errorResult, MissionToolError, okResult, type MissionLog } from "./tool-result.ts"
+import { checkLabelsRequest, labelsCheckText, withLabelsCheck } from "./labels-check.ts"
 import { checkMissionSchema, describeAjvError, groupNameOk } from "../../store/mission/validate.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
+import { patchCorrection } from "./next-call.ts"
+import { fillMissionDefaults, withDefaultsNamed } from "./row-defaults.ts"
 import { readActivityAt, readDeliverables, readMessagesTail, type OutputVerificationSource } from "./deliverables.ts"
 import { EXPORT_PATHS, LEGACY_EXPORT_PATHS, type ExportFileKey } from "./export/render.ts"
+import { knowledgeLines, rowKnowledgeMatcher } from "./knowledge-on-row.ts"
 
 /** The part of SqliteStudioStore the mission tools use (row 126/155: + the G4 source, row 149's listOutputVerifications, see deliverables.ts). */
 export interface MissionHostStore extends OutputVerificationSource {
@@ -41,6 +46,12 @@ export interface MissionToolOptions {
   exporter?: MissionExporter
   nfs?: NodeFs
   now?: () => number
+  /**
+   * 1.3.3 row 101 (KL-2): the GSP technical knowledge library root, as start.ts resolved it once from STUDIO_LIBRARY_ROOT
+   * (row 151, S8: no environment read here, no explicit index path: the matcher loads the file studio_library_read
+   * loads); absent or null = no matching.
+   */
+  libraryRoot?: string | null
 }
 
 const ajv = new Ajv({ allErrors: true, strict: true, useDefaults: true })
@@ -122,6 +133,20 @@ export function defaultProjectDir(mission: unknown, fileRoot: string): void {
   // 1.3.1 Windows (F1): a drive path is stored as /C:/... (mission-store.ts storeProjectDir).
   const project = m.project as Record<string, unknown> | null
   if (project && typeof project === "object" && typeof project.dir === "string") project.dir = storeProjectDir(project.dir)
+}
+
+/**
+ * 1.3.3 row 147 (security review M1, supersedes the open point of C17c): a mission's project folder is the calling
+ * session's folder or a folder inside it (real paths, deliverable-path.ts). Any other `project.dir` is refused
+ * PATH_OUTSIDE_ROOT at create, with the folder named, so the deliverable copy never writes into a folder the agent
+ * picked outside the session. Moving a mission elsewhere stays with studio_mission_place (the person's answered
+ * decision, a group folder one level below the current project folder). A non-string dir is left for the schema check.
+ */
+export function assertProjectDirInSession(mission: unknown, fileRoot: string): void {
+  const dir = (mission as { project?: { dir?: unknown } } | null)?.project?.dir
+  if (typeof dir !== "string") return
+  const outside = projectDirOutsideRoot(nativeProjectDir(dir), fileRoot)
+  if (outside !== null) throw new MissionToolError("PATH_OUTSIDE_ROOT", `project.dir is refused: ${outside}. Send no project.dir (the session folder is used) or a folder inside the session folder`, { projectDir: dir, sessionFolder: fileRoot })
 }
 
 /** Declared actor (L2): the argument, else the session's agent. */
@@ -291,6 +316,13 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
   const M = store.missions
   const nfs = opts.nfs ?? REAL_NODE_FS
   const now = opts.now ?? Date.now
+  // 1.3.3 row 101 (KL-2 item 1): a row's title is matched again each time it goes running (update_row or a work report).
+  M.setKnowledgeMatcher((text) => rowKnowledgeMatcher(opts)(text))
+  /** 1.3.3 row 101: an unreadable library is logged (warn) once per call that needed it; the call itself goes through. */
+  const libraryUnavailable = (name: string, mission: string, reason: string | undefined) => {
+    if (reason !== undefined) opts.log("warn", `datum-studio-host.mission.${name}`, "knowledge library unavailable", { mission, reason })
+    return reason
+  }
 
   async function write<T>(dry: boolean, fn: (tx: StoreTx) => T): Promise<T> {
     try {
@@ -337,14 +369,17 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
           if (known) a.session = { ...sess, ref: known }
           else delete a.session
         }
+        // 1.3.3 row 16 (MC-4): absent mission and row fields get their defaults before validation; the reply names them.
+        const defaulted = fillMissionDefaults(name, a, { type: (id, version) => M.getType(id, version), typeOfMission: (id) => ((m) => (m ? M.getType(m.type, m.typeVersion) : null))(M.get(id)?.mission) })
         validateArgs(name, a)
-        const out = await run(a, session)
+        const out = withDefaultsNamed(await run(a, session), defaulted)
         if (!readOnly) opts.log("info", `datum-studio-host.mission.${name}`, "mission write", { mission: typeof a.mission === "string" ? a.mission : (a.mission as { id?: unknown } | undefined)?.id, agent: session.agentId, dryRun: a.dryRun === true })
         const notes = sessionNotesOf(a)
         return notes.length > 0 ? okResult(name, `${out.text}\n${notes.join("\n")}`, { ...out.data, sessionNotes: notes }) : okResult(name, out.text, out.data)
       } catch (e) {
-        if (e instanceof McpToolError) return errorResult(name, new MissionToolError(e.code, e.message, (e as { details?: Record<string, unknown> }).details ?? {}), opts.log)
-        return errorResult(name, e, opts.log, { mission: typeof a.mission === "string" ? a.mission : undefined, agent: session.agentId })
+        // 1.3.3 row 17 (MC-4): the arguments as sent go to the refusal shaping (error.corrected / error.fields); never logged.
+        if (e instanceof McpToolError) return errorResult(name, new MissionToolError(e.code, e.message, (e as { details?: Record<string, unknown> }).details ?? {}), opts.log, {}, args ?? {})
+        return errorResult(name, e, opts.log, { mission: typeof a.mission === "string" ? a.mission : undefined, agent: session.agentId }, args ?? {})
       }
     },
   })
@@ -372,10 +407,33 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       false,
       async (a, s) => {
         defaultProjectDir(a.mission, s.fileRoot)
+        try {
+          assertProjectDirInSession(a.mission, s.fileRoot)
+        } catch (e) {
+          // Row 147 (M1): logged (the folder, never the mission content) so a refused folder is traceable.
+          opts.log("warn", "datum-studio-host.mission.studio_mission_create", "PATH_OUTSIDE_ROOT: project.dir outside the session folder", { projectDir: (e as MissionToolError).details?.projectDir, sessionFolder: s.fileRoot, agent: s.agentId })
+          throw e
+        }
         const input = a.mission as Parameters<MissionStore["create"]>[1]
         if ((input.decisions ?? []).some((d) => d?.by === "user")) refuseUnattested("studio_mission_create", s, input.id)
-        const r = await write(dry(a), (tx) => M.create(tx, input, writeOptions(a, s)))
-        return { text: `mission ${r.id} created as ${r.status}: ${r.rows} rows, ${r.waves.length} waves${dryNote(a)}`, data: { ...r, issues: [], dryRun: dry(a) } }
+        // 1.3.3 row 101 (KL-2 item 1): each row's own title is matched and stored as `knowledge` in the same job; the
+        // mission title is listed only (knowledge-on-row.ts). An unreadable library stores nothing and is said once.
+        const match = rowKnowledgeMatcher(opts)
+        const unavailable = libraryUnavailable("studio_mission_create", input.id, match("").reason)
+        const missionHits = unavailable === undefined ? match(input.title ?? "").domains : []
+        const r = await write(dry(a), (tx) => {
+          const out = M.create(tx, input, writeOptions(a, s))
+          const rows = unavailable !== undefined ? [] : (input.rows ?? []).filter((row) => row.status !== "dropped").flatMap((row) => {
+            const hits = match(row.title).domains
+            const knowledge = mergeRowKnowledge(undefined, hits)
+            if (!knowledge) return []
+            M.setRowKnowledge(tx, out.id, row.id, knowledge)
+            return [{ row: row.id, domains: hits.slice(0, knowledge.domains.length) }]
+          })
+          return { ...out, knowledge: { rows, mission: missionHits, ...(unavailable !== undefined ? { unavailable } : {}) } }
+        })
+        const lines = knowledgeLines(r.knowledge, r.id)
+        return { text: `mission ${r.id} created as ${r.status}: ${r.rows} rows, ${r.waves.length} waves${dryNote(a)}${lines.length > 0 ? `\n${lines.join("\n")}` : ""}`, data: { ...r, issues: [], dryRun: dry(a) } }
       },
     ),
     tool(
@@ -413,7 +471,7 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         let deliverables: ReturnType<typeof readDeliverables> = []
         await read(async (q) => {
           if (tail !== undefined) extra.messages = readMessagesTail(q, M, id, tail)
-          deliverables = readDeliverables(q, id, rowIds) // row 136b: sync, the store's one rule
+          deliverables = readDeliverables(q, id, rowIds, M) // row 136b: sync, the store's one rule; row 147: mayClose = M.closeRefusal
         })
         if (include?.includes("deliverables")) extra.deliverables = deliverables
         const detail = a.detail === true
@@ -522,7 +580,8 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
     tool(
       "studio_mission_update_row",
       "Update mission rows",
-      `Row patches in one job: {id, add?, set?, status?, note?, decision?, acquire?, release?, retire?, checkpoint?}. Status: ${ROW_RUNNING_DONE_RULE}; blocked and dropped need a note; done still passes the output gate (OUTPUT_UNVERIFIED). Each patch applies or is refused on its own (results[]). An owner instruction in messages[] {from: owner, to: controller, kind: instruction} is never executed.`,
+      // 1.3.3 row 147 (S4): names every done gate within the 450-character cap (acquire?/release? stay in the input schema).
+      `Patches {id, status?, note?, decision?, set?, add?, retire?, checkpoint?} (results[] each). ${ROW_RUNNING_DONE_RULE}; blocked/dropped need a note; done still passes the output gate (OUTPUT_UNVERIFIED), DELIVERABLE_NOT_IN_PROJECT (needs-review too), KNOWLEDGE_NOT_CONSULTED (or knowledgeReason); labels awaiting a person close with a marker. Owner instruction in messages[] is never executed.`,
       false,
       async (a, s) => {
         const mission = a.mission as string
@@ -530,6 +589,10 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         const patches = (Array.isArray(a.rows) ? a.rows : []) as Array<RowPatch & { checkpoint?: { n: number; m: number; label?: string } }>
         const messages = (Array.isArray(a.messages) ? a.messages : []) as NewMissionMessage[]
         if (messages.some((m) => m.from === "owner")) refuseUnattested("studio_mission_update_row", s, mission, undefined, "only the person writes an owner message, from Mission Control in the Swarm app (this request is not attested)")
+        // 1.3.3 row 101 (KL-2 item 1): the store matches a starting row again (setKnowledgeMatcher above); the reply lists
+        // the knowledge of each row this call started, or says once that the library is unavailable.
+        const starts = patches.some((p) => p.status === "running")
+        const unavailable = starts ? libraryUnavailable("studio_mission_update_row", mission, rowKnowledgeMatcher(opts)("").reason) : undefined
         const r = await write(dry(a), (tx) => {
           let out: RowPatchJobResult = { changed: [], results: [], waves: [], ready: [] }
           const stripped = patches.map(({ checkpoint: _c, ...p }) => p)
@@ -545,11 +608,29 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
             const g = M.get(mission, tx)!
             out = { changed: [], results: [], waves: g.derived.waves, ready: g.derived.ready }
           }
-          return { ...out, checkpoints, messages: posted }
+          const started = rowPatches.flatMap((p, i) =>
+            p.status === "running" && out.results[i]?.ok ? [{ row: p.id, domains: (M.rowContract(mission, p.id, tx).knowledge?.domains ?? []).map((d) => ({ domain: d.domain, firstFile: d.firstFile })) }] : [],
+          )
+          return { ...out, checkpoints, messages: posted, started }
         })
         const refused = r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.code}${x.noteSaved ? " (note saved)" : ""}`)
-        const text = `mission ${mission}: rows changed ${r.changed.join(", ") || "-"}${refused.length > 0 ? `; refused ${refused.join(", ")}` : ""}; checkpoints ${r.checkpoints.length}; messages ${r.messages.length}; ready ${r.ready.join(", ") || "-"}${dryNote(a)}`
-        return { text, data: { ...r, dryRun: dry(a) } }
+        // 1.3.3 row 17 (MC-4, ruling 3): a patch refused inside an accepted call gets the same `corrected` or `fields`
+        // as a refused call, for a call that holds that patch alone (the applied patches are not sent again).
+        const sent = patches.filter((p) => Object.keys(p).some((k) => k !== "id" && k !== "checkpoint"))
+        const fixes: string[] = []
+        const results = r.results.map((x, i) => {
+          const fix = x.ok || !sent[i] ? {} : patchCorrection(mission, str(a, "decision"), sent[i] as unknown as Record<string, unknown>, x.code ?? "", x.message ?? "")
+          if (fix.corrected) fixes.push(`corrected (row ${x.id}, a call of its own): ${JSON.stringify(fix.corrected)}`)
+          else if (fix.fields) fixes.push(`fields (row ${x.id}, in a call of its own): ${JSON.stringify(fix.fields)}`)
+          return { ...x, ...(fix.corrected ? { corrected: fix.corrected } : {}), ...(fix.fields ? { fields: fix.fields } : {}) }
+        })
+        // 1.3.3 row 101 (row 66 request, ruling C25): a row closed with the awaiting-human marker says so on the text line too.
+        const marks = r.results.flatMap((x) => (x.ok && x.message ? [x.message] : []))
+        const started = r.started.length > 0 ? { rows: r.started, ...(unavailable !== undefined ? { unavailable } : {}) } : undefined
+        const extra = [...fixes, ...marks, ...(started ? knowledgeLines(started, mission) : [])]
+        const text = `mission ${mission}: rows changed ${r.changed.join(", ") || "-"}${refused.length > 0 ? `; refused ${refused.join(", ")}` : ""}; checkpoints ${r.checkpoints.length}; messages ${r.messages.length}; ready ${r.ready.join(", ") || "-"}${dryNote(a)}${extra.length > 0 ? `\n${extra.join("\n")}` : ""}`
+        const { started: _started, ...rest } = r
+        return { text, data: { ...rest, results, dryRun: dry(a), ...(started ? { knowledge: started } : {}) } }
       },
     ),
     tool(
@@ -633,8 +714,11 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
       async (a, s) => {
         const issues = placementGroupIssues(a.request as NewDecisionRequest, requireMission(a.mission as string).mission.project.dir, nfs)
         if (issues.length > 0) throw new MissionToolError("SCHEMA_INVALID", "the placement groups do not match the mission's folder", { def: "studio_mission_request_decision input", issues })
+        // 1.3.3 row 62 (ST-9, U20): a label-check request the person could not answer is refused here (labels-check.ts).
+        const labels = await checkLabelsRequest({ store }, a.mission as string, a.request as never)
+        if (labels.issues.length > 0) throw new MissionToolError("SCHEMA_INVALID", "the label-check request cannot be answered as sent", { def: "studio_mission_request_decision input", issues: labels.issues })
         const r = await write(dry(a), (tx) => M.requestDecision(tx, a.mission as string, a.request as never, writeOptions(a, s)))
-        return { text: `decision request ${r.id} open: ${r.question} (blocks ${(r.blockingRows ?? []).join(", ") || "-"})${dryNote(a)}`, data: { request: r, dryRun: dry(a) } }
+        return { text: `decision request ${r.id} open: ${r.question} (blocks ${(r.blockingRows ?? []).join(", ") || "-"})${dryNote(a)}${labels.note}`, data: { request: r, dryRun: dry(a) } }
       },
     ),
     tool(
@@ -658,8 +742,9 @@ export function missionTools(store: MissionHostStore, opts: MissionToolOptions):
         if (a.by === "user") refuseUnattested("studio_mission_answer_decision", s, mission, request)
         // 1.2.8 row 45b (SR8-05, N8-461): provenance from the session, never from the arguments.
         const answer = { ...pick(a, ["option", "by", "decisionId", "date", "text"]), via: s.agentId, attested: s.attested === true } as never
-        const r = await write(dry(a), (tx) => M.answerDecision(tx, mission, request, answer, o))
-        return { text: `decision request ${request} answered ${String(a.option)} -> ${r.decision.id}; released ${r.released.join(", ") || "-"}${dryNote(a)}`, data: { ...r, dryRun: dry(a) } }
+        // 1.3.3 row 62 (ST-9, U20): a label check is answered by the person only; the user's approval raises labels_verified.
+        const r = await withLabelsCheck({ store, log: opts.log, now }, { mission, request, by: a.by, session: s, dryRun: dry(a) }, () => write(dry(a), (tx) => M.answerDecision(tx, mission, request, answer, o)))
+        return { text: `decision request ${request} answered ${String(a.option)} -> ${r.decision.id}; released ${r.released.join(", ") || "-"}${dryNote(a)}${labelsCheckText(r.labelsCheck)}`, data: { ...r, dryRun: dry(a) } }
       },
     ),
     // 1.2.8 row 45 (PROJ-b, N8-142/N8-143). Row 45b (SR8-05): only an attested Mission Control session places a

@@ -17,9 +17,18 @@
  * recorded unverified (newest wins, D-7), the error goes to the host JSONL, and the render result is still returned.
  * Verification never turns a successful render into `isError`.
  *
+ * 1.3.3 row 68 (MC-8, U16): after the records are written, a verified whole-document render that is not a draft is
+ * copied into `<project>/deliverables/<mission id>/` and listed on the mission row (project-copy.ts). The result is
+ * `structuredContent.projectCopy` plus `project copy:` text lines. A copy that is refused never changes the render
+ * result: the Studio store files stay reported as they are.
+ *
+ * 1.3.3 row 114 (ST-8): when the request has `figures`, the reply also carries `structuredContent.figures` (one item
+ * per figure file: label, blockId, format, outputId, absolute store path, sha256) and `figures:` text lines.
+ *
  * The fault seam of §9 exists only through `renderVerifyWrapper(store, { seam })` in tests; the production list
  * (`missionHostExtension`) never passes it, and the returned extension says so in `faultSeam`.
  */
+import { statSync } from "node:fs"
 import path from "node:path"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { TOOLS } from "../../../vendor/scripts/studio/mcp/tools"
@@ -31,7 +40,9 @@ import type { HostToolExtension, HostToolNext, HostToolSession } from "../tool-t
 import type { VerifyFormat } from "./static-checks.ts"
 import type { OutputVerificationReport, VerifiedOutput } from "./types.ts"
 import { clientEntries, clientFindingsBlock } from "./client-findings.ts"
+import { fidelityExpectationFromSnapshot, figureBlockFor } from "./fidelity.ts"
 import { overlapCoverageText } from "./overlap-clip.ts"
+import { projectCopyAfterRender, projectCopyLines, projectCopySkipped, type ProjectCopyReply, type ProjectCopyStore } from "./project-copy.ts"
 import { allUnknownOutput, isVerifyFormat, outputState, verifyOutputs, type VerifyOptions, type VerifyOutputFile } from "./verify-outputs.ts"
 
 export const RENDER_VERIFY_TOOL = "studio_render"
@@ -83,6 +94,8 @@ export interface RenderVerifyStore {
   getTemplateVersion(slug: string, versionNo?: number): Promise<{ resolved_params?: unknown } | null>
   putOutputVerification(tx: StoreTx, rec: { outputFileId: string; outputSha256: string; renderJobId?: string | null; state: "verified" | "unverified"; checksVersion: number; failCount: number; unknownCount: number; report: Record<string, unknown>; verifiedBy: string }): Promise<unknown>
   revisionVerification(documentId: string, revisionNo: number | "latest"): Promise<{ outputs: Array<{ format: string; role: string; state: string }> }>
+  /** 1.3.3 row 68: the mission store (row 5 setters) of the installed store; absent in narrow test stores, then the copy is not recorded on a row. */
+  readonly missions?: ProjectCopyStore["missions"]
 }
 
 export interface RenderVerifyOptions {
@@ -211,6 +224,8 @@ export function renderVerifyWrapper(store: RenderVerifyStore, opts: RenderVerify
       let report: OutputVerificationReport | null = null
       let pageImages = { made: 0, reason: null as string | null }
       let files: VerifyOutputFile[] = []
+      let recorded = false
+      let snapshot: unknown = null
       let base: { revisionNo: number; renderJobId: string | null; draft: boolean } = { revisionNo: 0, renderJobId: null, draft: scope !== "DOCUMENT" }
       try {
         const rows = (await Promise.all(ids.map((id) => store.getOutput(id)))).filter((r): r is NonNullable<typeof r> => r !== null)
@@ -234,6 +249,7 @@ export function renderVerifyWrapper(store: RenderVerifyStore, opts: RenderVerify
           : 0
         base = { revisionNo, renderJobId: rows.find((r) => r.render_job_id)?.render_job_id ?? null, draft: rows.some((r) => r.draft === 1) || scope !== "DOCUMENT" }
         const rev = revisionNo > 0 ? await store.getRevision(documentId, revisionNo) : null
+        snapshot = rev?.revision.snapshot ?? null
         const doc = await store.getDocument(documentId)
         const tv = rev ? await store.getTemplateVersion(rev.template.slug, rev.template.version_no) : null
         const params = tv && isRec(tv.resolved_params) ? tv.resolved_params : undefined
@@ -266,6 +282,7 @@ export function renderVerifyWrapper(store: RenderVerifyStore, opts: RenderVerify
         report = res.report
         pageImages = res.pageImages
         await writeRecords(store, report, verifiedBy)
+        recorded = true
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e))
         log("error", "studio_render.verify", "output verification failed; outputs recorded unverified (VERIFY_INTERNAL)", { documentId, outputs: ids, message: err.message, stack_trace: err.stack })
@@ -284,12 +301,34 @@ export function renderVerifyWrapper(store: RenderVerifyStore, opts: RenderVerify
         bridgeJobs: report.bridgeJobs,
         ms: report.ms,
       })
+      // 1.3.3 row 68 (MC-8): the project copy. Only a whole-document render that is not a draft, whose every output
+      // verified and whose records were stored; the destination comes from the store, never from `args`.
+      const projectCopy: ProjectCopyReply =
+        scope !== "DOCUMENT" || base.draft
+          ? projectCopySkipped("draft", "only a whole-document render that is not a draft is copied to the project")
+          : !recorded || report.overall !== "verified"
+            ? projectCopySkipped("not-verified", "only a verified render is copied to the project")
+            : await projectCopyAfterRender(store, { documentId, revisionNo: base.revisionNo, outputs: files }, log, session.fileRoot) // row 147 (M1)
+      // 1.3.3 row 114 (ST-8): only when the request asked for figure files; otherwise the reply is as before.
+      const figures = (strList(args?.figures) ?? []).length > 0 ? figureFiles(files.length > 0 ? files : listedFiles(listed), snapshot) : null
       const untrusted = Array.isArray(sc.untrustedFields) ? [...(sc.untrustedFields as string[])] : []
       untrusted.push("verification.outputs[].checks[].findings")
+      if (figures) untrusted.push("figures[].label")
       return {
         ...out,
-        content: [...(out.content ?? []), { type: "text", text: verificationLines(report, pageImages).join("\n") }],
-        structuredContent: { ...sc, verification: neutralizeDeep(report), untrustedFields: untrusted },
+        content: [
+          ...(out.content ?? []),
+          { type: "text", text: verificationLines(report, pageImages).join("\n") },
+          { type: "text", text: projectCopyLines(projectCopy).join("\n") },
+          ...(figures ? [{ type: "text" as const, text: figureLines(figures).join("\n") }] : []),
+        ],
+        structuredContent: {
+          ...sc,
+          verification: neutralizeDeep(report),
+          projectCopy: neutralizeDeep(projectCopy),
+          ...(figures ? { figures: neutralizeDeep(figures.items), ...(figures.truncated > 0 ? { figuresTruncated: figures.truncated } : {}) } : {}),
+          untrustedFields: untrusted,
+        },
       }
     },
   }
@@ -311,6 +350,70 @@ async function writeRecords(store: RenderVerifyStore, report: OutputVerification
       })
     }
   })
+}
+
+/**
+ * 1.3.3 row 114 (ST-8): one item of the `figures` reply field. `path` is the ABSOLUTE path of the stored figure file
+ * in the Studio store (as row 59's witness PNGs), checked to be a regular file when the reply is made; null when it is
+ * not there (never a guessed path). Figure files are NOT copied into the project: the project copy of row 68 holds the
+ * document deliverables only (decision of row 114, reported to the controller).
+ */
+export interface RenderFigureFile {
+  /** Printed figure number ("Gambar 1.2"), or the block id/address the engine keyed the file by. Document text: untrusted. */
+  label: string | null
+  /** The figure block's id in the revision snapshot; null when the snapshot does not name it. */
+  blockId: string | null
+  format: "SVG" | "PNG"
+  outputId: string
+  path: string | null
+  sha256: string
+}
+
+/** Items in the reply at most; the rest are counted in `figuresTruncated` (the files stay in the store). */
+export const RENDER_FIGURES_MAX = 200
+
+/** The `figures` reply: one item per FIGURE file of the render, in output (document) order. */
+export function figureFiles(files: ReadonlyArray<VerifyOutputFile>, snapshot: unknown): { items: RenderFigureFile[]; truncated: number } {
+  const all = files.filter((f) => f.role === "FIGURE" && (f.format === "SVG" || f.format === "PNG"))
+  // The reply must never fail on these lookups: an unreadable snapshot gives null block ids, an unreadable path null.
+  const expected = (() => {
+    try {
+      return snapshot ? fidelityExpectationFromSnapshot(snapshot) : null
+    } catch {
+      return null
+    }
+  })()
+  const items = all.slice(0, RENDER_FIGURES_MAX).map((f) => ({
+    label: f.figureLabel,
+    blockId: expected ? (figureBlockFor(expected, f.figureLabel)?.blockId ?? null) : null,
+    format: f.format as "SVG" | "PNG",
+    outputId: f.id,
+    path: f.absPath && isRegularFile(f.absPath) ? f.absPath : null,
+    sha256: f.sha256,
+  }))
+  return { items, truncated: all.length - items.length }
+}
+
+function isRegularFile(p: string): boolean {
+  try {
+    return statSync(p, { throwIfNoEntry: false })?.isFile() === true
+  } catch {
+    return false
+  }
+}
+
+const FIGURE_PATH_SAFE = /^[A-Za-z0-9 _.,()@:/\\-]{1,1024}$/
+
+/** Reply text of `figures` (safe tokens only, MCP-D4): a label shows only when it is a safe token. */
+export function figureLines(r: { items: RenderFigureFile[]; truncated: number }): string[] {
+  const tok = (s: string | null) => (s && SAFE.test(s) ? s : "?")
+  // A printed label has a space ("Gambar 1.2"); quoted, letters, digits and . _ : - only.
+  const label = (s: string | null) => (s && /^[A-Za-z0-9][A-Za-z0-9 _.:-]{0,79}$/.test(s) ? `"${s}"` : "?")
+  return [
+    `figures: ${r.items.length} files (absolute paths in the Studio store; open them read-only, copy before you change one)`,
+    ...r.items.map((f) => `  ${f.format} ${label(f.label)} block=${tok(f.blockId)} ${f.path && FIGURE_PATH_SAFE.test(f.path) ? f.path : f.path ? "path=structuredContent.figures" : "path=none (file not in the store)"} sha256=${SHA256.test(f.sha256) ? f.sha256 : "?"}`),
+    ...(r.truncated > 0 ? [`  ${r.truncated} more figure files not listed (reply cap ${RENDER_FIGURES_MAX}); render one chapter to list them`] : []),
+  ]
 }
 
 function listedFiles(listed: Sc[]): VerifyOutputFile[] {

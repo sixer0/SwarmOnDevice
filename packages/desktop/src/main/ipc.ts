@@ -35,6 +35,7 @@ import { createSetupRunner, resolveSetupHome, setupDir, type SetupRunner } from 
 import { createInstallConfirm, registerSetupToolsHandlers } from "./setup-tools-ipc"
 import { createRehomeCaller, registerMissionControlHandlers } from "./datum-studio-host/mission-ipc"
 import { registerDesktopNonceHandler } from "./desktop-nonce"
+import { openDeliverable } from "./open-deliverable"
 import { revealInFolder } from "./reveal-path"
 import { registerMissingDirectoryHandlers } from "./missing-directory"
 import { MISSION_CONTROL_IPC } from "../preload/mission-control-channels"
@@ -385,6 +386,19 @@ export function registerIpcHandlers(deps: Deps) {
   // shell.showItemInFolder only, never openPath/openExternal (a `.command` or `.app` is shown, never launched).
   ipcMain.handle("reveal-path", async (event: IpcMainInvokeEvent, path: unknown) =>
     revealInFolder(path, revealRoots(event.sender), {
+      shell,
+      home: app.getPath("home"),
+      excluded: revealExcluded(),
+      log: (level, message, context) => getLogger()[level](message, context),
+    }),
+  )
+
+  // 1.3.3 row 72 (MC-8 item 5, U16): "Open" on a Mission Control deliverable. Only a document that is exactly
+  // <a folder this window listed in Mission Control>/deliverables/<mission>/<name> (open-deliverable.ts); the home
+  // folder is not a root here. The shell gets the checked realpath as one argument; the generic open channel above is
+  // untouched.
+  ipcMain.handle("open-deliverable", async (event: IpcMainInvokeEvent, path: unknown) =>
+    openDeliverable(path, [...(listedFolders.get(event.sender) ?? [])], {
       shell,
       home: app.getPath("home"),
       excluded: revealExcluded(),

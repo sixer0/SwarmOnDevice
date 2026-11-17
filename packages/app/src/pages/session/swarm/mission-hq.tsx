@@ -6,6 +6,8 @@
 
 import { useLanguage } from "@/context/language"
 import { createMemo, createSignal, createUniqueId, For, onCleanup, onMount, Show, type JSX } from "solid-js"
+import { MissionDeliverableLinksFor } from "./mission-deliverables"
+import { summaryDocumentIds } from "./mission-deliverables-model"
 import type { MissionAgentStatus, MissionAgentVM, MissionFamily, MissionTool, MissionVM } from "./mission-model"
 import {
   checkpointFill,
@@ -31,6 +33,8 @@ export type MissionHQProps = {
   selected?: string
   onSelectAgent?: (rowId: string) => void
   onOpenDecision?: () => void
+  /** 1.3.3 row 73: the mission's project folder when it is not the session's (mission-control `deliverablesFolder`) */
+  directory?: string
 }
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace"
@@ -763,6 +767,16 @@ export function MissionHQ(props: MissionHQProps) {
           <Radial s={scene() as RadialScene} />
         </Show>
       </svg>
+      {/* 1.3.3 row 73 (MC-8): the latest deliverable of each document that has a project copy; nothing otherwise. */}
+      <Show when={summaryDocumentIds(props.mission).length > 0}>
+        <div data-hq-deliverables="" class="flex flex-col gap-1 px-2 pb-2">
+          <For each={summaryDocumentIds(props.mission)}>
+            {(documentId) => (
+              <MissionDeliverableLinksFor mission={props.mission} documentId={documentId} directory={props.directory} latestOnly />
+            )}
+          </For>
+        </div>
+      </Show>
       <Show when={scene().mode === "radial"}>
         <div class="hq-legend" data-hq-legend="">
           <For each={STATUS_ORDER}>

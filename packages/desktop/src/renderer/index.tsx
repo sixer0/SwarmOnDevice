@@ -224,6 +224,8 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     async revealPath(path: string) {
       return window.api.revealPath(path)
     },
+    // 1.3.3 row 72 (MC-8): Mission Control "Open" on a deliverable; main opens only a checked project copy
+    openDeliverable: (path: string) => window.api.openDeliverable(path),
 
     // 1.2.8 row 42c (AC-OBSf, N8-116): the memory view's one Obsidian action
     openObsidianNote: (hubPath: string) => window.api.openObsidianNote(hubPath),

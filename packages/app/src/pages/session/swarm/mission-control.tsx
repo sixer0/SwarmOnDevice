@@ -316,6 +316,7 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
                     selected={row()}
                     onSelectAgent={selectAgent}
                     onOpenDecision={() => setSheet(true)}
+                    directory={folder()}
                   />
                 </div>
 
@@ -376,6 +377,7 @@ export function MissionControl(props: MissionControlMount & { width?: number }) 
                         prompt={props.prompt}
                         selected={row()}
                         sessionBusy={props.sessionBusy}
+                        directory={folder()}
                       />
                     )}
                   </Show>

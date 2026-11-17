@@ -3,7 +3,8 @@
 // tools over streamable HTTP (MCP SDK client, agent "claude", caller cwd = the fixture project). Nothing is written to
 // the store by hand except the output verification records, which go through row 149's store API
 // (putOutputVerification), the same call row 154's studio_render wrapper makes (row 154 has not landed; row 155 test
-// does the same).
+// does the same), and, since 1.3.3 row 147, the project copy of each verified document (row 70's shared helper
+// `giveProjectCopy`, which runs row 68's copy hook).
 //
 // Started by swarm/packages/app/src/pages/session/swarm/mission-control-e2e.render.ts. Env (fixture paths only):
 //   R134_WORK      work folder (store, home, project are created under it)
@@ -156,6 +157,16 @@ async function deliverable(mission: string, docKey: string, title: string, verif
   const rev = (await store.revisionVerification(documentId, "latest")).revisionNo
   await call("studio_render", { documentId, revisionNo: rev, formats: ["html"] })
   const outputs = verified ? await verifyAll(documentId) : (await store.revisionVerification(documentId, "latest")).outputs.map((o: S) => o.outputId)
+  // 1.3.3 row 147 (row 70's gate DELIVERABLE_NOT_IN_PROJECT): a verified render copies the document into
+  // <project>/deliverables/<mission>/; here verification is recorded after the render, so the copy is made the way
+  // row 70's shared helper makes it (row 68's own hook), before a row bound to the document moves on.
+  // Only a document bound to a row (docKey row-<id>-...) has a row to record the copy on and a gate that asks for it.
+  // Imported here, not at the top: the helper loads store/mission/mission-store.ts, which the phase-filter mutation
+  // plugin must see first (a static import is hoisted above Bun.plugin).
+  if (verified && docKey.startsWith("row-")) {
+    const { giveProjectCopy } = await import("../mc8-deliverable-gate/_project-copy.ts")
+    await giveProjectCopy(store, documentId)
+  }
   return { documentId, docKey, title, verified, outputs }
 }
 
