@@ -12,6 +12,7 @@ const build = await import(path.join(ENGINE, "diagram", "build", "index.ts"));
 const core = await import(path.join(ENGINE, "diagram", "core", "index.ts"));
 const geom = await import(path.join(ENGINE, "diagram", "fit", "lint.ts"));
 const renderLint = await import(path.join(ENGINE, "lint", "render", "index.ts"));
+const colour = await import(path.join(ENGINE, "diagram", "core", "colour.ts")); // 1.3.3 row 57 (ST-6)
 const dispatch = await import(path.join(PKG, "vendor", "src", "lib", "studio", "contract", "dispatch.ts"));
 
 /** Case 04 Studio spec, byte copy of test/material_rev_a/Kasus 04 Diagram/gambar.studio.json (sha256 802b7e07...). */
@@ -64,13 +65,19 @@ describe("CP-43 colour roles <= 5 (DT-06 ID p.48, Table 9.4 p.57)", () => {
     const svg = svgOf(spec());
     for (const m of svg.matchAll(/<(?:marker|pattern)\b[^>]*\bid="([^"]+)"/g)) expect(svg).toContain(`url(#${m[1]})`);
   });
-  test("a figure that really needs 6 colour values is still refused (guard)", () => {
+  // 1.3.3 row 57 (ST-6, B-16, INTENT): this figure prints 6 values, but three are neutral inks (one colour) and alert is
+  // printed only by the ASUMSI glyph (a value-origin mark, not counted): its budget is tinta, signal, verd = 3 and it
+  // builds. An engine spec can no longer exceed the budget (palette: ink, signal, alert, verd); the over-budget guard
+  // is the render lint test below.
+  test("a figure whose 6 printed values are inks, line kinds and a mark is within the budget (1.3.3 row 57)", () => {
     const six = spec((s) => {
       s.nodes.find((n: any) => n.id === "db").mark = "ASUMSI";
       s.legend.push("ASUMSI = asumsi retensi");
-      s.edges[4].kind = "verify"; // verd: ink900, ink700, ink400, signal, alert + verd = 6
+      s.edges[4].kind = "verify"; // verd: ink900, ink700, ink400, signal, alert + verd = 6 printed
     });
-    expect(() => svgOf(six)).toThrow(/DATUM-25/);
+    const svg = svgOf(six);
+    expect(lintColours(svg).length).toBe(6);
+    expect(colour.svgColourBudget(svg).count).toBe(3);
   });
   test("the engine's own DATUM-25 count equals the Rev A file count", () => {
     const r = build.buildDiagramSvg(spec(), { release: false });
@@ -81,8 +88,17 @@ describe("CP-43 colour roles <= 5 (DT-06 ID p.48, Table 9.4 p.57)", () => {
     const est = core.estimate(s, dispatch.DIAGRAM_LAYOUTS[s.family]);
     expect(est.colourValues).toEqual(build.buildDiagramSvg(s, { release: false }).report.colourValues);
   });
-  test("Studio render lint DATUM-25 counts every hex value (no ink-ramp folding, K-32 dropped)", () => {
-    const six = ["#101418", "#2B3640", "#6B7783", "#C3CBD1", "#B45309", "#9B1C1C"];
+  // 1.3.3 row 57 (ST-6; controller ruling: the neutral ink greys count as one colour, INTENT): the four inks of the
+  // former case now count once (3 in all, PASS). The guard keeps its shape on six non-ink values: 6 FAIL, 5 PASS.
+  test("Studio render lint DATUM-25: the neutral inks count as one colour (1.3.3 row 57)", () => {
+    const inks = ["#101418", "#2B3640", "#6B7783", "#C3CBD1", "#B45309", "#9B1C1C"];
+    const inkRects = inks.map((c, i) => `<rect x="${i * 10}" y="0" width="8" height="8" fill="${c}"/>`).join("");
+    const inkSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="128mm" height="20mm" viewBox="0 0 128 20"><rect x="0" y="0" width="128" height="20" fill="#FCFCFB"/>${inkRects}</svg>`;
+    const inkOut = renderLint.lintRendered({ svgs: [{ svg: inkSvg, widthMm: 128, heightMm: 20 }], metrics: { pageCount: 0, elements: [] } });
+    expect(inkOut.filter((i: any) => i.checkId === "DATUM-25").map((i: any) => i.status)).toEqual(["PASS"]);
+  });
+  test("Studio render lint DATUM-25 refuses six counted colour values and passes five (guard)", () => {
+    const six = ["#B45309", "#9B1C1C", "#2F6F6B", "#0563C1", "#7C3AED", "#15803D"];
     const rects = six.map((c, i) => `<rect x="${i * 10}" y="0" width="8" height="8" fill="${c}"/>`).join("");
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128mm" height="20mm" viewBox="0 0 128 20"><rect x="0" y="0" width="128" height="20" fill="#FCFCFB"/>${rects}</svg>`;
     const out = renderLint.lintRendered({ svgs: [{ svg, widthMm: 128, heightMm: 20 }], metrics: { pageCount: 0, elements: [] } });
@@ -115,7 +131,7 @@ describe("CP-28/48 caption label GAMBAR n.m, bold (DT-15 ID p.41)", () => {
   test("an English document passes FIGURE; the key word can be set by the caller (CP-35 seam)", () => {
     const svg = build.buildDiagramSvg(spec(), { release: false, figureLabel: "FIGURE", keyLabel: "KUNCI" }).svg;
     expect(caption(svg)?.content.startsWith("FIGURE 4.1")).toBe(true);
-    expect(texts(svg).some((t) => t.content.startsWith("KUNCI  DATA = "))).toBe(true);
+    expect(texts(svg).some((t) => t.content.startsWith("KUNCI  data = "))).toBe(true); // Swarm 1.3.3 row 43 (ST-3.4): the key prints legend rows as written
   });
 });
 
@@ -208,7 +224,7 @@ describe("CP-45 node symbol and legend", () => {
       .filter((t) => t.a.x === "0" && t.a["font-weight"] === "600" && t.a["letter-spacing"] !== undefined)
       .map((t) => t.content)
       .join(" ");
-    expect(key).toContain("IEC:BATTERY");
+    expect(key).toContain("iec:battery"); // Swarm 1.3.3 row 43 (ST-3.4): the key prints legend rows as written
   });
   test("an unknown symbol id is refused", () => {
     expect(() => svgOf(spec((s) => (s.nodes[0].symbol = "iec:nope")))).toThrow();
@@ -235,7 +251,7 @@ describe("CP-46 key line fits the figure width", () => {
     const all = texts(svgOf(spec()))
       .map((t) => t.content)
       .join("\n");
-    for (const row of CASE04.legend) expect(all).toContain(String(row).toUpperCase());
+    for (const row of CASE04.legend) expect(all).toContain(String(row)); // Swarm 1.3.3 row 43 (ST-3.4): the key prints legend rows as written
   });
   test("the figure height still includes every key line (caption and SUMBER inside the sheet)", () => {
     const r = build.buildDiagramSvg(spec(), { release: false });

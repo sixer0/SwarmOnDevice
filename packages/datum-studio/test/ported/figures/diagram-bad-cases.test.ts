@@ -55,7 +55,7 @@ function withT02(c: BadCase): BadCase {
 const CASES = badCases().map(withD242).map(withT02);
 
 /** checkId yang diharapkan per kasus (urutan fixture); tahap = spek (validateSpec) atau build. */
-const EXPECTED: Record<string, { checkId: string; stage: 'spec' | 'build' }> = {
+const EXPECTED: Record<string, { checkId: string; stage: 'spec' | 'build' | 'accepted' }> = {
   'width_mm di antara 128 dan 166': { checkId: 'P1-width_mm', stage: 'spec' },
   'title tanpa titik akhir': { checkId: 'P1-title', stage: 'spec' },
   'DATUM-24 konektor tanpa label': { checkId: 'DATUM-24', stage: 'spec' },
@@ -68,7 +68,9 @@ const EXPECTED: Record<string, { checkId: string; stage: 'spec' | 'build' }> = {
   'konektor ke simpul tak dikenal': { checkId: 'DATUM-24', stage: 'spec' },
   'P3 keputusan tanpa keluaran berlabel': { checkId: 'P3-diamond-exits', stage: 'spec' },
   // 1.2.8 row 35c (AT-HT06, INTENT): 5 edge kinds + a mark -> refused at spec stage by DATUM-25L (was accepted by row 124).
-  'DATUM-25 enam nilai warna dalam satu gambar': { checkId: 'DATUM-25L', stage: 'spec' },
+  // 1.3.3 row 57 (ST-6, C23, INTENT): accepted again: 5 line kinds distinguished by pattern are within DATUM-25L (limit
+  // 6, a mark no longer lowers it), and its colours (inks, line kinds, a mark) are within the DATUM-25 budget.
+  'DATUM-25 enam nilai warna dalam satu gambar': { checkId: 'DATUM-25', stage: 'accepted' },
   'DATUM-33 gambar lebih tinggi dari blok teks 247 mm': { checkId: 'DATUM-33', stage: 'build' },
   'DATUM-37 simpul keluar lebar lembar': { checkId: 'DATUM-37-sheet', stage: 'build' }, // 1.2.8 row 35b (AT-HNB4): was DATUM-37-lebar
   'DATUM-32 konektor menembus kotak tak terkait dan detur gagal': { checkId: 'DATUM-32', stage: 'build' },
@@ -107,8 +109,10 @@ describe('bad_cases Garis A: koreksi tinggi D-242', () => {
 // below and left out of the "every case is refused" loops.
 // 1.2.8 row 35c (AT-HT06, INTENT): the case is refused again, now at spec stage by DATUM-25L (5 line styles, a mark);
 // its message starts "DATUM-25L:", so it rejoins the refused loops.
+// 1.3.3 row 57 (ST-6, C23, INTENT): accepted again (DATUM-25 budget: inks one colour, marks not counted; DATUM-25L limit
+// 6), so it leaves the refused loops once more and is checked by the A7 test below.
 const R124_ACCEPTED = 'DATUM-25 enam nilai warna dalam satu gambar';
-const REFUSED = CASES;
+const REFUSED = CASES.filter((c) => c.name !== R124_ACCEPTED);
 
 describe('bad_cases Garis A: buildDiagramSvg(release=true) menolak setiap kasus', () => {
   it('row42 A7: kasus DATUM-25 kini terbangun dengan <= 5 nilai hex di luar latar (Rev A Tabel 9.4)', () => {
@@ -122,6 +126,10 @@ describe('bad_cases Garis A: buildDiagramSvg(release=true) menolak setiap kasus'
     const hex = new Set((r.svg.match(/#[0-9A-Fa-f]{6}\b/g) ?? []).map((h) => h.toUpperCase()));
     for (const bg of ['#FCFCFB', '#FBFAF7', '#FFFFFF']) hex.delete(bg);
     expect(hex.size).toBeLessThanOrEqual(5);
+    // 1.3.3 row 57 (ST-6): the case as given (5 kinds, a mark) builds too; DATUM-25 and DATUM-25L both run.
+    const full = buildDiagramSvg(clone(c.spec) as unknown as StudioDiagramV1, { release: true });
+    expect(full.report.checksRun).toContain('DATUM-25');
+    expect(validateSpec(clone(c.spec) as unknown as StudioDiagramV1, { release: true }).filter((i) => i.status === 'FAIL')).toEqual([]);
   });
   for (const c of REFUSED) {
     it(`${c.name} -> memuat "${c.expect}"`, () => {
@@ -139,7 +147,7 @@ describe('bad_cases Garis A: buildDiagramSvg(release=true) menolak setiap kasus'
     for (const c of REFUSED) {
       const e = catchErr(() => buildDiagramSvg(clone(c.spec) as unknown as StudioDiagramV1, { release: true }));
       if (e.message.startsWith('DIAGRAM DEFECT: ')) prefixed.push(c.name);
-      // 16 kasus lain = pesan Python persis (DiagramDefect, tanpa prefiks)
+      // 15 kasus lain = pesan Python persis (DiagramDefect, tanpa prefiks); 1.3.3 row 57: kasus DATUM-25 diterima
       if (c.name !== KNOWN_PREFIX_CASE) expect(e).toBeInstanceOf(DiagramDefect);
     }
     expect(prefixed).toEqual([KNOWN_PREFIX_CASE]);
@@ -167,9 +175,10 @@ describe('bad_cases Garis A: tahap validasi spek (validateSpec / assertValidSpec
   const specCases = CASES.filter((c) => EXPECTED[c.name].stage === 'spec');
   const buildCases = CASES.filter((c) => EXPECTED[c.name].stage === 'build');
 
-  it('13 kasus tahap spek, 4 kasus tahap build', () => {
+  it('12 kasus tahap spek, 4 kasus tahap build (1.3.3 row 57: kasus DATUM-25 diterima)', () => {
     // 1.2.8 row 35c (INTENT): the DATUM-25 colour case moved to spec stage (DATUM-25L).
-    expect(specCases).toHaveLength(13);
+    // 1.3.3 row 57 (ST-6, C23, INTENT): that case is accepted again, so the spec stage holds 12 cases.
+    expect(specCases).toHaveLength(12);
     expect(buildCases).toHaveLength(4);
   });
 

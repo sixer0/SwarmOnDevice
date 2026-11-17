@@ -87,6 +87,11 @@ export const TRACK = DIAGRAM_TOKENS.type.tracking_em;
 export const MARKS = DIAGRAM_TOKENS.marks;
 export const PAPER = INTERIOR.paper;
 export const INK_TEXT = "ink700";
+/**
+ * Swarm 1.3.3 row 57 (ST-6, B-16): the neutral ink ramp. DATUM-25 counts these values as ONE colour (the ink): the
+ * greys of the line kinds data/control/sync are part of their line pattern, not extra colours.
+ */
+export const NEUTRAL_INK_TOKENS = ["ink900", "ink700", "ink400", "ink200", "ink100"] as const;
 
 // Kisi dihitung ulang dari induknya (datum_diagram.py:94-103): 128/12 bukan 10,6667.
 const LX_TOK = DIAGRAM_TOKENS.grid_mm.horizontal_lattice;
@@ -113,8 +118,11 @@ export const LIMITS = {
   // Swarm 1.2.8 row 52 (VIS-0a, F-VISIO 01f §4.1; register N8-213, N8-253, N8-255, N8-259, N8-217, N8-264, N8-470,
   // N8-471, values per R20-C36/C42): limits and sizes of the 1.2.8 diagram contract fields. Read by the rows that draw
   // and check them (35c, 53-57); nothing reads them in row 52. Phases, pools and via alias the contract bounds.
-  max_line_styles: 4,
-  max_line_styles_with_mark: 3,
+  // Swarm 1.3.3 row 57 (ST-6, C23): the manual's six line kinds may be used together, pattern first. 4 (3 with a mark)
+  // became 6: a mark is no longer a colour (DATUM-25), so it no longer lowers the line budget. Legibility is guarded by
+  // the second DATUM-25L rule: two styles that print the same pattern, colour and weight are refused.
+  max_line_styles: 6,
+  max_line_styles_with_mark: 6,
   max_phases: FIGURE_BOUNDS.diagramPhases,
   max_pools: FIGURE_BOUNDS.diagramPools,
   max_via: FIGURE_BOUNDS.diagramVia,
@@ -236,7 +244,13 @@ export const SHAPES: Readonly<Record<DiagramShape, { means: string; notation_set
 
 export type DashPatternName = "solid" | "dashed" | "dotted" | "longdash" | "dashdot";
 
-/** P4: 6 jenis konektor (pola garis dulu, warna = nama token). */
+/**
+ * P4: 6 jenis konektor (pola garis dulu, warna = nama token).
+ * Swarm 1.3.3 row 57 (ST-6): five kinds are told apart by their pattern (solid, dashed, dotted, longdash, dashdot);
+ * data/control/sync are in the neutral ink (not counted as colours by DATUM-25). The engine has five patterns, so the
+ * sixth kind, accent, takes the second colour (signal, 1.6 x width) on the solid pattern. alert and verify also carry
+ * their own colour (unchanged); DATUM-25 counts each such colour once.
+ */
 export const EDGE_KINDS: Readonly<
   Record<DiagramEdgeKind, { pattern: DashPatternName; colour: string; head: "solid" | "open"; iso: string; use: string }>
 > = {
@@ -320,6 +334,21 @@ export function role(name: string): DiagramRoleToken {
   const r = SCALE[name];
   if (!r) throw new DiagramDefect(`peran tipografi '${name}' tidak ada di tokens.json type.scale_pt`);
   return r;
+}
+
+/**
+ * Swarm 1.3.3 row 43 (ST-3 item 4, gap matrix N6): roles whose text in a diagram is the author's own words and prints
+ * in the letter case of the spec ("Mb/s", "kW", "CommitEvidence"). `evidence_rail` carries only edge labels and their
+ * numbered note rows in this engine. The role token itself stays the frozen house-style copy (`upper: true` for the
+ * document's evidence rail); the diagram engine asks `roleUpper`, never `role(name).upper`, when it prints or measures.
+ * Container titles, lane heads and node tags (`table_header`) keep capitals; the key row opts out per call
+ * (`svgText(..., { upper: false })`, build/svg.ts) because it shares that role with them.
+ */
+export const SOURCE_CASE_ROLES: ReadonlySet<string> = new Set(["evidence_rail"]);
+
+/** Row 43: true when the diagram engine prints text of this role in capitals (role `upper`, minus `SOURCE_CASE_ROLES`). */
+export function roleUpper(name: string): boolean {
+  return Boolean(role(name).upper) && !SOURCE_CASE_ROLES.has(name);
 }
 
 export function faceOf(roleName: string): string {

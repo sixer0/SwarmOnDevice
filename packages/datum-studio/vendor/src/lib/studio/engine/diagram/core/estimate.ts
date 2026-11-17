@@ -13,12 +13,13 @@ import type { LayoutFn, StudioDiagramV1 } from "../../../contract";
 import { DiagramDefect } from "./defect";
 import { DiagramOverCapacity } from "../../figure-capacity";
 import { pyFixed, pyRound0 } from "./pyfmt";
-import { colourCountDetail, diagramColourSources, diagramColourValues } from "./colour"; // INT-1 (row 62 twin)
+import { colourBudgetDetail, diagramColourBudget, diagramColourSources, diagramColourValues } from "./colour"; // INT-1 (row 62 twin); row 57
+import { measure, wrap } from "../../chart/core/textfit";
 import { Sheet, footReserveMm } from "./sheet";
 import { assertValidSpec } from "./spec";
 import { baselineStepMm } from "./geometry";
 import { type DiagramGrid, resolveDiagramGrid } from "./grid";
-import { BASELINE_PT, DIAGRAM_ROLES, LATTICE_Y, LIMITS, STROKE_FLOOR_MM, STROKE_HAIR, STROKE_PRIMARY, role } from "./tokens";
+import { BASELINE_PT, DIAGRAM_ROLES, LATTICE_Y, LIMITS, STROKE_FLOOR_MM, STROKE_HAIR, STROKE_PRIMARY, pt2mm, role } from "./tokens";
 
 export interface DiagramEstimate {
   widthMm: number;
@@ -100,7 +101,11 @@ export function estimate(s: StudioDiagramV1, layout?: LayoutFn, opts: { grid?: D
   ran.push(...tokenFloorChecks());
 
   sheet.foot = footReserveMm(s, sheet.widthMm); // row 124 (CP-46): a wrapped key counts every line
-  const H = sheet.height();
+  // Swarm 1.3.3 row 57 (request of row 40): the foot as build/svg.ts reserves it: key and SUMBER (`footReserveMm`), the
+  // author's note rows (row 54), then row 40's drop of the foot below zone frames, lifelines, lanes and pools.
+  sheet.foot += noteLineCount(s, sheet.widthMm) * LATTICE_Y;
+  const H0 = sheet.height();
+  const H = H0 + (sheet.foot > 0 ? footDropMm(H0 - LATTICE_Y * 2 - sheet.foot, footBottoms(s, sheet, res)) : 0);
   if (H > grid.maxHeightMm + 1e-6) {
     // Swarm patch (row 158, U24 B): over-capacity refusal with the measured height and the limit.
     throw new DiagramOverCapacity(`DATUM-33: tinggi gambar ${pyFixed(H, 2)} mm melewati blok teks ${pyFixed(grid.maxHeightMm, 1)} mm (P8)`, {
@@ -116,10 +121,11 @@ export function estimate(s: StudioDiagramV1, layout?: LayoutFn, opts: { grid?: D
   ran.push("DATUM-33");
 
   const colourValues = diagramColourValues(s, sheet);
-  if (colourValues.length > LIMITS.max_colour_values) {
+  const budget = diagramColourBudget(s, sheet); // Swarm 1.3.3 row 57 (ST-6): twin of the build count
+  if (budget.count > LIMITS.max_colour_values) {
     throw new DiagramDefect(
       // Swarm 1.2.6 INT-1 (twin of build/svg.ts row 62, T-06): name each counted value, its sources and the remainder.
-      `DATUM-25: ${colourValues.length} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8); ${colourCountDetail(colourValues, diagramColourSources(s, sheet), LIMITS.max_colour_values)}`,
+      `DATUM-25: ${budget.count} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8); ${colourBudgetDetail(budget, diagramColourSources(s, sheet), LIMITS.max_colour_values)}`,
       { checkId: "DATUM-25" },
     );
   }
@@ -136,6 +142,60 @@ export function estimate(s: StudioDiagramV1, layout?: LayoutFn, opts: { grid?: D
     family: s.family,
     checksRun: ran,
   };
+}
+
+/**
+ * Swarm 1.3.3 row 57: printed lines of the author's `notes[]`, as build/svg.ts `specNoteLines` (row 54) counts them with
+ * the default label `CATATAN`: one line per non-blank entry, more when the entry is wider than the sheet and the wrap
+ * keeps every character. A caller of the build that passes another `noteLabel` can wrap differently.
+ */
+export function noteLineCount(s: Pick<StudioDiagramV1, "notes">, W: number, label = "CATATAN"): number {
+  const pt = role("source_line").size;
+  const maxW = W - 0.5 - measure(" ", pt);
+  const squash = (t: string): string => t.replace(/\s+/g, "");
+  return (s.notes ?? [])
+    .filter((e): e is string => typeof e === "string" && e.trim() !== "")
+    .map((entry) => {
+      const one = `${label}  ${entry}`;
+      if (measure(one, pt) <= W - 0.5) return 1;
+      const r = wrap(`${label} ${entry}`, maxW, NOTE_MAX_LINES, { pt });
+      return r.lines.length > 1 && r.lines[0].startsWith(`${label} `) && squash(r.lines.join("")) === squash(one) ? r.lines.length : 1;
+    })
+    .reduce((a, b) => a + b, 0);
+}
+
+/** Row 57: build/svg.ts `NOTE_MAX_LINES` (row 54). */
+const NOTE_MAX_LINES = 40;
+/** Row 57: build/svg.ts `FOOT_ROW_RISE_EM` (row 40). */
+const FOOT_ROW_RISE_EM = 0.75;
+
+/** Row 57: build/svg.ts `footDropMm` (row 40): whole lattice rows that put the first foot row below every bottom. */
+function footDropMm(contentBottom: number, bottoms: readonly number[]): number {
+  if (!bottoms.length) return 0;
+  const over = Math.max(...bottoms) + FOOT_ROW_RISE_EM * pt2mm(role("table_header").size) - (contentBottom + LATTICE_Y);
+  return over > 1e-6 ? Math.ceil(over / LATTICE_Y - 1e-9) * LATTICE_Y : 0;
+}
+
+/**
+ * Row 57: the lower edges build/svg.ts passes to `footDropMm` that exist without routing: zone frames (members' box plus
+ * the Garis A pad of two rows; a pad that `zonePads` caps lies above a node, hence above the content bottom, and cannot
+ * move the foot), the lifeline end, lanes and the swimlane frame with its pools. Connector points and edge-label bands
+ * need the router and are not mirrored: a connector or label drawn below the lowest node makes the build taller.
+ */
+function footBottoms(s: StudioDiagramV1, sheet: Sheet, res: unknown): number[] {
+  const contentBottom = sheet.height() - LATTICE_Y * 2 - sheet.foot;
+  const zones = (s.zones ?? []).flatMap((z) => {
+    const members = (z.members ?? []).map((m) => sheet.nodes.get(m)).filter((m) => m !== undefined);
+    return members.length ? [Math.max(...members.map((m) => m.y + m.h)) + LATTICE_Y * 2] : [];
+  });
+  type Frame = { orientation: string; bottom: number; pools?: Array<{ hi: number }> };
+  const frame = s.family === "swimlane" && res && typeof res === "object" ? (res as { frame?: Frame }).frame : undefined;
+  return [
+    ...zones,
+    ...(sheet.lifelines.length ? [contentBottom + LATTICE_Y] : []),
+    ...sheet.lanes.map((lane) => lane.y + lane.h),
+    ...(frame ? [frame.bottom, ...(frame.orientation === "horizontal" ? (frame.pools ?? []).map((p) => p.hi) : [])] : []),
+  ];
 }
 
 /** P6: piksel PNG 300 dpi dari lebar/tinggi mm (`render_hint`). */

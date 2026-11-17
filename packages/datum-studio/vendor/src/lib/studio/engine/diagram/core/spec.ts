@@ -35,6 +35,7 @@ import {
   LIMITS,
   MARKS,
   MARK_NAMES_SORTED,
+  NEUTRAL_INK_TOKENS,
   SHAPES,
   SHAPE_NAMES_SORTED,
 } from "./tokens";
@@ -85,6 +86,8 @@ function* stringValues(v: unknown): Generator<string> {
 
 /** Urutan id cek validasi spek Garis A (`ran` dari validate_spec). */
 export const SPEC_CHECK_IDS = [
+  // Swarm 1.3.3 row 52 (ST-5): first, and listed in `ran` only when it fails (a spec without a token keeps its report).
+  "PLACEHOLDER_UNFILLED",
   "P1-family",
   "P1-id",
   "P1-title",
@@ -111,6 +114,70 @@ export const SPEC_CHECK_IDS = [
 export const RELEASE_CHECK_ID = "P1-labels_verified";
 
 type Json = Record<string, unknown>;
+
+/**
+ * Swarm 1.3.3 row 52 (ST-5, register 03 s2 and s7): id of the refusal for an unfilled `{{key}}` in a diagram spec.
+ * The same string is the spec check id (build of preview and render) and the lint registry id (document lint).
+ */
+export const PLACEHOLDER_CHECK_ID = "PLACEHOLDER_UNFILLED";
+
+/**
+ * The placeholder form of the register: `{{key}}` with `key` = `[A-Za-z0-9_.-]{1,64}`; spaces or tabs between the
+ * braces and the key are allowed (`{{ key }}` is the same unfilled slot). Anything else in braces is text and is
+ * printed as written: `{nama}`, `{{a b}}`, `{{#each x}}`, `{{ .Values.x | quote }}`. A literal bare key in double
+ * braces is written with a space between the braces: `{ {kunci} }` (no escape sequence, so what is printed is what
+ * was written and no print path has to undo anything).
+ */
+const PLACEHOLDER_TOKEN = /\{\{[ \t]*([A-Za-z0-9_.-]{1,64})[ \t]*\}\}/g;
+
+/** Itemised tokens in one refusal message; the rest are counted. */
+const PLACEHOLDER_DETAIL_MAX = 8;
+/** Depth bound of the walk (a diagram spec is at most 5 deep; the bound only stops a hostile input). */
+const PLACEHOLDER_DEPTH_MAX = 16;
+
+export interface UnfilledPlaceholder {
+  /** JSON pointer to the string that holds the token, relative to the spec. */
+  pointer: string;
+  /** The token as written, braces included. */
+  token: string;
+  key: string;
+}
+
+/**
+ * Every unfilled `{{key}}` in a diagram spec, in document order. Every string value at any depth is read: a string
+ * of a diagram spec is either printed (labels, sub lines, tags, titles, key, source and note rows, zone, lane, phase
+ * and pool labels) or used as a reference (`id`, `from`, `to`, `members`, `ref.figure`, `ref.key`), and the remaining
+ * ones are closed enums that a token breaks anyway. Property names are not read. Pure; never throws.
+ */
+export function unfilledPlaceholders(spec: unknown): UnfilledPlaceholder[] {
+  const out: UnfilledPlaceholder[] = [];
+  const walk = (v: unknown, pointer: string, depth: number): void => {
+    if (typeof v === "string") {
+      for (const m of v.matchAll(PLACEHOLDER_TOKEN)) out.push({ pointer, token: m[0], key: m[1] });
+      return;
+    }
+    if (depth >= PLACEHOLDER_DEPTH_MAX) return;
+    if (Array.isArray(v)) {
+      v.forEach((x, i) => walk(x, `${pointer}/${i}`, depth + 1));
+      return;
+    }
+    if (!isObj(v)) return;
+    for (const k of Object.keys(v)) walk(v[k], `${pointer}/${k.replaceAll("~", "~0").replaceAll("/", "~1")}`, depth + 1);
+  };
+  if (isObj(spec)) walk(spec, "", 0);
+  return out;
+}
+
+/** One refusal text for all tokens of a spec: each token with its field, then what to do. */
+export function unfilledPlaceholderDetail(found: readonly UnfilledPlaceholder[]): string {
+  const shown = found.slice(0, PLACEHOLDER_DETAIL_MAX).map((u) => `${u.token} di ${u.pointer}`);
+  const rest = found.length - shown.length;
+  return (
+    `${PLACEHOLDER_CHECK_ID}: ${found.length} penanda {{kunci}} belum terisi: ${shown.join("; ")}${rest > 0 ? `; dan ${rest} lagi` : ""}. ` +
+    "Ganti setiap penanda dengan nilainya; penanda tidak pernah dicetak apa adanya. " +
+    "Kurung ganda yang memang teks ditulis berjarak: { {kunci} }"
+  );
+}
 
 function isObj(v: unknown): v is Json {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -323,6 +390,24 @@ function lineStyleKey(kind: DiagramEdgeKind, dash: unknown, weight: unknown): st
   return d === meta.pattern && w === (kind === "accent" ? "accent" : "normal") ? kind : `${kind}/${d}/${w}`;
 }
 
+/** Row 57 (ST-6): DATUM-25L is listed in `ran` above this many styles (the former lower limit; 52c rule). */
+const LINE_STYLES_LISTED_ABOVE = 3;
+/** Row 57 (ST-6, C23): the budget before 1.3.3 (1.2.8 row 35c); within it every verdict stays as it was. */
+const FORMER_LINE_STYLE_MAX = 4;
+const FORMER_LINE_STYLE_MAX_WITH_MARK = 3;
+
+/**
+ * Swarm 1.3.3 row 57 (ST-6, C23): how a line style prints: `pola <dash>, warna <tinta|token>, tebal <weight>`. The
+ * neutral ink greys are one colour (`NEUTRAL_INK_TOKENS`), as DATUM-25 counts them.
+ */
+function lineStyleLook(kind: DiagramEdgeKind, dash: unknown, weight: unknown): string {
+  const meta = EDGE_KINDS[kind];
+  const d = typeof dash === "string" ? dash : meta.pattern;
+  const w = typeof weight === "string" && !(weight === "normal" && kind !== "accent") ? weight : kind === "accent" ? "aksen" : "normal";
+  const c = (NEUTRAL_INK_TOKENS as readonly string[]).includes(meta.colour) ? "tinta" : meta.colour;
+  return `pola ${d}, warna ${c}, tebal ${w}`;
+}
+
 /** 01f §3.3 (D-V3): families where an author may place bend points (`flow` only without `direction`). */
 const VIA_FAMILIES = "flow tanpa direction, graph, swimlane";
 
@@ -352,6 +437,12 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
     }
   };
   let mark = 0;
+
+  // PLACEHOLDER_UNFILLED (Swarm 1.3.3 row 52, ST-5): before every other check, so the unfilled token is the named
+  // defect even where it also breaks another rule (`id`, `title`, `ref.figure`). One entry lists every token. No
+  // PASS entry: a spec without a token keeps the `ran` list and the report bytes it had.
+  const unfilled = unfilledPlaceholders(spec);
+  if (unfilled.length > 0) fail(PLACEHOLDER_CHECK_ID, unfilledPlaceholderDetail(unfilled), unfilled[0].pointer);
 
   // P1-family
   mark = out.length;
@@ -684,15 +775,26 @@ export function validateSpec(s: StudioDiagramV1, opts: ValidateSpecOptions = {})
   // so a spec within 3 styles keeps its verdict and check list (52c rule).
   // Row 57b (AC-VIS8, 01f §3.5): the style key is (kind, effective dash, effective weight); a style that only differs
   // from its kind by a non-default dash or weight is named `kind/dash/weight`, so a kind-only spec keeps its message.
-  const lineStyles = new Set(
-    edgeObjs.filter((e) => typeof e.kind === "string" && has(EDGE_KINDS, e.kind)).map((e) => lineStyleKey(e.kind as DiagramEdgeKind, e.dash, e.weight)),
-  );
-  if (lineStyles.size > LIMITS.max_line_styles_with_mark) {
+  // Swarm 1.3.3 row 57 (ST-6, C23): the limit is 6 with or without a mark (the manual's six kinds, pattern first; a mark
+  // is no longer a colour). Legibility: above the former budget (4, or 3 with a mark; every such figure was refused
+  // before) two styles that print the same pattern, colour (the neutral ink greys count as one) and weight cannot be
+  // told apart and are refused. Within the former budget the verdict is unchanged. Listed in `ran` above 3 styles.
+  const styled = edgeObjs
+    .filter((e) => typeof e.kind === "string" && has(EDGE_KINDS, e.kind))
+    .map((e) => ({ key: lineStyleKey(e.kind as DiagramEdgeKind, e.dash, e.weight), look: lineStyleLook(e.kind as DiagramEdgeKind, e.dash, e.weight) }));
+  const lineStyles = new Set(styled.map((x) => x.key));
+  const looks = new Map<string, Set<string>>();
+  for (const x of styled) looks.set(x.look, (looks.get(x.look) ?? new Set<string>()).add(x.key));
+  const formerMax = marksUsed.size > 0 ? FORMER_LINE_STYLE_MAX_WITH_MARK : FORMER_LINE_STYLE_MAX;
+  const clashes = lineStyles.size > formerMax ? [...looks].filter(([, keys]) => keys.size > 1) : [];
+  if (lineStyles.size > LINE_STYLES_LISTED_ABOVE) {
     mark = out.length;
     const max = marksUsed.size > 0 ? LIMITS.max_line_styles_with_mark : LIMITS.max_line_styles;
     if (lineStyles.size > max) {
-      const why = marksUsed.size > 0 ? `${max} bila ada simpul ber-mark` : `${max}`;
-      fail("DATUM-25L", `DATUM-25L: ${lineStyles.size} gaya garis (${[...lineStyles].sort().join(", ")}), maksimum ${why} (P5)`, "/edges");
+      fail("DATUM-25L", `DATUM-25L: ${lineStyles.size} gaya garis (${[...lineStyles].sort().join(", ")}), maksimum ${max} (P5)`, "/edges");
+    }
+    for (const [look, keys] of clashes) {
+      fail("DATUM-25L", `DATUM-25L: gaya garis ${[...keys].sort().join(" dan ")} tidak terbedakan (${look}); beri pola garis lain (P5)`, "/edges");
     }
     pass("DATUM-25L", mark);
   }

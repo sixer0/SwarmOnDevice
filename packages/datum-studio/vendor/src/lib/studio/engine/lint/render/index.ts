@@ -26,6 +26,7 @@ import { PARAMS_BY_KEY } from "../../../params";
 import { countColourValues, countFigureColourValues, DEFAULT_INK_RAMPS, type InkRamp } from "./colour";
 import { findCrossings } from "./geometry";
 import { analyseSvg, extractInlineSvgs, type SvgAnalysis } from "./svg";
+import { colourBudget, INK_ENTRY, svgMarkOnlyColours, type ColourBudget } from "../../diagram/core/colour"; // row 57 (ST-6)
 
 export { countColourValues, countFigureColourValues, DEFAULT_INK_RAMPS, FIGURE_GROUNDS, isChromatic, normaliseColour, rampOf } from "./colour";
 export type { ColourCount, InkRamp } from "./colour";
@@ -170,7 +171,7 @@ interface Ctx {
   els: El[];
   truncated: boolean;
   /** Analisis SVG statis (lazy): sumber `svgs`, atau SVG inline HTML bila `svgs` kosong. */
-  svgList: () => Array<{ pointer: string; a?: SvgAnalysis; error?: string }>;
+  svgList: () => Array<{ pointer: string; a?: SvgAnalysis; error?: string; src?: string }>;
   hasMetrics: boolean;
 }
 
@@ -350,22 +351,29 @@ function check25(c: Ctx): LintIssue[] {
       continue;
     }
     figures++;
-    const cc = countFigureColourValues(s.a.colours); // row 124 (C23/C29): every hex value, no K-32 folding
+    // Swarm 1.3.3 row 57 (ST-6): the colour budget of the printed values: fill and accent colours once each, the neutral
+    // ink once, line patterns and value-origin marks not counted (the rule of the engine build check).
+    const cc = colourBudget(countFigureColourValues(s.a.colours).values, s.src ? svgMarkOnlyColours(s.src) : new Set());
     worst = Math.max(worst, cc.count);
-    if (cc.count > limit) fails.push({ n: cc.count, is: issue(id, "FAIL", `gambar SVG: ${cc.count} nilai warna > maks ${limit} (${cc.values.join(", ")})`, { pointer: s.pointer }) });
+    if (cc.count > limit) fails.push({ n: cc.count, is: issue(id, "FAIL", `gambar SVG: ${cc.count} nilai warna > maks ${limit} (${budgetText(cc)})`, { pointer: s.pointer }) });
   }
   for (const e of c.els) {
     if (e.kind !== "figure" || !Array.isArray(e.colors)) continue;
     figures++;
-    const cc = countFigureColourValues(e.colors); // row 124 (C23/C29)
+    const cc = colourBudget(countFigureColourValues(e.colors).values); // row 57 (ST-6): the same budget, no source to read marks
     worst = Math.max(worst, cc.count);
     if (cc.count > limit) {
-      fails.push({ n: cc.count, is: issue(id, "FAIL", `gambar ${figLabel(e)} halaman ${e.page ?? "-"}: ${cc.count} nilai warna > maks ${limit} (${cc.values.join(", ")})`, where(e)) });
+      fails.push({ n: cc.count, is: issue(id, "FAIL", `gambar ${figLabel(e)} halaman ${e.page ?? "-"}: ${cc.count} nilai warna > maks ${limit} (${budgetText(cc)})`, where(e)) });
     }
   }
   if (fails.length) return [...capped(fails.sort((a, b) => b.n - a.n).map((f) => f.is), c.lim.maxIssuesPerCheck), ...errs];
   if (!figures) return errs.length ? errs : [issue(id, "PASS", "tidak ada gambar")];
-  return [issue(id, "PASS", `${figures} gambar; maks ${worst} nilai warna per gambar (batas ${limit}; setiap nilai hex di luar latar dihitung, Rev A DT-06)`), ...errs];
+  return [issue(id, "PASS", `${figures} gambar; maks ${worst} nilai warna per gambar (batas ${limit}; warna isi dan aksen dihitung sekali, tinta netral satu warna, pola garis dan tanda asal tidak dihitung)`), ...errs];
+}
+
+/** Row 57: counted entries of a budget; the ink entry names its values. */
+function budgetText(b: ColourBudget): string {
+  return b.counted.map((v) => (v === INK_ENTRY ? `${INK_ENTRY} ${b.ink.join("/")}` : v)).join(", ");
 }
 
 // ── DATUM-28 huruf gambar < 5,5 pt ───────────────────────────────────────
@@ -566,7 +574,7 @@ function buildCtx(i: Input, lim: RenderLintLimits): Ctx {
   const els = metrics.elements.filter((e): e is El => !!e && typeof e === "object" && typeof e.kind === "string");
   const truncated = (metrics as { truncated?: unknown }).truncated === true;
   const svgs = Array.isArray(i.svgs) ? i.svgs : [];
-  let memo: Array<{ pointer: string; a?: SvgAnalysis; error?: string }> | undefined;
+  let memo: Array<{ pointer: string; a?: SvgAnalysis; error?: string; src?: string }> | undefined;
   const svgList = () => {
     if (memo) return memo;
     const list: Array<{ pointer: string; src: string; size?: { widthMm: number; heightMm: number } }> = [];
@@ -582,7 +590,7 @@ function buildCtx(i: Input, lim: RenderLintLimits): Ctx {
     }
     memo = list.map((s) => {
       try {
-        return { pointer: s.pointer, a: analyseSvg(s.src, s.size) };
+        return { pointer: s.pointer, a: analyseSvg(s.src, s.size), src: s.src }; // row 57: DATUM-25 counts from the source
       } catch (e) {
         return { pointer: s.pointer, error: msg(e) };
       }
