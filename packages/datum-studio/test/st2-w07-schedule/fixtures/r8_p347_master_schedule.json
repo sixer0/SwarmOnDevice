@@ -1,0 +1,46 @@
+{
+  "_provenance": {
+    "source": "GSP Diagram Manual Multi-Domain RevB.pdf, sheet 347 of 603, Figure 29.6 (PBS-12 master schedule, critical path method, weeks from SPMK)",
+    "replay": "docs/2026-11-17_swarm_1_3_3_patch/research/replay/R8_manual (PDF sha256 965ca4f86df1f341608b3f2c533a360bbe7f3529005ef8068704c3803c34af14)",
+    "readFrom": [
+      "R8_manual/p347.jpg: table columns ID, TASK, DUR, ES, EF, TF read by eye from the page raster",
+      "R8_manual/29_proses_bisnis_proyek.txt lines 596-655 (PDF text extraction of the same sheet): same 14 rows, 5 milestones, forward and backward pass"
+    ],
+    "mapping": "start = ES, end = EF, float = TF, critical = (TF = 0), milestone week = the single value printed on rows M0..M4, statusAt = 'data date wk 10', timeUnit = 'minggu' (the manual prints WEEK; the unit word is translated, the numbers are not)",
+    "illegible": [],
+    "manualStatement": "Critical path A-B-C-E-G-J-L-N = 1 + 3 + 4 + 6 + 3 + 4 + 2 + 4 = 27 weeks",
+    "note": "Task names are the manual's English text unchanged. The manual marks durations as illustrative."
+  },
+  "block": {
+    "type": "chart",
+    "code": "W-07",
+    "caption": {"text": "Jalur kritis melewati desain, pengadaan tiang, pemasangan, instalasi, SAT dan operasi percobaan sampai minggu ke-27."},
+    "source": {"text": "GSP Diagram Manual Multi-Domain RevB, Gambar 29.6, lembar 347"},
+    "data": {
+      "shape": "intervals",
+      "timeUnit": "minggu",
+      "statusAt": 10,
+      "items": [
+        { "label": "A Contract, SPMK, kick-off", "start": 0, "end": 1, "float": 0, "critical": true },
+        { "label": "B Site survey, 12 posts", "start": 1, "end": 4, "float": 0, "critical": true },
+        { "label": "C Detailed design to IFC", "start": 4, "end": 8, "float": 0, "critical": true },
+        { "label": "D Procure cameras, radar (import)", "start": 1, "end": 12, "float": 1 },
+        { "label": "E Procure masts, shelters", "start": 8, "end": 14, "float": 0, "critical": true },
+        { "label": "F Civil works, foundations", "start": 8, "end": 13, "float": 1 },
+        { "label": "G Erect masts, shelters", "start": 14, "end": 17, "float": 0, "critical": true },
+        { "label": "H FAT, GSP lab Jakarta", "start": 12, "end": 14, "float": 1 },
+        { "label": "I Ship to sites", "start": 14, "end": 16, "float": 1 },
+        { "label": "J Install and cable", "start": 17, "end": 21, "float": 0, "critical": true },
+        { "label": "K Command-centre integration", "start": 8, "end": 11, "float": 10 },
+        { "label": "L SAT, 12 posts", "start": 21, "end": 23, "float": 0, "critical": true },
+        { "label": "M Training", "start": 23, "end": 25, "float": 2 },
+        { "label": "N Trial operation 30 days", "start": 23, "end": 27, "float": 0, "critical": true },
+        { "label": "M0 Contract signed, SPMK", "start": 0, "end": 0, "milestone": true },
+        { "label": "M1 IFC drawings approved", "start": 8, "end": 8, "milestone": true },
+        { "label": "M2 FAT passed", "start": 14, "end": 14, "milestone": true },
+        { "label": "M3 SAT complete", "start": 23, "end": 23, "milestone": true },
+        { "label": "M4 PHO · BAST signed", "start": 27, "end": 27, "milestone": true }
+      ]
+    }
+  }
+}
