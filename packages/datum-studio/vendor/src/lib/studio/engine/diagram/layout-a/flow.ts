@@ -7,7 +7,7 @@
 import type { DiagramBox, DiagramNode, DiagramSheet, LayoutResult, StudioDiagramV1 } from "../../../contract";
 import { DiagramOverCapacity } from "../../figure-capacity";
 import { GRAPH_EDGE_INSET_MM, type SheetEdgeInset } from "../core/sheet";
-import { snapFloor } from "../core/tokens";
+import { ALLOWED_WIDTHS, snapFloor } from "../core/tokens";
 import { clampTierXs, elkPlanFor, elkTierOrder, elkTierXs } from "../elk/plan";
 import { diagramFitActive, diagramFitAllows, diagramFitNote } from "../fit/state";
 import { knockWidthMm } from "../fit/labels";
@@ -278,13 +278,56 @@ export interface FlowRankOverload {
   suggestion: string;
 }
 
+/**
+ * Swarm 1.3.3 row 34 (ST-1 items 3-4): the two figure widths a block may choose, read from the diagram tokens
+ * (`ALLOWED_WIDTHS` = text column, full span; the registry default `diagram.widthMm` is the text column). No literal here.
+ */
+export const FIGURE_TEXT_WIDTH_MM: number = ALLOWED_WIDTHS[0]!;
+export const FIGURE_FULL_WIDTH_MM: number = ALLOWED_WIDTHS[ALLOWED_WIDTHS.length - 1]!;
+
+/** Row 34: the split remedy, always the last choice of a width-capacity message (row 51 hangs its skeleton on it). */
+export const CAPACITY_SPLIT_TEXT = "pecah menjadi 2 diagram";
+
+const mmLabel = (mm: number): string => (Number.isInteger(mm) ? String(mm) : String(Math.round(mm * 1000) / 1000));
+
+export interface CapacityWidthChoice {
+  /** What is counted, as printed after the number ("simpul per peringkat", "kolom"). */
+  unit: string;
+  /** How many `unit` fit at a figure width (mm). Called for the text width and the full width. */
+  at: (widthMm: number) => number;
+  /** The width in use (mm). */
+  width: number;
+  /** How many the figure needs; when the full width holds fewer, `full` is not offered. */
+  need?: number;
+  /** Other remedies, placed between the width choice and the split. */
+  others?: readonly string[];
+}
+
+/**
+ * Row 34 (ST-1 item 3): the width choice of a capacity message, numbers computed per width:
+ * `muat N <unit> pada 128 mm, M pada 166 mm; pilih width "full" (width_mm 166) atau pecah menjadi 2 diagram`.
+ * At the full width, or when the full width does not hold `need`, `full` is not offered and the text says why.
+ */
+export function capacityWidthChoice(c: CapacityWidthChoice): string {
+  const T = FIGURE_TEXT_WIDTH_MM;
+  const F = FIGURE_FULL_WIDTH_MM;
+  const atFull = c.at(F);
+  const head = `muat ${c.at(T)} ${c.unit} pada ${mmLabel(T)} mm, ${atFull} pada ${mmLabel(F)} mm`;
+  const used = c.width >= F - 1e-6;
+  const enough = c.need === undefined || c.need <= atFull;
+  const items = [...(!used && enough ? [`width "full" (width_mm ${mmLabel(F)})`] : []), ...(c.others ?? []), CAPACITY_SPLIT_TEXT];
+  const list = items.length === 1 ? items[0] : items.length === 2 ? `${items[0]} atau ${items[1]}` : `${items.slice(0, -1).join(", ")}, atau ${items[items.length - 1]}`;
+  if (used) return `${head}; width "full" sudah dipakai: ${list}`;
+  if (!enough) return `${head}; width "full" tidak cukup: ${list}`;
+  return `${head}; pilih ${list}`;
+}
+
 export function flowRankOverload(dir: FlowDirection, ranks: readonly DiagramNode[][], W: number, lx: number): FlowRankOverload | null {
   if (dir === "TB") {
     const M = flowTbMaxPerRank(W, lx);
     const r = ranks.findIndex((g) => g.length > M);
     if (r < 0) return null;
     const m = ranks[r].length;
-    const alt = W < 166 ? `width_mm 166 (maks ${flowTbMaxPerRank(166, lx)}), ` : "";
     return {
       rank: r,
       quantity: "simpul per peringkat",
@@ -292,7 +335,14 @@ export function flowRankOverload(dir: FlowDirection, ranks: readonly DiagramNode
       measured: m,
       limit: M,
       message: `DATUM-37-rank: peringkat ${r} memuat ${m} simpul, maks ${M} pada ${W} mm (lebar simpul minimum ${(FLOW_RANK_NODE_MIN_UNITS * lx).toFixed(2)} mm)`,
-      suggestion: `pakai ${alt}direction "LR" (maks ${FLOW_LR_MAX_PARALLEL} per peringkat), atau pecah menjadi 2 diagram`,
+      // Row 34: both widths computed; `full` offered only below the full width and only when it holds this rank.
+      suggestion: capacityWidthChoice({
+        unit: "simpul per peringkat",
+        at: (w) => flowTbMaxPerRank(w, lx),
+        width: W,
+        need: m,
+        others: [`direction "LR" (maks ${FLOW_LR_MAX_PARALLEL} per peringkat)`],
+      }),
     };
   }
   const r = ranks.findIndex((g) => g.length > FLOW_LR_MAX_PARALLEL);
@@ -309,7 +359,6 @@ export function flowRankOverload(dir: FlowDirection, ranks: readonly DiagramNode
   }
   const Rmax = flowLrMaxRanks(W, lx);
   if (ranks.length <= Rmax) return null;
-  const alt = W < 166 ? ` atau width_mm 166 (maks ${flowLrMaxRanks(166, lx)} peringkat)` : "";
   return {
     rank: null,
     quantity: "peringkat",
@@ -317,7 +366,7 @@ export function flowRankOverload(dir: FlowDirection, ranks: readonly DiagramNode
     measured: ranks.length,
     limit: Rmax,
     message: `DATUM-37-rank: ${ranks.length} peringkat kiri-kanan, maks ${Rmax} pada ${W} mm`,
-    suggestion: `pakai direction "TB"${alt}, atau pecah menjadi 2 diagram`,
+    suggestion: capacityWidthChoice({ unit: "peringkat", at: (w) => flowLrMaxRanks(w, lx), width: W, need: ranks.length, others: ['direction "TB"'] }),
   };
 }
 

@@ -1,0 +1,82 @@
+{
+  "$comment": "Swarm 1.3.3 row 36 (ST-1 acceptance case, replay R8). Transcription of FIGURE 16.6 of the GSP Diagram Manual Multi-Domain RevB, sheet 147 of 603. Data only; the test maps it to diagram specs.",
+  "source": {
+    "document": "GSP Diagram Manual Multi-Domain RevB.pdf (sha256 965ca4f86df1f341608b3f2c533a360bbe7f3529005ef8068704c3803c34af14)",
+    "sheet": "147 of 603, FIGURE 16.6, drawing GSP-PMJ-VSS-110 sheet 7/9",
+    "copies": ["docs/2026-11-17_swarm_1_3_3_patch/research/replay/R8_manual/p147.jpg", "docs/2026-11-17_swarm_1_3_3_patch/research/replay/R8_manual/16_video_vms.txt (lines 506-594)"]
+  },
+  "howRead": [
+    "Every text (labels, second lines, connector labels, container titles, notes, key, source, caption) was taken from the text layer 16_video_vms.txt lines 506-594 and matched to its place on the page raster p147.jpg.",
+    "Placement (which box is in which container, row and column), connector ends and line styles were read from the raster p147.jpg (about 1000 px wide). The text layer carries no geometry.",
+    "Node ids are mine (the manual prints no ids for the camera groups); labels are the printed first line of each box, `sub` the printed second line.",
+    "Count check against the acceptance text: 19 nodes and 4 containers, as the spec says."
+  ],
+  "notLegible": [
+    "CORE-01/02 to FW-01: the two boxes sit side by side in the site rack; whether a connector is drawn between them cannot be read from the raster. No edge is transcribed for it.",
+    "Arrowheads of MS-01/02 to C2-OPS ('live + playback') and FED-01 to VW-01 ('12 tiles · sub') are not legible; the from/to order below follows the top-to-bottom position, not a read arrowhead (directionRead: false).",
+    "Line style of CORE to AN-01 ('24 × 1 Mb/s'): it looks dotted with an open arrowhead on the raster, unlike the solid recorder feeds; low confidence (styleRead: false). Transcribed as dotted.",
+    "Line style of CORE to RS-F ('standby'): drawn like the recorder feeds on the raster; the word 'standby' matches the key entry 'standby / logs' (dotted). Style not legible at this resolution (styleRead: false). Transcribed as dotted, following the key wording.",
+    "The camera groups are drawn as camera symbols (the third with a dome symbol); the engine has no camera shape, so they are plain nodes.",
+    "The REQ tags above the four server boxes read REQ-REC-01, REQ-REC-01, REQ-REC-02, REQ-ANL-01 in the text layer (the second REQ-REC-01 is as printed). They are kept in `tag`, not sent to the engine."
+  ],
+  "notTranscribed": [
+    "The sizing table at the foot of the sheet (NODE / PLATFORM / NETWORK / ROLE, 3 rows): a table, not part of a diagram spec.",
+    "The drawing frame, zone references (A-F, 1-8) and the title block (owner, title, drawing number, revision, sheet, scale, class)."
+  ],
+  "caption": "Recording stays at each Polres, so the MPLS link carries 16 Mb/s of alarms, metadata and on-demand video while 208 Mb/s stays inside the site server room.",
+  "sourceLine": "Worked example; loads from the camera schedule; platform values are basis of design, not a vendor selection",
+  "key": [
+    { "style": "solid", "text": "video" },
+    { "style": "dashed", "text": "control/API" },
+    { "style": "dotted", "text": "standby / logs" },
+    { "style": "accent", "text": "WAN subject path" },
+    { "style": "dash-dot", "text": "evidence" }
+  ],
+  "containers": [
+    { "id": "field", "label": "FIELD · 48 CAMERAS · 3 ACCESS SWITCHES" },
+    { "id": "rack", "label": "SITE RACK · POLRES SERVER ROOM SR-01", "note": "Recording at the site: 208 Mb/s stays inside SR-01. Failover RS-F takes over a failed recorder in ≤ 60 s (heartbeat 5 s × 3)." },
+    { "id": "wan", "label": "WAN · MPLS L3VPN VRF-CCTV", "note": "WAN load: alarms + metadata 2 · ≤ 6 live subs 6 · 2 playback 8 Mb/s · IPsec AES-256-GCM, IKEv2", "remark": "holds no node on the sheet: only the two WAN links and this note cross it" },
+    { "id": "c2", "label": "REGIONAL C2 · POLDA COMMAND CENTRE" }
+  ],
+  "nodes": [
+    { "id": "cam_a", "label": "16 cams · 4 MP", "container": "field", "row": 0, "col": 0 },
+    { "id": "cam_b", "label": "16 cams · 8 × 8 MP + 8 × 4 MP", "container": "field", "row": 0, "col": 1 },
+    { "id": "cam_c", "label": "12 × 4 MP + 4 PTZ", "container": "field", "row": 0, "col": 2 },
+    { "id": "sw_a1", "label": "SW-A1 · 24 × 1G PoE+", "sub": "2 × 1G SFP · LACP up", "container": "field", "row": 1, "col": 0 },
+    { "id": "sw_a2", "label": "SW-A2 · 24 × 1G PoE+", "sub": "2 × 1G SFP · LACP up", "container": "field", "row": 1, "col": 1 },
+    { "id": "sw_a3", "label": "SW-A3 · 24 × 1G PoE+", "sub": "2 × 1G SFP · LACP up", "container": "field", "row": 1, "col": 2 },
+    { "id": "core", "label": "CORE-01 / CORE-02 · L3 stack · VLAN 110 video · 120 security · 10 mgmt · MSTP + VRRP", "container": "rack", "row": 2, "col": 0, "remark": "one wide box over columns 0-3, one text line" },
+    { "id": "fw01", "label": "FW-01", "sub": "zone fw", "container": "rack", "row": 2, "col": 4, "remark": "tall box right of the rack, beside rows 2 and 3" },
+    { "id": "rs01", "label": "RS-01 · recording 24 ch", "sub": "9 × 8 TB RAID 6 + HS", "tag": "REQ-REC-01", "container": "rack", "row": 3, "col": 0 },
+    { "id": "rs02", "label": "RS-02 · recording 24 ch", "sub": "9 × 8 TB RAID 6 + HS", "tag": "REQ-REC-01", "container": "rack", "row": 3, "col": 1 },
+    { "id": "rsf", "label": "RS-F · N+1 failover", "sub": "4 × 8 TB buffer", "tag": "REQ-REC-02", "container": "rack", "row": 3, "col": 2 },
+    { "id": "an01", "label": "AN-01 · analytics GPU", "sub": "2 × L4 · 24 streams", "tag": "REQ-ANL-01", "container": "rack", "row": 3, "col": 3 },
+    { "id": "ms", "label": "MS-01/02 · VMS management HA", "sub": "cluster · SQL mirror", "container": "c2", "row": 4, "col": 0 },
+    { "id": "fed01", "label": "FED-01 · federation gateway", "sub": "Polres sites 1..14", "container": "c2", "row": 4, "col": 1 },
+    { "id": "wanedge", "label": "WAN edge · FW-C2", "sub": "IPsec termination", "container": "c2", "row": 4, "col": 2 },
+    { "id": "c2ops", "label": "C2-OPS · 6 operator clients", "sub": "2 × 4K each", "container": "c2", "row": 5, "col": 0 },
+    { "id": "vw01", "label": "VW-01 · video wall controller", "sub": "3 × 3 · 55\"", "container": "c2", "row": 5, "col": 1 },
+    { "id": "ea01", "label": "EA-01 · evidence archive", "sub": "WORM · SHA-256", "shape": "cylinder", "container": "c2", "row": 5, "col": 2 },
+    { "id": "idp01", "label": "IDP-01 · AD / LDAP · NTP · SIEM", "sub": "syslog TLS 6514", "container": "c2", "row": 5, "col": 3 }
+  ],
+  "edges": [
+    { "from": "cam_a", "to": "sw_a1", "label": "Cat 6A · ≤ 90 m", "style": "solid" },
+    { "from": "cam_b", "to": "sw_a2", "label": "Cat 6A · ≤ 90 m", "style": "solid" },
+    { "from": "cam_c", "to": "sw_a3", "label": "Cat 6A · ≤ 90 m", "style": "solid" },
+    { "from": "sw_a1", "to": "core", "label": "64 + 8 Mb/s", "medium": "OS2 2F", "style": "solid" },
+    { "from": "sw_a2", "to": "core", "label": "80 + 8 Mb/s", "medium": "OS2 2F", "style": "solid" },
+    { "from": "sw_a3", "to": "core", "label": "64 + 8 Mb/s", "medium": "OS2 2F", "style": "solid" },
+    { "from": "core", "to": "rs01", "label": "104 Mb/s", "style": "solid" },
+    { "from": "core", "to": "rs02", "label": "104 Mb/s", "style": "solid" },
+    { "from": "core", "to": "rsf", "label": "standby", "style": "dotted", "styleRead": false },
+    { "from": "core", "to": "an01", "label": "24 × 1 Mb/s", "style": "dotted", "styleRead": false },
+    { "from": "fw01", "to": "wanedge", "label": "MPLS 100 Mb/s · 16 Mb/s used", "style": "accent" },
+    { "from": "fw01", "to": "wanedge", "label": "LTE backup · alarms only", "style": "dotted" },
+    { "from": "wanedge", "to": "fed01", "label": "", "style": "solid", "remark": "no label printed on this connector" },
+    { "from": "fed01", "to": "ms", "label": "API", "style": "dashed" },
+    { "from": "ms", "to": "c2ops", "label": "live + playback", "style": "solid", "directionRead": false },
+    { "from": "fed01", "to": "vw01", "label": "12 tiles · sub", "style": "solid", "directionRead": false },
+    { "from": "wanedge", "to": "ea01", "label": "export + hash", "style": "dash-dot" },
+    { "from": "wanedge", "to": "idp01", "label": "logs", "style": "dotted" }
+  ]
+}

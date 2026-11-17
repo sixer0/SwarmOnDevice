@@ -18,6 +18,10 @@
  * Swarm 1.2.7 row 37 (N-6/F-6, N7-069): one Norms line names GEOM_T03_CODES and where ENTRY_COLLISION fires
  * (ENTRY_COLLISION_MM). Other lines were shortened to keep the resource under 3000 B (the pin is not moved).
  *
+ * Swarm 1.3.3 row 35 (ST-1): the T-03 line no longer prints the bare name ENTRY_COLLISION (no engine code has it; the code is
+ * GEOM_ENTRY_COLLISION, already in GEOM_T03_CODES). Rows 25/26 added width, offpage ref and tiers (one line); other lines were
+ * shortened to hold the 3000 B pin (a test pin only: not in the register, no transport cap found).
+ *
  * Swarm 1.2.8 row 52 (VIS-0b, F-VISIO 01f §8, C12 OP-18-1, register N8-474): the field lines print the fields that
  * existed before 1.2.8 and point to studio://skema/diagram-visio (diagramVisioGuideText), the generated catalogue of the
  * 1.2.8 fields (DIAGRAM_VISIO_FIELDS), shape sets and connector style; both stay under 3000 B (the pins are not moved).
@@ -96,8 +100,6 @@ export const DIAGRAM_GUIDE_EXAMPLE = {
   source: { text: "SUMBER: data proyek." },
   spec: {
     family: "flow",
-    // Row 58 (AC-VIS10): without it the preview lists P1-labels_verified (draft) among figure.defects.
-    labels_verified: true,
     nodes: [
       { id: "a", label: "Sensor R1-R2", class: {} },
       { id: "b", label: "Gerbang Data A", class: {} },
@@ -128,24 +130,25 @@ export function diagramGuideText(): string {
     `- node.class (may be {}; placement, not on node): ${req(f.classFields, [])}.`,
     `- edge: ${req(f.edgeFields, f.edgeRequired)}. kind: ${f.edgeKinds.join(", ")}.`,
     `- zone: ${req(f.zoneFields, f.zoneRequired)} (members = node ids). legend, notes, sources: string arrays.`,
-    `- Visio shape sets and connector fields: ${DIAGRAM_VISIO_GUIDE_URI}.`,
-    `- direction (flow only): "TB" or "LR"; ranks nodes by the edges, parallel branches side by side. Rank max: TB ${flowTbMaxPerRank(128, lx)} @128 mm, ${flowTbMaxPerRank(166, lx)} @166 mm; LR ${FLOW_LR_MAX_PARALLEL}. LR max ${flowLrMaxRanks(128, lx)} ranks @128 mm, ${flowLrMaxRanks(166, lx)} @166 mm. Without it: list order (per_row), FLOW_SERIALISED if branches serialise.`,
+    `- Visio fields, shapes: ${DIAGRAM_VISIO_GUIDE_URI}.`,
+    "- width text|full; offpage ref {figure: block id, key}; tiers [{tier,label}] for layered, topology.",
+    `- direction (flow only): "TB" or "LR"; ranks by edges, parallel branches side by side. Rank max: TB ${flowTbMaxPerRank(128, lx)} @128 mm, ${flowTbMaxPerRank(166, lx)} @166 mm; LR ${FLOW_LR_MAX_PARALLEL}. LR max ${flowLrMaxRanks(128, lx)} ranks @128 mm, ${flowLrMaxRanks(166, lx)} @166 mm. Without it: list order (per_row), FLOW_SERIALISED if branches serialise.`,
     "",
     "Norms:",
     "- Figure gate: machine gate = the inline preview (the standalone preview is not the gate); a figure is done only after the machine gate AND an eye check of the rendered PNG.",
     `- Defects (figure.defects: any FAIL, GEOM_*, ${defectCodes.join(", ")}) must reach zero; notices are information.`,
-    `- Caption: Studio prints the label; the caption never starts with it; at most ${CAPTION_GUIDE_MAX_CHARS} characters.`,
-    "- Labels: edge label at most ~20 characters, node label at most ~40; a second detail goes in `sub`.",
+    `- Caption: Studio prints the label, so never start with it; at most ${CAPTION_GUIDE_MAX_CHARS} characters.`,
+    "- Labels: edge fits its line (LABEL_* say how long), node ~40; more in `sub`.",
     "- One accent per drawing.",
-    // Row 35c (1.2.8, H-T06, N8-212): the spec check DATUM-25L enforces it (DATUM-25 counts colours).
-    `- Edge kinds max ${LIMITS.max_line_styles}, ${LIMITS.max_line_styles_with_mark} if a node has a mark (DATUM-25L).`,
-    `- \`col: 0\` is valid; Studio keeps a ${GRAPH_EDGE_INSET_MM} mm inset from the sheet edge.`,
-    `- Fan-out of ${FANOUT_SPLIT_MIN} or more edges is sub-ranked by Studio; over a rank max, split it.`,
+    // Row 35c (1.2.8, H-T06, N8-212), row 37 (1.3.3, row 57 rule): DATUM-25 counts fill and accent colours only; DATUM-25L the line styles.
+    `- Edge kinds max ${LIMITS.max_line_styles}, by pattern; DATUM-25 counts fill and accent colours only (DATUM-25L).`,
+    `- \`col: 0\` is valid; Studio keeps a ${GRAPH_EDGE_INSET_MM} mm sheet-edge inset.`,
+    `- Fan-out of ${FANOUT_SPLIT_MIN}+ edges is sub-ranked; over a rank max, split it.`,
     "- Preview a shape before promising it.",
-    "- A/B: randomise which side each version is on before a judge sees them.",
-    "- After every revision read FIGURE_GRAPH_DELTA; fix any unplanned change.",
+    "- A/B: randomise sides before a judge sees them.",
+    "- Read FIGURE_GRAPH_DELTA after each revision; fix unplanned changes.",
     // Row 37 (1.2.7, N-6/F-6, N7-069): the T-03 codes and when ENTRY_COLLISION fires (row 35f: also two glued ends on one slot); shortened for the 3000 B budget.
-    `- T-03: ${GEOM_T03_CODES.join(", ")}; ENTRY_COLLISION when glued ends share a slot: move one or let router pick (ends at least ${ENTRY_COLLISION_MM} mm apart).`,
+    `- T-03: ${GEOM_T03_CODES.join(", ")}; the first: glued ends share a slot; move one or let the router pick (at least ${ENTRY_COLLISION_MM} mm apart).`,
     "",
     "Example:",
     "```json",
@@ -235,7 +238,7 @@ export function diagramVisioGuideText(): string {
     "Rules:",
     `- via: lattice points {col,row} from the preview's figure.lattice; families flow without direction, graph, swimlane (P3-via-family); not with curved (P1-edge-style); max ${LIMITS.max_via} (P1-via).`,
     "- A slot needs from_side/to_side; an arrow size needs an arrow type (P1-edge-style).",
-    `- Line styles (kind + dash + weight) at most ${LIMITS.max_line_styles}, ${LIMITS.max_line_styles_with_mark} when a node has a mark (DATUM-25L).`,
+    `- Line styles (kind + dash + weight) at most ${LIMITS.max_line_styles}, told apart by pattern; two with the same pattern, colour and weight are refused (DATUM-25L).`,
     "- label_at fixes the label: a collision is a defect, never moved. Curved and diagonal lines get no jumps.",
     "- Event and gateway labels sit below the shape; other labels inside.",
     "- BPMN: sequence flow = kind data; message flow = kind control + arrow_start circle + arrow_end open; association = kind sync + arrow_end none. A sequence flow leaving its pool is a warning (POOL_FLOW_CROSSES).",

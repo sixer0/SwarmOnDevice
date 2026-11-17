@@ -321,7 +321,10 @@ describe("55g G3-21: a vertical-pool refusal's capacity line shows a max below t
     expect(d.measured).toBe(4)
     expect(d.limit).toBeLessThan(d.measured)
     expect(maks).toBeLessThan(d.measured)
-    expect(String(e!.message)).toContain("pakai 166 mm")
+    // Swarm 1.3.3 row 34: was "pakai 166 mm"; 166 mm holds 3 of these 4 columns (a real render at 166 mm is refused),
+    // so the message now states both numbers and does not offer the full width.
+    expect(String(e!.message)).toContain('muat 2 kolom lajur pada 128 mm, 3 pada 166 mm; width "full" tidak cukup: pecah menjadi 2 diagram')
+    expect(String(e!.message)).not.toContain("pakai 166 mm")
   })
   test("four vertical pools, one lane each (L1..L4): no longer 'memuat 1, maks 2' next to a refusal", async () => {
     const e = await refusal(distinctLanes())

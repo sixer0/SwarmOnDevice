@@ -27,7 +27,7 @@ import {
 } from "./geometry";
 import { diagramFitCapacity } from "../fit/state";
 import type { SheetEdgeInset } from "../core/sheet";
-import { contiguousCols, layoutGraphCapacity } from "./graphcap";
+import { contiguousCols, graphCapacityNodeWidth, layoutGraphCapacity } from "./graphcap";
 
 /** Padanan `sheet.rowpack` Python (hanya diisi bila ada tumpuan basal). */
 export interface GraphRowpack {
@@ -318,6 +318,27 @@ export function layoutGraphDetail(s: StudioDiagramV1, sheet: DiagramSheet): Grap
     cols.length > 1 &&
     [...maxw.values()].every((w) => w <= L.W + 1e-6) &&
     cols.every((c) => c * L.x * 4 < L.W - 1e-6);
+  // Swarm 1.3.3 row 33 (ST-1 item 2, B-02): capacity runs BEFORE plain placement when a plain anchor
+  // lands exactly on the right edge. The plain path anchors column c at c x 4 lattice columns, so the
+  // fourth column of a 128 mm graph sat at 3 x 42.667 = 128.000 mm with width 0
+  // (`simpul .. keluar lebar lembar (128.000..128.000 dari 128.0 mm)`), although `graphMaxCols` says
+  // four columns fit. With contiguous columns and a compacted pitch that fits, the capacity layout
+  // is now the first placement (so `placeDiagram` and `estimate` agree with the capacity number, and
+  // the figure is an ordinary one for the auto-fit that follows). Kept on the old path, with their
+  // refusals and the capacity retry of `build/capacity.ts`: an anchor BEYOND the sheet (five columns
+  // at 166 mm: 170.667 mm), columns with a gap, more columns than the compacted pitch holds, and a
+  // column wider than the sheet (DATUM-32).
+  const anchors = cols.map((c) => c * L.x * 4);
+  const onEdge = anchors.some((a) => Math.abs(a - L.W) <= 1e-6) && anchors.every((a) => a <= L.W + 1e-6);
+  if (
+    onEdge &&
+    cols.length > 1 &&
+    contiguousCols(cols) &&
+    [...maxw.values()].every((w) => w <= L.W + 1e-6) &&
+    graphCapacityNodeWidth(cols.length, L) > 0
+  ) {
+    return { result: layoutGraphCapacity(s, L, GRAPH_NODE_PAD_UNITS, GRAPH_ROW_GAP_BASELINES), adaptive: true };
+  }
   let pos: ColPos;
   let rowpack: GraphRowpack | undefined;
   if (adaptive) {

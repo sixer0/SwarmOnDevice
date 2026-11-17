@@ -74,7 +74,9 @@ describe("FX-10 F7 / C19b: label limits follow the engine hints", () => {
   })
 
   test("diagram resource quotes them; 18 / 32 are gone", () => {
-    expect(count(DIAGRAM, `edge label at most ~${[...edge][0]} characters, node label at most ~${[...node][0]}; a second detail goes in \`sub\``)).toBe(1)
+    // Swarm 1.3.3 rows 37/44: the edge limit is the room of its own connector (the LABEL_* notes name the character count), so the
+    // resource no longer quotes a fixed edge number; the node number still follows the engine hint.
+    expect(count(DIAGRAM, `edge fits its line (LABEL_* say how long), node ~${[...node][0]}; more in \`sub\``)).toBe(1)
     expect(DIAGRAM).not.toMatch(/at most 18\b|at most 32\b/)
   })
 })
