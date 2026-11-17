@@ -8,6 +8,9 @@ import path from "node:path"
 import type { AutonomyTable } from "../../src/permission/autonomy-table"
 
 const PERMISSION = path.join(import.meta.dir, "../../src/permission")
+// 1.3.3 row 148: twelve parts. Row 108 added `skill-script.ts`, the routine kind `skill-script` (register section 9) that
+// `routine.ts` calls: it is autonomy-table code by design, so it lives in the parts folder. The barrel did not change: it
+// re-exports none of its names (BASE_NAMES below is unchanged), and the barrel assertions are unchanged.
 const PARTS = [
   "types",
   "routine",
@@ -20,6 +23,7 @@ const PARTS = [
   "subagent",
   "destroys",
   "consent",
+  "skill-script",
 ]
 
 // Captured at BASE e1f9673772. The module and the self re-exported `AutonomyTable` namespace carry the same names.
@@ -93,7 +97,7 @@ describe("R-1 AC-R1: the autonomy table split keeps its exports", () => {
       expect((mod.AutonomyTable as Record<string, unknown>)[name]).toBe((mod as Record<string, unknown>)[name])
   })
 
-  test("the code lives in the eleven autonomy-parts files and the table is a barrel", () => {
+  test("the code lives in the twelve autonomy-parts files and the table is a barrel", () => {
     for (const part of PARTS) expect(fs.existsSync(path.join(PERMISSION, "autonomy-parts", part + ".ts"))).toBe(true)
     expect(fs.readdirSync(path.join(PERMISSION, "autonomy-parts")).sort()).toEqual(PARTS.map((p) => p + ".ts").sort())
     const barrel = fs.readFileSync(path.join(PERMISSION, "autonomy-table.ts"), "utf8")
