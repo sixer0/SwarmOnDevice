@@ -113,6 +113,14 @@ describe("remove", () => {
     expectUserDomainOnly(runner.calls)
   })
 
+  test("F-SG2-3: remove-trusted-cert gets the password-dialog bound; delete-certificate keeps the short one", async () => {
+    const runner = fakeRunner({})
+    await createKeychain({ run: runner.run, log: recordingLog().log, home }).remove({ caCertPath: caCert, sha1 })
+    expect(runner.calls[0]!.args[0]).toBe("remove-trusted-cert")
+    expect(runner.calls[0]!.options.timeoutMs).toBe(TRUST_TIMEOUT_MS)
+    expect(runner.calls[1]!.options.timeoutMs).toBeLessThan(TRUST_TIMEOUT_MS)
+  })
+
   test("delete is still attempted when untrust fails; 'item not found' (44) counts as deleted", async () => {
     const runner = fakeRunner({ "remove-trusted-cert": 1, "delete-certificate": 44 })
     const result = await createKeychain({ run: runner.run, log: recordingLog().log, home }).remove({ caCertPath: caCert, sha1 })

@@ -12,7 +12,10 @@ import { SECURITY_BIN, deleteCertificateArgv, removeTrustArgv, trustArgv, verify
 import type { OfficeLogSink } from "./key-custody"
 import type { PatchRunResult, PatchRunner } from "../patch-common"
 
-/** `add-trusted-cert` may wait on a macOS login-password dialog (U-2); give the user time. */
+/**
+ * `add-trusted-cert` and `remove-trusted-cert` may wait on a macOS login-password dialog (U-2); give the user time.
+ * F-SG2-3: the removal used the 30 s bound and timed out while the user was still typing the password.
+ */
 /** @internal test seam */
 export const TRUST_TIMEOUT_MS = 180_000
 const SECURITY_TIMEOUT_MS = 30_000
@@ -83,7 +86,7 @@ export function createKeychain(input: { run: PatchRunner; log: OfficeLogSink; ho
     async remove(removal) {
       // Built first: a malformed SHA-1 throws here, before any keychain change.
       const deleteArgv = deleteCertificateArgv(removal.sha1, home)
-      const untrust = await exec(removeTrustArgv(removal.caCertPath), SECURITY_TIMEOUT_MS)
+      const untrust = await exec(removeTrustArgv(removal.caCertPath), TRUST_TIMEOUT_MS)
       const deleted = await exec(deleteArgv, SECURITY_TIMEOUT_MS)
       const result = {
         trustRemoved: untrust.code === 0,
