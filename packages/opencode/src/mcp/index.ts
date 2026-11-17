@@ -39,7 +39,7 @@ import { McpCatalog } from "./catalog"
 import { DATUM_STUDIO_MCP, DatumStudioMcp } from "./datum-studio"
 import { McpEvent } from "@opencode-ai/schema/mcp-event"
 import { McpBrowser } from "./browser"
-import { GRAFT_MCP_NAME, planGraftBuild, runGraftBuild } from "./graft-build"
+import { GRAFT_BUILD_TIMEOUT_MS, GRAFT_MCP_NAME, planGraftBuild, recordGraftBuildFailure, runGraftBuild } from "./graft-build"
 
 const DEFAULT_TIMEOUT = 30_000
 
@@ -307,6 +307,8 @@ interface State {
   reconnects: Record<string, number>
   /** M-02: the reconnect in flight, which a pending call waits for before its one retry. */
   reconnecting: Record<string, Promise<MCPClient | undefined> | undefined>
+  /** U20 / M12 CR-1: aborts a background graft build when the instance closes. */
+  builds: AbortController
 }
 
 export interface ServerInstructions {
@@ -514,11 +516,9 @@ const layer = Layer.effect(
       }
     })
 
-    const connectLocal = Effect.fn("MCP.connectLocal")(function* (
-      key: string,
-      mcp: ConfigMCPV1.Info & { type: "local" },
-    ) {
-      const [cmd, ...args] = mcp.command
+    /** Working directory and environment of a local MCP child (also used by the U20 graft build). */
+    const localSpawn = Effect.fnUntraced(function* (mcp: ConfigMCPV1.Info & { type: "local" }) {
+      const [cmd] = mcp.command
       const baseDir = yield* InstanceState.directory
       const cwd = mcp.cwd ? path.resolve(baseDir, mcp.cwd) : baseDir
       // Holding the password is a way to answer what autonomous mode holds, so a server's own config cannot ask for it.
@@ -530,22 +530,64 @@ const layer = Layer.effect(
         ...(cmd === "swarm" ? { BUN_BE_BUN: "1" } : {}),
         ...mcp.environment,
       })
+      return { cwd, env }
+    })
 
-      // U20: graft lists no tools without a graph, and this connection keeps its first list; build one first.
+    /**
+     * U20: graft lists no tools without a graph, and a connection keeps its first list. For a project with no graph the
+     * graph is built in the background after graft connected, then graft is connected again and ToolsChanged is
+     * published (M12 CR-1: no server's tools wait on the build). A failed build is remembered per folder.
+     */
+    const buildGraftGraph = Effect.fnUntraced(function* (
+      s: State,
+      key: string,
+      mcp: ConfigMCPV1.Info & { type: "local" },
+      bridge: EffectBridge.Shape,
+    ) {
+      const { cwd, env } = yield* localSpawn(mcp)
       const plan = planGraftBuild({ name: key, command: mcp.command, cwd, env })
-      if (plan.run) {
-        yield* Effect.logInfo("graft graph build starting", { server: key })
-        const built = yield* Effect.promise(() => runGraftBuild(plan.argv, cwd, env))
-        if (built.ok) yield* Effect.logInfo("graft graph build done", { server: key, durationMs: built.ms })
-        else
-          yield* Effect.logWarning("graft graph build failed; connecting without a graph", {
-            server: key,
-            durationMs: built.ms,
-            reason: logText(built.reason, LOG_TEXT_MAX_BYTES),
-          })
-      } else if (key === GRAFT_MCP_NAME) {
-        yield* Effect.logDebug("graft graph build skipped", { server: key, reason: plan.reason })
+      if (!plan.run) {
+        if (key === GRAFT_MCP_NAME) yield* Effect.logDebug("graft graph build skipped", { server: key, reason: plan.reason })
+        return
       }
+      const signal = s.builds.signal
+      bridge.fork(
+        Effect.gen(function* () {
+          yield* Effect.logInfo("graft graph build starting", { server: key })
+          const built = yield* Effect.promise(() => runGraftBuild(plan.argv, cwd, env, GRAFT_BUILD_TIMEOUT_MS, signal))
+          if (signal.aborted) return
+          if (!built.ok) {
+            recordGraftBuildFailure(cwd)
+            yield* Effect.logWarning("graft graph build failed; graft stays without a graph", {
+              server: key,
+              durationMs: built.ms,
+              reason: logText(built.reason, LOG_TEXT_MAX_BYTES),
+            })
+            return
+          }
+          yield* Effect.logInfo("graft graph build done; reconnecting graft", { server: key, durationMs: built.ms })
+          const result = yield* create(key, mcp)
+          // A disconnect, disable or removal while the build ran wins over the reconnect.
+          if (signal.aborted || s.status[key]?.status !== "connected") {
+            if (result.mcpClient) yield* Effect.tryPromise(() => result.mcpClient!.close()).pipe(Effect.ignore)
+            return
+          }
+          if (!result.mcpClient) {
+            yield* Effect.logWarning("graft reconnect after the build failed", { server: key })
+            return
+          }
+          yield* storeClient(s, key, result.mcpClient, result.defs!, result.instructions, mcp.timeout)
+          yield* events.publish(ToolsChanged, { server: key }).pipe(Effect.ignore)
+        }).pipe(Effect.ignore),
+      )
+    })
+
+    const connectLocal = Effect.fn("MCP.connectLocal")(function* (
+      key: string,
+      mcp: ConfigMCPV1.Info & { type: "local" },
+    ) {
+      const [cmd, ...args] = mcp.command
+      const { cwd, env } = yield* localSpawn(mcp)
 
       const transport = new StdioClientTransport({
         stderr: "pipe",
@@ -823,6 +865,7 @@ const layer = Layer.effect(
           instructions: {},
           reconnects: {},
           reconnecting: {},
+          builds: new AbortController(),
         }
 
         yield* Effect.forEach(
@@ -847,12 +890,14 @@ const layer = Layer.effect(
                 if (result.instructions) s.instructions[key] = result.instructions
                 watch(s, key, result.mcpClient, bridge, mcp.timeout)
               }
+              if (mcp.type === "local") yield* buildGraftGraph(s, key, mcp, bridge)
             }),
           { concurrency: "unbounded" },
         )
 
         yield* Effect.addFinalizer(() =>
           Effect.gen(function* () {
+            s.builds.abort()
             // F3 (1.3.2): the snapshot is what gets closed, so it is also what gets named. Clearing before closing is
             // what stops a re-entrant onclose from double-deleting (:532 guard), so the line is logged here rather
             // than in onclose, which cannot fire during shutdown.
@@ -963,7 +1008,9 @@ const layer = Layer.effect(
         return result.status
       }
 
-      return yield* storeClient(s, name, result.mcpClient, result.defs!, result.instructions, mcp.timeout)
+      const stored = yield* storeClient(s, name, result.mcpClient, result.defs!, result.instructions, mcp.timeout)
+      if (mcp.type === "local") yield* buildGraftGraph(s, name, mcp, yield* EffectBridge.make())
+      return stored
     })
 
     const add = Effect.fn("MCP.add")(function* (name: string, mcp: ConfigMCPV1.Info) {
