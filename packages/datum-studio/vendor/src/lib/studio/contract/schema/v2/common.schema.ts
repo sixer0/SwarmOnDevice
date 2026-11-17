@@ -89,6 +89,20 @@ const BLOCK_ID = { id: pid } as const;
 const figureText = (def: "InlineV2" | "CaptionV2" | "SourceV2") =>
   ({ ...ref(def), type: "object", properties: { runs: { type: "array", maxItems: B.figureRuns } } }) as const;
 
+/**
+ * Swarm 1.3.3 row 25 (ST-1; register 03 §6): per-figure width of a chart, diagram or image block. `text` = the text
+ * column (128 mm on A4 DATUM), `full` = text + gutter + rail (166 mm); the same two classes as the section template
+ * parameter `<kind>.widthClass` (`figureWidthFromClass`, engine/tokens/grid.ts). A block value wins over the template
+ * parameter; an absent value means the template parameter applies, whose own default is `text`. The name
+ * `widthClass` stays forbidden in blocks (DF-66..DF-70); millimetre fields stay forbidden (DF-21, DF-23).
+ */
+export const FIGURE_WIDTH_VALUES = ["text", "full"] as const;
+export const FIGURE_WIDTH_DEFAULT = "text" as const;
+/** Millimetres of each class on the default A4 DATUM grid (the engine derives the real number from the template grid). */
+export const FIGURE_WIDTH_MM = { text: 128, full: 166 } as const;
+/** `default` is an annotation only: STUDIO_AJV_OPTIONS has no `useDefaults`, so validation never writes the field. */
+const FIGURE_WIDTH_V2 = { width: { enum: [...FIGURE_WIDTH_VALUES], default: FIGURE_WIDTH_DEFAULT } } as const;
+
 /** Medan figur v2 (tanpa ukuran/format): caption, source, keyRow. */
 const FIGURE_V2 = { caption: figureText("CaptionV2"), source: figureText("SourceV2"), keyRow: figureText("InlineV2") } as const;
 
@@ -211,6 +225,9 @@ const DIAGRAM_SPEC_V2 = obj(
     phases: DIAGRAM_V1_PROPS.phases,
     pools: DIAGRAM_V1_PROPS.pools,
     jumps: DIAGRAM_V1_PROPS.jumps,
+    // Swarm 1.3.3 row 26 (ST-5): tier labels, same definition as v1 (node `ref` comes with nodes above). Last, so
+    // the "allowed here" list of a refusal keeps its earlier order (row 178 pins).
+    tiers: DIAGRAM_V1_PROPS.tiers,
   },
   ["family", "nodes"],
 );
@@ -294,10 +311,22 @@ const CHART_DATA_V2 = {
           minItems: 1,
           maxItems: 200,
           items: obj(
-            { label: str, start: { type: ["number", "string"], maxLength: 200 }, end: { type: ["number", "string"], maxLength: 200 }, group: str, milestone: bool },
+            {
+              label: str,
+              start: { type: ["number", "string"], maxLength: 200 },
+              end: { type: ["number", "string"], maxLength: 200 },
+              group: str,
+              milestone: bool,
+              // Swarm 1.3.3 row 25 (ST-2, W-07; register 03 §6): float in axis units; only critical bars take the accent.
+              float: { type: "number", minimum: 0 },
+              critical: bool,
+            },
             ["label", "start", "end"],
           ),
         },
+        // Swarm 1.3.3 row 25 (ST-2): status line position (same kind as start/end) and the printed axis unit.
+        statusAt: { type: ["number", "string"], minLength: 1, maxLength: 200 },
+        timeUnit: { type: "string", minLength: 1, maxLength: 40 },
       },
       ["items"],
     ),
@@ -592,6 +621,7 @@ export const commonV2Schema = {
         // FIG-03a (D-482 butir 2): maksud analitis opsional (konten, bukan tampilan).
         ...CHART_INTENT_V2,
         ...FIGURE_V2,
+        ...FIGURE_WIDTH_V2,
       },
       ["type", "code", "caption", "source"],
       {
@@ -639,6 +669,7 @@ export const commonV2Schema = {
         spec: ref("DiagramSpecV2"),
         artifactId: { type: "string", minLength: 1, maxLength: 64 },
         ...FIGURE_V2,
+        ...FIGURE_WIDTH_V2,
       },
       ["type", "caption", "source"],
       xorRequired("spec", "artifactId"),
@@ -649,6 +680,7 @@ export const commonV2Schema = {
         ...BLOCK_ID,
         asset: { type: "string", maxLength: 71, anyOf: [{ pattern: ASSET_KEY_PATTERN }, { pattern: ASSET_REF_PATTERN }] },
         ...FIGURE_V2,
+        ...FIGURE_WIDTH_V2,
       },
       ["type", "asset", "caption", "source"],
     ),

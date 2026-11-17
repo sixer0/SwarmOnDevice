@@ -9,7 +9,7 @@
  */
 import type { ChartCode, ChartIntentOrientation, ChartIntentSort, DiagramFamily, DiagramJumps, DiagramLaneOrientation, ParagraphRoleV2, ProvenanceMark, SymbolDialect, TableBlockType } from "../../enums";
 import type { ChartLabelShort, ChartVegaOptions, VegaChartKind } from "../chart";
-import type { DiagramContainer, DiagramEdge, DiagramNode, DiagramZone } from "../diagram";
+import type { DiagramContainer, DiagramEdge, DiagramNode, DiagramTierLabel, DiagramZone } from "../diagram";
 import type { DocMeta, RegisterEntry, StudioMissionRef } from "../doc";
 import type {
   AssetInputV2,
@@ -116,6 +116,8 @@ export interface DiagramSpecV2 {
   zones?: DiagramZone[];
   legend?: string[];
   notes?: string[];
+  /** Swarm 1.3.3 row 26 (ST-5): tier labels, layered and topology only (engine, row 56). */
+  tiers?: DiagramTierLabel[];
   per_row?: number;
   /** Swarm 1.2.6 row 45 (T-11, N-109): ranked flow direction, family flow only; absent = legacy list layout. */
   direction?: "TB" | "LR";
@@ -147,7 +149,20 @@ export type ChartDataV2 =
   | { shape: "matrix"; rows: string[]; cols: string[]; values: number[][] }
   | {
       shape: "intervals";
-      items: Array<{ label: string; start: number | string; end: number | string; group?: string; milestone?: boolean }>;
+      /** Swarm 1.3.3 row 25 (ST-2, W-07): `float` >= 0 in axis units; `critical` bars take the accent. */
+      items: Array<{
+        label: string;
+        start: number | string;
+        end: number | string;
+        group?: string;
+        milestone?: boolean;
+        float?: number;
+        critical?: boolean;
+      }>;
+      /** Status line position, same kind (number or date text) as `start`/`end`. */
+      statusAt?: number | string;
+      /** Printed axis unit, 1..40 characters (for example `minggu`). */
+      timeUnit?: string;
     }
   | {
       shape: "graph";
@@ -230,6 +245,11 @@ export interface ChartV2 extends BlockBaseV2 {
   caption: CaptionV2;
   source: SourceV2;
   keyRow?: InlineV2;
+  /**
+   * Swarm 1.3.3 row 25 (ST-1): width of this figure; `text` = text column (128 mm), `full` = full span (166 mm).
+   * Wins over the template parameter `chart.widthClass`; absent = that parameter (default `text`).
+   */
+  width?: FigureWidthV2;
 }
 
 /** T2-26 — tepat satu dari `spec` atau `artifactId`. */
@@ -240,15 +260,28 @@ export interface DiagramV2 extends BlockBaseV2 {
   caption: CaptionV2;
   source: SourceV2;
   keyRow?: InlineV2;
+  /**
+   * Swarm 1.3.3 row 25 (ST-1): width of this figure; `text` = text column (128 mm), `full` = full span (166 mm).
+   * Wins over the template parameter `diagram.widthClass`; absent = that parameter (default `text`).
+   */
+  width?: FigureWidthV2;
 }
 
-/** T2-28 — `asset` = kunci `assets` kiriman (C26) atau rujukan langsung (C27). Lebar dari templat. */
+/** Swarm 1.3.3 row 25 (ST-1; register 03 §6): per-figure width class of a chart, diagram or image block. */
+export type FigureWidthV2 = "text" | "full";
+
+/** T2-28 — `asset` = kunci `assets` kiriman (C26) atau rujukan langsung (C27). Lebar dari templat, kecuali `width`. */
 export interface ImageV2 extends BlockBaseV2 {
   type: "image";
   asset: string;
   caption: CaptionV2;
   source: SourceV2;
   keyRow?: InlineV2;
+  /**
+   * Swarm 1.3.3 row 25 (ST-1): width of this figure; `text` = text column (128 mm), `full` = full span (166 mm).
+   * Wins over the template parameter `image.widthClass`; absent = that parameter (default `text`).
+   */
+  width?: FigureWidthV2;
 }
 
 /** T2-29 — jumlah kolom lembar = parameter `symbol.*` (DF-57). */
