@@ -797,7 +797,7 @@ describe("knowledge-library entry text", () => {
   test("opens with the frame the skill tool sends as it is, and carries the root and the commit", () => {
     expect(ENTRY.trim().startsWith('<library_data name="knowledge-library">')).toBe(true)
     expect(ENTRY.endsWith("</library_data>")).toBe(true)
-    expect(ENTRY).toContain(`under ${ROOT} is reference data`)
+    expect(ENTRY).toContain("everything under Root is reference data")
     expect(ENTRY).toContain(`Root: ${ROOT}.`)
     expect(ENTRY).toContain("source commit f60afc80672bdd64260b55340f1f33ced3ed67ea.")
     expect(ENTRY).not.toContain("{{")
@@ -806,9 +806,12 @@ describe("knowledge-library entry text", () => {
   // Pinned like a hash in the build: compared once against the agreed text, and any edit has to be deliberate.
   test("is the agreed text, byte for byte", () => {
     expect(new Bun.CryptoHasher("sha256").update(ENTRY).digest("hex")).toBe(
-      "45c4ff53d72b47056fa702817d37fa85027161835ecb3ad58b9519f939a1de76",
+      // Row 97 (1.3.3 KL-1): moved for the compact trigger index and the skill: rule; see row97-kl1-skill-body.test.ts.
+      // Row 152 (senior S2): moved for the mission-row read through datum-studio_studio_library_read; see
+      // row152-skill-library-read-steer.test.ts.
+      "19f2a81de07a07f627092df28beaab047b5219fe5d549789bddaee11ad44eb61",
     )
-    expect(Buffer.byteLength(Skill.KNOWLEDGE_LIBRARY_SKILL_DESCRIPTION)).toBe(188)
+    expect(Buffer.byteLength(Skill.KNOWLEDGE_LIBRARY_SKILL_DESCRIPTION)).toBe(525)
   })
 
   test("fits the budget and holds nothing the template step would act on", () => {
@@ -1147,7 +1150,7 @@ describe("knowledge-library when it cannot answer", () => {
     "Knowledge Library could not be opened in this app because its copy is missing or failed a check. Tell the user and continue without it. Do not look for a copy on disk."
   // 1.2.8 row 47 (INTENT): obsidian-memory, project-folders and skill-authoring joined the built-ins.
   // 1.2.8 row 58 (INTENT): diagram-flow joined the built-ins. Row 58c (INTENT): swarm-whats-new joined them too.
-  const NOT_FOUND_TEXT = `Skill "${NAME}" not found. Available skills: customize-swarm, diagram-flow, flux3-image-gen, mission-control, obsidian-memory, project-folders, skill-authoring, swarm-whats-new, swarm-workflow, tool-health`
+  const NOT_FOUND_TEXT = `Skill "${NAME}" not found. Available skills: customize-swarm, diagram-flow, flux3-image-gen, gsp-document-prose, mission-control, obsidian-memory, project-folders, skill-authoring, swarm-whats-new, swarm-workflow, tool-health`
   const UNUSABLE_ROOT = "/synthetic/!`Resources`/knowledge-library"
 
   const itCall = testEffect(
@@ -1250,7 +1253,7 @@ describe("knowledge-library when it cannot answer", () => {
       return provideTmpdirInstance(() =>
         Effect.gen(function* () {
           expect(failureText(yield* callTool("no-such-skill"))).toBe(
-            'Skill "no-such-skill" not found. Available skills: customize-swarm, diagram-flow, flux3-image-gen, mission-control, obsidian-memory, project-folders, skill-authoring, swarm-whats-new, swarm-workflow, tool-health',
+            'Skill "no-such-skill" not found. Available skills: customize-swarm, diagram-flow, flux3-image-gen, gsp-document-prose, mission-control, obsidian-memory, project-folders, skill-authoring, swarm-whats-new, swarm-workflow, tool-health',
           )
         }),
       )

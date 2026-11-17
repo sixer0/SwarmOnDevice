@@ -58,6 +58,10 @@ export type StudioHostStartOptions = {
   signal?: AbortSignal
   /** Row 127: X-Studio-Caller-Cwd of mission control (default `<stateHome>/swarm/datum-studio-mission-control`). */
   missionCallerCwd?: string
+  /** 1.3.3 row 100: the bundled technical library, passed as STUDIO_LIBRARY_ROOT (start.ts `studioLibraryRoot`). */
+  libraryRoot?: string
+  /** 1.3.3 row 100 / C33: built-in skill name -> on-disk root, passed as STUDIO_SKILL_ROOTS (JSON). */
+  skillRoots?: Record<string, string>
 }
 
 export type StudioHostHandle = {
@@ -103,7 +107,7 @@ export const HOST_ENV_ALLOW = [
   "no_proxy",
 ] as const
 
-export function createHostEnv(opts: Pick<StudioHostStartOptions, "baseEnv" | "renderEnv" | "layout" | "storeRoot">) {
+export function createHostEnv(opts: Pick<StudioHostStartOptions, "baseEnv" | "renderEnv" | "layout" | "storeRoot" | "libraryRoot" | "skillRoots">) {
   const env: Record<string, string> = {}
   for (const key of HOST_ENV_ALLOW) {
     const value = opts.baseEnv[key]
@@ -116,6 +120,9 @@ export function createHostEnv(opts: Pick<StudioHostStartOptions, "baseEnv" | "re
   env.STUDIO_ASSETS_ROOT = opts.layout.assetsRoot
   env.STUDIO_WORKSPACE_ROOT = opts.storeRoot
   env.STUDIO_VENDOR_ROOT = opts.layout.vendorRoot
+  // 1.3.3 row 100: only from main's own resolution, never inherited from the shell env.
+  if (opts.libraryRoot) env.STUDIO_LIBRARY_ROOT = opts.libraryRoot
+  if (opts.skillRoots && Object.keys(opts.skillRoots).length > 0) env.STUDIO_SKILL_ROOTS = JSON.stringify(opts.skillRoots)
   return env
 }
 
