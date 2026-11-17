@@ -38,8 +38,9 @@ export type PreviewNotRun = LintNotRun;
  * - `none`: does not look at figures (tables, cover, prose, fonts ...); the render applies it to the document only.
  * Scan and language rules are not in this table: their module is listed once (they read all text of the document).
  */
-export type PreviewRuleScope = "figure" | "document" | "page" | "none";
+type PreviewRuleScope = "figure" | "document" | "page" | "none";
 
+/** @internal test seam */
 export const RULE_SCOPE: Readonly<Record<string, PreviewRuleScope>> = {
   // structure, group A by construction: the checks that walk figures (checks-a.ts `figures` / `diagrams`)
   "DATUM-01": "figure",
@@ -110,6 +111,7 @@ export const RULE_SCOPE: Readonly<Record<string, PreviewRuleScope>> = {
 };
 
 /** Register 03 (preview `notRun`): every reason starts with this text. */
+/** @internal test seam */
 export const PREVIEW_NOT_RUN_PREFIX = OFFPAGE_PREVIEW_NOT_RUN_REASON;
 
 const REASON = {
@@ -122,9 +124,10 @@ const REASON = {
 } as const;
 
 /** Reason of a registry rule the preview has no scope for yet (a rule added after row 65). */
+/** @internal test seam */
 export const UNMAPPED_REASON = `${PREVIEW_NOT_RUN_PREFIX} (aturan registri belum dipetakan ke pratinjau)`;
 
-export interface PreviewParityInput {
+interface PreviewParityInput {
   /** The block previewed (stored content, or the inline block composed by `composeInlineBlock`). */
   block: NormBlock & { pid?: string };
   /** The resolved spec (artefact references read): used for the off-page check. */
@@ -136,7 +139,7 @@ export interface PreviewParityInput {
   snapshot?: AnyNormSnapshot;
 }
 
-export interface PreviewParity {
+interface PreviewParity {
   /** Lint rows of the rules run here that did not pass (FAIL, REPORT, NOT_RUN), in registry order. */
   issues: LintIssue[];
   /** Ids of the rules run here (any outcome). */

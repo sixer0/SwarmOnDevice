@@ -117,20 +117,20 @@ export function nextCall(code: string, tool?: string): string {
 // two legal values. The result is checked again here (`localIssues`) and is returned only when that check is clean.
 
 type Rec = Record<string, unknown>
-export interface LocalIssue {
+interface LocalIssue {
   pointer: string
   keyword: string
   message: string
 }
-export interface CorrectedArgs {
+interface CorrectedArgs {
   arguments: Rec
   changed: string
 }
-export interface RefusalField {
+interface RefusalField {
   field: string
   allowed: string | unknown[]
 }
-export interface Correction {
+interface Correction {
   corrected?: CorrectedArgs
   fields?: RefusalField[]
   /** Replaces the static hint (the running -> done note case: one example call). Without the skill suffix. */
@@ -139,8 +139,8 @@ export interface Correction {
   message?: string
 }
 
-export const CORRECTABLE_CODES: ReadonlySet<string> = new Set(["SCHEMA_INVALID", "STATUS_TRANSITION"])
-export const MAX_REFUSAL_FIELDS = 10
+const CORRECTABLE_CODES: ReadonlySet<string> = new Set(["SCHEMA_INVALID", "STATUS_TRANSITION"])
+const MAX_REFUSAL_FIELDS = 10
 const MAX_CHANGED = 300
 const MAX_CORRECTED_JSON = 24_000
 const NOTE_ALLOWED = "one line, 1-4000 characters: the check you ran and its result"
@@ -197,6 +197,7 @@ const typeFilled = (i: LocalIssue) => i.keyword === "required" && /'(phase|kind)
  * state (a row is added pending or dropped; one row is not moved to the same status twice in one call). Empty = the
  * call can only still be refused for the mission's state. The arguments are not changed.
  */
+/** @internal test seam */
 export function localIssues(tool: string, args: Rec): LocalIssue[] {
   const a = structuredClone(args)
   const c = CONTAINER[tool]
@@ -255,7 +256,7 @@ function distance(a: string, b: string): number {
 }
 const fold = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "")
 /** The one legal value a wrong spelling stands for: equal without case and separators, else one value within two edits (and under half its length). */
-export function nearestLegal(value: unknown, legal: readonly string[]): string | undefined {
+function nearestLegal(value: unknown, legal: readonly string[]): string | undefined {
   if (typeof value !== "string" || value.length === 0) return undefined
   const equal = legal.filter((l) => fold(l) === fold(value))
   if (equal.length > 0) return equal.length === 1 ? equal[0] : undefined

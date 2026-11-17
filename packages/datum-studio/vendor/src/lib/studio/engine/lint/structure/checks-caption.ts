@@ -27,7 +27,7 @@ import { findings, type CheckOutcome, type Finding, type StructCtx } from "./con
 import { isTableType, tableText, textOf, type WalkItem } from "./walk";
 import type { TableBlock } from "../../../contract";
 
-export const CAPTION_EVIDENCE_ID = "D23";
+const CAPTION_EVIDENCE_ID = "D23";
 
 // ── Normalisation ──────────────────────────────────────────────────────────
 
@@ -46,6 +46,7 @@ function norm(s: string): string {
 const NUMBER_RE = new RegExp(`\\d{1,3}(?:${SPACE_IN_NUMBER}\\d{3})+(?:[.,]\\d+)?|\\d+(?:[.,]\\d+)*`, "gu");
 
 /** Every reading of a written number: decimal comma or decimal point, dot or comma as thousands separator. */
+/** @internal test seam */
 export function numberReadings(raw: string): number[] {
   const s = raw.replace(new RegExp(SPACE_IN_NUMBER, "g"), "");
   const out = new Set<number>();
@@ -84,7 +85,7 @@ interface NumberHit {
 }
 
 /** Numbers of a text that stand alone (not inside a code such as "SW-01", "L2", "25G", "SHA-256"). */
-export function standaloneNumbers(text: string): NumberHit[] {
+function standaloneNumbers(text: string): NumberHit[] {
   const out: NumberHit[] = [];
   for (const m of text.matchAll(NUMBER_RE)) {
     const start = m.index ?? 0;
@@ -109,10 +110,10 @@ export function standaloneNumbers(text: string): NumberHit[] {
 
 // ── Counts ─────────────────────────────────────────────────────────────────
 
-export type CountKind = "task" | "milestone" | "zone" | "container" | "lane" | "phase" | "pool";
+type CountKind = "task" | "milestone" | "zone" | "container" | "lane" | "phase" | "pool";
 
 /** Element words whose count can be taken from a spec without interpretation (implementation/86, section 3). */
-export const COUNT_WORDS: Readonly<Record<string, CountKind>> = {
+const COUNT_WORDS: Readonly<Record<string, CountKind>> = {
   tugas: "task",
   task: "task",
   tasks: "task",
@@ -163,7 +164,7 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 /** Count of one element kind in a spec, or undefined when the spec has no such kind at all. */
-export function countOf(spec: unknown, kind: CountKind): number | undefined {
+function countOf(spec: unknown, kind: CountKind): number | undefined {
   if (!isObj(spec)) return undefined;
   const data = isObj(spec.data) ? spec.data : undefined;
   const items = data && data.shape === "intervals" ? arr(data.items).filter(isObj) : [];
@@ -201,14 +202,14 @@ const LAYOUT_NUMBER_KEYS: ReadonlySet<string> = new Set([
   "widthMm", "heightMm", "width_mm", "height_mm", "dec", "col", "row", "tier", "per_row", "u", "span", "order",
 ]);
 
-export interface FigureEvidence {
+interface FigureEvidence {
   /** Normalised printed text, one string. */
   text: string;
   /** Numeric data values (values, starts, ends, floats, status) of the spec. */
   values: number[];
 }
 
-export function figureEvidence(spec: unknown, extraTexts: readonly string[] = []): FigureEvidence {
+function figureEvidence(spec: unknown, extraTexts: readonly string[] = []): FigureEvidence {
   const texts: string[] = [...extraTexts];
   const values: number[] = [];
   const walk = (v: unknown, key: string, depth: number): void => {
@@ -227,7 +228,7 @@ export function figureEvidence(spec: unknown, extraTexts: readonly string[] = []
 
 // ── Claims ─────────────────────────────────────────────────────────────────
 
-export type CaptionClaim =
+type CaptionClaim =
   | { kind: "number"; text: string; values: number[] }
   | { kind: "count"; text: string; n: number; element: CountKind; values: number[] }
   | { kind: "name"; text: string };
@@ -243,6 +244,7 @@ function apparatusSpans(text: string): Array<[number, number]> {
 }
 
 /** The checkable claims of a caption, in reading order, without duplicates. */
+/** @internal test seam */
 export function captionClaims(caption: string): CaptionClaim[] {
   const text = caption.normalize("NFKC").replace(/[‐-―−]/g, "-");
   const skip = apparatusSpans(text);
@@ -315,7 +317,7 @@ const hasToken = (hay: string, needle: string): boolean => {
 const valueFound = (values: readonly number[], pool: readonly number[]): boolean =>
   values.some((v) => pool.some((p) => Math.abs(p - v) < 1e-9));
 
-export interface ClaimResult {
+interface ClaimResult {
   claim: CaptionClaim;
   found: boolean;
   /** How it was found or why not, for the test record. */
@@ -323,6 +325,7 @@ export interface ClaimResult {
 }
 
 /** Judge every claim of a caption against the figure (spec + key row) and the table directly below. */
+/** @internal test seam */
 export function judgeCaption(caption: string, spec: unknown, keyRow = "", tableBelow = ""): ClaimResult[] {
   const ev = figureEvidence(spec, keyRow ? [keyRow] : []);
   const tbl = norm(tableBelow);

@@ -18,17 +18,18 @@
 import fs from "node:fs"
 import path from "node:path"
 
+/** @internal test seam */
 export const TRIGGER_INDEX_FILE = "indeks_pemicu.json"
 
 /** Prefix of a first file that lives in the built-in skills folder, not in the library (row 95, DIAGRAM-STANDARD). */
-export const SKILL_FILE_PREFIX = "skill:"
+const SKILL_FILE_PREFIX = "skill:"
 
 export type TriggerIndex = {
   domains: Array<{ domain: string; terms: string[]; firstFile: string | undefined }>
   weak: Set<string>
 }
 
-export type KnowledgeHit = { domain: string; firstFile: string; words: string[] }
+type KnowledgeHit = { domain: string; firstFile: string; words: string[] }
 
 export type KnowledgeMatch = { domains: KnowledgeHit[]; reason?: string }
 
@@ -36,6 +37,7 @@ export type KnowledgeMatch = { domains: KnowledgeHit[]; reason?: string }
  * Match a mission or row text (row 101 joins title and description with one space) against the index file.
  * `indexPath` comes from `resolveTriggerIndexPath`; undefined means the host has no library.
  */
+/** @internal test seam */
 export function matchKnowledgeFromFile(text: string, indexPath: string | undefined): KnowledgeMatch {
   if (!indexPath) return { domains: [], reason: "index path not known" }
   const loaded = loadTriggerIndex(indexPath)
@@ -56,6 +58,7 @@ export function matchKnowledge(text: string, index: TriggerIndex): KnowledgeHit[
 }
 
 /** `" " + re.sub(r"[^0-9a-zà-ÿ/+\-]+", " ", text.lower()) + " "` from build_kl_index.match. */
+/** @internal test seam */
 export function normaliseForMatch(text: string) {
   return " " + text.toLowerCase().replace(/[^0-9a-zà-ÿ/+\-]+/gu, " ") + " "
 }
@@ -96,17 +99,19 @@ export function loadTriggerIndex(indexPath: string): { index?: TriggerIndex; rea
 }
 
 /** The edition name of the trigger index (spec KL-1); the builder's name is TRIGGER_INDEX_FILE. */
-export const TRIGGER_INDEX_EDITION_FILE = "INDEKS-PEMICU.json"
+const TRIGGER_INDEX_EDITION_FILE = "INDEKS-PEMICU.json"
 /** File names looked for in each folder, in order. */
-export const TRIGGER_INDEX_NAMES: readonly string[] = [TRIGGER_INDEX_FILE, TRIGGER_INDEX_EDITION_FILE]
+const TRIGGER_INDEX_NAMES: readonly string[] = [TRIGGER_INDEX_FILE, TRIGGER_INDEX_EDITION_FILE]
 /** The indexed text layer inside the library folder (`root_relative` of the index builder; paths of `read_order`). */
 export const LIBRARY_INDEX_BASE = "4 Knowledge Bank/ekas-lapis-teks"
 /** Folders under the library root looked in, in order ("" = the root itself). */
-export const TRIGGER_INDEX_FOLDERS: readonly string[] = ["", "knowledge-library-index", LIBRARY_INDEX_BASE]
+const TRIGGER_INDEX_FOLDERS: readonly string[] = ["", "knowledge-library-index", LIBRARY_INDEX_BASE]
 /** A larger index file is skipped (the real one is about 60 KB). */
+/** @internal test seam */
 export const TRIGGER_INDEX_MAX_BYTES = 2_097_152
 
 /** The search list above, in order. */
+/** @internal test seam */
 export function triggerIndexCandidates(input: { libraryRoot?: string | null; explicitPath?: string }) {
   const root = input.libraryRoot
   return [
@@ -177,6 +182,7 @@ function parseDoc(file: string): DocResult {
 }
 
 /** A first file is relative to the library root, or with `skill:` relative to the built-in skills folder. */
+/** @internal test seam */
 export function firstFileLocation(firstFile: string) {
   if (firstFile.startsWith(SKILL_FILE_PREFIX)) return { base: "skill" as const, path: firstFile.slice(SKILL_FILE_PREFIX.length) }
   return { base: "library" as const, path: firstFile }

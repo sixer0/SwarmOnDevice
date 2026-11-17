@@ -15,7 +15,7 @@ import { argIssues, closestBranchErrors } from "../../vendor/scripts/studio/mcp/
 import { loadConfig } from "../../vendor/scripts/studio/mcp/config"
 import { McpToolError, REAL_NODE_FS } from "../../vendor/scripts/studio/mcp/safety"
 import { executeTool, TOOLS } from "../../vendor/scripts/studio/mcp/tools"
-import { buildClient, chapterOf, chartBlock, chartCodeOf, diagramBlock } from "../../vendor/scripts/studio/mcp/write-client"
+import { buildClient, chapterOf, chartBlock, chartCodeOf } from "../../vendor/scripts/studio/mcp/write-client"
 import { applyClientEdits } from "../../vendor/scripts/studio/mcp/write-client-edit"
 import { CHART_INTERVALS_INPUT_KEYS, NON_NEGATIVE_CHART_CODES, negativeChartValues } from "../../vendor/scripts/studio/mcp/write-figure-input"
 import { CHART_KEYS, normalizeEditArgs, normalizeWriteArgs } from "../../vendor/scripts/studio/mcp/write-normalize"
@@ -71,6 +71,11 @@ function storedDoc(chart: S = CHART, diagram: S = DIAGRAM) {
   const content: S = { meta: {}, sections: { content: { chapters: [ch] } } }
   const blocks = ch.intro as S[]
   return { content, chart: blocks.find((b) => b.type === "chart") as S, diagram: blocks.find((b) => b.type === "diagram") as S }
+}
+/** Row 169: the diagram block studio_write builds from one `{diagram}` input (diagramBlock is file-local, AC-A03.61). */
+function writtenDiagram(diagram: S, issue?: (i: S) => void): S {
+  const ch = chapterOf({ heading: "", blocks: [{ diagram }] } as never, "", "", null, () => undefined, "x", issue as never) as S | null
+  return ch?.intro?.[0] ?? {}
 }
 const apply = (content: S, edits: S[]) => applyClientEdits(content, edits as never, () => undefined)
 
@@ -193,7 +198,7 @@ describe("row 77 PARITY: studio_edit takes the figure blocks of studio_write", (
     expect(d.diagram.width).toBe("text")
     expect(d.diagram.caption).toEqual({ text: "Alur sintetis." })
     // the same block studio_write would build from the merged input
-    expect(d.diagram).toEqual(diagramBlock({ ...DIAGRAM, spec: spec2, width: "text" } as never, null, () => undefined, "x"))
+    expect(d.diagram).toEqual(writtenDiagram({ ...DIAGRAM, spec: spec2, width: "text" }))
   })
 
   test("{figure, diagram} with a spec studio_write refuses is refused with the same validator text; nothing changed", () => {
@@ -202,7 +207,7 @@ describe("row 77 PARITY: studio_edit takes the figure blocks of studio_write", (
     const bad = { spec: { family: "flow", nodes: "bukan larik" } }
     const viaEdit = refusal(() => apply(d.content, [{ figure: "Alur sintetis", diagram: bad }]))
     const viaWrite: S[] = []
-    diagramBlock({ ...DIAGRAM, ...bad } as never, null, () => undefined, "x", (i) => viaWrite.push(i))
+    writtenDiagram({ ...DIAGRAM, ...bad }, (i) => viaWrite.push(i))
     expect(viaEdit.code).toBe("SCHEMA_INVALID")
     expect(viaWrite).toHaveLength(1)
     expect(viaEdit.message).toContain(viaWrite[0].message)

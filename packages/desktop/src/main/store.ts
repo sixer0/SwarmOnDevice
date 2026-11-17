@@ -19,6 +19,7 @@ const cache = new Map<string, Store>()
 // SIGVTALRM, SIGUSR2) stay, as does its `exit` listener, which is what removes atomically's leftover temp files on
 // every normal quit. What is given up: that temp-file sweep when the process dies of one of the signals below. The
 // settings file itself is safe either way (write to a temp file, then rename).
+/** @internal test seam */
 export const CRASH_SIGNALS = ["SIGTRAP", "SIGABRT", "SIGIOT", "SIGSYS", "SIGQUIT", "SIGXCPU", "SIGXFSZ"] as const
 
 type SignalTarget = {
@@ -26,7 +27,7 @@ type SignalTarget = {
   removeListener(signal: string, listener: (...args: any[]) => void): unknown
 }
 
-export type CrashSignalListenerReport = {
+type CrashSignalListenerReport = {
   removed: Record<string, number>
   /** Dependency listeners still present on a crash signal after the pass (0 when the change holds). */
   remaining: number
@@ -38,6 +39,7 @@ export type CrashSignalListenerReport = {
 // when-exit's hook, `() => this.exit(<name>)`, and (b) a listener of that same source sits on every crash signal,
 // which is the footprint of the import-time hook. Anything else on these signals is left alone. Self-contained on
 // purpose (no reference outside its arguments): the test runs this exact function in a plain Node process.
+/** @internal test seam */
 export function removeDependencyCrashSignalListeners(
   target: SignalTarget = process,
   signals: readonly string[] = CRASH_SIGNALS,

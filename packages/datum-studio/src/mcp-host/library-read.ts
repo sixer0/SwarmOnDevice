@@ -51,8 +51,9 @@ import { LIBRARY_INDEX_BASE, libraryRootOf, readTriggerIndexDoc, resolveTriggerI
 export { LIBRARY_INDEX_BASE, libraryRootOf }
 
 type Rec = Record<string, unknown>
-export type LibraryReadLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Rec) => void
+type LibraryReadLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Rec) => void
 
+/** @internal test seam */
 export const LIBRARY_READ_TOOL = "studio_library_read"
 /**
  * Row 151 (S2): the name the agent calls the tool by. Swarm lists Studio host tools as `datum-studio_<tool>`
@@ -61,14 +62,16 @@ export const LIBRARY_READ_TOOL = "studio_library_read"
  */
 export const LIBRARY_READ_CALL_NAME = `datum-studio_${LIBRARY_READ_TOOL}`
 /** Bytes of file text in one reply. */
+/** @internal test seam */
 export const LIBRARY_PAGE_BYTES = 65_536
 /** Larger files are refused (the bundled edition's largest text file is under 64 KiB, MANIFEST.csv aside). */
+/** @internal test seam */
 export const LIBRARY_FILE_MAX_BYTES = 4_194_304
-export const LIBRARY_TEXT_EXT: ReadonlySet<string> = new Set([".md", ".markdown", ".txt", ".csv", ".tsv", ".json", ".jsonl", ".yaml", ".yml"])
+const LIBRARY_TEXT_EXT: ReadonlySet<string> = new Set([".md", ".markdown", ".txt", ".csv", ".tsv", ".json", ".jsonl", ".yaml", ".yml"])
 /** Served as path and size, never as text. */
-export const LIBRARY_IMAGE_EXT: ReadonlySet<string> = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"])
+const LIBRARY_IMAGE_EXT: ReadonlySet<string> = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"])
 /** C33: the bundled on-disk skills whose files count as library reads (`skill:<name>/<path>`). */
-export const BUILTIN_SKILL_ROOT_NAMES: readonly string[] = ["gsp-diagram-standard"]
+const BUILTIN_SKILL_ROOT_NAMES: readonly string[] = ["gsp-diagram-standard"]
 const SKILL_PATH_RE = /^skill:([a-z0-9][a-z0-9-]{0,63})\/(.+)$/s
 const SOURCE = "datum-studio-host.library-read"
 const PATH_MAX = 512
@@ -76,7 +79,7 @@ const ID_MAX = 128
 const KEYS: ReadonlySet<string> = new Set(["path", "mission", "row", "cursor"])
 const DOMAIN_RE = /^[A-Z0-9][A-Z0-9-]{0,63}$/
 
-export const LIBRARY_READ_DESCRIPTION =
+const LIBRARY_READ_DESCRIPTION =
   "Read a technical knowledge library file (path as in the trigger index). mission + row of a running row record the read."
 
 const INPUT_SCHEMA: Rec = {
@@ -144,7 +147,7 @@ function validate(raw: Rec): Args {
 }
 
 /** Lexical rules of a library path (before the disk is touched). Returns the segments. */
-export function checkLibraryPath(rel: string): string[] {
+function checkLibraryPath(rel: string): string[] {
   const invalid = (why: string) => bad("PATH_INVALID", `path ${why}; give a path inside the technical library as listed in the trigger index`, { reason: why })
   if (/[\u0000-\u001f]/.test(rel)) throw invalid("contains a NUL or control character")
   if (rel.includes("\\")) throw invalid("contains a backslash (use /)")
@@ -167,7 +170,7 @@ function inside(child: string, parent: string): boolean {
  * The real file a library path names, inside the real root. Looks under LIBRARY_INDEX_BASE first, then the root.
  * Throws PATH_INVALID, PATH_OUTSIDE_ROOTS or FILE_UNREADABLE.
  */
-export function resolveLibraryFile(rootReal: string, rel: string, bases = [path.join(rootReal, ...LIBRARY_INDEX_BASE.split("/")), rootReal]): string {
+function resolveLibraryFile(rootReal: string, rel: string, bases = [path.join(rootReal, ...LIBRARY_INDEX_BASE.split("/")), rootReal]): string {
   const segs = checkLibraryPath(rel)
   for (const base of bases) {
     const candidate = path.join(base, ...segs)
@@ -220,6 +223,7 @@ function triggerIndex(rootReal: string): TriggerIndex | null {
 }
 
 /** The domain a library path belongs to: its read order in the trigger index, else its domain folder. */
+/** @internal test seam */
 export function libraryDomainOf(rootReal: string | null, rel: string): string | null {
   const index = rootReal ? triggerIndex(rootReal) : null
   const listed = index?.byPath.get(rel)
@@ -233,6 +237,7 @@ export function libraryDomainOf(rootReal: string | null, rel: string): string | 
 }
 
 /** One page of a UTF-8 buffer from `from`: at most `size` bytes, cut after the last line end, else on a character. */
+/** @internal test seam */
 export function pageOf(buf: Buffer, from: number, size: number): { from: number; to: number } {
   const total = buf.length
   if (from === 0 && total === 0) return { from: 0, to: 0 }
@@ -258,7 +263,7 @@ export function skillFile(rel: string, roots: Readonly<Record<string, string>> |
   return resolveLibraryFile(root, m[2]!, [root])
 }
 
-export interface LibraryReadOptions {
+interface LibraryReadOptions {
   /** STUDIO_LIBRARY_ROOT; null/absent = the tool answers "not available". */
   root?: string | null
   /** The host's log channel; without it the tool writes its own daily JSONL under the store. */

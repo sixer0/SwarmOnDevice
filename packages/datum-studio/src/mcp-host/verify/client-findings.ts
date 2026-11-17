@@ -245,6 +245,7 @@ export function checksOfReport(report: unknown): VerifyCheck[] {
 // refusal already marks untrusted.
 
 /** One entry of `LintReport.notRun` (row 64, vendor services/render/lint.ts `LintNotRun`), read defensively. */
+/** @internal test seam */
 export interface LintNotRunLike {
   id: string
   kind: "rule" | "module"
@@ -253,7 +254,7 @@ export interface LintNotRunLike {
 }
 
 /** The witness facts of one deliverable revision (row 58 `readWitnessManifest`: `missing`, `unplaced`). */
-export interface OutputGateWitnessFacts {
+interface OutputGateWitnessFacts {
   htmlOutputId?: string | null
   missing: readonly number[]
   unplaced?: readonly string[]
@@ -265,7 +266,7 @@ export interface OutputGateWitnessFacts {
  * (`deliverable.lintNotRun`, `deliverable.witness`, `deliverable.awaitingHumanCheck`, `details.awaitingHumanCheck`,
  * `output.fileMissing`) win over these. Absent fact = "not known": the detail then says so, it never guesses.
  */
-export interface OutputGateFacts {
+interface OutputGateFacts {
   /** `notRun` of the parsed lint report of that revision; null/undefined = no list (older report, or not read). */
   lintNotRun?(documentId: string, revisionNo: number): readonly LintNotRunLike[] | null | undefined
   /** Witness list of that revision's newest PRIMARY HTML render; null/undefined = no list. */
@@ -276,11 +277,12 @@ export interface OutputGateFacts {
 
 let registeredFacts: OutputGateFacts | null = null
 /** Registers (or clears, with null) the facts source used when `outputGateFindings` gets no second argument. */
+/** @internal test seam */
 export function setOutputGateFacts(facts: OutputGateFacts | null): void {
   registeredFacts = facts
 }
 
-export type OutputGateMissingKind =
+type OutputGateMissingKind =
   | "file-missing"
   | "sha256-mismatch"
   | "not-checked"
@@ -292,7 +294,7 @@ export type OutputGateMissingKind =
   | "check-unknown"
 
 /** One agent-fixable reason. Strings are safe tokens only (see the section head). */
-export interface OutputGateMissing {
+interface OutputGateMissing {
   kind: OutputGateMissingKind
   /** lint-failed: the failing lint rule ids; lint-not-run: the rule ids that did not run (cause staged / could-not-run). */
   rules?: string[]
@@ -320,7 +322,7 @@ export interface OutputGateMissing {
 }
 
 /** Not agent-fixable: shown as information, never as something missing. */
-export interface OutputGateInfo {
+interface OutputGateInfo {
   kind: "awaiting-human-check" | "human-rule"
   /** awaiting-human-check: the register vocabulary (`labels_verified`). */
   checks?: string[]
@@ -329,9 +331,12 @@ export interface OutputGateInfo {
   moreRules?: number
 }
 
+/** @internal test seam */
 export const OUTPUT_GATE_IDS_MAX = 20
+/** @internal test seam */
 export const OUTPUT_GATE_PAGES_MAX = 60
 /** NOT_RUN reason entries printed per deliverable (the ids are all in `missing[].rules`, up to OUTPUT_GATE_IDS_MAX). */
+/** @internal test seam */
 export const NOT_RUN_ENTRIES_PER_DELIVERABLE = 12
 
 /** Lint rules that only say "a person has not checked the labels" (register section 7: D09, P1-labels_verified). */
@@ -365,6 +370,7 @@ function capIds(ids: readonly string[]): { rules: string[]; moreRules?: number }
 
 const CAUSES: ReadonlySet<string> = new Set(["tier", "not-applicable", "human", "staged", "could-not-run"])
 /** A `notRun` list read defensively (a stored lint report is JSON text written by another version). */
+/** @internal test seam */
 export function readLintNotRun(v: unknown): LintNotRunLike[] | null {
   if (!Array.isArray(v)) return null
   const out: LintNotRunLike[] = []
@@ -389,7 +395,7 @@ function awaitingChecks(v: unknown): string[] {
 }
 
 /** The detail of one output of a refused deliverable. */
-export interface OutputGateOutputDetail {
+interface OutputGateOutputDetail {
   verified: boolean
   missing: OutputGateMissing[]
   info: OutputGateInfo[]
@@ -397,7 +403,7 @@ export interface OutputGateOutputDetail {
   notRun: LintNotRunLike[]
 }
 
-export interface DeliverableFacts {
+interface DeliverableFacts {
   lintNotRun: readonly LintNotRunLike[] | null
   witness: OutputGateWitnessFacts | null
   /** The listed PDF / HTML outputs (for `because` of no-layout-witness). */
@@ -411,6 +417,7 @@ export interface DeliverableFacts {
  *   STALE -> sha256-mismatch; CHECK_FAILED -> lint-failed (LINT) and check-failed (others);
  *   CHECK_UNKNOWN -> lint-not-run (LINT) and check-unknown (others).
  */
+/** @internal test seam */
 export function outputGateOutputDetail(o: Record<string, unknown>, f: DeliverableFacts, fileExists?: boolean | null): OutputGateOutputDetail {
   const missing: OutputGateMissing[] = []
   const info: OutputGateInfo[] = []

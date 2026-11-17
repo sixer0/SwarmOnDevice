@@ -100,6 +100,7 @@ export function standaloneFileName(f: Rec, ext: "svg" | "png", fallback: string)
 }
 
 /** Swarm 1.3.3 row 156 (S12, ST-7): the most characters of the one "belum diperiksa" line of a preview. */
+/** @internal test seam */
 export const NOT_RUN_LINE_MAX = 360;
 
 /**
@@ -125,6 +126,7 @@ function notRunShort(n: Rec): string {
  * that failed to run, then rules (the figure's own open checks), then modules; capped at NOT_RUN_LINE_MAX characters.
  * Ids are safe tokens only (an unsafe id is not echoed). Undefined when nothing is listed. Never a pass.
  */
+/** @internal test seam */
 export function notRunLine(notRun: unknown): string | undefined {
   if (!Array.isArray(notRun)) return undefined;
   const all = notRun.filter(isRecord);

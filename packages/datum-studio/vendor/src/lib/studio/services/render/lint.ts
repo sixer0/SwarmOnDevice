@@ -78,7 +78,7 @@ function counts(checks: readonly LintIssue[]): string {
 }
 
 /** Modul lint yang bisa gagal sebagai satu kesatuan (register 03 s7: `kind: "module"`). */
-export type LintNotRunModule = "scan" | "structure" | "language" | "render";
+type LintNotRunModule = "scan" | "structure" | "language" | "render";
 
 /**
  * Sebab sebuah butir tidak dijalankan. Dua keluarga yang harus dibedakan pembaca:
@@ -90,7 +90,7 @@ export type LintNotRunModule = "scan" | "structure" | "language" | "render";
  *    metrik render; galat instrumen; modul melempar).
  * `human` = pemeriksaan manusia, tidak pernah dijalankan mesin.
  */
-export type LintNotRunCause = "tier" | "not-applicable" | "human" | "staged" | "could-not-run";
+type LintNotRunCause = "tier" | "not-applicable" | "human" | "staged" | "could-not-run";
 
 /** Satu butir `LintReport.notRun` (register 03 s7: `{id, kind, reason}`; `cause` = kelas sebab). */
 export interface LintNotRun {
@@ -103,12 +103,13 @@ export interface LintNotRun {
 }
 
 /** Laporan lint layanan render: `LintReport` kontrak ditambah `notRun` (selalu ada, boleh kosong). */
-export type LintReportWithNotRun = LintReport & { notRun: LintNotRun[] };
+type LintReportWithNotRun = LintReport & { notRun: LintNotRun[] };
 
+/** @internal test seam */
 export const NOT_RUN_REASON_MAX = 300;
 
 /** Modul yang gagal atau tidak dipanggil pada satu pemanggilan lint. */
-export interface LintModuleNotRun {
+interface LintModuleNotRun {
   module: LintNotRunModule;
   reason: string;
 }
@@ -132,7 +133,7 @@ function isStaged(def: (typeof LINT_REGISTRY)[number]): boolean {
   return false;
 }
 
-export interface LintNotRunInput {
+interface LintNotRunInput {
   /** `LintReport.checks` akhir. */
   checks: readonly LintIssue[];
   tier: Tier;
@@ -242,6 +243,7 @@ export function lintNotRun(i: LintNotRunInput): LintNotRun[] {
 }
 
 /** Alasan modul render tidak dipanggil: belum ada hasil render untuk diukur. */
+/** @internal test seam */
 export const RENDER_NO_INPUT_REASON = "belum ada metrik tata letak maupun SVG hasil render";
 
 function safeRun<T>(log: JobLog, label: LintNotRunModule, fn: () => T, faults?: LintModuleNotRun[]): T | undefined {

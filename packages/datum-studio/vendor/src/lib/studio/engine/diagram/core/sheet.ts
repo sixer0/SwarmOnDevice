@@ -398,12 +398,13 @@ export interface BlockKeyRow {
 }
 
 /** Row 53: a notice in the shape of a compose warning (`ComposeWarning`: `{ code, message }`). */
-export interface KeyRowNotice {
+interface KeyRowNotice {
   code: "KEYROW_SUPERSEDED";
   message: string;
 }
 
 /** Row 53: the message of the `KEYROW_SUPERSEDED` notice. */
+/** @internal test seam */
 export const KEYROW_SUPERSEDED_MESSAGE =
   "keyRow tulisan penulis tidak dicetak karena spec memiliki baris legend[]; baris legend[] adalah satu-satunya baris kunci (kosongkan legend[] bila kalimat keyRow yang dikehendaki)";
 

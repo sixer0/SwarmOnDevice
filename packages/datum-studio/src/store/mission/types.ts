@@ -116,8 +116,8 @@ export interface RowCheckpoint {
 }
 
 /** 1.3.3 row 5 (register section 1): the formats a row deliverable may have; Studio outputs first, then support files. */
-export const ROW_DELIVERABLE_FORMATS = ["DOCX", "PDF", "HTML", "XLSX", "PPTX", "MD", "TXT"] as const
-export type RowDeliverableFormat = (typeof ROW_DELIVERABLE_FORMATS)[number]
+const ROW_DELIVERABLE_FORMATS = ["DOCX", "PDF", "HTML", "XLSX", "PPTX", "MD", "TXT"] as const
+type RowDeliverableFormat = (typeof ROW_DELIVERABLE_FORMATS)[number]
 
 /** 1.3.3 row 5: one file of a row in the project folder `deliverables/<mission-id>/` (MC-8). */
 export interface RowDeliverable {
@@ -135,7 +135,7 @@ export interface RowDeliverable {
   documentId?: string
 }
 
-export interface RowKnowledgeDomain {
+interface RowKnowledgeDomain {
   /** A key of `domains` in the library trigger index, e.g. `COMPUTER-VISION`. */
   domain: string
   /** Library-root-relative path of the first file to read for the domain. */

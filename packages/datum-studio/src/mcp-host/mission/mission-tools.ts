@@ -142,7 +142,7 @@ export function defaultProjectDir(mission: unknown, fileRoot: string): void {
  * picked outside the session. Moving a mission elsewhere stays with studio_mission_place (the person's answered
  * decision, a group folder one level below the current project folder). A non-string dir is left for the schema check.
  */
-export function assertProjectDirInSession(mission: unknown, fileRoot: string): void {
+function assertProjectDirInSession(mission: unknown, fileRoot: string): void {
   const dir = (mission as { project?: { dir?: unknown } } | null)?.project?.dir
   if (typeof dir !== "string") return
   const outside = projectDirOutsideRoot(nativeProjectDir(dir), fileRoot)

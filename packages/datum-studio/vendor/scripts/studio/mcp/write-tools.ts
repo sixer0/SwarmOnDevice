@@ -74,9 +74,11 @@ const DIAGRAM_BLOCK = { type: "object" } as const;
  * chart, and a caption or source given must not be empty), `{ figure, diagram }` and `append` take the write blocks
  * unchanged. Derived here from the write constants; test/st10-write-edit-parity fails when the two drift apart.
  */
+/** @internal test seam */
 export const WRITE_FIGURE_BLOCKS = { chart: CHART_BLOCK, diagram: DIAGRAM_BLOCK } as const;
 const { anyOf: _chartForms, ...CHART_FIELDS } = CHART_BLOCK;
 const CHART_PROPS = (CHART_BLOCK as unknown as { properties: Record<string, Record<string, unknown>> }).properties;
+/** @internal test seam */
 export const EDIT_FIGURE_PATCHES = {
   chart: { ...CHART_FIELDS, properties: { ...CHART_PROPS, caption: { ...CHART_PROPS.caption, minLength: 1 }, source: { ...CHART_PROPS.source, minLength: 1 } } },
   diagram: DIAGRAM_BLOCK,
@@ -767,6 +769,7 @@ const chartPatchValid = new Ajv({ allErrors: true, strict: true }).compile(EDIT_
  * negative value are refused (NON_NEGATIVE_CHART_CODES mirrors the engine); a line, a waterfall or a diverging bar
  * keeps its negative values. The code is the one the builder will choose (`chartCodeOf`).
  */
+/** @internal test seam */
 export function refuseNegativeCharts(charts: ReadonlyArray<{ chart: unknown; pointer: string }>): void {
   const details: Array<{ pointer: string; keyword: string; message: string }> = [];
   for (const { chart, pointer } of charts) {
@@ -795,6 +798,7 @@ function chartsOfSections(sections: unknown): Array<{ chart: unknown; pointer: s
 }
 
 /** Row 77: the builder's CH-01 refusal of a studio_edit (label "edit N" / "edit N blok K") gets the same pointer shape. */
+/** @internal test seam */
 export function withNegativePointer(e: unknown): unknown {
   if (!(e instanceof McpToolError) || e.code !== "INVALID_ARGUMENT" || e.extra.details !== undefined) return e;
   const m = /^edit (\d+)(?: blok (\d+))?: (CH-01: series\/(\d+)\/values\/(\d+) = [^;]+;.*?)(?:\. Tidak ada yang dikirim)?$/.exec(e.message);

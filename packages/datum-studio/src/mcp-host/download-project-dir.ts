@@ -14,7 +14,7 @@ export interface DownloadProjectStore {
   transaction<T>(fn: (tx: StoreTx) => Promise<T>): Promise<T>
 }
 
-export type DownloadProjectRef = { documentId?: string; fileId?: string }
+type DownloadProjectRef = { documentId?: string; fileId?: string }
 
 export function downloadProjectDirOf(store: DownloadProjectStore): (ref: DownloadProjectRef) => Promise<string | null> {
   return async (ref) => {

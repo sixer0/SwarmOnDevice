@@ -127,6 +127,7 @@ export function labelAtBaseline(points: ReadonlyArray<Pt>, at: DiagramLabelAt): 
  * width is measured on the text as written. Every width in this file goes through here (`railTextWidthMm`,
  * `knockWidthMm`, `layoutNotes`); a label budget (row 44) that counts glyphs or millimetres reads the same text.
  */
+/** @internal test seam */
 export function railPrintedText(text: string): string {
   return roleUpper("evidence_rail") ? text.toUpperCase() : text;
 }
@@ -368,7 +369,7 @@ export function spotClear(points: ReadonlyArray<Pt>, heads: EdgeLabelInput["head
  * Swarm 1.3.3 row 42: a `strict` rule (zone frame) crosses wherever it meets the band. Exported so the first-render
  * position (build/svg.ts `labelPos`) can apply the same test to `zoneFrameRules` (build/fitlabels.ts).
  */
-export function ruleCrosses(r: ContainerRule, b: Box, edges: readonly EdgeLabelInput[]): boolean {
+function ruleCrosses(r: ContainerRule, b: Box, edges: readonly EdgeLabelInput[]): boolean {
   const t = clipSeg(r.a, r.b, [b[0] - r.half, b[1] - r.half, b[2] + r.half, b[3] + r.half]);
   if (!t) return false;
   if (r.strict) return true; // row 42: a zone frame stays visible also under a connector that follows it

@@ -119,6 +119,7 @@ type Json = Record<string, unknown>;
  * Swarm 1.3.3 row 52 (ST-5, register 03 s2 and s7): id of the refusal for an unfilled `{{key}}` in a diagram spec.
  * The same string is the spec check id (build of preview and render) and the lint registry id (document lint).
  */
+/** @internal test seam */
 export const PLACEHOLDER_CHECK_ID = "PLACEHOLDER_UNFILLED";
 
 /**
@@ -135,7 +136,7 @@ const PLACEHOLDER_DETAIL_MAX = 8;
 /** Depth bound of the walk (a diagram spec is at most 5 deep; the bound only stops a hostile input). */
 const PLACEHOLDER_DEPTH_MAX = 16;
 
-export interface UnfilledPlaceholder {
+interface UnfilledPlaceholder {
   /** JSON pointer to the string that holds the token, relative to the spec. */
   pointer: string;
   /** The token as written, braces included. */
@@ -169,7 +170,7 @@ export function unfilledPlaceholders(spec: unknown): UnfilledPlaceholder[] {
 }
 
 /** One refusal text for all tokens of a spec: each token with its field, then what to do. */
-export function unfilledPlaceholderDetail(found: readonly UnfilledPlaceholder[]): string {
+function unfilledPlaceholderDetail(found: readonly UnfilledPlaceholder[]): string {
   const shown = found.slice(0, PLACEHOLDER_DETAIL_MAX).map((u) => `${u.token} di ${u.pointer}`);
   const rest = found.length - shown.length;
   return (

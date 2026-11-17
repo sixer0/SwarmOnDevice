@@ -62,7 +62,7 @@ export interface DiagramNode {
 }
 
 /** Swarm 1.3.3 row 26 (ST-4; register 03 §6): target of an off-page connector. */
-export interface DiagramOffpageRef {
+interface DiagramOffpageRef {
   /** Block id (pid) of the diagram block that holds the other end; the engine prints its real figure number. */
   figure: string;
   /** Pair key, `^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$`, equal on both ends. */

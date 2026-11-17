@@ -114,7 +114,7 @@ export type DeliverableLink = {
   previewPath: string | null
 }
 
-export type DeliverableLinkAction = "open" | "preview"
+type DeliverableLinkAction = "open" | "preview"
 
 const PREVIEW_FORMATS = new Set(["PDF", "HTML"])
 const REV_LETTER = /^[0-9A-Za-z]{1,8}$/
@@ -148,6 +148,7 @@ function revisionLabel(file: Pick<ProjectFileWire, "docRev" | "revisionNo">) {
  * - Preview: Open's rules, PDF or HTML, a Studio output name, and the project folder is the session's folder (the
  *   file tab reads nowhere else).
  */
+/** @internal test seam */
 export function deliverableLinks(
   files: readonly ProjectFileWire[] | null | undefined,
   directory?: string,

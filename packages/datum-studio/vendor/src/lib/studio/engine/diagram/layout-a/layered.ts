@@ -38,6 +38,7 @@ export const LAYERED_TIER_GAP_BASELINES = 5;
  * Swarm 1.3.3 row 47 (ST-3 item 7): default node width in lattice columns. It is the floor every family already gives
  * a node (`nodeSize`: `max(snap(text), 3 columns)`), named here because a node alone on its tier now takes it.
  */
+/** @internal test seam */
 export const LONE_NODE_WIDTH_COLS = 3;
 
 /** Row 47: families whose one-node tier takes the default node width (`stack` keeps its full-width bar: a stack layer is a band). */
@@ -70,6 +71,7 @@ export function tierWidthMm(m: number, W: number, lat: Pick<Lattice, "x">, lone?
  * 166 mm 4; a band takes one node at either width (row 56). `layoutLayered` refuses a fuller tier before it places a
  * node, so the plain placement never anchors a node on (or past) the right edge.
  */
+/** @internal test seam */
 export function tierCapacity(W: number, latX: number): number {
   return Math.max(1, Math.floor((W / latX + 1 + 1e-9) / 4));
 }
@@ -92,9 +94,11 @@ export function tierLoad(s: StudioDiagramV1, widthMm: number, latX: number): { t
  * Swarm 1.3.3 row 56 (ST-5): labelled tiers. `tiers[] {tier, label}` (contract row 26) is printed for these two families
  * only; every other family refuses the field (`assertTierLabels`, called once per build from `build/place.ts`).
  */
+/** @internal test seam */
 export const TIER_LABEL_FAMILIES: ReadonlySet<string> = new Set(["layered", "topology"]);
 
 /** Row 56: check id of every `tiers[]` refusal. */
+/** @internal test seam */
 export const TIER_LABEL_CHECK = "P1-tiers";
 
 /**
@@ -102,17 +106,18 @@ export const TIER_LABEL_CHECK = "P1-tiers";
  * 0.09 em, ink400), the role of container titles and lane heads, printed with `upper: false` so the author's letter
  * case is kept.
  */
+/** @internal test seam */
 export const TIER_LABEL_ROLE = "table_header";
 
 /** Row 56: widest text column of the tier label band, in lattice columns; a longer label wraps (at most 3 lines). */
-export const TIER_LABEL_MAX_COLS = 3;
-export const TIER_LABEL_MAX_LINES = 3;
+const TIER_LABEL_MAX_COLS = 3;
+const TIER_LABEL_MAX_LINES = 3;
 
 /** Row 56: line step of a wrapped tier label, in label sizes. */
 const TIER_LABEL_LEADING = 1.25;
 
 /** Row 56: the tier label band a layout reserved (absent when the spec has no `tiers[]` entry). */
-export interface TierLabelBand {
+interface TierLabelBand {
   /** Band width (mm) at the left edge of the sheet: nodes of every tier start at or right of it. */
   widthMm: number;
   /** One entry per labelled tier: the tier key (`tierKey`) and the label lines, letter case as written. */

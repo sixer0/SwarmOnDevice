@@ -25,13 +25,13 @@ export const OFFPAGE_UNPAIRED = "OFFPAGE_UNPAIRED";
 export const OFFPAGE_PREVIEW_NOT_RUN_REASON = "belum diperiksa: hanya saat render";
 
 /** `notRun` entry of the preview reply (row 65), in the shape of `LintReport.notRun`. */
-export interface OffpagePreviewNotRun {
+interface OffpagePreviewNotRun {
   id: typeof OFFPAGE_UNPAIRED;
   kind: "rule";
   reason: string;
 }
 
-export type OffpageRefusalCause =
+type OffpageRefusalCause =
   | "ref-missing"
   | "ref-on-other-shape"
   | "figure-self"
@@ -42,7 +42,7 @@ export type OffpageRefusalCause =
   | "key-mismatch"
   | "twin-duplicate";
 
-export interface OffpageRefusal {
+interface OffpageRefusal {
   cause: OffpageRefusalCause;
   /** Block id of the figure that holds the node. */
   blockId: string;
@@ -59,7 +59,7 @@ export interface OffpageRefusal {
   message: string;
 }
 
-export interface OffpageLabelNote {
+interface OffpageLabelNote {
   blockId: string;
   figure: string;
   node: string;
@@ -68,7 +68,7 @@ export interface OffpageLabelNote {
   generated: string;
 }
 
-export interface OffpageCheck {
+interface OffpageCheck {
   /** The snapshot with generated labels on inline specs (the same object when nothing changed). */
   snapshot: NormDocSnapshot;
   /** Generated-label specs of blocks that refer to an artefact, by the block's `content.spec` object. */
@@ -84,7 +84,7 @@ export interface OffpageCheck {
   unchecked: number;
 }
 
-export interface OffpageCheckOptions {
+interface OffpageCheckOptions {
   /** Specs of diagram blocks that refer to an artefact, by block id (resolved by the caller). */
   specs?: ReadonlyMap<string, StudioDiagramV1>;
   /** Rendered scope; absent = whole document. In a chapter or slot draft a twin outside the scope is not refused. */
@@ -161,6 +161,7 @@ const WORDS = {
  * The printed label of one end: direction word, the other figure's number as the document prints it, and the pair
  * key. `number` is the entry of `snapshot.numbering` ("Gambar 2.2"); an EN document prints "Figure 2.2".
  */
+/** @internal test seam */
 export function offpageLabel(direction: "to" | "from", number: string, key: string, lang: "ID" | "EN" = "ID"): string {
   const w = WORDS[lang];
   const printed = lang === "EN" && number.startsWith(`${WORDS.ID.figure} `) ? `${w.figure} ${number.slice(WORDS.ID.figure.length + 1)}` : number;
@@ -338,16 +339,16 @@ export function checkOffpagePairs(snapshot: NormDocSnapshot, opts: OffpageCheckO
 }
 
 /** Lint rows only (for a lint module that holds the whole snapshot; inline specs). */
-export function offpagePairIssues(snapshot: NormDocSnapshot, opts: OffpageCheckOptions = {}): LintIssue[] {
+function offpagePairIssues(snapshot: NormDocSnapshot, opts: OffpageCheckOptions = {}): LintIssue[] {
   return checkOffpagePairs(snapshot, opts).checks;
 }
 
 /** The part of the artefact reader this module needs (`ArtifactSpecReader`, `InlineSpecReader`). */
-export interface DiagramSpecSource {
+interface DiagramSpecSource {
   diagram(spec: unknown): Promise<StudioDiagramV1>;
 }
 
-export interface OffpagePairing<R extends DiagramSpecSource> extends OffpageCheck {
+interface OffpagePairing<R extends DiagramSpecSource> extends OffpageCheck {
   /** The reader to build figures with: `reader` itself, or a view of it that returns the generated-label specs. */
   reader: R;
 }

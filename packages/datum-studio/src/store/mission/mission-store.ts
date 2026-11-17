@@ -149,7 +149,7 @@ const ROW_HOST_FIELDS = ["createdAt", "updatedAt", "startedAt", "finishedAt", "r
 /** 1.3.3 row 5: the column of each row contract field (migration 0009), JSON text. */
 const ROW_CONTRACT_COLUMNS = { deliverables: "deliverables", knowledge: "knowledge", awaitingHumanCheck: "awaiting_human_check" } as const
 /** 1.3.3 row 5 (register section 1): files kept per domain in `knowledge.domains[].consulted`; later reads are not stored. */
-export const KNOWLEDGE_CONSULTED_MAX = 20
+const KNOWLEDGE_CONSULTED_MAX = 20
 /** 1.3.3 row 101 (register section 1): `knowledge.domains` holds 1-25 items. */
 const KNOWLEDGE_DOMAINS_MAX = 25
 
@@ -157,7 +157,7 @@ const KNOWLEDGE_DOMAINS_MAX = 25
  * 1.3.3 row 101 (spec KL-2 item 1): matches a row's text against the library trigger index. Set by the mission tools
  * (`setKnowledgeMatcher`); absent = rows are not matched at start. `reason` set = the library could not be read.
  */
-export type RowKnowledgeMatcher = (text: string) => { domains: ReadonlyArray<{ domain: string; firstFile: string }>; reason?: string }
+type RowKnowledgeMatcher = (text: string) => { domains: ReadonlyArray<{ domain: string; firstFile: string }>; reason?: string }
 
 /**
  * 1.3.3 row 101: the row's knowledge after a new match. Domains in match order (at most 25); a domain that stays

@@ -97,8 +97,10 @@ const figureText = (def: "InlineV2" | "CaptionV2" | "SourceV2") =>
  * `widthClass` stays forbidden in blocks (DF-66..DF-70); millimetre fields stay forbidden (DF-21, DF-23).
  */
 export const FIGURE_WIDTH_VALUES = ["text", "full"] as const;
+/** @internal test seam */
 export const FIGURE_WIDTH_DEFAULT = "text" as const;
 /** Millimetres of each class on the default A4 DATUM grid (the engine derives the real number from the template grid). */
+/** @internal test seam */
 export const FIGURE_WIDTH_MM = { text: 128, full: 166 } as const;
 /** `default` is an annotation only: STUDIO_AJV_OPTIONS has no `useDefaults`, so validation never writes the field. */
 const FIGURE_WIDTH_V2 = { width: { enum: [...FIGURE_WIDTH_VALUES], default: FIGURE_WIDTH_DEFAULT } } as const;

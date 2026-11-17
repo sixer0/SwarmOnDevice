@@ -149,7 +149,7 @@ export function estimate(s: StudioDiagramV1, layout?: LayoutFn, opts: { grid?: D
  * the default label `CATATAN`: one line per non-blank entry, more when the entry is wider than the sheet and the wrap
  * keeps every character. A caller of the build that passes another `noteLabel` can wrap differently.
  */
-export function noteLineCount(s: Pick<StudioDiagramV1, "notes">, W: number, label = "CATATAN"): number {
+function noteLineCount(s: Pick<StudioDiagramV1, "notes">, W: number, label = "CATATAN"): number {
   const pt = role("source_line").size;
   const maxW = W - 0.5 - measure(" ", pt);
   const squash = (t: string): string => t.replace(/\s+/g, "");

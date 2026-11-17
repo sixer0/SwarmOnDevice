@@ -71,6 +71,7 @@ export interface OverwriteFinding extends OverwrittenPid {
 
 export const OVERWRITE_REASON = "PATCHED_PIDS_OVERWRITTEN";
 /** Swarm 1.3.3 row 74 (ST-10): kiriman bab akan menghilangkan blok grafik, diagram, atau gambar. */
+/** @internal test seam */
 export const FIGURE_LOSS_REASON = "FIGURE_BLOCKS_WOULD_BE_LOST";
 const FIGURE_TYPES: readonly string[] = ["chart", "diagram", "image"];
 const RENUMBER_SCOPE = "structure:renumberChapters";
@@ -201,7 +202,7 @@ function compareFindings(a: OverwriteFinding, b: OverwriteFinding): number {
 // dengan baseRevisionNo terbaru" (`ERROR_HINTS`), yang untuk kasus ini menyesatkan.
 
 /** Satu blok figur yang akan hilang. */
-export interface LostFigureBlock {
+interface LostFigureBlock {
   id: string;
   kind: "chart" | "diagram" | "image";
   caption: string;
@@ -227,6 +228,7 @@ function captionText(b: BlockV2): string {
 }
 
 /** pid blok figur bab `chapterKeys` yang di hasil gabung tetap berjenis sama dan berisi sama persis. Murni. */
+/** @internal test seam */
 export function intactFigurePids(current: StudioDocV2Resolved, merged: StudioDocV2Resolved, chapterKeys: ReadonlySet<string>): Set<string> {
   const cur = chaptersByKey(current);
   const next = chaptersByKey(merged);
@@ -242,6 +244,7 @@ export function intactFigurePids(current: StudioDocV2Resolved, merged: StudioDoc
  * Blok figur revisi terkini yang tidak ada lagi di bab hasil gabung (aturan di atas) dan tidak
  * disebut `[[remove:<pid>]]`. Murni; hanya lingkup `chapter:<k>` kiriman yang diperiksa.
  */
+/** @internal test seam */
 export function findLostFigureBlocks(
   current: StudioDocV2Resolved,
   merged: { doc: StudioDocV2Resolved; scopes: readonly string[]; removedFigurePids?: readonly string[] },
@@ -273,7 +276,7 @@ export function findLostFigureBlocks(
 }
 
 /** Teks awam penolakan `FIGURE_BLOCKS_WOULD_BE_LOST` untuk diteruskan agen ke controller-nya. */
-export function figureLossForwardText(lost: readonly LostFigureBlock[]): string {
+function figureLossForwardText(lost: readonly LostFigureBlock[]): string {
   const chapters = [...new Set(lost.map((b) => b.chapterKey))].join(", ");
   return (
     `Kiriman belum disimpan: bab ${chapters} memuat ${lost.length} grafik, diagram, atau gambar yang tidak ada di naskah kiriman, ` +
@@ -285,6 +288,7 @@ export function figureLossForwardText(lost: readonly LostFigureBlock[]): string 
  * 422 `PID_CONFLICT` `reason: FIGURE_BLOCKS_WOULD_BE_LOST` bila kiriman bab akan menghilangkan
  * blok figur tanpa `[[remove:<pid>]]`. Tidak membaca DB; berlaku apa pun `baseRevisionNo`-nya.
  */
+/** @internal test seam */
 export function assertNoFigureBlocksLost(input: Pick<OverwriteCheckInput, "current" | "merged" | "latestRevisionNo"> & Partial<Pick<OverwriteCheckInput, "documentId" | "baseRevisionNo" | "prevRows">>): void {
   const rows = input.prevRows;
   const lost = findLostFigureBlocks(input.current, input.merged, rows ? (pid) => addressOfPid(rows, pid) : undefined);

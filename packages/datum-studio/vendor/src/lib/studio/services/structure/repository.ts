@@ -55,6 +55,7 @@ export interface WriteRevisionRowsResult {
  * builds a store of the shape written before 1.3.3. Returns the previous value.
  */
 let legacyDualWriteDefault = false;
+/** @internal test seam */
 export function setLegacyBlockDualWrite(on: boolean): boolean {
   const before = legacyDualWriteDefault;
   legacyDualWriteDefault = on;
@@ -408,6 +409,7 @@ export function legacyBlockRowsIn(db: StructureDb, revisionId: string, withConte
  * text and sha taken from the block of the same pid in `revision.snapshot.blocks` when there is one
  * (the "internal" form `attachInternal` took from that same list), else the v2 values of the row.
  */
+/** @internal test seam */
 export function derivedLegacyBlockRowsIn(db: StructureDb, revisionId: string, withContent = true): LegacyBlockRow[] {
   const rows = db.all<Record<string, unknown>>(
     `SELECT pid, address, artifact_label, ordinal, type, text_plain, content_sha256${withContent ? ", content" : ""} FROM doc_block WHERE revision_id = ? ORDER BY ordinal ASC`,

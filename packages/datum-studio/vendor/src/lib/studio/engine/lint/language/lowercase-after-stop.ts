@@ -34,6 +34,7 @@ import type { Scanner } from "./checks";
 import type { TextUnit } from "./prose";
 import { ABBREVIATIONS } from "./tokenize";
 
+/** @internal test seam */
 export const LOWERCASE_AFTER_STOP_ID = "C-35";
 
 /** Plafon isu (satu isu per paragraf); sisanya diringkas. */
@@ -48,6 +49,7 @@ const EXCERPT_AFTER = 26;
  * (`dll. dan`, `Tbk. serta`, `etc. and`). Huruf kecil, tanpa titik akhir. Melengkapi
  * `ABBREVIATIONS`, yang hanya memuat singkatan yang tidak pernah mengakhiri kalimat.
  */
+/** @internal test seam */
 export const CONTINUING_ABBREVIATIONS: ReadonlySet<string> = new Set([
   // Indonesia
   "dll", "dsb", "dst", "dkk", "tbk", "sbb", "tsb", "ybs", "maks", "min", "kol", "bag", "gbr", "tab", "lih", "bdk",
@@ -80,7 +82,7 @@ const OPERATOR_AHEAD = /^\s*[=≥≤<>≈×÷+−^]/u;
 const GREEK_LOWER = /^[α-ωµ]/u;
 const CODE_PLACEHOLDER = "￼";
 
-export interface LowercaseAfterStopHit {
+interface LowercaseAfterStopHit {
   /** Indeks titik pada teks yang sudah dinormalkan. */
   index: number;
   /** Kata pertama sesudah titik. */

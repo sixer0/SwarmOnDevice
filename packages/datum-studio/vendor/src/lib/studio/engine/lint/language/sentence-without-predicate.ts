@@ -55,9 +55,11 @@ import { findLowercaseAfterStop } from "./lowercase-after-stop";
 import type { TextUnit } from "./prose";
 import { splitSentences } from "./tokenize";
 
+/** @internal test seam */
 export const SENTENCE_WITHOUT_PREDICATE_ID = "C-36";
 
 /** Kalimat dengan kata berhuruf lebih sedikit dari ini tidak diperiksa. */
+/** @internal test seam */
 export const MIN_WORDS = 4;
 /** "Istilah: penjelasan": titik dua sesudah paling banyak sekian kata (isi kurung tidak dihitung). */
 const LABEL_MAX_WORDS = 4;
@@ -196,9 +198,9 @@ const FORMULA_OPERATORS = /[=×÷Σ∑√⌊⌈∫^]|\s[*/]\s/gu;
 /** Kalimat ditutup bilangan + satu kata satuan: predikat bilangan (Panjang ruas 40 km.). */
 const ENDS_WITH_QUANTITY = /\p{L}[^()]*\s[+\-−±≈~≤≥<>]?\d[\d.,]*\s?(?:%|‰|[\p{L}µμΩ°/²³]{1,12})\s*[.!?]$/u;
 
-export type PredicateLanguage = "ID" | "EN";
+type PredicateLanguage = "ID" | "EN";
 
-export interface SentenceWithoutPredicateHit {
+interface SentenceWithoutPredicateHit {
   /** Kalimat yang dilaporkan (dirapatkan spasinya). */
   sentence: string;
   /** Jumlah kata berhuruf dalam kalimat. */
@@ -312,6 +314,7 @@ function hasPredicateEn(toks: readonly Tok[]): boolean {
 }
 
 /** Benar bila kalimat memuat tanda predikat menurut heuristik bahasa itu. */
+/** @internal test seam */
 export function hasPredicate(sentence: string, language: PredicateLanguage = "ID"): boolean {
   const toks = tokens(sentence);
   return language === "EN" ? hasPredicateEn(toks) : hasPredicateId(toks, sentence);
@@ -360,6 +363,7 @@ function sentencesOf(t: string): string[] {
  * Kalimat tanpa predikat pada satu paragraf. `text` boleh md-lite (backtick dan `*` dikenali)
  * atau teks polos.
  */
+/** @internal test seam */
 export function findSentencesWithoutPredicate(text: string, language: PredicateLanguage = "ID"): SentenceWithoutPredicateHit[] {
   if (typeof text !== "string") return [];
   const t = normalize(text);

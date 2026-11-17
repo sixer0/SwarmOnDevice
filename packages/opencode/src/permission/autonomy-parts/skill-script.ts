@@ -46,7 +46,7 @@ export const NONE: Builtin = { pythons: [], skills: [] }
 export const INTERPRETERS: readonly string[] = ["python3"]
 
 const DIAGRAM_SCRIPT = "bingkai_lembar.py"
-export const KNOWLEDGE_SCRIPT = "build_kl_index.py"
+const KNOWLEDGE_SCRIPT = "build_kl_index.py"
 
 /**
  * Per script, the only options it may get. `in`: a path inside the project that is read. `out`: a path inside the project
@@ -61,6 +61,7 @@ const OPTIONS: Readonly<Record<string, Readonly<Record<string, Value>>>> = {
 }
 
 /** The five files `build_kl_index.py` writes into `--out` (its `OUTPUT_FILES`; register section 9, Index files). */
+/** @internal test seam */
 export const KNOWLEDGE_OUTPUTS: readonly string[] = [
   "indeks_struktur.json",
   "indeks_pemicu.json",
@@ -84,6 +85,7 @@ const COVERED: Readonly<Record<string, readonly string[]>> = {
  * library's root when `LibraryRoot` has one: the knowledge-library builder may read it as `--root`, as it may read the
  * folder its scripts sit in (packaged, the same folder).
  */
+/** @internal test seam */
 export function fromRoots(entries: readonly Entry[], library?: string): Builtin {
   const skills = entries.flatMap((entry) => {
     const scripts = COVERED[entry.skill]

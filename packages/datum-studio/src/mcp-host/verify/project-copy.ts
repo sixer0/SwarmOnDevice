@@ -48,21 +48,22 @@ import type { MissionLog } from "../mission/tool-result.ts"
 
 export { PROJECT_DELIVERABLES_DIR }
 /** The row schema's cap on `deliverables` (register section 1). */
+/** @internal test seam */
 export const ROW_DELIVERABLES_MAX = 100
 
-export type ProjectCopyFormat = "DOCX" | "PDF" | "HTML"
+type ProjectCopyFormat = "DOCX" | "PDF" | "HTML"
 const FORMATS: readonly ProjectCopyFormat[] = ["DOCX", "PDF", "HTML"]
-export const isProjectCopyFormat = (v: unknown): v is ProjectCopyFormat => typeof v === "string" && (FORMATS as readonly string[]).includes(v)
+const isProjectCopyFormat = (v: unknown): v is ProjectCopyFormat => typeof v === "string" && (FORMATS as readonly string[]).includes(v)
 
-export type ProjectCopyCode = "PROJECT_UNWRITABLE" | "OUTPUT_EXISTS" | "INTEGRITY_MISMATCH" | "PATH_OUTSIDE_ROOT"
-export interface ProjectCopyFailure {
+type ProjectCopyCode = "PROJECT_UNWRITABLE" | "OUTPUT_EXISTS" | "INTEGRITY_MISMATCH" | "PATH_OUTSIDE_ROOT"
+interface ProjectCopyFailure {
   ok: false
   code: ProjectCopyCode
   /** The project folder (PROJECT_UNWRITABLE) or the folder the refusal is about. */
   dir: string
   message: string
 }
-export interface ProjectCopyOk {
+interface ProjectCopyOk {
   ok: true
   /** Absolute real path of `<project>/deliverables/<mission id>`. */
   dir: string
@@ -71,25 +72,26 @@ export interface ProjectCopyOk {
   kept: number
 }
 /** Why nothing was copied when nothing went wrong. */
-export type ProjectCopySkipReason = "no-mission" | "not-verified" | "draft" | "no-document-output" | "internal-error"
+type ProjectCopySkipReason = "no-mission" | "not-verified" | "draft" | "no-document-output" | "internal-error"
 /** `structuredContent.projectCopy` of the render reply (register section 5, plus the two shapes the register has no line for). */
 export type ProjectCopyReply =
   | { ok: true; dir: string; files: RowDeliverable[]; row: string | null; recorded: boolean; note?: string; dropped?: number }
   | ProjectCopyFailure
   | { ok: false; skipped: true; reason: ProjectCopySkipReason; message: string }
 
-export interface ProjectCopyDocument {
+interface ProjectCopyDocument {
   documentId: string
   docNumber: string
   docRev: string
   revisionNo: number
 }
-export interface ProjectCopySource {
+interface ProjectCopySource {
   format: ProjectCopyFormat
   /** The store's `output_file.sha256`. */
   sha256: string
   bytes: Uint8Array | null
 }
+/** @internal test seam */
 export interface ProjectCopyInput {
   /** The mission's project folder as a disk path (`nativeProjectDir(mission.project_dir)`). */
   projectDir: string
@@ -124,6 +126,7 @@ const errno = (e: unknown) => (typeof (e as NodeJS.ErrnoException | null)?.code 
  * Register section 5: `<doc number> Rev<letter> rev<N>.<ext>`, from stored document metadata only. Throws when the
  * metadata does not give exactly that one safe name (a separator, `..`, a letter outside the register's range).
  */
+/** @internal test seam */
 export function projectFileName(doc: Pick<ProjectCopyDocument, "docNumber" | "docRev" | "revisionNo">, format: ProjectCopyFormat): string {
   if (!isProjectCopyFormat(format)) throw new Error("format is not DOCX, PDF or HTML")
   if (typeof doc.docRev !== "string" || !DOC_REV.test(doc.docRev)) throw new Error("the revision letter is not 1-8 letters or digits")
@@ -139,7 +142,7 @@ export function projectFileName(doc: Pick<ProjectCopyDocument, "docNumber" | "do
  * Row 114 seam: `child` as a real directory directly inside the real directory `parent`, created when absent. A
  * symbolic link, or anything that is not a directory, at that name is refused.
  */
-export function ensureChildDir(parent: string, child: string, projectDir = parent): string {
+function ensureChildDir(parent: string, child: string, projectDir = parent): string {
   if (path.basename(child) !== child || child === "." || child === ".." || child.length === 0) throw new CopyRefusal("PATH_OUTSIDE_ROOT", parent, "the folder name is not one path segment")
   const dir = path.join(parent, child)
   try {
@@ -159,7 +162,7 @@ export function ensureChildDir(parent: string, child: string, projectDir = paren
  * Row 114 seam: writes each file into the real directory `dir` under the rules of this module (checks first, exclusive
  * create, read back). Returns how many were written and how many were already there with the same sha256.
  */
-export function copyFilesInto(dir: string, files: ReadonlyArray<{ name: string; sha256: string; bytes: Uint8Array | null }>, projectDir = dir): { written: number; kept: number } {
+function copyFilesInto(dir: string, files: ReadonlyArray<{ name: string; sha256: string; bytes: Uint8Array | null }>, projectDir = dir): { written: number; kept: number } {
   for (const f of files) {
     if (path.basename(f.name) !== f.name || path.win32.basename(f.name) !== f.name || f.name === "." || f.name === "..") throw new CopyRefusal("PATH_OUTSIDE_ROOT", dir, "a file name is not one path segment")
     if (!SHA256.test(f.sha256)) throw new CopyRefusal("INTEGRITY_MISMATCH", dir, "the store gave no sha256 for an output")
@@ -211,6 +214,7 @@ function sameFileThere(dir: string, name: string, sha256: string): boolean {
 }
 
 /** The copy itself (no store access): path rule, checks, write, read back. Never throws. */
+/** @internal test seam */
 export function copyToProject(input: ProjectCopyInput): ProjectCopyOk | ProjectCopyFailure {
   const projectDir = typeof input.projectDir === "string" ? input.projectDir : ""
   try {
@@ -266,6 +270,7 @@ export function copyToProject(input: ProjectCopyInput): ProjectCopyOk | ProjectC
  * is true on the items of the highest Studio revision listed for that document; items without a `documentId` keep
  * their mark. Above the row cap the oldest items that are not latest leave the LIST (their files stay on disk).
  */
+/** @internal test seam */
 export function mergeRowDeliverables(existing: readonly RowDeliverable[], fresh: readonly RowDeliverable[]): { list: RowDeliverable[]; dropped: number } {
   const paths = new Set(fresh.map((f) => f.path))
   const all = [...existing.filter((d) => !paths.has(d.path)), ...fresh]
@@ -291,7 +296,7 @@ export interface ProjectCopyStore {
   transaction<T>(fn: (tx: StoreTx) => Promise<T>): Promise<T>
   readonly missions?: Pick<MissionStore, "rowContract" | "setRowDeliverables">
 }
-export interface ProjectCopyRender {
+interface ProjectCopyRender {
   documentId: string
   revisionNo: number
   /** The PRIMARY outputs of this render (any format; only DOCX, PDF, HTML are copied). */

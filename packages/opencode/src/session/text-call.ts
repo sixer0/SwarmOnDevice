@@ -26,10 +26,10 @@
 // - Markup that is cut short or has lost pieces is `damaged` / `truncated`; markup closing tags in the text of a step
 //   that also made a structured call are `damaged` / `leaked-markup`.
 
-export type TextCallForm = "markup" | "name-json" | "values-only"
-export type TextCallCause = "leaked-markup" | "truncated" | "args-invalid"
+type TextCallForm = "markup" | "name-json" | "values-only"
+type TextCallCause = "leaked-markup" | "truncated" | "args-invalid"
 
-export type TextCall =
+type TextCall =
   | { kind: "none" }
   | {
       kind: "call"
@@ -62,7 +62,7 @@ export type TextCallTool = {
   readonly schema?: unknown
 }
 
-export type TextCallInput = {
+type TextCallInput = {
   /** The final assistant text of the step. */
   readonly text: string
   readonly tools: readonly TextCallTool[]

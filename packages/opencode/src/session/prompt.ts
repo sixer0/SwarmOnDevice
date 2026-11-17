@@ -106,15 +106,15 @@ function formatMcpResourceBytes(value: number) {
 // the session has a running mission row, does not end the turn: the model gets one synthetic user message and the loop
 // goes on. Names, texts and the limit are from the 1.3.3 register (section 4). The call is never run from the text.
 /** Corrections and continues in a row per turn; a step with a real tool call resets the count, the next one ends the turn. */
-export const MAX_TURN_CORRECTIONS = 2
-export const TEXT_CALL_CORRECTION_MARK = "text_call_correction"
-export const EMPTY_STEP_CONTINUE_MARK = "empty_step_continue"
-export const textCallCorrection = (tool: string) =>
+const MAX_TURN_CORRECTIONS = 2
+const TEXT_CALL_CORRECTION_MARK = "text_call_correction"
+const EMPTY_STEP_CONTINUE_MARK = "empty_step_continue"
+const textCallCorrection = (tool: string) =>
   `Your last message wrote a tool call as text (${tool}). Nothing ran. Call the tool itself now with the same arguments; never write a call in your answer.`
-export const emptyStepContinue = (mission: string, rows: readonly string[]) =>
+const emptyStepContinue = (mission: string, rows: readonly string[]) =>
   `Your last step was empty and mission ${mission} still has a running row (${rows.join(", ")}). Continue with a tool call, or set the row's status with its note.`
 /** One log line per final step the fence acted on or recognised (`action`: correction, continue, end, none). */
-export const LOOP_GUARD_LOG = "loop exit guard"
+const LOOP_GUARD_LOG = "loop exit guard"
 
 function isOrphanedInterruptedTool(part: SessionV1.ToolPart) {
   // cleanup() marks abandoned tool_use blocks this way after retries/aborts.

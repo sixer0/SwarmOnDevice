@@ -290,7 +290,7 @@ export const CAPACITY_SPLIT_TEXT = "pecah menjadi 2 diagram";
 
 const mmLabel = (mm: number): string => (Number.isInteger(mm) ? String(mm) : String(Math.round(mm * 1000) / 1000));
 
-export interface CapacityWidthChoice {
+interface CapacityWidthChoice {
   /** What is counted, as printed after the number ("simpul per peringkat", "kolom"). */
   unit: string;
   /** How many `unit` fit at a figure width (mm). Called for the text width and the full width. */

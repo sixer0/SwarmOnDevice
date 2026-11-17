@@ -212,6 +212,7 @@ export function createDatumStudio(deps: DatumStudioDeps) {
  * dev: the staged copy `<appPath>/.library-stage` (scripts/stage-library.ts). A missing folder, a file or a symlink in
  * its place gives none: the host then answers "not available".
  */
+/** @internal test seam */
 export function studioLibraryRoot(input: { isPackaged: boolean; resourcesPath?: string; appPath: string }): string | undefined {
   const dir = input.isPackaged ? (input.resourcesPath ? join(input.resourcesPath, "knowledge-library") : undefined) : join(input.appPath, ".library-stage")
   if (!dir) return undefined
@@ -220,12 +221,13 @@ export function studioLibraryRoot(input: { isPackaged: boolean; resourcesPath?: 
 }
 
 /** C33: the bundled on-disk skills whose files studio_library_read serves as `skill:<name>/...`. */
-export const STUDIO_SKILL_ROOT_NAMES = ["gsp-diagram-standard"] as const
+const STUDIO_SKILL_ROOT_NAMES = ["gsp-diagram-standard"] as const
 
 /**
  * 1.3.3 row 100 / C33: STUDIO_SKILL_ROOTS. Packaged: `<Resources>/<name>` (electron-builder.config.ts maps
  * datum/<name> there); dev: `<appPath>/datum/<name>`. A missing folder, a file or a symlink in its place is left out.
  */
+/** @internal test seam */
 export function studioSkillRoots(input: { isPackaged: boolean; resourcesPath?: string; appPath: string }): Record<string, string> | undefined {
   const base = input.isPackaged ? input.resourcesPath : join(input.appPath, "datum")
   if (!base) return undefined

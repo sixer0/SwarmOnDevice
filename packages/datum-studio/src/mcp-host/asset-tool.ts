@@ -130,12 +130,13 @@ function sourceHint(p: string | undefined): string {
  * the current revision (exactly the keys compose read, COMPOSE_PARAM_KEYS), else the pinned template's parameters
  * (a v1 snapshot without a stored context). Document-level parameters; a slot's own override is not consulted.
  */
+/** @internal test seam */
 export function figureParamsOf(snapshot: unknown, template: Pick<ResolvedTemplate, "params"> | null | undefined): ParamMap | undefined {
   return storedComposeContext(snapshot)?.params ?? template?.params ?? undefined
 }
 
 /** Default resolver: the current revision and its pinned template, read through the figure-preview loader. */
-export async function documentFigureParams(documentId: string): Promise<ParamMap | undefined> {
+async function documentFigureParams(documentId: string): Promise<ParamMap | undefined> {
   const f = await loadFigureContext(documentId, undefined)
   return figureParamsOf(f.snapshot, f.template)
 }

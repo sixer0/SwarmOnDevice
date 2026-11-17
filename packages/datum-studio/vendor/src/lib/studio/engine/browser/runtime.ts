@@ -100,9 +100,10 @@ export const BRIDGE_READ_MARGIN_MS = 45000;
  * connection and does not answer (Electron main frozen, hang trace 2026-11-17) used to hold the
  * preflight for 30 000 + 45 000 ms and was then reported as "engine missing".
  */
+/** @internal test seam */
 export const BRIDGE_HANDSHAKE_TIMEOUT_MS = 8000;
 /** Fixed text of the handshake timeout; the PDF preflight maps it to `PDF_BRIDGE_TIMEOUT` (preflight.ts). */
-export const BRIDGE_HANDSHAKE_TIMEOUT_MESSAGE = "render bridge handshake timed out";
+const BRIDGE_HANDSHAKE_TIMEOUT_MESSAGE = "render bridge handshake timed out";
 
 /** What the bridge reports at the handshake (row 24 dispatch.ts EngineInfo + hello extras). */
 export interface BridgeInfo {
@@ -469,6 +470,7 @@ function mmOf(v: string | number | undefined, fallback: number): number {
 const PX_PER_MM = 96 / 25.4;
 
 /** Swarm 1.3.3 row 132: name of the page file a `checkPage` request points at (inside the page's work folder). */
+/** @internal test seam */
 export const CHECK_PAGE_FILE = "check.html";
 
 /**

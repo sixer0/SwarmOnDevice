@@ -134,9 +134,10 @@ export function applyMigrations(db: SqliteDb, opts: { release: string; now: () =
 }
 
 /** `store_meta` key holding the reversal record: a JSON array, one entry per reversal, oldest first. Written only by a reversal. */
+/** @internal test seam */
 export const MIGRATION_REVERSALS_KEY = "migration_reversals"
 
-export interface RevertOptions {
+interface RevertOptions {
   release: string
   now: () => number
   /** Allow a reverse step whose `downLossSql` counts rows above zero. */
@@ -171,6 +172,7 @@ export interface RevertResult {
  * `details.direction = "down"`.
  * `list` defaults to MIGRATIONS; tests pass a prefix or add synthetic migrations.
  */
+/** @internal test seam */
 export function revertMigration(db: SqliteDb, opts: RevertOptions & { id: string }, list: readonly Migration[] = MIGRATIONS): RevertResult {
   const applied = appliedInOrder(db, list)
   const m = applied.at(-1)
@@ -228,6 +230,7 @@ export function revertMigration(db: SqliteDb, opts: RevertOptions & { id: string
  * transaction and its own record, so a refusal part-way leaves the store at the last migration that was reverted
  * cleanly, never between two. Returns the steps done (empty when the store is already at `toId`).
  */
+/** @internal test seam */
 export function revertMigrations(db: SqliteDb, opts: RevertOptions, toId: string, list: readonly Migration[] = MIGRATIONS): RevertResult[] {
   const applied = appliedInOrder(db, list)
   const at = applied.findIndex((m) => m.id === toId)

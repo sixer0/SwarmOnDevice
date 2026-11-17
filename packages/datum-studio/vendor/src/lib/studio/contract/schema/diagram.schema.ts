@@ -53,6 +53,7 @@ const arrowSize = { enum: [...DIAGRAM_ARROW_SIZES] } as const;
  * Swarm 1.3.3 row 26 (ST-4; register 03 §6): the pair key of an off-page connector, equal on both ends of the pair.
  * Anchored and bounded (1..32 characters), so it needs no `maxLength`.
  */
+/** @internal test seam */
 export const DIAGRAM_REF_KEY_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$";
 
 export const diagramSchema = {

@@ -82,7 +82,7 @@ export type MissionDeliverablesProps = {
   sessionDirectory?: string
 }
 
-export type MissionDeliverableLinksProps = DeliverableLinkActions & {
+type MissionDeliverableLinksProps = DeliverableLinkActions & {
   links: readonly DeliverableLink[]
   /** the mission id, for the not-in-project text */
   mission: string
@@ -98,6 +98,7 @@ const LINK_ACTION =
  * 1.3.3 row 72: the project copies of a deliverable as links, grouped by revision. Props only (no context), so it
  * renders in a test and on any existing view. Text nodes only; every path was shaped by `deliverableLinks`.
  */
+/** @internal test seam */
 export function MissionDeliverableLinks(props: MissionDeliverableLinksProps) {
   const groups = createMemo(() => linkGroups(props.links))
   const current = createMemo(() => groups().filter((group) => group.latest))
@@ -386,7 +387,7 @@ function useDeliverableLinkContext() {
   }
 }
 
-export type MissionDeliverableLinksForProps = {
+type MissionDeliverableLinksForProps = {
   mission: MissionVM | null | undefined
   /** the links of this row's deliverable(s) ... */
   rowId?: string

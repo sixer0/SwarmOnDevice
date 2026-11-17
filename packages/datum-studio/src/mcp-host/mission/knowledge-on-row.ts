@@ -13,7 +13,7 @@
 import { LIBRARY_READ_CALL_NAME } from "../library-read.ts"
 import { libraryRootOf, loadTriggerIndex, matchKnowledge, resolveTriggerIndexPath, type KnowledgeMatch } from "./knowledge-match.ts"
 
-export type LibraryOptions = { libraryRoot?: string | null }
+type LibraryOptions = { libraryRoot?: string | null }
 
 /** A matcher over one read of the index (read once here, used for every row of a call). */
 export function rowKnowledgeMatcher(opts: LibraryOptions): (text: string) => KnowledgeMatch {
@@ -30,6 +30,7 @@ export function rowKnowledgeMatcher(opts: LibraryOptions): (text: string) => Kno
  * The path is printed verbatim (a `skill:` path included: studio_library_read serves it, C33). Said in words, never
  * as `tool_name {json}`: models copy that shape as a text-form tool call (MC-1/MC-3).
  */
+/** @internal test seam */
 export function libraryReadCall(firstFile: string, at?: { mission: string; row: string }): string {
   const where = at ? `, mission ${JSON.stringify(at.mission)}, row ${JSON.stringify(at.row)}` : " (no mission and row: nothing is recorded)"
   return `call the tool ${LIBRARY_READ_CALL_NAME} with path ${JSON.stringify(firstFile)}${where}`

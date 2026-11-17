@@ -74,8 +74,8 @@ export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMI
  * Row 60 (ST-9 item 2): what the preview says, in place of the engine's draft note, when a diagram's `labels_verified`
  * is not true. Nothing for the agent to fix and nothing the agent may set: a person raises the flag.
  */
-export const LABELS_UNCHECKED_PREVIEW_DETAIL = `${LABELS_UNCHECKED_TEXT.ID} (${LABELS_UNCHECKED_TEXT.EN}): bukan cacat; gambar berstatus draf sampai orang memeriksanya`;
-export const LABELS_UNCHECKED_PREVIEW_SUGGEST = "tidak ada yang perlu diperbaiki agen; labels_verified ditetapkan orang, jangan mengirim labels_verified: true";
+const LABELS_UNCHECKED_PREVIEW_DETAIL = `${LABELS_UNCHECKED_TEXT.ID} (${LABELS_UNCHECKED_TEXT.EN}): bukan cacat; gambar berstatus draf sampai orang memeriksanya`;
+const LABELS_UNCHECKED_PREVIEW_SUGGEST = "tidak ada yang perlu diperbaiki agen; labels_verified ditetapkan orang, jangan mengirim labels_verified: true";
 
 /**
  * Swarm 1.2.6 row 73 (W-03, register N-020): class of a preview issue. A notice = the engine already adapted the

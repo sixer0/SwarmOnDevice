@@ -26,24 +26,28 @@ import { isInside } from "./paths.ts"
 import type { StoreTx } from "./types.ts"
 
 /** N of decision C6: the newest revisions of each document that are kept whatever refers to them. */
+/** @internal test seam */
 export const RETENTION_KEEP_RECENT = 10
 /** Soft-delete window of decision C6: days a revision stays marked before a purge may remove it. */
+/** @internal test seam */
 export const RETENTION_SOFT_WINDOW_DAYS = 14
 /** Version of the keep rule, stored with every mark. Raise it when a clause of `revisionKeepSet` changes. */
-export const RETENTION_RULE_VERSION = 1
+const RETENTION_RULE_VERSION = 1
 /** `store_meta` key of the retention record: a JSON array, one entry per purge or restore, oldest first. */
-export const RETENTION_LOG_KEY = "revision_retention_log"
-export const RETENTION_BACKUP_FORMAT = "datum-studio.revision-backup/v1"
+const RETENTION_LOG_KEY = "revision_retention_log"
+const RETENTION_BACKUP_FORMAT = "datum-studio.revision-backup/v1"
 
 const DAY_MS = 86_400_000
 
-export interface RetentionReader {
+interface RetentionReader {
   get<T = Record<string, unknown>>(sql: string, params?: readonly SqlParam[]): T | undefined
   all<T = Record<string, unknown>>(sql: string, params?: readonly SqlParam[]): T[]
 }
 
 /** The clauses of the keep rule, in the order of `revisionKeepSet`. */
+/** @internal test seam */
 export const KEEP_CLAUSES = ["latest", "recent", "mission-document", "row-deliverable", "mission-event", "mission-snapshot", "doc-ref", "output", "verification", "mission-text"] as const
+/** @internal test seam */
 export type KeepClause = (typeof KEEP_CLAUSES)[number]
 
 export interface KeptRevision {
@@ -172,6 +176,7 @@ const REV_RANGE_MAX = 1000
  * The revision numbers a text names after the word rev / revisi / revision / revisionNo: single numbers, lists
  * ("rev 3, 4 dan 7") and ranges ("revisi 3-5", "rev 3 s.d. 5"). A revision letter ("Rev A") names no number.
  */
+/** @internal test seam */
 export function revisionNumbersIn(text: string): number[] {
   const found = new Set<number>()
   for (const word of text.matchAll(REV_WORD)) {
@@ -288,7 +293,7 @@ const FAMILY: ReadonlyArray<{ table: string; where: string; order: string }> = [
 /** Tables with a foreign key to `revision` that must hold no row of a purged revision. */
 const NEVER_PURGED = ["output_file", "output_verification"] as const
 
-export interface PurgeOptions {
+interface PurgeOptions {
   /** Absolute path of the backup file to write: outside the store root, not existing, its folder existing. */
   backupFile: string
   /** Who asked for the purge (a person or an operator command). Recorded in `store_meta`. Required: a purge is never implicit. */
@@ -304,7 +309,7 @@ export interface PurgeOptions {
   limit?: number
 }
 
-export interface PurgedRevision {
+interface PurgedRevision {
   revisionId: string
   documentId: string
   revisionNo: number
@@ -448,7 +453,7 @@ export function purgeMarkedRevisions(tx: StoreTx, opts: PurgeOptions): PurgeResu
   return { purged: due.length, revisions, rows, snapshotBytes, backup, remainingMarked: marks.length - due.length, windowDays, keepRecent }
 }
 
-export interface BackupContent {
+interface BackupContent {
   file: string
   storeId: string
   schemaVersion: string
@@ -464,6 +469,7 @@ export interface BackupContent {
  * the digest of every revision recomputed from its rows against the digest stored beside it. Throws
  * INTEGRITY_MISMATCH on any difference. Writes nothing.
  */
+/** @internal test seam */
 export function readRevisionBackup(file: string): BackupContent {
   if (!existsSync(file)) throw new StoreError("NOT_FOUND", "backup file missing", { file })
   const db = openSqlite(file, { readonly: true })

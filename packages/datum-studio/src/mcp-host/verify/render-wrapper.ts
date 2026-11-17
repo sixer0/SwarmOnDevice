@@ -358,7 +358,7 @@ async function writeRecords(store: RenderVerifyStore, report: OutputVerification
  * not there (never a guessed path). Figure files are NOT copied into the project: the project copy of row 68 holds the
  * document deliverables only (decision of row 114, reported to the controller).
  */
-export interface RenderFigureFile {
+interface RenderFigureFile {
   /** Printed figure number ("Gambar 1.2"), or the block id/address the engine keyed the file by. Document text: untrusted. */
   label: string | null
   /** The figure block's id in the revision snapshot; null when the snapshot does not name it. */
@@ -370,9 +370,11 @@ export interface RenderFigureFile {
 }
 
 /** Items in the reply at most; the rest are counted in `figuresTruncated` (the files stay in the store). */
+/** @internal test seam */
 export const RENDER_FIGURES_MAX = 200
 
 /** The `figures` reply: one item per FIGURE file of the render, in output (document) order. */
+/** @internal test seam */
 export function figureFiles(files: ReadonlyArray<VerifyOutputFile>, snapshot: unknown): { items: RenderFigureFile[]; truncated: number } {
   const all = files.filter((f) => f.role === "FIGURE" && (f.format === "SVG" || f.format === "PNG"))
   // The reply must never fail on these lookups: an unreadable snapshot gives null block ids, an unreadable path null.
@@ -405,6 +407,7 @@ function isRegularFile(p: string): boolean {
 const FIGURE_PATH_SAFE = /^[A-Za-z0-9 _.,()@:/\\-]{1,1024}$/
 
 /** Reply text of `figures` (safe tokens only, MCP-D4): a label shows only when it is a safe token. */
+/** @internal test seam */
 export function figureLines(r: { items: RenderFigureFile[]; truncated: number }): string[] {
   const tok = (s: string | null) => (s && SAFE.test(s) ? s : "?")
   // A printed label has a space ("Gambar 1.2"); quoted, letters, digits and . _ : - only.

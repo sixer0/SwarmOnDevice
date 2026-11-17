@@ -25,9 +25,10 @@ import { isRevealablePath, type RevealPathDeps } from "./reveal-path"
 export const PROJECT_DELIVERABLES_DIR = "deliverables"
 
 /** Document types only (the app's FOLDER_OPEN list, mission-deliverables-model.ts): nothing that runs. */
+/** @internal test seam */
 export const OPEN_DELIVERABLE_EXTENSIONS: readonly string[] = ["pdf", "html", "docx", "xlsx", "pptx", "md", "txt"]
 
-export type OpenDeliverableDeps = RevealPathDeps & {
+type OpenDeliverableDeps = RevealPathDeps & {
   /** Default: fs.statSync(path).isFile(); false when it throws. */
   isFile?: (path: string) => boolean
 }
@@ -41,6 +42,7 @@ function regularFile(path: string) {
 }
 
 /** The checked realpath to open, or null. */
+/** @internal test seam */
 export function checkedDeliverablePath(input: unknown, roots: readonly string[], deps: OpenDeliverableDeps = {}): string | null {
   const f = flavourOf(deps.platform ?? process.platform)
   const realpath = deps.realpath ?? realpathSync.native

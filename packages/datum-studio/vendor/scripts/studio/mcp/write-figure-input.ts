@@ -43,7 +43,7 @@ function contractIntervals(): { schema: Rec; properties: Rec; items: Rec } {
 const CONTRACT = contractIntervals();
 
 /** Chart code of an intervals chart when `type` is not a chart code (the only registry code with this data shape). */
-export const CHART_INTERVALS_CODE = "W-07";
+const CHART_INTERVALS_CODE = "W-07";
 /** Name of the item list in the chart block (register 03 §6): `chart.intervals` = contract `data.items`. */
 export const CHART_INTERVALS_KEY = "intervals";
 /** Data-level fields beside the items, read from the contract (today: statusAt, timeUnit). */
@@ -51,6 +51,7 @@ export const CHART_INTERVALS_DATA_KEYS: readonly string[] = Object.keys(CONTRACT
 /** Every chart-block key that belongs to the intervals shape. */
 export const CHART_INTERVALS_INPUT_KEYS: readonly string[] = [CHART_INTERVALS_KEY, ...CHART_INTERVALS_DATA_KEYS];
 /** Fields of one interval item, read from the contract (label, start, end, group, milestone, float, critical). */
+/** @internal test seam */
 export const CHART_INTERVALS_ITEM_KEYS: readonly string[] = Object.keys((CONTRACT.items.items as Rec).properties as Rec);
 
 /**
@@ -86,7 +87,7 @@ export function liftIntervalsData(c: Rec): boolean {
   return true;
 }
 
-export interface IntervalsChart {
+interface IntervalsChart {
   code: string;
   /** `{ shape: "intervals", items, statusAt?, timeUnit? }`: the input values, unchanged. */
   data: Rec;
@@ -141,6 +142,7 @@ export function intervalsRows(c: Rec): Array<Array<string | number>> {
  * waterfall P-10, small multiples P-12, P-14, area W-04, diverging K-03) are NOT listed and stay accepted.
  * Pinned to the engine by test/st10-write-edit-parity (every code is rendered with one negative value).
  */
+/** @internal test seam */
 export const NON_NEGATIVE_CHART_CODES: ReadonlySet<string> = new Set([
   "P-01", "P-02", "P-03", "P-09", "P-11",
   "K-01", "K-02", "K-04", "K-05", "K-06", "K-07", "K-08", "K-09", "K-10", "K-12",
@@ -148,7 +150,7 @@ export const NON_NEGATIVE_CHART_CODES: ReadonlySet<string> = new Set([
   "V-02", "V-06",
 ]);
 
-export interface NegativeValue {
+interface NegativeValue {
   /** Index of the series and of the value inside it, as in the input `series[j].values[k]`. */
   series: number;
   index: number;

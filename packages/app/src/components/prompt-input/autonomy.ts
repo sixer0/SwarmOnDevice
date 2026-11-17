@@ -151,6 +151,7 @@ export function createPromptAutonomy(input: {
 /** The scopes already asked in this run of the app: one prompt each, whatever the answer. */
 const asked = new Set<string>()
 /** True once per scope and app run, and only for a scope the server says needs consent again. */
+/** @internal test seam */
 export function claimReconsent(known: Pick<Known, "where" | "needsReconsent">) {
   if (!known.needsReconsent) return false
   const key = known.where.sessionID ?? "folder"
@@ -159,12 +160,14 @@ export function claimReconsent(known: Pick<Known, "where" | "needsReconsent">) {
   return true
 }
 /** For tests: a new app run. */
+/** @internal test seam */
 export const forgetReconsentAsked = () => asked.clear()
 
 /**
  * The one re-consent prompt (MC-7). A yes sends on with the consent; a no, Escape, a click outside or any other close
  * sends off, so the mode never stays half on. Returns what was sent, or undefined when nothing was.
  */
+/** @internal test seam */
 export async function answerReconsent(
   known: Pick<Known, "where">,
   input: {

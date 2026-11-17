@@ -58,6 +58,7 @@ export { diagramLabelsUnchecked, LABELS_UNCHECKED_TEXT };
  * `revision.lint_report.checks`, a `LintReport.checks`, or `FigureBuild.extra`). `[]` = nothing waits for a person.
  * Pure; reads only `checkId` and `status`, so it works on the JSON read back from the store.
  */
+/** @internal test seam */
 export function awaitingHumanCheckOf(checks: ReadonlyArray<{ checkId?: unknown; status?: unknown }> | null | undefined): string[] {
   if (!Array.isArray(checks)) return [];
   return checks.some((c) => c !== null && typeof c === "object" && c.checkId === LABELS_VERIFIED_CHECK && c.status === "REPORT") ? [LABELS_VERIFIED_HUMAN_CHECK] : [];
@@ -147,6 +148,7 @@ function keyRowPlain(keyRow: unknown): string | undefined {
  * are the key, in the block form compose writes (label run + one text run). Undefined when the block is
  * not an artefact reference or the artefact has no row (an authored `keyRow` then stays as written). Pure.
  */
+/** @internal test seam */
 export function artifactBlockKeyRow(spec: StudioDiagramV1, content: Readonly<Record<string, unknown>>): { runs: { t: string }[] } | undefined {
   if (!isArtifactRef(content.spec)) return undefined;
   const key = blockKeyRow(spec, keyRowPlain(content.keyRow));
@@ -234,10 +236,11 @@ export interface FigureBuild {
 const FIGURE_TYPES: readonly string[] = ["chart", "diagram", "symbolSheet"];
 
 /** Row 56 (row 50 request): words appended to a render job error whose capacity refusal carries `details.split`. */
+/** @internal test seam */
 export const RENDER_SPLIT_NOTE = "Kerangka pecahan dua spec ada di details.split galat ini (sama dengan pratinjau studio_figure_preview).";
 
 /** Row 56: the split skeleton of a capacity refusal (`details.split`, row 51), or undefined. */
-export function capacitySplitOf(err: unknown): unknown {
+function capacitySplitOf(err: unknown): unknown {
   if (!(err instanceof StudioEngineError) || !isRecord(err.details)) return undefined;
   return err.details.split ?? undefined;
 }

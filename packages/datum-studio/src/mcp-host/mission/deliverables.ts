@@ -149,6 +149,7 @@ type R = Record<string, unknown>
  * files) are not part of a document and are skipped. `exists` replaces the presence probe of a path the containment
  * rule accepted (tests); it never lets a refused path through.
  */
+/** @internal test seam */
 export function readProjectCopies(q: MissionReader, mission: string, exists?: (p: string) => boolean): Map<string, ProjectFileWire[]> {
   const out = new Map<string, ProjectFileWire[]>()
   const m = q.get<{ project_dir: string }>("SELECT project_dir FROM mission WHERE id = ?", [mission])

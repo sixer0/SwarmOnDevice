@@ -75,6 +75,7 @@ const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest(
 // dict order, which fixes the order of the output). It runs as `python3 -I`, so no user site, PYTHON* variable or
 // current folder reaches it. The builder has no strict flag, so the strict check (every domain has `terms` and
 // `read_order`) is enforced here, on the JSON it wrote, by checkIndex.
+/** @internal test seam */
 export const SCRIPT_SOURCE = path.join(import.meta.dir, "..", "datum", "knowledge-library", "scripts")
 const BUILDER = path.join(SCRIPT_SOURCE, "build_kl_index.py")
 const BANK = "4 Knowledge Bank/ekas-lapis-teks"
@@ -90,6 +91,7 @@ export const INDEX_FILES = [
 // electron-builder maps datum/knowledge-library into Resources/knowledge-library beside the staged library, so a
 // packaged copy also holds these, byte for byte as in the repo. Test files, testdata and the repo snapshot of the
 // indexes are filtered out of that mapping (electron-builder.config.ts), so they are refused here.
+/** @internal test seam */
 export const SHIPPED_SCRIPTS = ["scripts/README.md", "scripts/build_kl_index.py"]
 const PYTHON_NEEDED = "python3 (3.7 or later, standard library only) is needed on PATH to build the library indexes"
 
@@ -380,6 +382,7 @@ async function buildIndexes(python: string, stage: string) {
 
 // The strict check of KL-1 item 3: every domain names trigger words (`terms`) and a reading order (`read_order`).
 // A domain name is printed only when it has the form of one; otherwise its position stands in.
+/** @internal test seam */
 export function checkIndex(bytes: Uint8Array) {
   const fail = (detail: string) => new StageError("LIB_INDEX_DOMAIN", detail)
   const index = (() => {

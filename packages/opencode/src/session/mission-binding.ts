@@ -60,7 +60,7 @@ export type MissionBinding = {
 /** What a call did to the session's binding. */
 export type Outcome = "set" | "cleared" | "none"
 
-export type Observed = {
+type Observed = {
   sessionID: string
   /** The tool's own name on the server, without the server prefix: `studio_mission_get`. */
   tool: string
@@ -324,6 +324,7 @@ export function get(sessionID: string): MissionBinding | undefined {
 }
 
 /** Row 11: does this session have a mission with a running row? */
+/** @internal test seam */
 export function hasRunningRow(sessionID: string): boolean {
   return (bindings.get(sessionID)?.runningRows.length ?? 0) > 0
 }

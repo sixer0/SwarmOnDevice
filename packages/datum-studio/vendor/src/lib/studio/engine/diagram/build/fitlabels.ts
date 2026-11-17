@@ -45,6 +45,7 @@ export interface ZoneGeom {
 }
 
 /** Row 42: width (mm) of a container label as drawn (role `table_header`; the case follows the role's `upper`). */
+/** @internal test seam */
 export function zoneLabelWidthMm(label: string): number {
   return headerWidth(label);
 }
@@ -67,6 +68,7 @@ const ZONE_GROUND_RISE_EM = 0.8;
  * attribute right before a text, fit/lint.ts `prevKnock`), as a frame or as a container rule; it carries no
  * `data-mark` (decoration, G-2).
  */
+/** @internal test seam */
 export function zoneLabelGroundSvg(g: Pick<ZoneGeom, "label" | "lx" | "ly">, sheetW: number, dy = 0): string {
   const size = pt2mm(role("table_header").size);
   const x0 = Math.max(0, g.lx - ZONE_GROUND_PAD_MM);
@@ -175,6 +177,7 @@ const ZONE_RULE_CLEAR_MM = 0.02;
  * side even where a connector runs along it (R2 u1/1, u1/2: a connector routed on the frame's top line carried its
  * label there). The dashed frame is not a rule for the geometry lint's scanner, so it is handed over here. None for a legacy flow (`zoneClearOn` false: frozen at its 1.2.5 bytes, C10(a), C12).
  */
+/** @internal test seam */
 export function zoneFrameRules(s: StudioDiagramV1, sheet: Sheet, fit: boolean): ContainerRule[] {
   if (!zoneClearOn(s)) return [];
   const out: ContainerRule[] = [];

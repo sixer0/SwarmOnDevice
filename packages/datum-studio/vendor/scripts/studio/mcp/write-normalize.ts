@@ -111,6 +111,7 @@ function coalesceRows(blocks: readonly unknown[], n: Notes, where: string): Arra
 const TABLE_KEYS = ["table", "caption", "source", "unit"];
 // Swarm 1.3.3 row 39 (ST-2): the W-07 intervals keys and `width` come from the figure contract (write-figure-input.ts).
 // Row 77 (ST-10): the list is exported for the parity test; it is no longer a prune list (see normalizeChart).
+/** @internal test seam */
 export const CHART_KEYS = ["type", "categories", "series", "caption", "source", "unit", "stacked", FIGURE_WIDTH_KEY, ...CHART_INTERVALS_INPUT_KEYS];
 
 /**

@@ -33,8 +33,9 @@ import { sessionLogRef, type HostToolExtension, type HostToolSession } from "../
 import { readWitnessManifest, VERIFY_WITNESS_DPI, type WitnessManifest } from "./verify-outputs.ts"
 
 type Rec = Record<string, unknown>
-export type WitnessListLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Rec) => void
+type WitnessListLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Rec) => void
 
+/** @internal test seam */
 export const WITNESS_LIST_TOOL = "studio_witness_list"
 const SOURCE = "datum-studio-host.witness-list"
 const ID_MAX = 64
@@ -45,6 +46,7 @@ const MAX_FOLDERS = 200
 /** Pages listed in the text; the structured result always carries all of them. */
 const MAX_TEXT_PAGES = 400
 
+/** @internal test seam */
 export const WITNESS_LIST_DESCRIPTION =
   "List the page images (PNG, 150 dpi) of every page of a document revision that carries a figure or chart, to look at them. Read only: the images are made by studio_render; when there are none yet, the reply names that call. Paths are absolute files in the Studio store (witness images, not deliverables). `missing` lists figure pages without an image."
 
@@ -114,7 +116,7 @@ function renderFolders(verifyDir: string): string[] {
   return out
 }
 
-export interface WitnessLookup {
+interface WitnessLookup {
   revisionNo: number
   /** The witness list of the newest render of the revision that has one; null = none. */
   witness: WitnessManifest | null
@@ -124,7 +126,7 @@ export interface WitnessLookup {
  * The witness list of one document revision, or `witness: null`. Read only.
  * Throws WitnessListRefusal DOCUMENT_NOT_FOUND / REVISION_NOT_FOUND.
  */
-export async function lookupWitness(store: WitnessListStore, documentId: string, revisionNo?: number): Promise<WitnessLookup> {
+async function lookupWitness(store: WitnessListStore, documentId: string, revisionNo?: number): Promise<WitnessLookup> {
   const doc = await store.getDocument(documentId)
   if (!doc) throw new WitnessListRefusal("DOCUMENT_NOT_FOUND", "Document not found", { documentId: tok(documentId, "?") })
   const n = revisionNo ?? doc.document.current_revision_no
@@ -144,6 +146,7 @@ export async function lookupWitness(store: WitnessListStore, documentId: string,
 }
 
 /** The one call that makes the witness images of a revision. */
+/** @internal test seam */
 export function witnessRenderCall(documentId: string, revisionNo?: number): string {
   return `call the tool datum-studio_studio_render with documentId "${tok(documentId, "<documentId>")}"${revisionNo !== undefined ? `, revisionNo ${revisionNo}` : ""}, formats "html" and "pdf"`
 }
@@ -189,7 +192,7 @@ function result(documentId: string, asked: number | undefined, found: WitnessLoo
   }
 }
 
-export interface WitnessListOptions {
+interface WitnessListOptions {
   /** The host's log channel; without it the tool writes its own daily JSONL under the store. */
   log?: WitnessListLog
 }

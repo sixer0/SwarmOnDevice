@@ -66,6 +66,7 @@ interface Item {
  * terkecil yang sudah dihasilkan aturan lama, yaitu batas atas `rowsInProposal` (15 baris) pada
  * tinggi acuan 62 mm dengan pita KUNCI dan garis status: (62 - 9,6 - 5,0) / 15 = 3,16 mm.
  */
+/** @internal test seam */
 export const W07_MIN_ROW_PITCH_MM = 3.16;
 /** Pita atas (mm): tepi, baris KUNCI, label garis hari ini / status. Pita sumbu x di bawah. */
 const TOP_PAD_MM = 1.6;

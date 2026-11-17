@@ -7,7 +7,7 @@
  */
 import { McpToolError } from "./safety";
 import { tok, type ToolWarning } from "./tool-kit";
-import { cellOf, chapterOf, chartBlock, diagramBlock, type ClientBlock, type ClientChart } from "./write-client";
+import { cellOf, chapterOf, chartBlock, type ClientBlock, type ClientChart } from "./write-client";
 import { warnTableOverflow, type Cell, type DiagramInput } from "./write-content";
 import { CHART_INTERVALS_DATA_KEYS, CHART_INTERVALS_KEY, FIGURE_WIDTH_KEY, isIntervalsChart } from "./write-figure-input";
 import { parseInline } from "../../../src/lib/studio/services/import/inline";
@@ -493,7 +493,10 @@ function diagramPatch(block: Rec, edit: Rec, warn: (w: ToolWarning) => void, lab
   const { type: _type, ...cur } = block;
   if (edit.spec !== undefined) delete cur.artifactId;
   if (edit.artifactId !== undefined) delete cur.spec;
-  return diagramBlock({ ...cur, ...edit } as DiagramInput, null, warn, label);
+  // Swarm 1.3.3 row 169: through chapterOf, the entry studio_write itself uses, so diagramBlock stays file-local in
+  // write-client.ts (AC-A03.61). A refused spec throws there (default sink), so a returned chapter holds the one block.
+  const ch = chapterOf({ heading: "", blocks: [{ diagram: { ...cur, ...edit } as DiagramInput }] }, "", "", null, warn, label);
+  return (ch?.intro as Rec[] | undefined)?.[0] ?? {};
 }
 
 /** Row 77: an intervals (W-07) chart, stored or given, is merged field by field and rebuilt by the same builder. */

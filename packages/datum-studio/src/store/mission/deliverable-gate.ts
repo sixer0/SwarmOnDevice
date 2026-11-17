@@ -32,13 +32,13 @@ import type { MissionReader } from "./mission-store.ts"
 import type { RowDeliverable } from "./types.ts"
 
 /** A refusal lists at most this many expected files. */
-export const DELIVERABLE_GATE_LIST_MAX = 20
+const DELIVERABLE_GATE_LIST_MAX = 20
 /** The formats row 68 copies; the order a missing set is named in. */
 const COPY_FORMATS = ["PDF", "DOCX", "HTML"] as const
 
-export type DeliverableGateCause = "missing" | "sha-mismatch" | "PROJECT_UNWRITABLE"
+type DeliverableGateCause = "missing" | "sha-mismatch" | "PROJECT_UNWRITABLE"
 
-export interface ExpectedProjectFile {
+interface ExpectedProjectFile {
   /** Project-relative, `/` separators: `deliverables/<mission id>/<doc number> Rev<letter> rev<N>.<ext>`. */
   path: string
   /** The recorded sha256, or the store output's sha256 when nothing is recorded yet; null when neither exists. */
@@ -51,7 +51,7 @@ export interface ExpectedProjectFile {
   olderRevisionNo?: number
 }
 
-export interface DeliverableGateResult {
+interface DeliverableGateResult {
   /** Empty = the gate passes. */
   expected: ExpectedProjectFile[]
   /** Number of expected files beyond the listed ones. */

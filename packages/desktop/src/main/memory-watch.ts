@@ -7,19 +7,25 @@
 // No Electron import: clock, memory reader, dialog, relaunch and log are injected (the test runs without Electron).
 // Numbers and log line shapes: masterplan/03_register.md section 10.
 
+/** @internal test seam */
 export const MEMORY_WATCH_INTERVAL_MS = 60_000
+/** @internal test seam */
 export const MEMORY_WARN_MB = 2_700
+/** @internal test seam */
 export const MEMORY_URGENT_MB = 3_300
 
-export type MemoryLevel = "warn" | "urgent"
+type MemoryLevel = "warn" | "urgent"
 
 // Bytes, the shape of `process.memoryUsage()`. The watched metric is `rss` (logged as `rssMb`); the same value is
 // used for the log line and for the thresholds.
+/** @internal test seam */
 export type MemoryReading = { rss: number; heapUsed: number; heapTotal: number; external: number }
 
+/** @internal test seam */
 export type MemoryThresholdEvent = { level: MemoryLevel; rssMb: number; thresholdMb: number }
 
 // A subset of Electron's MessageBoxOptions, so `dialog.showMessageBox` fits without a cast.
+/** @internal test seam */
 export type MemoryWatchDialogOptions = {
   type: "warning"
   message: string
@@ -29,7 +35,7 @@ export type MemoryWatchDialogOptions = {
   noLink: boolean
 }
 
-export type MemoryWatchDeps = {
+type MemoryWatchDeps = {
   clock: {
     setInterval: (fn: () => void, ms: number) => unknown
     clearInterval: (handle: unknown) => void
@@ -70,6 +76,7 @@ const toMb = (bytes: number) => Math.round(bytes / (1024 * 1024))
 
 // Register section 10 texts. Indonesian for locale "id", English for every other locale. 2 700 MB reads "2.7 GB",
 // the way the register and the spec name the thresholds.
+/** @internal test seam */
 export function memoryReopenOffer(locale: string, rssMb: number) {
   const indonesian = locale.toLowerCase().startsWith("id")
   const text = indonesian ? OFFER_TEXT.id : OFFER_TEXT.en

@@ -13,19 +13,24 @@ import type { RowModel, MissionTypeDoc } from "../../store/mission/types.ts"
  * Mission owner: the store's own name for the orchestrating role (decisions `by: controller`, messages
  * `from: controller`). True for any client; a skill name would misname a mission made outside that skill.
  */
+/** @internal test seam */
 export const OWNER_DEFAULT = "controller"
 /**
  * Row agent: Swarm's own fallback agent for an unnamed or unknown role (opencode agent/role-alias.ts
  * UNKNOWN_ROLE_AGENT). It claims no specialist, so the mission never says a planner or verifier did a step nobody
  * assigned to one.
  */
+/** @internal test seam */
 export const AGENT_DEFAULT = "general"
 /** Row output: says that nothing was named. Not a path, so nothing reads it as a document or a promised file. */
+/** @internal test seam */
 export const OUTPUT_DEFAULT = "no output named for this step"
 /** Row verification: points at the rule that still holds (running -> done needs a note with the check and its result). */
+/** @internal test seam */
 export const VERIFICATION_DEFAULT = "the done note names the check that was run and its result"
 
 /** The shipped Swarm tier map (skill mission-control step 2, swarm-workflow agent table). */
+/** @internal test seam */
 export const AGENT_TIERS: Readonly<Record<string, RowModel>> = {
   planner: { tier: "thinker" },
   verifier: { tier: "thinker" },
@@ -48,7 +53,7 @@ export interface MissionTypeLookup {
   typeOfMission(mission: string): MissionTypeDoc | null
 }
 
-export interface DefaultsFilled {
+interface DefaultsFilled {
   /** Mission fields filled (today: owner). */
   mission: string[]
   /** Per row that got at least one default: its id and the field names, in row field order. */
@@ -106,6 +111,7 @@ function fillRow(row: Rec, id: string | undefined, type: MissionTypeDoc | null, 
 const MAX_GROUPS = 6
 
 /** One line for the reply, or undefined when nothing was filled. Rows with the same filled fields are named together. */
+/** @internal test seam */
 export function defaultsSentence(filled: DefaultsFilled): string | undefined {
   if (filled.mission.length === 0 && filled.rows.length === 0) return undefined
   const groups = new Map<string, string[]>()

@@ -51,13 +51,14 @@ import { renderVerifyWrapper, type RenderVerifyStore } from "../verify/render-wr
 import { MissionToolError, type MissionLog } from "./tool-result.ts"
 
 /** First word of the context line of a labels-check request; equal to the row check name (register section 1). */
+/** @internal test seam */
 export const LABELS_CHECK_MARK = "labels_verified"
 /** The only option id that approves. */
-export const LABELS_CHECK_APPROVE = "approve"
-export const LABELS_CHECK_DECLINE = "decline"
+const LABELS_CHECK_APPROVE = "approve"
+const LABELS_CHECK_DECLINE = "decline"
 const SOURCE = "datum-studio-host.mission.labels-check"
 
-export interface LabelsCheckNaming {
+interface LabelsCheckNaming {
   /** Mission row that waits for the check. */
   row: string
   documentId: string
@@ -70,6 +71,7 @@ export interface LabelsCheckNaming {
 const LINE_RE = /^labels_verified row=([A-Za-z0-9][A-Za-z0-9._-]{0,63}) document=([A-Za-z0-9_-]{1,64}) revision=([1-9][0-9]{0,8}) figures=([A-Za-z0-9_-]{1,64}(?:,[A-Za-z0-9_-]{1,64})*)$/
 
 /** The context line of a labels-check request (at most 300 characters: the store's limit for `context`). */
+/** @internal test seam */
 export function labelsCheckContext(n: LabelsCheckNaming): string {
   return `${LABELS_CHECK_MARK} row=${n.row} document=${n.documentId} revision=${n.revisionNo} figures=${n.figures.join(",")}`
 }
@@ -78,6 +80,7 @@ export function labelsCheckContext(n: LabelsCheckNaming): string {
  * null = the request is not a labels check (another topic). Otherwise the naming, or `malformed` when the line carries
  * the mark but names no figures in the fixed form.
  */
+/** @internal test seam */
 export function labelsCheckOf(req: { context?: unknown }): { naming?: LabelsCheckNaming; malformed?: string } | null {
   const line = typeof req?.context === "string" ? req.context : ""
   if (line !== LABELS_CHECK_MARK && !line.startsWith(`${LABELS_CHECK_MARK} `)) return null
@@ -89,6 +92,7 @@ export function labelsCheckOf(req: { context?: unknown }): { naming?: LabelsChec
 }
 
 /** Request-time check for studio_mission_request_decision (SCHEMA_INVALID issues; empty for any other request). */
+/** @internal test seam */
 export function labelsRequestIssues(req: { context?: unknown; options?: unknown }): Array<{ pointer: string; keyword: string; message: string }> {
   const check = labelsCheckOf(req ?? {})
   if (!check) return []
@@ -101,14 +105,14 @@ export function labelsRequestIssues(req: { context?: unknown; options?: unknown 
 }
 
 /** The store's limit for `context`; with a 25-character document id about 17 figures fit in one request. */
-export const LABELS_CHECK_CONTEXT_MAX = 300
-export const LABELS_CHECK_FIGURES_ABOUT = 17
+const LABELS_CHECK_CONTEXT_MAX = 300
+const LABELS_CHECK_FIGURES_ABOUT = 17
 const SEVERAL = `one request holds about ${LABELS_CHECK_FIGURES_ABOUT} figures (context is at most ${LABELS_CHECK_CONTEXT_MAX} characters): send several requests, each naming other figures`
 
 type Rec = Record<string, unknown>
 const isRec = (v: unknown): v is Rec => v !== null && typeof v === "object" && !Array.isArray(v)
 
-export interface LabelsFigures {
+interface LabelsFigures {
   /** `document.mission_folder`. */
   missionFolder: string | null
   currentRevisionNo: number
@@ -118,13 +122,14 @@ export interface LabelsFigures {
   current: Map<string, unknown>
 }
 
+/** @internal test seam */
 export interface LabelsFigureSource {
   /** null = unknown document. */
   read(documentId: string, revisionNo: number): Promise<LabelsFigures | null>
 }
 
 /** Reads the stored diagram blocks (the same rows row 61's raise function reads). */
-export const STORED_FIGURES: LabelsFigureSource = {
+const STORED_FIGURES: LabelsFigureSource = {
   read(documentId, revisionNo) {
     return withStudioTx(async (tx) => {
       const doc = tx.get<{ current_revision_no: number; mission_folder: string | null }>("SELECT current_revision_no, mission_folder FROM document WHERE id = ?", [documentId])
@@ -191,7 +196,7 @@ export async function checkLabelsRequest(deps: Pick<LabelsCheckDeps, "store" | "
   return { issues, note: "" }
 }
 
-export type LabelsCheckOutcome =
+type LabelsCheckOutcome =
   | "raised"
   | "not-approved"
   | "not-by-user"
@@ -201,8 +206,9 @@ export type LabelsCheckOutcome =
   | "document-not-of-mission"
   | "raise-failed"
 
-export type LabelsNotRaisedCause = "figure-changed-after-check" | "not-in-named-revision" | "not-in-current-revision" | "no-inline-spec"
+type LabelsNotRaisedCause = "figure-changed-after-check" | "not-in-named-revision" | "not-in-current-revision" | "no-inline-spec"
 
+/** @internal test seam */
 export interface LabelsCheckResult {
   outcome: LabelsCheckOutcome
   /** Decision id of the stored answer. */
@@ -228,7 +234,7 @@ export interface LabelsCheckResult {
 }
 
 /** Row 150: the render after a sign-off, as the reply and the log state it. */
-export interface SignOffRender {
+interface SignOffRender {
   /** `rendered` = verified, copied to the project folder and listed on the row; `owed` = the next studio_render does it. */
   state: "rendered" | "owed"
   /** Whose action it is: the person's decision. */
@@ -245,9 +251,9 @@ export interface SignOffRender {
 }
 
 /** What a renderer reports back: the copied project files, or why it could not. */
-export type SignOffRenderOutcome = { ok: true; files: string[] } | { ok: false; cause: string }
+type SignOffRenderOutcome = { ok: true; files: string[] } | { ok: false; cause: string }
 
-export interface SignOffRenderRequest {
+interface SignOffRenderRequest {
   documentId: string
   revisionNo: number
   /** Formats of the row's current project files of this document (lower case); absent = the document's default. */
@@ -260,13 +266,15 @@ export interface SignOffRenderRequest {
   sessionRoot: string
 }
 
-export type SignOffRenderer = (req: SignOffRenderRequest) => Promise<SignOffRenderOutcome>
+type SignOffRenderer = (req: SignOffRenderRequest) => Promise<SignOffRenderOutcome>
 
+/** @internal test seam */
 export interface LabelsCheckStore {
   readonly missions: MissionStore
   transaction<T>(fn: (tx: StoreTx) => Promise<T>, opts?: { timeoutMs?: number; correlationId?: string }): Promise<T>
 }
 
+/** @internal test seam */
 export interface LabelsCheckDeps {
   store: LabelsCheckStore
   /** The host's persistent log. */
@@ -278,7 +286,7 @@ export interface LabelsCheckDeps {
   now?: () => number
 }
 
-export interface LabelsCheckCall {
+interface LabelsCheckCall {
   mission: string
   /** Decision request id (D-<n>). */
   request: string
@@ -377,7 +385,7 @@ async function applyStoredAnswer(deps: LabelsCheckDeps, mission: string, request
 }
 
 /** Finding that carries an owed sign-off render of a row (one per row; upserted). */
-export const signOffFindingId = (row: string): string => `labels-render-r${row}`
+const signOffFindingId = (row: string): string => `labels-render-r${row}`
 
 /**
  * Row 150: renders the signed-off revision, then records the outcome on the mission: an owed render opens the row's
@@ -456,7 +464,7 @@ const codeOf = (e: unknown): string => {
  * row 68's project copy run exactly as for an agent's render. `ok` only when every output verified and the copy is
  * listed on a row.
  */
-export function renderAfterSignOff(store: RenderVerifyStore, log: MissionLog): SignOffRenderer {
+function renderAfterSignOff(store: RenderVerifyStore, log: MissionLog): SignOffRenderer {
   return async (req) => {
     const { assertRenderCapacity, renderScope } = await import("@/lib/studio/services/render")
     const wrapper = renderVerifyWrapper(store, { log })

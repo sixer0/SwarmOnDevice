@@ -87,7 +87,7 @@ export function prepareSocketPath(socketPath: string) {
   return dir
 }
 
-export type LineReaderOptions = {
+type LineReaderOptions = {
   maxLine: number
   /** A complete, non-blank line without its newline (and without a trailing CR); `bytes` is its size on the wire. */
   onLine: (line: string, bytes: number) => void
@@ -102,6 +102,7 @@ export type LineReaderOptions = {
  * and the same cap rule as the per-chunk concat it replaces: after the complete lines of a chunk are handed out, an
  * unfinished rest larger than `maxLine` is refused and dropped.
  */
+/** @internal test seam */
 export function createLineReader(opts: LineReaderOptions) {
   // Looked up per call, so a wrapped `Buffer.concat` (growth-harness.ts) still counts this join.
   const concat = opts.concat ?? ((list: Buffer[], totalBytes: number) => Buffer.concat(list, totalBytes))

@@ -26,7 +26,7 @@ import { isNormSnapshotV2 } from "../../../contract";
 import { unfilledPlaceholders } from "../../diagram/core/spec";
 import { findings, type CheckOutcome, type Finding, type StructCtx } from "./context";
 
-export const PLACEHOLDER_UNFILLED_ID = "PLACEHOLDER_UNFILLED";
+const PLACEHOLDER_UNFILLED_ID = "PLACEHOLDER_UNFILLED";
 
 /** Keys whose values are never printed (metadata, identity, hashes) or are read by another scope. */
 const SKIP_KEYS: ReadonlySet<string> = new Set([
@@ -52,7 +52,7 @@ const FRONT_UNIT_TYPES: ReadonlySet<string> = new Set(["cover", "controlSheet", 
 const TEXT_DEPTH_MAX = 64;
 
 /** Text tier rule: FAIL at TERBIT/SERAH, REPORT at NOTA (draft). */
-export function placeholderTextStatus(tier: StudioTier): "FAIL" | "REPORT" {
+function placeholderTextStatus(tier: StudioTier): "FAIL" | "REPORT" {
   return tier === "NOTA" ? "REPORT" : "FAIL";
 }
 

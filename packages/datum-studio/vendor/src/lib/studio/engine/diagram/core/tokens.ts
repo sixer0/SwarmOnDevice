@@ -344,7 +344,7 @@ export function role(name: string): DiagramRoleToken {
  * Container titles, lane heads and node tags (`table_header`) keep capitals; the key row opts out per call
  * (`svgText(..., { upper: false })`, build/svg.ts) because it shares that role with them.
  */
-export const SOURCE_CASE_ROLES: ReadonlySet<string> = new Set(["evidence_rail"]);
+const SOURCE_CASE_ROLES: ReadonlySet<string> = new Set(["evidence_rail"]);
 
 /** Row 43: true when the diagram engine prints text of this role in capitals (role `upper`, minus `SOURCE_CASE_ROLES`). */
 export function roleUpper(name: string): boolean {

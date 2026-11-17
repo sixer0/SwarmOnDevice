@@ -224,7 +224,7 @@ function assertSameStoreRoot(store: object): string {
 }
 
 /** 1.3.3 row 100 / C33: `STUDIO_SKILL_ROOTS` -> {name: absolute path}; anything else in it is dropped. */
-export function parseSkillRoots(raw: string | undefined, log?: (level: HostLogLevel, source: string, message: string, context?: Record<string, unknown>) => void): Record<string, string> | null {
+function parseSkillRoots(raw: string | undefined, log?: (level: HostLogLevel, source: string, message: string, context?: Record<string, unknown>) => void): Record<string, string> | null {
   if (!raw?.trim()) return null
   try {
     const doc: unknown = JSON.parse(raw)

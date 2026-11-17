@@ -54,7 +54,7 @@ export function parseRowDeliverables(raw: string | null | undefined): RowDeliver
  *   project-relative path) or `not-file` (a parent that is not a folder, or a final entry that is not a regular file;
  *   still inside the folder, so `abs` is given).
  */
-export type DeliverablePath = { ok: true; abs: string; present: boolean } | { ok: false; reason: "outside" | "link"; at?: string } | { ok: false; reason: "not-file"; at: string; abs: string }
+type DeliverablePath = { ok: true; abs: string; present: boolean } | { ok: false; reason: "outside" | "link"; at?: string } | { ok: false; reason: "not-file"; at: string; abs: string }
 
 export function deliverablePath(projectDir: string, mission: string, rel: string): DeliverablePath {
   const parts = rel.split("/")

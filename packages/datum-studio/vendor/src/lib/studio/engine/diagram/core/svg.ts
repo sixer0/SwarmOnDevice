@@ -135,7 +135,7 @@ const FACE_ROLE_KEY: Readonly<Record<FaceRole, string>> = {
  * An explicit `opts.upper` wins; otherwise `roleUpper(role)`: edge labels (`evidence_rail`) print as the author wrote
  * them, titles and tags (`table_header`) keep the house capitals.
  */
-export function printsUpper(roleName: string, opts: Pick<SvgTextOptions, "upper"> = {}): boolean {
+function printsUpper(roleName: string, opts: Pick<SvgTextOptions, "upper"> = {}): boolean {
   return opts.upper ?? roleUpper(roleName);
 }
 

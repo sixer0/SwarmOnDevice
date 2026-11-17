@@ -16,6 +16,7 @@ export const TAG = "turn_facts"
 export const METADATA_KEY = "turnFacts"
 
 /** The facts that may change during a session, in the order they are written. `undefined`: nothing applies now. */
+/** @internal test seam */
 export interface Volatile {
   /** `new Date().toDateString()` */
   date: string
@@ -27,6 +28,7 @@ export interface Volatile {
   mcp?: string
 }
 export type Key = keyof Volatile
+/** @internal test seam */
 export type Emitted = Partial<Record<Key, string | null>>
 
 const ORDER: readonly Key[] = ["date", "routing", "tools", "mcp"]
@@ -43,7 +45,7 @@ const write = (key: Key, value: string) => {
   return value
 }
 
-export interface ContextFacts {
+interface ContextFacts {
   used: number
   limit: number
   /** undefined: auto compaction is off, or no threshold applies */

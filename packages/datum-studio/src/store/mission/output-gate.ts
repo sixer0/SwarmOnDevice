@@ -186,7 +186,7 @@ export function revisionOutputState(q: MissionReader, documentId: string, revisi
  * document-level entry, `outputId: null`, for NOT_RENDERED / NO_LAYOUT_WITNESS). Empty = the gate passes.
  * `total` counts every not-final deliverable; `deliverables` is capped at OUTPUT_GATE_LIST_MAX.
  */
-export function rowDeliverablesNotFinal(q: MissionReader, mission: string, rowId: string, workReportKind: string): { total: number; deliverables: OutputGateDeliverable[] } {
+function rowDeliverablesNotFinal(q: MissionReader, mission: string, rowId: string, workReportKind: string): { total: number; deliverables: OutputGateDeliverable[] } {
   const docs = q
     .all<{ id: string; mission_doc_key: string; revision_id: string; revision_no: number }>(
       `SELECT d.id, d.mission_doc_key, r.id AS revision_id, r.revision_no
@@ -239,21 +239,21 @@ export function rowDeliverablesNotFinal(q: MissionReader, mission: string, rowId
 // page numbers (`lintNotRun`, `witness`, `awaitingHumanCheck`, `fileMissing`).
 
 /** Lint check id of the pending label check (vendor services/render/figures.ts `LABELS_VERIFIED_CHECK`). */
-export const ROW_LABELS_VERIFIED_CHECK = "P1-labels_verified"
+const ROW_LABELS_VERIFIED_CHECK = "P1-labels_verified"
 /** Register section 1 `awaitingHumanCheck.checks` value (vendor `LABELS_VERIFIED_HUMAN_CHECK`). */
-export const ROW_LABELS_VERIFIED_HUMAN_CHECK = "labels_verified"
+const ROW_LABELS_VERIFIED_HUMAN_CHECK = "labels_verified"
 /** Lint rule ids that, before row 60, FAILED for labels a person had not checked (stored LINT findings `label`). */
 const LABEL_LINT_RULES: ReadonlySet<string> = new Set(["D09", ROW_LABELS_VERIFIED_CHECK])
 /** Figures named in a marker reply or a close note (the rest is counted). */
-export const ROW_CLOSE_FIGURES_MAX = 20
+const ROW_CLOSE_FIGURES_MAX = 20
 /** `notRun` entries handed to the refusal detail per deliverable. */
-export const ROW_CLOSE_NOT_RUN_MAX = 60
+const ROW_CLOSE_NOT_RUN_MAX = 60
 const WITNESS_MANIFEST = "witness.json" // mcp-host/verify/verify-outputs.ts VERIFY_WITNESS_MANIFEST
 const WITNESS_SCHEMA = "studio.verify.witness/v1" // VERIFY_WITNESS_SCHEMA
 const WITNESS_PAGES_MAX = 400
 
 /** One entry of `LintReport.notRun` (row 64), as stored in `revision.lint_report`. */
-export interface LintNotRunEntry {
+interface LintNotRunEntry {
   id: string
   kind: "rule" | "module"
   reason: string
@@ -261,14 +261,14 @@ export interface LintNotRunEntry {
 }
 
 /** Witness facts of one revision's newest PRIMARY HTML render (row 58): pages of figures without an image. */
-export interface WitnessFacts {
+interface WitnessFacts {
   htmlOutputId: string
   missing: number[]
   unplaced: string[]
 }
 
 /** What the gate may read beside the database. Absent root = files are not looked at (no witness, no presence check). */
-export interface RowCloseFacts {
+interface RowCloseFacts {
   storeRoot?: string | null
 }
 
@@ -283,7 +283,7 @@ export interface RowCloseNote {
   witnessMissingPages?: number[]
 }
 
-export interface RowCloseGate {
+interface RowCloseGate {
   /** Deliverables that refuse the close; 0 = the row may go `done`. */
   total: number
   /** The refused deliverables (cap OUTPUT_GATE_LIST_MAX), each with its not-verified outputs and the detail facts. */
@@ -314,6 +314,7 @@ function parseJsonText(v: unknown): unknown {
  * the block addresses of those rows. The store does not import the render service, so the two-line rule is repeated
  * here; test/mc5-row-close-gate pins that both read alike.
  */
+/** @internal test seam */
 export function rowAwaitingHumanCheckOf(checks: unknown): { checks: string[]; figures: string[] } {
   if (!Array.isArray(checks)) return { checks: [], figures: [] }
   const rows = checks.filter((c): c is Record<string, unknown> => c !== null && typeof c === "object" && (c as Record<string, unknown>).checkId === ROW_LABELS_VERIFIED_CHECK && (c as Record<string, unknown>).status === "REPORT")
@@ -339,7 +340,7 @@ function lintNotRunOf(report: unknown): LintNotRunEntry[] | null {
  * exactly LINT with status FAIL, and every finding of it is rule D09 or P1-labels_verified, with nothing cut from the
  * list. Returns the block addresses of those findings, else null. (Records written before row 60 made the rule report.)
  */
-export function heldOnlyByLabelCheck(report: unknown): string[] | null {
+function heldOnlyByLabelCheck(report: unknown): string[] | null {
   const r = parseJsonText(report)
   const checks = r && typeof r === "object" ? (r as { checks?: unknown }).checks : null
   if (!Array.isArray(checks)) return null
@@ -362,6 +363,7 @@ export function heldOnlyByLabelCheck(report: unknown): string[] | null {
  * gate reports: pages without an existing image, and the figures that could not be placed on a page. null = no list.
  * Same reading as the host's `readWitnessManifest` (the store does not import the host); never throws.
  */
+/** @internal test seam */
 export function readWitnessFacts(storeRoot: string, htmlOutputId: string): WitnessFacts | null {
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(htmlOutputId)) return null
   const dir = join(storeRoot, "verify", htmlOutputId)

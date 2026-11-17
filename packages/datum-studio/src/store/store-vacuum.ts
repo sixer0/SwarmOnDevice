@@ -20,13 +20,14 @@ import type { SqliteDb } from "./driver-types.ts"
 import { StoreError } from "./errors.ts"
 
 /** `store_meta` key of the reclaim record: a JSON array, one entry per completed reclaim, oldest first. */
+/** @internal test seam */
 export const STORE_VACUUM_LOG_KEY = "store_vacuum_log"
 /** Head room on top of the estimated copy, per location. */
-export const VACUUM_FREE_MARGIN_BYTES = 64 * 1024 * 1024
+const VACUUM_FREE_MARGIN_BYTES = 64 * 1024 * 1024
 /** The WAL copy and the temporary copy are each about the used size plus page headers; 5 % covers the WAL frame headers (24 B per 4 KiB page) with room. */
 const COPY_FACTOR = 1.05
 
-export interface StoreFileSize {
+interface StoreFileSize {
   /** Bytes of `datum-studio.sqlite`. */
   fileBytes: number
   /** Bytes of `datum-studio.sqlite-wal` (0 when absent). */
@@ -36,7 +37,7 @@ export interface StoreFileSize {
   freelistCount: number
 }
 
-export interface ReclaimSpaceCheck {
+interface ReclaimSpaceCheck {
   /** (page_count - freelist_count) * page_size before the reclaim: the estimated size of the new file. */
   usedBytes: number
   tempDir: string
@@ -80,7 +81,7 @@ export interface ReclaimSpaceOptions {
  * pinned by store.test.ts), so a host that sets SQLITE_TMPDIR elsewhere is not seen here; on this Mac both resolve
  * to the data volume of the store.
  */
-export function sqliteTempDir(): string {
+function sqliteTempDir(): string {
   return tmpdir()
 }
 
@@ -92,7 +93,7 @@ function defaultDiskFree(dir: string): number {
 const num = (v: unknown) => Number(v ?? 0)
 const fileSize = (p: string) => (existsSync(p) ? statSync(p).size : 0)
 
-export function measureStoreFile(db: SqliteDb, file: string): StoreFileSize {
+function measureStoreFile(db: SqliteDb, file: string): StoreFileSize {
   return {
     fileBytes: fileSize(file),
     walBytes: fileSize(`${file}-wal`),
@@ -103,7 +104,7 @@ export function measureStoreFile(db: SqliteDb, file: string): StoreFileSize {
 }
 
 /** Throws STORE_BUSY (reason `session-lock-held`) when any mission row lock is not released. */
-export function assertNoSessionLock(db: SqliteDb): void {
+function assertNoSessionLock(db: SqliteDb): void {
   const held = db.all<{ resource: string; mission_id: string; row_id: string; holder: string; time_acquired: number }>(
     "SELECT resource, mission_id, row_id, holder, time_acquired FROM mission_lock WHERE time_released IS NULL ORDER BY seq LIMIT 20",
   )
@@ -118,7 +119,7 @@ export function assertNoSessionLock(db: SqliteDb): void {
 }
 
 /** Throws CONSTRAINT (reason `insufficient-disk-space`) with every number when the two copies do not fit. */
-export function checkReclaimSpace(size: StoreFileSize, storeDir: string, opts: Pick<ReclaimSpaceOptions, "marginBytes" | "diskFree">): ReclaimSpaceCheck {
+function checkReclaimSpace(size: StoreFileSize, storeDir: string, opts: Pick<ReclaimSpaceOptions, "marginBytes" | "diskFree">): ReclaimSpaceCheck {
   const margin = opts.marginBytes ?? VACUUM_FREE_MARGIN_BYTES
   const free = opts.diskFree ?? defaultDiskFree
   const usedBytes = (size.pageCount - size.freelistCount) * size.pageSize

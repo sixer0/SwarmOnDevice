@@ -70,15 +70,17 @@ export type Result = "compact" | "stop" | "continue"
 // `finish` string (no schema change); the provider's own reason stays on the `step-finish` part. `error` is left
 // unset: these turns are not failures of the run, and an error would change the loop result, the error event and the
 // "failed" lane. Every other `finish` value is untouched.
+/** @internal test seam */
 export const TURN_END_REASONS = ["text-tool-call", "tools-unavailable", "empty-step"] as const
 export type TurnEndReason = (typeof TURN_END_REASONS)[number]
-export const TURN_END_LOG = "turn ended without work"
+const TURN_END_LOG = "turn ended without work"
 
 export type TurnEnd =
   | { reason: "text-tool-call" | "empty-step"; corrections: number }
   | { reason: "tools-unavailable"; server: string; corrections: number }
 
 /** The value stored in `finish`: the reason, and for `tools-unavailable` the server after a colon. */
+/** @internal test seam */
 export function turnEndFinish(end: TurnEnd): string {
   if (end.reason !== "tools-unavailable") return end.reason
   const server = end.server.trim()
@@ -86,6 +88,7 @@ export function turnEndFinish(end: TurnEnd): string {
 }
 
 /** Reads a stored `finish`. Undefined for every value that is not one of the three end reasons. */
+/** @internal test seam */
 export function parseTurnEnd(finish: string | undefined): { reason: TurnEndReason; server?: string } | undefined {
   if (!finish) return undefined
   if (finish === "text-tool-call" || finish === "empty-step" || finish === "tools-unavailable") return { reason: finish }

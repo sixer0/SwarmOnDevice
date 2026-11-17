@@ -32,7 +32,7 @@ import type { StudioTx } from "./db.ts"
 export const LABELS_VERIFIED_FIELD = "labels_verified"
 export const LABELS_VERIFIED_PERSON_ONLY = "LABELS_VERIFIED_PERSON_ONLY"
 
-export type LabelsVerifiedCause = "set-by-agent" | "figure-changed-after-check"
+type LabelsVerifiedCause = "set-by-agent" | "figure-changed-after-check"
 
 /** Register section 2: details `{field: "labels_verified", pointer}` (+ cause and block id when known). */
 export interface LabelsVerifiedRefusal {
@@ -45,7 +45,7 @@ export interface LabelsVerifiedRefusal {
   documentId: string
 }
 
-export interface AgentWriteScope {
+interface AgentWriteScope {
   readonly agentId: string
   /** Set by the guard when it refuses; the router answers from it. */
   refusal?: LabelsVerifiedRefusal
@@ -60,6 +60,7 @@ export function runAsAgentWrite<T>(agentId: string, fn: (scope: AgentWriteScope)
 }
 
 /** The agent write scope this async context runs in, if any. */
+/** @internal test seam */
 export function agentWriteScope(): AgentWriteScope | undefined {
   return agentWrite.getStore()
 }
@@ -81,7 +82,7 @@ export function canonicalJson(v: unknown): string {
   return JSON.stringify(walk(v))
 }
 
-export interface CheckedSpec {
+interface CheckedSpec {
   pointer: string
   /** Canonical JSON of the object that carries the flag (the diagram spec). */
   canon: string
@@ -93,6 +94,7 @@ export interface CheckedSpec {
 const ptr = (seg: string | number) => String(seg).replace(/~/g, "~0").replace(/\//g, "~1")
 
 /** Every object with `labels_verified: true` in the authored content of a snapshot. */
+/** @internal test seam */
 export function checkedSpecsOf(snapshot: unknown): CheckedSpec[] {
   const out: CheckedSpec[] = []
   const walk = (x: unknown, at: string, ownerId: string | undefined) => {
@@ -130,6 +132,7 @@ function sameAfterMigration(next: Readonly<Rec>, before: Readonly<Rec>): boolean
  * Pure rule: the flags of `next` that the parent does not already hold unchanged. `parent` is null for a first revision.
  * Exported for tests and for the seam description; the store path is `refuseAgentRaisedLabelsVerified`.
  */
+/** @internal test seam */
 export function raisedLabelsVerified(next: unknown, parent: unknown | null): Array<CheckedSpec & { cause: LabelsVerifiedCause }> {
   const now = checkedSpecsOf(next)
   if (now.length === 0) return []
@@ -141,7 +144,7 @@ export function raisedLabelsVerified(next: unknown, parent: unknown | null): Arr
   return now.filter((s) => !unchanged(s)).map((s) => ({ ...s, cause: s.blockId !== undefined && checkedIds.has(s.blockId) ? ("figure-changed-after-check" as const) : ("set-by-agent" as const) }))
 }
 
-export interface RevisionFlagInput {
+interface RevisionFlagInput {
   documentId: string
   parentRevisionNo: number | null
   snapshot: unknown

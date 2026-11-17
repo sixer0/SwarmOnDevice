@@ -135,11 +135,12 @@ function carriesLibrary(message: SessionV1.WithParts) {
 // id (row 9): a sub-agent session only has the one its own mission calls made. No binding: neither is added.
 
 /** The auto-continue message's first line for a mission-bound session. */
-export function missionReadLine(binding: MissionBinding.MissionBinding) {
+function missionReadLine(binding: MissionBinding.MissionBinding) {
   return `Read the mission state first: call datum-studio_studio_mission_get for mission ${binding.missionID} before any other step.`
 }
 
 /** The fixed `Mission state` block appended to the summary. The binding holds row ids only, not titles. */
+/** @internal test seam */
 export function missionStateBlock(binding: MissionBinding.MissionBinding) {
   return [
     "Mission state",

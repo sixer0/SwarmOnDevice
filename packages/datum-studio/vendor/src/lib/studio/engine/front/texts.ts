@@ -76,6 +76,7 @@ export function classificationMarkText(classification: string): string {
  * document field is empty = the registry default of P6-02 `classification.level` ("Terbatas"), the same value
  * `services/compose/merge.ts` `defaultMeta` stores when a document is sent without a classification.
  */
+/** @internal test seam */
 export const COVER_CLASSIFICATION_FALLBACK: string = registryDefault("classification.level", isString, "string");
 
 /**
@@ -83,6 +84,7 @@ export const COVER_CLASSIFICATION_FALLBACK: string = registryDefault("classifica
  * classification named in a written colophon and the issue stamp letter print. Source = `meta.classification`;
  * when it is empty: the template's `classification.level`, else `COVER_CLASSIFICATION_FALLBACK`. Same rule for all.
  */
+/** @internal test seam */
 export function coverClassificationOf(meta: { readonly classification?: string }, params: ParamMap): string {
   return meta.classification?.trim() || pStr(params, "classification.level")?.trim() || COVER_CLASSIFICATION_FALLBACK;
 }

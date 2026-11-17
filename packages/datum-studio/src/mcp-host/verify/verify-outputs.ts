@@ -64,9 +64,12 @@ export const VERIFY_MAX_PAGE_IMAGES = 12
 /** Patch 1.3.3 register section 8 (`studio_witness_list`): witness images have one fixed resolution, 150 dpi. */
 export const VERIFY_WITNESS_DPI = 150
 /** Pages per bridge request: the bridge refuses more than 12 (`MAX_PAGE_IMAGES`, desktop datum-render/protocol.ts:19, :181). */
+/** @internal test seam */
 export const VERIFY_PAGE_IMAGE_BATCH = 12
 /** Row 58: file name and schema of the witness list beside the page images. */
+/** @internal test seam */
 export const VERIFY_WITNESS_MANIFEST = "witness.json"
+/** @internal test seam */
 export const VERIFY_WITNESS_SCHEMA = "studio.verify.witness/v1"
 
 const FORMATS: ReadonlySet<string> = new Set(["DOCX", "PDF", "HTML", "SVG", "PNG"])
@@ -112,7 +115,7 @@ export interface VerifyJobInput {
 export type PageImager = (o: { src: string; dstDir: string; pages?: number[]; dpi?: number }) => Promise<HtmlPageImages>
 
 /** Row 58: one page that carries at least one figure or chart, with the labels of what it carries (document-derived: untrusted). */
-export interface FigurePage {
+interface FigurePage {
   page: number
   figures: string[]
 }
@@ -123,7 +126,7 @@ export interface FigurePage {
  * "markup" = no usable snapshot match, so every measured top-level svg or img counts (may include a logo);
  * "none" = not known, `reason` says why (flow layout, page count not measured).
  */
-export interface FigurePageSelection {
+interface FigurePageSelection {
   pages: FigurePage[]
   basis: "snapshot" | "markup" | "none"
   /** Figure blocks of the snapshot that were not found on any page (labels; untrusted). */
@@ -132,7 +135,7 @@ export interface FigurePageSelection {
 }
 
 /** Row 58: one witness = the image of one figure page. `png` is an absolute path of a file the bridge wrote. */
-export interface WitnessPage {
+interface WitnessPage {
   page: number
   png: string
   figures: string[]
@@ -280,6 +283,7 @@ const cut = (s: string, n: number): string => (s.length > n ? s.slice(0, n) : s)
  * A block is on the page of the measured element with the same address, or whose label is the block's artifact label
  * or block id. No cap. Pure.
  */
+/** @internal test seam */
 export function figurePages(layout: LayoutInput, expected: FidelityExpectation | null): FigurePageSelection {
   if (!layout || !("metrics" in layout)) return { pages: [], basis: "none", unplaced: [], reason: "page count not measured" }
   const m = layout.metrics

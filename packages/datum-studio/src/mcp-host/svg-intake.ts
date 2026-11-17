@@ -41,6 +41,7 @@ import type { ParamMap } from "../../vendor/src/lib/studio/contract"
 import { figureWidthMm } from "../../vendor/src/lib/studio/services/compose"
 
 /** Stated limits of the SVG intake. */
+/** @internal test seam */
 export const SVG_INTAKE_LIMITS = {
   /** SVG text, UTF-8 bytes (the frame script's sheets are 9-23 KB). */
   maxBytes: 2 * 1024 * 1024,
@@ -74,15 +75,16 @@ export const SVG_INTAKE_LIMITS = {
 } as const
 
 /** Frame script: sheet = figure + 2 x 7 mm (skill `cara_bingkai_lembar.md`, "lebar gambar + 14 mm"). */
+/** @internal test seam */
 export const FRAME_MARGIN_MM = 14
 /** Tolerance on the figure-in-column check (rounding of the sheet width to 3 decimals). */
 const FIT_TOLERANCE_MM = 0.5
 /** dpi of the PNG; `rasterizeSvg` takes 300 only. */
-export const SVG_RASTER_DPI = 300
+const SVG_RASTER_DPI = 300
 
 export { FIGURE_WIDTH_VALUES }
 
-export type SvgIntakeCode = "ASSET_TYPE_UNSUPPORTED" | "ASSET_TOO_LARGE" | "FIGURE_OVER_CAPACITY"
+type SvgIntakeCode = "ASSET_TYPE_UNSUPPORTED" | "ASSET_TOO_LARGE" | "FIGURE_OVER_CAPACITY"
 
 export class SvgIntakeRefusal extends Error {
   constructor(
@@ -119,7 +121,7 @@ const MM_RE = /^\s*(\d+(?:\.\d+)?|\.\d+)\s*mm\s*$/
 type El = { name: string; attrs: Array<[string, string]>; children: Node[] }
 type Node = El | { text: string }
 
-export interface SanitisedSvg {
+interface SanitisedSvg {
   /** Re-serialised validated tree (raster input before placement). */
   svg: string
   widthMm: number
@@ -538,6 +540,7 @@ function checkRenderCost(root: El, viewBox: readonly number[]): void {
 }
 
 /** Parse and validate; throws {@link SvgIntakeRefusal}. */
+/** @internal test seam */
 export function sanitiseSvg(text: string): SanitisedSvg {
   if (typeof text !== "string" || text.trim() === "") malformed("empty input")
   const bytes = Buffer.byteLength(text, "utf8")
@@ -580,14 +583,15 @@ const round3 = (x: number) => Math.round(x * 1000) / 1000
  * agree for any template). `a4-default`: the image is not tied to a document yet, so the registry defaults are used
  * (A4 DATUM: text 128 mm, full 166 mm) and the result says so.
  */
-export type FigureWidthSource = "document-template" | "a4-default"
-export interface FigureColumns {
+type FigureWidthSource = "document-template" | "a4-default"
+interface FigureColumns {
   text: number
   full: number
   source: FigureWidthSource
 }
 
 /** Column widths from compose for the given template parameters (none: the registry's A4 defaults). */
+/** @internal test seam */
 export function figureColumns(params?: ParamMap): FigureColumns {
   const p = params ?? {}
   return { text: figureWidthMm("image", p, "text"), full: figureWidthMm("image", p, "full"), source: params ? "document-template" : "a4-default" }
@@ -598,6 +602,7 @@ export function figureColumns(params?: ParamMap): FigureColumns {
  * `FIGURE_OVER_CAPACITY` (refused, not shrunk). Returns the raster input with the root size set to the printed mm.
  * `columns` (row 149): the document template's widths from {@link figureColumns}; absent = A4 defaults.
  */
+/** @internal test seam */
 export function placeFramedSvg(
   s: SanitisedSvg,
   width: FigureWidthV2,
@@ -639,7 +644,7 @@ export interface FramedSvgPng {
   widthSource: FigureWidthSource
 }
 
-export type SvgRasterizer = (svg: string, i: { widthMm: number; heightMm: number; dpi: 300 }) => Promise<Uint8Array>
+type SvgRasterizer = (svg: string, i: { widthMm: number; heightMm: number; dpi: 300 }) => Promise<Uint8Array>
 
 /** Sanitise, place at `width`, rasterise at 300 dpi. Throws {@link SvgIntakeRefusal} or the raster's own error. */
 export async function framedSvgToPng(text: string, width: FigureWidthV2, opts: { rasterize?: SvgRasterizer; templateParams?: ParamMap } = {}): Promise<FramedSvgPng> {

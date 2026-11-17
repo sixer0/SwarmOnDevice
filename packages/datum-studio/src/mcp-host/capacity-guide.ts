@@ -13,6 +13,7 @@ export const DIAGRAM_CAPACITY_URI = "studio://kapasitas/diagram"
 export const DIAGRAM_CAPACITY_NAME = "kapasitas-diagram"
 
 /** English wording per data row key: what grows, what is held fixed. A key without an entry makes the renderer throw. */
+/** @internal test seam */
 export const CAPACITY_WORDING: Record<string, [grows: string, fixed: string]> = {
   "layered.perTier": ["nodes per tier", "2 tiers"],
   "layered.tiers": ["tiers", "2 nodes per tier"],
@@ -43,6 +44,7 @@ export const CAPACITY_WORDING: Record<string, [grows: string, fixed: string]> = 
 type Above = { result: string; code?: string; checkId?: string; split?: boolean; defects?: string[] }
 type Cell = { width: string; widthMm: number; limit: number; capped: boolean; above?: Above }
 type Row = { key: string; family: string; cells: Cell[] }
+/** @internal test seam */
 export type CapacityData = { capacity: { rows: Row[] } }
 
 function refusal(c: Cell): string {
@@ -54,6 +56,7 @@ function refusal(c: Cell): string {
 }
 
 /** The table in Markdown, generated from the row 36 data file; deterministic, no clock, no machine data. */
+/** @internal test seam */
 export function renderCapacityTable(data: CapacityData): string {
   const lines: string[] = [
     "# Diagram capacity per family and width",

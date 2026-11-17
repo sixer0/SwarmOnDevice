@@ -205,6 +205,7 @@ function awaitingCheckOf(
 
 const LABELS_LINE =/^labels_verified row=(\S+) document=\S+ revision=\d+ figures=(\S+)$/
 /** Figures named by an open label-check request for this row (the host's one-line context grammar), else none. */
+/** @internal test seam */
 export function labelCheckFigures(req: { context?: string; status: string }, rowId: string): string[] | undefined {
   if (req.status !== "open") return undefined
   const m = LABELS_LINE.exec((req.context ?? "").trim())

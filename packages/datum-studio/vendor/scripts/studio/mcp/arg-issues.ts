@@ -13,7 +13,7 @@ import type { ErrorObject } from "ajv";
 /** L-4 (review 13): isu skema yang dikembalikan dibatasi; sisanya hanya dihitung (masukan besar tidak sah tidak menghasilkan MB). */
 export const MAX_ARG_ISSUES = 20;
 
-export interface ArgIssue {
+interface ArgIssue {
   pointer: string;
   keyword: string;
   message: string;
@@ -45,6 +45,7 @@ const typesOf = (e: Err): string[] => {
  * For every failed `anyOf` / `oneOf` (innermost first) keep the issues of its closest branch and drop the union line
  * and the other branches. Issues that belong to no union are kept unchanged and in order.
  */
+/** @internal test seam */
 export function closestBranchErrors(errors: readonly Err[]): Err[] {
   let list: Err[] = [...errors];
   const unions = list.filter((e) => e.keyword === "anyOf" || e.keyword === "oneOf").sort((a, b) => b.schemaPath.length - a.schemaPath.length);

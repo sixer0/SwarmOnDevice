@@ -44,9 +44,11 @@ function checkIdOf(e: unknown): string {
  * Compose always sets `width_mm` (from the block's `width`, else the template parameter), so this only decides
  * the numbers of a spec that reaches the helper without a width.
  */
+/** @internal test seam */
 export const CAPACITY_DEFAULT_WIDTH_MM = FIGURE_TEXT_WIDTH_MM;
 
 /** Row 34: the figure width the capacity numbers are computed from (the width in use, else the registry default). */
+/** @internal test seam */
 export function capacityWidthOf(s: StudioDiagramV1): number {
   return Number(s.width_mm) || CAPACITY_DEFAULT_WIDTH_MM;
 }
@@ -324,10 +326,13 @@ export function overCapacityOf(e: unknown, s: StudioDiagramV1, note?: string): D
  * Part 1's connectors point to part 2 and the reverse. The `{{key}}` form is the register's unfilled-placeholder
  * convention (PLACEHOLDER_UNFILLED, row 52); it is also outside the block id pattern, so the schema refuses it unfilled.
  */
+/** @internal test seam */
 export const SPLIT_PLACEHOLDER_PART_1 = "{{id_blok_bagian_1}}";
+/** @internal test seam */
 export const SPLIT_PLACEHOLDER_PART_2 = "{{id_blok_bagian_2}}";
 
 /** Row 51: the split rule, as stated in the skeleton (row 140: own off-page tier, one pair per node pair, parts checked). */
+/** @internal test seam */
 export const CAPACITY_SPLIT_RULE =
   "simpul diurutkan menurut sumbu keluarga (graph: class.col; flow ber-direction: peringkat; swimlane: fase, tanpa fase kolam, tanpa keduanya urutan simpul; " +
   "keluarga lain: class.tier bila ada, selain itu urutan simpul); potongan diletakkan di batas nilai sumbu yang paling dekat ke separuh jumlah simpul " +
@@ -339,6 +344,7 @@ export const CAPACITY_SPLIT_RULE =
  * Swarm 1.3.3 row 140 (ST-4, E6 of row 36): the most parts a skeleton offers. The spec of ST-4 names "dua spec" and the
  * acceptance of ST-1 reads "paling banyak dua lembar"; a figure that two parts cannot hold is not cut into three.
  */
+/** @internal test seam */
 export const CAPACITY_SPLIT_MAX_PARTS = 2;
 
 /** Row 140: families placed by `layoutLayered` (contract/dispatch DIAGRAM_LAYOUTS), where a tier is one row of the sheet. */
@@ -353,7 +359,7 @@ let partCheckDepth = 0;
 type SplitNode = StudioDiagramV1["nodes"][number];
 type SplitEdge = NonNullable<StudioDiagramV1["edges"]>[number];
 
-export interface DiagramSplitPair {
+interface DiagramSplitPair {
   /** `ref.key` of both off-page nodes. */
   key: string;
   /** The first cut connector's ends (row 140: the pair stands for every connector between these two nodes). */
@@ -368,6 +374,7 @@ export interface DiagramSplitPair {
   connectors: Array<{ from: string; to: string; label?: string }>;
 }
 
+/** @internal test seam */
 export interface DiagramSplitSkeleton {
   rule: string;
   /** Axis the nodes were ordered by ("class.col", "class.tier", "peringkat", "fase", "kolam", "urutan simpul"). */
@@ -380,6 +387,7 @@ export interface DiagramSplitSkeleton {
 }
 
 /** Row 51: details of a diagram capacity refusal; `split` is absent when width `full` is the advice or no clean cut exists. */
+/** @internal test seam */
 export type DiagramOverCapacityDetails = FigureOverCapacityDetails & { split?: DiagramSplitSkeleton };
 
 /** Row 51: the message offers width `full` (row 34 texts): then the advice is the width, not a split. */
@@ -431,6 +439,7 @@ function splitAxis(s: StudioDiagramV1): { name: string; of: (n: SplitNode, i: nu
  * the build's capacity check at the width in use. Node ids, labels and classes are verbatim; root fields are copied to
  * both parts (title and id included: the agent tells them apart).
  */
+/** @internal test seam */
 export function splitSkeletonOf(s: StudioDiagramV1): DiagramSplitSkeleton | null {
   return splitPlanOf(s).split ?? null;
 }

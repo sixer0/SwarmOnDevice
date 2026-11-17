@@ -228,7 +228,7 @@ export function toolsUnavailable(input: unknown): ToolsUnavailableError | undefi
  * is the server's connect timeout (`mcp.timeout`, else this), the same bound `create` gives the connect itself; the
  * register names no constant for it. A reconnect that is still running when the wait ends counts as lost tools.
  */
-export const TOOLS_RECONNECT_WAIT_MS = DEFAULT_TIMEOUT
+const TOOLS_RECONNECT_WAIT_MS = DEFAULT_TIMEOUT
 
 type MCPClient = Client
 

@@ -31,6 +31,7 @@ import type { LintIssue, NormDocSnapshot } from "../../../contract";
 import type { Scanner } from "./checks";
 import rawConfig from "./internal-abbreviations.json";
 
+/** @internal test seam */
 export const INTERNAL_ABBREVIATION_ID = "C-37";
 
 /** Plafon isu (satu isu per kemunculan); sisanya diringkas. */
@@ -38,13 +39,13 @@ const MAX_ISSUES = 200;
 const EXCERPT_BEFORE = 32;
 const EXCERPT_AFTER = 32;
 
-export interface AbbreviationTerm {
+interface AbbreviationTerm {
   term: string;
   say: string;
   sayNext?: string;
 }
 
-export interface AbbreviationConfig {
+interface AbbreviationConfig {
   version: 1;
   terms: AbbreviationTerm[];
 }
@@ -56,6 +57,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
 /** Validasi berkas konfigurasi; melempar dengan alasan (lintLanguage menjadikannya NOT_RUN, tidak pernah PASS palsu). */
+/** @internal test seam */
 export function parseAbbreviationConfig(raw: unknown): AbbreviationConfig {
   if (!isRecord(raw)) throw new Error("internal-abbreviations.json: bukan objek");
   if (raw.version !== 1) throw new Error(`internal-abbreviations.json: version ${String(raw.version)} tidak dikenal (harus 1)`);
@@ -70,6 +72,7 @@ export function parseAbbreviationConfig(raw: unknown): AbbreviationConfig {
 }
 
 /** Isi berkas konfigurasi (divalidasi saat modul dimuat ulang oleh pemindai; lihat `configOrThrow`). */
+/** @internal test seam */
 export const INTERNAL_ABBREVIATION_CONFIG: AbbreviationConfig = (() => {
   try {
     return parseAbbreviationConfig(rawConfig);
@@ -91,7 +94,7 @@ export interface Segment {
 
 export type Place = "judul" | "keterangan" | "paragraf";
 
-export interface TextPlace {
+interface TextPlace {
   place: Place;
   /** Jenis sumber teks, untuk detail (mis. "judul bab", "baris sumber"). */
   what: string;
@@ -109,7 +112,7 @@ function mdLiteSegments(text: string): Segment[] {
 }
 
 /** Inline v1/v2 dalam bentuk apa pun yang tersimpan: string, `{text}`, `{runs}`, `{inline: ...}`. */
-export function inlineSegments(v: unknown, depth = 0): Segment[] {
+function inlineSegments(v: unknown, depth = 0): Segment[] {
   if (depth > 4) return [];
   if (typeof v === "string") return mdLiteSegments(v);
   if (!isRecord(v)) return [];
@@ -137,6 +140,7 @@ const HEADING_WHAT: Readonly<Record<string, string>> = {
 };
 
 /** Semua teks judul, keterangan, dan paragraf snapshot, urut dokumen. Tidak pernah melempar. */
+/** @internal test seam */
 export function textPlacesOf(s: NormDocSnapshot): TextPlace[] {
   const out: TextPlace[] = [];
   const blocks = Array.isArray(s?.blocks) ? s.blocks : [];
@@ -195,9 +199,9 @@ export function textPlacesOf(s: NormDocSnapshot): TextPlace[] {
 
 // ── Pencocokan ─────────────────────────────────────────────────────────────
 
-export type ExemptReason = "kode" | "url" | "path";
+type ExemptReason = "kode" | "url" | "path";
 
-export interface AbbreviationHit {
+interface AbbreviationHit {
   term: AbbreviationTerm;
   /** Teks persis seperti tertulis. */
   written: string;
@@ -243,6 +247,7 @@ function excerptOf(text: string, start: number, end: number): string {
 }
 
 /** Kemunculan istilah konfigurasi dalam satu teks bersegmen, urut posisi (yang dikecualikan diberi `exempt`). */
+/** @internal test seam */
 export function findInternalAbbreviations(
   segments: ReadonlyArray<Segment>,
   terms: ReadonlyArray<AbbreviationTerm> = INTERNAL_ABBREVIATION_CONFIG.terms,

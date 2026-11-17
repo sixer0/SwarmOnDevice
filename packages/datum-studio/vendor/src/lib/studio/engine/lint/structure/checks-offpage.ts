@@ -18,7 +18,7 @@ import type { NormDocSnapshot } from "../../../contract";
 import { OFFPAGE_UNPAIRED, checkOffpagePairs } from "../../../services/render/offpage-pairs";
 import { findings, notRun, type CheckOutcome, type Finding, type StructCtx } from "./context";
 
-export const OFFPAGE_UNPAIRED_ID = OFFPAGE_UNPAIRED;
+const OFFPAGE_UNPAIRED_ID = OFFPAGE_UNPAIRED;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 

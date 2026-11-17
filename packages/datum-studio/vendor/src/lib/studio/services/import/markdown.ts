@@ -324,7 +324,7 @@ const DIAGRAM_FENCE_MAX_MESSAGES = 5;
  * (tidak ada yang tersimpan) dengan kode ini; peringatan per-pagar dapat terpotong (20 entri di ringkasan alat) dan
  * tidak menghentikan `submit`, jadi tidak cukup untuk menjamin agen diberi tahu.
  */
-export const CHART_FENCE_REFUSED = "CHART_FENCE_REFUSED";
+const CHART_FENCE_REFUSED = "CHART_FENCE_REFUSED";
 
 type Rec = Record<string, unknown>;
 type Fence = { kind: "diagram"; block: Rec } | { kind: "invalid"; message: string } | { kind: "kept"; type: string };

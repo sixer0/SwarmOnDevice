@@ -38,4 +38,5 @@ CREATE INDEX IF NOT EXISTS render_job_revision_idx ON render_job(revision_id);
 `
 
 /** The four index names, in creation order (tests and the reverse step check against this list). */
+/** @internal test seam */
 export const MIGRATION_0011_INDEXES = ["doc_block_chapter_idx", "doc_block_doc_section_idx", "doc_subsection_revision_idx", "render_job_revision_idx"] as const

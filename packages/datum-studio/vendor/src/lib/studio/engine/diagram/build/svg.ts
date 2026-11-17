@@ -159,9 +159,9 @@ export interface DiagramBuildOptions {
 }
 
 /** Row 54 (ST-5): default label word of an author note row. */
-export const DEFAULT_NOTE_LABEL = "CATATAN";
+const DEFAULT_NOTE_LABEL = "CATATAN";
 /** Row 54: attribute on every line of an author note row; its value is the 1-based index of the entry in `notes[]`. */
-export const NOTE_MARK_ATTR = "data-st-note";
+const NOTE_MARK_ATTR = "data-st-note";
 /** Row 54: a note is never cut; this only bounds the search of the wrap. Past it the last line holds the rest. */
 const NOTE_MAX_LINES = 40;
 
@@ -669,6 +669,7 @@ export function routeFor(s: StudioDiagramV1, p: Placement): { paths: RoutedEdge[
  * all-capitals word does, so "Sumber daya listrik ..." is not mistaken for a label. A text that merely contains the word
  * later is untouched.
  */
+/** @internal test seam */
 export function stripSourceLead(text: string): string {
   const m = /^\s*(?:(?:sumber|sources?)\s*[:\u2013\u2014-]+\s*|(?:SUMBER|SOURCES?)(?=\s|$)\s*)/i.exec(text);
   if (!m) return text;
