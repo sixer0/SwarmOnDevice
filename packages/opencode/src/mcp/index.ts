@@ -39,6 +39,7 @@ import { McpCatalog } from "./catalog"
 import { DATUM_STUDIO_MCP, DatumStudioMcp } from "./datum-studio"
 import { McpEvent } from "@opencode-ai/schema/mcp-event"
 import { McpBrowser } from "./browser"
+import { GRAFT_MCP_NAME, planGraftBuild, runGraftBuild } from "./graft-build"
 
 const DEFAULT_TIMEOUT = 30_000
 
@@ -520,20 +521,38 @@ const layer = Layer.effect(
       const [cmd, ...args] = mcp.command
       const baseDir = yield* InstanceState.directory
       const cwd = mcp.cwd ? path.resolve(baseDir, mcp.cwd) : baseDir
+      // Holding the password is a way to answer what autonomous mode holds, so a server's own config cannot ask for it.
+      const env = withoutServerCredentials({
+        ...process.env,
+        // Register J03: the MCP self-spawn literal. A local MCP server configured to run Swarm
+        // itself is recognised by the Swarm binary name only (Q3 creates no `opencode` alias),
+        // and BUN_BE_BUN makes that child run as plain Bun rather than as the compiled CLI.
+        ...(cmd === "swarm" ? { BUN_BE_BUN: "1" } : {}),
+        ...mcp.environment,
+      })
+
+      // U20: graft lists no tools without a graph, and this connection keeps its first list; build one first.
+      const plan = planGraftBuild({ name: key, command: mcp.command, cwd, env })
+      if (plan.run) {
+        yield* Effect.logInfo("graft graph build starting", { server: key })
+        const built = yield* Effect.promise(() => runGraftBuild(plan.argv, cwd, env))
+        if (built.ok) yield* Effect.logInfo("graft graph build done", { server: key, durationMs: built.ms })
+        else
+          yield* Effect.logWarning("graft graph build failed; connecting without a graph", {
+            server: key,
+            durationMs: built.ms,
+            reason: logText(built.reason, LOG_TEXT_MAX_BYTES),
+          })
+      } else if (key === GRAFT_MCP_NAME) {
+        yield* Effect.logDebug("graft graph build skipped", { server: key, reason: plan.reason })
+      }
+
       const transport = new StdioClientTransport({
         stderr: "pipe",
         command: cmd,
         args,
         cwd,
-        // Holding the password is a way to answer what autonomous mode holds, so a server's own config cannot ask for it.
-        env: withoutServerCredentials({
-          ...process.env,
-          // Register J03: the MCP self-spawn literal. A local MCP server configured to run Swarm
-          // itself is recognised by the Swarm binary name only (Q3 creates no `opencode` alias),
-          // and BUN_BE_BUN makes that child run as plain Bun rather than as the compiled CLI.
-          ...(cmd === "swarm" ? { BUN_BE_BUN: "1" } : {}),
-          ...mcp.environment,
-        }),
+        env,
       })
 
       // F4 (1.3.2): read the child's stderr — `BRIDGE_START`, `HOST_UNREACHABLE`, `TOKEN_REJECTED` were reaching no log
