@@ -168,6 +168,8 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
     streams: number
   }
   const sessions = new Map<string, Entry>()
+  /** Initialize requests between admission and registration (M12 S12-03). */
+  let opening = 0
   let port = 0
   const now = opts.now ?? Date.now
 
@@ -185,6 +187,7 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
   /** Count a request against its session until the response closes (a GET is the session's stream). */
   const track = (entry: Entry, method: string, res: ServerResponse) => {
     entry.lastActive = now()
+    if (res.destroyed || res.writableFinished) return
     const key = method === "GET" ? "streams" : "inFlight"
     entry[key] += 1
     res.once("close", () => {
@@ -248,45 +251,62 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
       return
     }
     if (method !== "POST" || !isInitializeRequest(body)) return rpcError(res, 400, "Bad Request: no valid session id")
-    const unattested = [...sessions.values()].filter((e) => !e.attested).length
-    const full = keyOk ? sessions.size >= MAX_SESSIONS + ATTESTED_RESERVE : unattested >= MAX_SESSIONS
-    if (full) {
-      const victim = keyOk && unattested < MAX_SESSIONS ? undefined : abandoned()
+    const agentRaw = req.headers[AGENT_HEADER]
+    const agentId = typeof agentRaw === "string" ? agentRaw : ""
+    if (!AGENT_RE.test(agentId)) return rpcError(res, 400, "X-Studio-Agent is required (1..40 of A-Z a-z 0-9 _ . -)")
+    // U21 F-4 (M12): one hard total of MAX_SESSIONS + ATTESTED_RESERVE; an unattested caller may open only below
+    // MAX_SESSIONS, so the reserve stays for Mission Control. Sessions still opening count (concurrent initialize
+    // requests cannot pass the cap), and the abandoned session is closed only after the new one opened (a refused or
+    // malformed initialize never costs anyone a session).
+    const limit = keyOk ? MAX_SESSIONS + ATTESTED_RESERVE : MAX_SESSIONS
+    let victim: [string, Entry] | undefined
+    if (sessions.size + opening >= limit) {
+      victim = abandoned()
       if (!victim) return rpcError(res, 503, "Too many DATUM Studio sessions")
+      sessions.delete(victim[0])
+    }
+    const evict = async () => {
+      if (!victim) return
       const [vid, ventry] = victim
-      sessions.delete(vid)
       opts.log({ level: "warn", event: "session_evicted", ...sessionLogRef({ sessionId: vid }), idleMs: now() - ventry.lastActive })
       await ventry.transport.close().catch(() => undefined)
       await ventry.handle.close().catch(() => undefined)
     }
-    const agentRaw = req.headers[AGENT_HEADER]
-    const agentId = typeof agentRaw === "string" ? agentRaw : ""
-    if (!AGENT_RE.test(agentId)) return rpcError(res, 400, "X-Studio-Agent is required (1..40 of A-Z a-z 0-9 _ . -)")
     const cwdRaw = req.headers[CALLER_CWD_HEADER]
     const sessionId = randomUUID()
     const attested = keyOk
     // Row 68b (S9-01): the shared host log helper; an attested session is `attested: true`, never its id.
     const logRef = sessionLogRef({ sessionId, ...(attested ? { openedAttested: true as const } : {}) })
     let sessionHandle: SessionHandle
+    opening += 1
     try {
       const callerSessionRaw = req.headers[CALLER_SESSION_HEADER]
       sessionHandle = await opts.openSession({ sessionId, agentId, callerCwd: typeof cwdRaw === "string" ? cwdRaw : null, callerSession: typeof callerSessionRaw === "string" ? callerSessionRaw : null, attested })
     } catch (e) {
+      // The chosen session was not closed: it goes back to the table untouched.
+      if (victim) sessions.set(victim[0], victim[1])
       const st = e instanceof SessionRefused ? e.status : 500
       const msg = e instanceof SessionRefused ? e.message : "DATUM Studio could not open the session"
       opts.log({ level: st >= 500 ? "error" : "warn", event: "session_refused", agentId, status: st, message: msg, ...(st >= 500 && e instanceof Error ? { stack_trace: e.stack } : {}) })
       return rpcError(res, st, msg)
+    } finally {
+      opening -= 1
     }
+    await evict()
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => sessionId,
       onsessioninitialized: (id) => {
-        sessions.set(id, { transport, handle: sessionHandle, attested, lastActive: now(), inFlight: 1, streams: 0 })
-        res.once("close", () => {
-          const e = sessions.get(id)
-          if (!e) return
-          e.inFlight -= 1
-          e.lastActive = now()
-        })
+        // M12 CR-4: a client that went away while the session was opening has no request in flight; counting it as
+        // one would make the session impossible to evict.
+        const gone = res.destroyed || res.writableFinished
+        sessions.set(id, { transport, handle: sessionHandle, attested, lastActive: now(), inFlight: gone ? 0 : 1, streams: 0 })
+        if (!gone)
+          res.once("close", () => {
+            const e = sessions.get(id)
+            if (!e) return
+            e.inFlight -= 1
+            e.lastActive = now()
+          })
         opts.log({ level: "info", event: "session_open", ...logRef, agentId })
       },
       onsessionclosed: (id) => {

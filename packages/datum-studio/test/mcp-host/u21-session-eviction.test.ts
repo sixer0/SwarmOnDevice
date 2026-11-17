@@ -2,7 +2,7 @@
 // the app's own Mission Control included. Real endpoint on 127.0.0.1 (ephemeral port), a fake clock, raw HTTP.
 import { afterEach, describe, expect, test } from "bun:test"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import { ATTESTED_RESERVE, IDLE_EVICT_MS, MAX_SESSIONS, startEndpoint } from "../../src/mcp-host/http-server.ts"
+import { ATTESTED_RESERVE, IDLE_EVICT_MS, MAX_SESSIONS, SessionRefused, startEndpoint } from "../../src/mcp-host/http-server.ts"
 
 const TOKEN = "t".repeat(48)
 const KEY = "k".repeat(48)
@@ -17,7 +17,8 @@ async function start() {
     missionControlKey: KEY,
     now: () => clock,
     log: (r) => logs.push(r),
-    openSession: () => {
+    openSession: ({ agentId }) => {
+      if (agentId === "refuse") throw new SessionRefused(403, "refused for the test")
       const server = new Server({ name: "u21", version: "0" }, { capabilities: { tools: {} } })
       return { server, close: async () => {} }
     },
@@ -40,8 +41,8 @@ const headers = (extra: Record<string, string> = {}) => ({
 })
 const INIT = { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "u21", version: "0" } } }
 
-async function open(attested = false): Promise<{ status: number; sid: string | null }> {
-  const r = await fetch(endpoint!.url, { method: "POST", headers: headers(attested ? { "x-swarm-mission-control-key": KEY } : {}), body: JSON.stringify(INIT) })
+async function open(attested = false, extra: Record<string, string> = {}): Promise<{ status: number; sid: string | null }> {
+  const r = await fetch(endpoint!.url, { method: "POST", headers: headers({ ...(attested ? { "x-swarm-mission-control-key": KEY } : {}), ...extra }), body: JSON.stringify(INIT) })
   await r.body?.cancel()
   return { status: r.status, sid: r.headers.get("mcp-session-id") }
 }
@@ -118,5 +119,48 @@ describe("U21 F-4 Studio session cap", () => {
     expect(r.status).toBe(200)
     expect(logs.some((l) => l.event === "session_closed")).toBe(true)
     expect(endpoint!.sessionCount()).toBe(0)
+  })
+
+  test("M12 G1: a malformed or refused initialize at the cap closes nobody", async () => {
+    await start()
+    for (let i = 0; i < MAX_SESSIONS; i++) await open()
+    clock += IDLE_EVICT_MS * 10
+    await tick()
+    expect((await open(false, { "x-studio-agent": "bad agent!" })).status).toBe(400)
+    expect((await open(false, { "x-studio-agent": "refuse" })).status).toBe(403)
+    expect(logs.filter((l) => l.event === "session_evicted")).toHaveLength(0)
+    expect(endpoint!.sessionCount()).toBe(MAX_SESSIONS)
+    expect((await open()).status).toBe(200)
+    expect(logs.filter((l) => l.event === "session_evicted")).toHaveLength(1)
+  })
+
+  test("M12 F1: the total never passes MAX_SESSIONS + ATTESTED_RESERVE, and Mission Control evicts an abandoned session at it", async () => {
+    await start()
+    for (let i = 0; i < MAX_SESSIONS; i++) expect((await open(true)).status).toBe(200)
+    await tick()
+    // Attested sessions are counted: the unattested cap is the total, and attested sessions are never evicted.
+    clock += IDLE_EVICT_MS * 10
+    expect((await open()).status).toBe(503)
+    for (let i = 0; i < ATTESTED_RESERVE; i++) expect((await open(true)).status).toBe(200)
+    expect((await open(true)).status).toBe(503)
+    expect(endpoint!.sessionCount()).toBe(MAX_SESSIONS + ATTESTED_RESERVE)
+  })
+
+  test("M12 G2: at the total, Mission Control gets in by closing an abandoned unattested session", async () => {
+    await start()
+    for (let i = 0; i < MAX_SESSIONS; i++) await open()
+    for (let i = 0; i < ATTESTED_RESERVE; i++) await open(true)
+    clock += IDLE_EVICT_MS * 10
+    await tick()
+    expect((await open(true)).status).toBe(200)
+    expect(logs.filter((l) => l.event === "session_evicted")).toHaveLength(1)
+    expect(endpoint!.sessionCount()).toBe(MAX_SESSIONS + ATTESTED_RESERVE)
+  })
+
+  test("M12 S12-03: concurrent initialize requests cannot pass the cap", async () => {
+    await start()
+    const results = await Promise.all(Array.from({ length: MAX_SESSIONS + 10 }, () => open()))
+    expect(results.filter((r) => r.status === 200)).toHaveLength(MAX_SESSIONS)
+    expect(endpoint!.sessionCount()).toBe(MAX_SESSIONS)
   })
 })
