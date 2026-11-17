@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PassThrough } from "node:stream"
-import type { MessageBoxOptions } from "electron"
+import type { BrowserWindow, MessageBoxOptions } from "electron"
 import { DESKTOP_NATIVE_ENGLISH } from "@opencode-ai/app/i18n/desktop-native"
 import { OFFICE_MANIFEST_FILE } from "@swarm/office-addin/constants"
 import { runOfficeBridge } from "../office-bridge"
@@ -1274,3 +1274,89 @@ describe("v2 sidecar (F-M7-5)", () => {
   })
 })
 
+
+// ── M7-04c (C91 F-SG2-1): informational dialogs never hold a pair dialog ──
+
+describe("pair dialogs do not wait behind informational dialogs (M7-04c)", () => {
+  /** A Swarm window: every box is a sheet that stays open until answered or its signal aborts. */
+  const sheets = () => {
+    const shown: { options: MessageBoxOptions; resolve: (response: number) => void; aborted: () => boolean }[] = []
+    const window = {} as BrowserWindow
+    const pairDialog: OfficeAddinControllerDeps["pairDialog"] = {
+      window: () => window,
+      focus: () => {},
+      showMessageBox: (win, options) =>
+        new Promise((resolve) => {
+          expect(win).toBe(window)
+          const answer = (response: number) => resolve({ response, checkboxChecked: false })
+          options.signal?.addEventListener("abort", () => answer(options.cancelId ?? 0))
+          shown.push({ options, resolve: answer, aborted: () => options.signal?.aborted === true })
+        }),
+    }
+    return { shown, pairDialog }
+  }
+
+  test("installFailed open (sheet) + pair-request: the pair dialog shows at once; installFailed comes back after it", async () => {
+    const h = harness({ dir, refuse: [join(dir, "home", "Library", "Containers")] })
+    await h.setup()
+    const s = sheets()
+    const controller = createOfficeAddinController({ ...h.deps, pairDialog: s.pairDialog })
+    expect((await controller.enable()).ok).toBe(true)
+    const installFailed = englishOf("desktop.officeAddin.error.installFailed", {
+      path: h.roots.join(", "),
+    })
+    await waitFor(() => s.shown.length === 1)
+    expect(s.shown[0]!.options.message).toBe(installFailed)
+    // Not an app-modal box (that one would run synchronously on macOS and hold everything behind it).
+    expect(h.boxes.map((box) => box.message)).not.toContain(installFailed)
+
+    // The user is still in Finder; a pane clicks Connect.
+    h.pairSinks.at(-1)!({ requestId: REQUEST_ID, host: "Word", code: "0427" })
+    await waitFor(() => s.shown.length === 2)
+    expect(s.shown[0]!.aborted()).toBe(true)
+    const pair = s.shown[1]!
+    expect(pair.options.buttons).toContain("0427")
+
+    // Nothing informational appears while the pair dialog is open.
+    await settle()
+    expect(s.shown).toHaveLength(2)
+    pair.resolve(pair.options.buttons!.indexOf("0427"))
+    await controller.idle()
+    await waitFor(() => s.shown.length === 3)
+    expect(h.forks[0]!.sent.filter((command) => command.type === "pair-decision")).toEqual([
+      { type: "pair-decision", requestId: REQUEST_ID, allow: true },
+    ])
+    expect(s.shown[2]!.options.message).toBe(installFailed)
+    s.shown[2]!.resolve(0)
+    await settle()
+    expect(s.shown).toHaveLength(3)
+    await controller.shutdown()
+  })
+
+  test("one pair dialog at a time still holds; an error raised meanwhile waits for the pair dialog", async () => {
+    const h = harness({ dir })
+    await h.setup()
+    const s = sheets()
+    const controller = createOfficeAddinController({ ...h.deps, pairDialog: s.pairDialog })
+    await controller.enable()
+    await waitFor(() => s.shown.length === 1)
+    s.shown[0]!.resolve(0)
+    await settle()
+    h.pairSinks.at(-1)!({ requestId: REQUEST_ID, host: "Word", code: "0427" })
+    await waitFor(() => s.shown.length === 2)
+    h.pairSinks.at(-1)!({ requestId: REQUEST_ID_2, host: "Excel", code: "1234" })
+    await settle()
+    expect(h.forks[0]!.sent.filter((command) => command.type === "pair-decision")).toEqual([
+      { type: "pair-decision", requestId: REQUEST_ID_2, allow: false },
+    ])
+    // The bridge crashes while the pair dialog is open: startFailed waits until the pair dialog closes.
+    h.forks[0]!.crash(3)
+    await settle()
+    expect(s.shown).toHaveLength(2)
+    const pair = s.shown[1]!
+    pair.resolve(pair.options.buttons!.length - 1)
+    await controller.idle()
+    await waitFor(() => s.shown.length === 3)
+    expect(s.shown[2]!.options.message).toBe(englishOf("desktop.officeAddin.error.startFailed"))
+  })
+})

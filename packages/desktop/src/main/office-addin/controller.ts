@@ -423,6 +423,8 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
     pending: Promise<unknown>
     pairQueue: Promise<unknown>
     pairOpen: boolean
+    /** Informational sheets now open (M7-04c); a pair request closes them and they come back afterwards. */
+    infos: Set<{ abort: AbortController; preempted: boolean }>
     keychain: Keychain | undefined
     enabling: { progress: EnableProgress; done: Promise<EnableResult> } | undefined
   } = {
@@ -432,6 +434,7 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
     pending: Promise.resolve(),
     pairQueue: Promise.resolve(),
     pairOpen: false,
+    infos: new Set(),
     keychain: deps.keychain,
     enabling: undefined,
   }
@@ -457,9 +460,44 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
       return { response: -1, checkboxChecked: false }
     })
 
+  /**
+   * Informational dialog (M7-04c, C91 F-SG2-1): errors, notices and the Finder guides. A pair dialog must never wait
+   * behind one: an app-modal box without a parent runs synchronously on macOS and holds the pair sheet (and the
+   * 2-minute pair request) until the user clicks OK. So, with a Swarm window, it is a sheet on that window with an
+   * AbortSignal; a pair request closes it (`preemptInfos`), the pair dialog shows at once, and the information comes
+   * back after the pair dialog settled. It also waits for a pair dialog that is already open. Without a window it stays
+   * app-modal (no pair sheet can exist then either; the pair dialog is app-modal too). Never awaited by a flow that
+   * gates pairing: the callers fire and forget.
+   */
+  const showInfo = async (options: MessageBoxOptions): Promise<void> => {
+    while (state.pairOpen) await state.pairQueue
+    const win = deps.pairDialog.window()
+    if (!win) {
+      await showBox(options)
+      return
+    }
+    const box = { abort: new AbortController(), preempted: false }
+    state.infos.add(box)
+    await deps.pairDialog.showMessageBox(win, { ...options, signal: box.abort.signal }).catch((error: unknown) => {
+      log("error", SOURCE, "dialog failed", errorFields(error))
+    })
+    state.infos.delete(box)
+    if (!box.preempted) return
+    log("info", SOURCE, "informational dialog shown again after a pair dialog")
+    return showInfo(options)
+  }
+
+  /** Close every open informational sheet so the pair dialog is not queued behind it (it is shown again later). */
+  const preemptInfos = () => {
+    for (const box of state.infos) {
+      box.preempted = true
+      box.abort.abort()
+    }
+  }
+
   /** Error dialog, every string via `nativeT` (`errorKey`). Not awaited by the flows. */
   const showError = (code: ControllerFailureCode, params?: Record<string, string>) => {
-    void showBox({ type: "error", message: t(errorKey(code), params), noLink: true })
+    void showInfo({ type: "error", message: t(errorKey(code), params), noLink: true })
   }
 
   // ── Bridge process ──
@@ -496,6 +534,7 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
       return
     }
     state.pairOpen = true
+    preemptInfos()
     state.pairQueue = (async () => {
       const outcome = await showPairDialog(request, deps.pairDialog).catch((error: unknown) => {
         log("error", SOURCE, "pair dialog failed", errorFields(error))
@@ -684,7 +723,7 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
     log("warn", SOURCE, "wef install refused; Finder-guided copy", { refused })
     deps.shell.showItemInFolder(resources.manifestPath)
     await revealRefused(reveal)
-    await showBox({
+    await showInfo({
       type: "warning",
       message: t("desktop.officeAddin.error.installFailed", { path: refused.join(", ") }),
       noLink: true,
@@ -695,7 +734,7 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
   const showUninstallGuide = async (refused: string[], reveal: string[]) => {
     log("warn", SOURCE, "wef uninstall refused; Finder-guided delete", { refused })
     await revealRefused(reveal)
-    await showBox({
+    await showInfo({
       type: "warning",
       message: t("desktop.officeAddin.error.uninstallFailed", { path: refused.join(", ") }),
       noLink: true,
@@ -992,7 +1031,7 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
         void showInstallGuide(installed.refused, installed.reveal)
         return { ok: true, install: "guided", refused: installed.refused }
       }
-      void showBox({ type: "info", message: t("desktop.officeAddin.installed"), noLink: true })
+      void showInfo({ type: "info", message: t("desktop.officeAddin.installed"), noLink: true })
       return { ok: true, install: "installed", refused: [] }
     })().catch(async (error: unknown) => {
       if (error instanceof EnableAborted || progress.aborted) return abort()
@@ -1047,7 +1086,7 @@ export function createOfficeAddinController(deps: OfficeAddinControllerDeps): Of
     set({ state: "off" })
     // C65 (F-M7-4): one dialog per Disable whose keychain removal failed; the `ca/previous/` retry stays.
     if (certificate === "removal-pending") {
-      void showBox({ type: "warning", message: t("desktop.officeAddin.error.certRemovalFailed"), noLink: true })
+      void showInfo({ type: "warning", message: t("desktop.officeAddin.error.certRemovalFailed"), noLink: true })
     }
     if (uninstalled.refused.length > 0) void showUninstallGuide(uninstalled.refused, uninstalled.reveal)
     return { ok: true, removedCertificate: removeCertificate, uninstallRefused: uninstalled.refused }
