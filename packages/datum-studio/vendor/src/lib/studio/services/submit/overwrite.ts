@@ -27,7 +27,7 @@
  * kolom. Hasilnya sama dengan membaca semua revisi: setiap temuan mensyaratkan sunting
  * terakhir > acuan lingkupnya >= min acuan, dan revisi kiriman tidak pernah memuat `pid:`.
  */
-import type { ChapterV2, StudioDocV2Resolved } from "../../contract";
+import type { BlockV2, ChapterV2, StudioDocV2Resolved } from "../../contract";
 import { StudioEngineError } from "../../contract/errors";
 import { stripIds } from "../compose/hash";
 import { stableStringify } from "../ingest/util";
@@ -70,6 +70,9 @@ export interface OverwriteFinding extends OverwrittenPid {
 }
 
 export const OVERWRITE_REASON = "PATCHED_PIDS_OVERWRITTEN";
+/** Swarm 1.3.3 row 74 (ST-10): kiriman bab akan menghilangkan blok grafik, diagram, atau gambar. */
+export const FIGURE_LOSS_REASON = "FIGURE_BLOCKS_WOULD_BE_LOST";
+const FIGURE_TYPES: readonly string[] = ["chart", "diagram", "image"];
 const RENUMBER_SCOPE = "structure:renumberChapters";
 
 // ── Pembantu murni ───────────────────────────────────────────────────────
@@ -180,6 +183,135 @@ function compareFindings(a: OverwriteFinding, b: OverwriteFinding): number {
   return (a.address ?? "").localeCompare(b.address ?? "", "en", { numeric: true }) || a.pid.localeCompare(b.pid);
 }
 
+// ── Row 74 (ST-10): blok figur tidak hilang diam-diam ────────────────────
+//
+// Kiriman bab mengganti bab seutuhnya. Blok grafik, diagram, atau gambar bab di revisi terkini
+// dianggap TETAP ADA di bab hasil gabung bila salah satu berlaku (dicocokkan satu-satu, urut ini):
+//   1. blok figur yang isinya sama persis (tanpa id): dibawa dengan `[[keep:<pid>]]`, atau pagar
+//      `diagram` / gambar yang ditulis ulang apa adanya di Markdown;
+//   2. blok berjenis sama dengan caption yang sama persis (figur yang sama, isinya direvisi);
+//   3. blok berjenis sama dengan pid yang sama (dibawa dengan `id`, atau pewarisan pid posisi §10:
+//      blok figur sejenis di tempat yang sama = blok itu direvisi di tempat).
+// Selebihnya blok itu AKAN HILANG: kiriman ditolak 422 `PID_CONFLICT`
+// `reason: FIGURE_BLOCKS_WOULD_BE_LOST` dengan daftar {id, kind, caption, address}, kecuali pid-nya
+// disebut `[[remove:<pid>]]` (penghapusan sengaja, `MergeOutcome.removedFigurePids`). Tidak ada
+// blok yang ditaruh di posisi tebakan: paragraf tetangga yang tidak berubah bukan jangkar.
+// Kode 422 `PID_CONFLICT`, bukan 409 `SCOPE_CONFLICT`: penyebabnya isi kiriman, bukan pihak lain,
+// dan alat MCP mengganti pesan `SCOPE_CONFLICT` dengan petunjuk "diubah pihak lain, kirim ulang
+// dengan baseRevisionNo terbaru" (`ERROR_HINTS`), yang untuk kasus ini menyesatkan.
+
+/** Satu blok figur yang akan hilang. */
+export interface LostFigureBlock {
+  id: string;
+  kind: "chart" | "diagram" | "image";
+  caption: string;
+  chapterKey: string;
+  address: string | null;
+}
+
+function figureBlocks(c: ChapterV2 | undefined): BlockV2[] {
+  if (!c) return [];
+  return [...(c.intro ?? []), ...c.sections.flatMap((s) => s.blocks)].filter((b) => FIGURE_TYPES.includes(b.type));
+}
+
+function captionSig(b: BlockV2): string | null {
+  const caption = (b as { caption?: unknown }).caption;
+  return caption === undefined || caption === null ? null : stableStringify(caption);
+}
+
+function captionText(b: BlockV2): string {
+  const caption = (b as { caption?: { text?: unknown; runs?: Array<{ t?: unknown }> } }).caption;
+  if (!caption) return "";
+  if (typeof caption.text === "string") return caption.text;
+  return (caption.runs ?? []).map((r) => (typeof r.t === "string" ? r.t : "")).join("");
+}
+
+/** pid blok figur bab `chapterKeys` yang di hasil gabung tetap berjenis sama dan berisi sama persis. Murni. */
+export function intactFigurePids(current: StudioDocV2Resolved, merged: StudioDocV2Resolved, chapterKeys: ReadonlySet<string>): Set<string> {
+  const cur = chaptersByKey(current);
+  const next = chaptersByKey(merged);
+  const out = new Set<string>();
+  for (const k of chapterKeys) {
+    const after = new Map(figureBlocks(next.get(k)).map((b) => [b.id, stableStringify(stripIds(b))]));
+    for (const b of figureBlocks(cur.get(k))) if (b.id && after.get(b.id) === stableStringify(stripIds(b))) out.add(b.id);
+  }
+  return out;
+}
+
+/**
+ * Blok figur revisi terkini yang tidak ada lagi di bab hasil gabung (aturan di atas) dan tidak
+ * disebut `[[remove:<pid>]]`. Murni; hanya lingkup `chapter:<k>` kiriman yang diperiksa.
+ */
+export function findLostFigureBlocks(
+  current: StudioDocV2Resolved,
+  merged: { doc: StudioDocV2Resolved; scopes: readonly string[]; removedFigurePids?: readonly string[] },
+  addressOf: (pid: string) => string | null = () => null,
+): LostFigureBlock[] {
+  const cur = chaptersByKey(current);
+  const next = chaptersByKey(merged.doc);
+  const removed = new Set(merged.removedFigurePids ?? []);
+  const lost: LostFigureBlock[] = [];
+  for (const key of merged.scopes.filter((s) => s.startsWith("chapter:")).map((s) => s.slice("chapter:".length))) {
+    const pool = figureBlocks(next.get(key));
+    const take = (match: (b: BlockV2) => boolean): boolean => {
+      const i = pool.findIndex(match);
+      if (i >= 0) pool.splice(i, 1);
+      return i >= 0;
+    };
+    const passes: Array<(old: BlockV2) => (b: BlockV2) => boolean> = [
+      (old) => (b) => stableStringify(stripIds(b)) === stableStringify(stripIds(old)),
+      (old) => (b) => b.type === old.type && captionSig(old) !== null && captionSig(b) === captionSig(old),
+      (old) => (b) => b.id === old.id && b.type === old.type,
+    ];
+    const open = passes.reduce((rest, pass) => rest.filter((old) => !take(pass(old))), figureBlocks(cur.get(key)));
+    for (const b of open) {
+      if (!b.id || removed.has(b.id)) continue;
+      lost.push({ id: b.id, kind: b.type as LostFigureBlock["kind"], caption: captionText(b), chapterKey: key, address: addressOf(b.id) });
+    }
+  }
+  return lost;
+}
+
+/** Teks awam penolakan `FIGURE_BLOCKS_WOULD_BE_LOST` untuk diteruskan agen ke controller-nya. */
+export function figureLossForwardText(lost: readonly LostFigureBlock[]): string {
+  const chapters = [...new Set(lost.map((b) => b.chapterKey))].join(", ");
+  return (
+    `Kiriman belum disimpan: bab ${chapters} memuat ${lost.length} grafik, diagram, atau gambar yang tidak ada di naskah kiriman, ` +
+    `dan kiriman ini akan menghapusnya. Tandai tempat tiap blok di naskah dengan penanda keep-nya, atau nyatakan penghapusannya dengan penanda remove-nya, lalu kirim ulang.`
+  );
+}
+
+/**
+ * 422 `PID_CONFLICT` `reason: FIGURE_BLOCKS_WOULD_BE_LOST` bila kiriman bab akan menghilangkan
+ * blok figur tanpa `[[remove:<pid>]]`. Tidak membaca DB; berlaku apa pun `baseRevisionNo`-nya.
+ */
+export function assertNoFigureBlocksLost(input: Pick<OverwriteCheckInput, "current" | "merged" | "latestRevisionNo"> & Partial<Pick<OverwriteCheckInput, "documentId" | "baseRevisionNo" | "prevRows">>): void {
+  const rows = input.prevRows;
+  const lost = findLostFigureBlocks(input.current, input.merged, rows ? (pid) => addressOfPid(rows, pid) : undefined);
+  if (lost.length === 0) return;
+  const list = lost.map((b) => `${b.id} ${b.kind}${b.address ? ` ${b.address}` : ""} "${b.caption}"`).join("; ");
+  // Penanda ditulis lengkap per blok (siap tempel): alat MCP meloloskan "<" di teks server.
+  throw new StudioEngineError(
+    "PID_CONFLICT",
+    `${FIGURE_LOSS_REASON}: kiriman bab ${[...new Set(lost.map((b) => b.chapterKey))].join(", ")} tidak memuat ${lost.length} blok grafik, diagram, atau gambar ` +
+      `yang ada di revisi ${input.latestRevisionNo}, dan tidak disimpan (0 tulis): ${list}. ` +
+      `Mempertahankan sebuah blok: tulis satu paragraf yang isinya hanya penanda keep blok itu, mis. [[keep:${lost[0].id}]], tepat di tempat blok itu harus berada. ` +
+      `Menghapusnya dengan sengaja: tulis satu paragraf yang isinya hanya penanda remove-nya, mis. [[remove:${lost[0].id}]], di bab itu. ` +
+      `Tanpa penanda, blok tidak dibuang dan tidak ditaruh di posisi tebakan`,
+    {
+      scope: `chapter:${lost[0].chapterKey}`,
+      reason: FIGURE_LOSS_REASON,
+      baseRevisionNo: input.baseRevisionNo ?? null,
+      latestRevisionNo: input.latestRevisionNo,
+      lostBlocks: lost,
+      keep: lost.map((b) => `[[keep:${b.id}]]`),
+      remove: lost.map((b) => `[[remove:${b.id}]]`),
+      ...(input.documentId ? { readContent: `GET /api/studio/documents/${input.documentId}/content` } : {}),
+      forwardToController: figureLossForwardText(lost),
+    },
+  );
+}
+
 // ── Pemeriksaan (DB) ─────────────────────────────────────────────────────
 
 const REVISION_SCOPE_SELECT = { revisionNo: true, changeScope: true, createdBy: true, parentRevisionNo: true } as const;
@@ -220,7 +352,7 @@ export interface OverwriteCheckInput {
   latestRevisionNo: number;
   baseRevisionNo?: number;
   current: StudioDocV2Resolved;
-  merged: { doc: StudioDocV2Resolved; scopes: readonly string[] };
+  merged: { doc: StudioDocV2Resolved; scopes: readonly string[]; removedFigurePids?: readonly string[] };
   prevRows: StructureRows;
   /** Slot berulang (bab/lampiran) menurut tata letak kerangka. */
   isRepeatableSlot: (slotKey: string) => boolean;
@@ -336,7 +468,11 @@ export async function findPatchedOverwrites(tx: SubmitTx, input: OverwriteCheckI
 
   // (a) pid bab yang diubah kiriman dan disunting sesudah acuan.
   if (chapterKeys.size > 0 && edits.size > 0) {
+    // Row 74: blok figur yang isinya utuh dan pid-nya tetap (dibawa kiriman atau [[keep:<pid>]])
+    // tidak tertimpa; hanya indeksnya bergeser karena teks di sekitarnya berubah.
+    const intact = intactFigurePids(input.current, input.merged.doc, chapterKeys);
     for (const [pid, key] of changedChapterPids(input.current, input.merged.doc, chapterKeys)) {
+      if (intact.has(pid)) continue;
       const e = edits.get(pid);
       const scope = `chapter:${key}`;
       if (e && e.rev > refOf(scope)) add(pid, scope, addressOfPid(input.prevRows, pid), e.rev, e.by);
@@ -396,6 +532,8 @@ export function overwriteForwardText(documentId: string, findings: readonly Over
 
 /** 409 `SCOPE_CONFLICT` bila kiriman akan menimpa suntingan PATCH sesudah acuan lingkupnya. */
 export async function assertNoPatchedOverwrite(tx: SubmitTx, input: OverwriteCheckInput): Promise<void> {
+  // Row 74: lebih dulu dan tanpa syarat dasar; `baseRevisionNo` terkini tidak membuat blok figur boleh hilang.
+  assertNoFigureBlocksLost(input);
   const findings = await findPatchedOverwrites(tx, input);
   if (findings.length === 0) return;
   const n = input.latestRevisionNo;

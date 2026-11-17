@@ -21,7 +21,7 @@ import { DATUM_NAME_UNSAFE_CHARS, PID_PATTERN, studioRoutePath } from "../../../
 import { datumSafeName } from "../../../src/lib/studio/services/render/naming";
 import { diagramSchema } from "../../../src/lib/studio/contract/schema/diagram.schema";
 import { ADOPT, adoptedWarning, BASE_REV, bodyAgentId, CHANGE, checkOwnership, completenessBrief, existingData, rememberRevision, requireBasis, withWarnings, type ExistingDoc, type Ownership } from "./doc-tools";
-import { assertFileWriteEnabled, McpToolError, prepareDownloadDir, resolveDownloadDir, writeFileGuarded } from "./safety";
+import { assertFileWriteEnabled, isRelativeDownloadDir, McpToolError, prepareDownloadDir, resolveDownloadDir, writeFileGuarded } from "./safety";
 import {
   bool,
   http,
@@ -48,8 +48,10 @@ type Rec = Record<string, unknown>;
 /** Batas SVG yang dikembalikan `includeSvg` (karakter). */
 export const SVG_CAP = 6000;
 const ISSUE_LINES = 20;
-export const CHART_PATCH_KEYS = ["data", "caption", "source", "note", "unit", "dec", "highlight", "limit", "keyRow", "code", "form", "panels", "orientation", "sort", "topN", "otherLabel", "labelShort"] as const;
-export const DIAGRAM_PATCH_KEYS = ["spec", "caption", "source", "keyRow"] as const;
+// Swarm 1.3.3 row 39 (ST-1, request of row 25): `width` (text | full, contract FIGURE_WIDTH_VALUES) is a patch key of
+// charts and diagrams; every key here is a field of its contract block (pinned by row39-tool-input-contract.test.ts).
+export const CHART_PATCH_KEYS = ["data", "caption", "source", "note", "unit", "dec", "highlight", "limit", "keyRow", "code", "form", "panels", "orientation", "sort", "topN", "otherLabel", "labelShort", "width"] as const;
+export const DIAGRAM_PATCH_KEYS = ["spec", "caption", "source", "keyRow", "width"] as const;
 /**
  * Swarm 1.2.7 row 39 (T-11, N7-071/K7-11): required keys of a merged INLINE v2 diagram spec (no `$schema`), equal to
  * the `required` of the v2 diagram spec schema (common.schema.ts `DiagramSpecV2`, pinned by rel127-t11 test).
@@ -97,6 +99,61 @@ export function standaloneFileName(f: Rec, ext: "svg" | "png", fallback: string)
   return safe === ext || safe === `.${ext}` || safe.length <= ext.length + 1 ? fallback : safe;
 }
 
+/** Swarm 1.3.3 row 156 (S12, ST-7): the most characters of the one "belum diperiksa" line of a preview. */
+export const NOT_RUN_LINE_MAX = 360;
+
+/**
+ * Row 156: the short reason of one `figure.notRun` entry (fixed vocabulary; the server's long reason stays in
+ * structuredContent). Read from `cause` first, then the reason text of figure-preview-parity.ts.
+ */
+function notRunShort(n: Rec): string {
+  const reason = typeof n.reason === "string" ? n.reason : "";
+  if (n.cause === "staged") return "bertahap";
+  if (n.cause === "human") return "perlu orang";
+  if (n.cause === "tier") return "tingkat dokumen";
+  if (n.cause === "not-applicable") return "tidak berlaku";
+  if (reason.includes("gagal dijalankan")) return "gagal dijalankan";
+  if (reason.includes("belum dipetakan")) return "belum dipetakan";
+  if (reason.includes("butuh halaman")) return "perlu halaman PDF";
+  if (reason.includes("seluruh dokumen")) return "perlu dokumen";
+  return "hanya saat render";
+}
+
+/**
+ * Swarm 1.3.3 row 156 (senior review S12; spec ST-7): `figure.notRun` as ONE text line the model reads:
+ * `  belum diperiksa: <id> (<alasan singkat>), modul <id> (...), ... +N lainnya (figure.notRun)`. Order: entries
+ * that failed to run, then rules (the figure's own open checks), then modules; capped at NOT_RUN_LINE_MAX characters.
+ * Ids are safe tokens only (an unsafe id is not echoed). Undefined when nothing is listed. Never a pass.
+ */
+export function notRunLine(notRun: unknown): string | undefined {
+  if (!Array.isArray(notRun)) return undefined;
+  const all = notRun.filter(isRecord);
+  if (all.length === 0) return undefined;
+  const rank = (n: Rec) => (String(n.reason ?? "").includes("gagal dijalankan") ? 0 : n.kind === "module" ? 2 : 1);
+  const items = all
+    .map((n, i) => ({ n, i }))
+    .sort((a, b) => rank(a.n) - rank(b.n) || a.i - b.i)
+    .map(({ n }) => {
+      const id = tok(n.id, "");
+      return id === "" ? null : `${n.kind === "module" ? "modul " : ""}${id} (${notRunShort(n)})`;
+    });
+  const head = "  belum diperiksa: ";
+  const shown: string[] = [];
+  let len = head.length;
+  for (let k = 0; k < items.length; k++) {
+    const it = items[k];
+    if (it === null) continue;
+    const rest = items.length - k - 1;
+    const tail = rest > 0 ? ` +${items.length - k} lainnya (figure.notRun)`.length : 0;
+    const add = (shown.length > 0 ? 2 : 0) + it.length;
+    if (len + add + (rest > 0 ? tail : 0) > NOT_RUN_LINE_MAX) break;
+    shown.push(it);
+    len += add;
+  }
+  const hidden = items.length - shown.length;
+  return `${head}${shown.join(", ")}${hidden > 0 ? ` +${hidden} lainnya (figure.notRun)` : ""}`;
+}
+
 /**
  * Baris hasil pratinjau: kepala token aman + blok tak tepercaya (label, isu + saran). `rendered: false` = mesin
  * menolak figur (kode aman di kepala, pesan di blok).
@@ -130,6 +187,9 @@ export function previewLines(id: string, b: Rec, label = "pratinjau figur"): str
   // Row 73 (W-03): the server splits issues into defects (fix) and notices (engine adapted, no action).
   const defects = Array.isArray(f.defects) ? f.defects.length : null;
   if (defects !== null && Array.isArray(f.notices)) lines.push(`  cacat ${defects}, catatan ${f.notices.length} (figure.defects / figure.notices)`);
+  // Row 156 (S12, ST-7): what the preview did not check, in the text (not only structuredContent.figure.notRun).
+  const open = notRunLine(f.notRun);
+  if (open !== undefined) lines.push(open);
   if ((defects ?? layout) > 0) lines.push("  perbaiki: studio_figure_revise (patch data/caption/labelShort/topN/orientation/sort) lalu pratinjau lagi");
   return lines;
 }
@@ -176,7 +236,9 @@ const figurePreviewTool: ToolDef = {
     const dirRaw = str(a, "downloadDir");
     if (dirRaw === null && bool(a, "overwrite")) throw new McpToolError("INVALID_ARGUMENT", "overwrite hanya bersama downloadDir");
     if (dirRaw !== null) assertFileWriteEnabled(ctx.deps.config.fileWriteEnabled, "studio_figure_preview (downloadDir)");
-    const dir = dirRaw !== null ? resolveDownloadDir(dirRaw, ctx.deps.config.fileRoots, ctx.deps.nfs) : null;
+    // Row 69/77 (MC-8): a relative downloadDir is read against the project folder of the document's mission.
+    const projectDir = dirRaw !== null && isRelativeDownloadDir(dirRaw) ? ((await ctx.deps.projectDirOf?.({ documentId: id })) ?? null) : null;
+    const dir = dirRaw !== null ? resolveDownloadDir(dirRaw, ctx.deps.config.fileRoots, ctx.deps.nfs, projectDir) : null;
     const includeSvg = bool(a, "includeSvg");
     // Row 165C (F56-3): stand-alone figure (the original's apparatus "figure" render); PNG only into downloadDir.
     const standalone = bool(a, "standalone");
@@ -214,7 +276,7 @@ const figurePreviewTool: ToolDef = {
         const w = writeFileGuarded(dest, buf, { roots: ctx.deps.config.fileRoots, purpose: "write-file", overwrite: bool(a, "overwrite"), nfs: ctx.deps.nfs, now: ctx.now, log: ctx.fsLog.writes, isSame: (x) => sha256Hex(x) === got });
         return { dest, bytes: buf.length, sha256: got, w };
       };
-      prepareDownloadDir(dir, ctx.deps.config.fileRoots, ctx.deps.nfs);
+      prepareDownloadDir(dir, ctx.deps.config.fileRoots, ctx.deps.nfs, projectDir);
       // Swarm 1.2.9 row 37 (AC-A12a, N9-061/N9-062): the residue and retention counters of writeFileGuarded, as
       // studio_report_refresh and studio_file_verify return them; SVG and PNG rotate their 5 backups apart, so the PNG
       // has its own pair (C12 D-5). The text wording is the one of tools.ts (refresh).

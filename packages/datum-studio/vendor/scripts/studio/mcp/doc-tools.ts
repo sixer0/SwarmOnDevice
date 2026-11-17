@@ -609,6 +609,11 @@ const importTool: ToolDef = {
       ...(str(a, "template") !== null ? { template: { slug: str(a, "template") } } : {}),
       ...(str(a, "docTitle") !== null ? { meta: { title: str(a, "docTitle") } } : {}),
       ...(str(a, "slot") !== null ? { slot: str(a, "slot") } : {}),
+      // Swarm 1.3.3 row 75 (ST-10): an EXPLICIT baseRevisionNo also goes to the importer's R08 dry run, so the dry run
+      // judges the same base R12 will (before: the dry run never saw it and refused PATCHED_PIDS_OVERWRITTEN even for
+      // baseRevisionNo = latest). A basis only remembered by the session is NOT sent here: the caller did not state
+      // that it read that revision, so the dry run keeps guarding edits made since the chapter's last submission.
+      ...(num(a, "baseRevisionNo") !== null ? { baseRevisionNo: num(a, "baseRevisionNo") } : {}),
     };
     const reply = await http(ctx, "POST", `${IMPORT_ROUTE}?validate=1`, `POST ${IMPORT_ROUTE}?validate=1`, { json: body });
     const r = isRecord(reply.body) ? reply.body : {};
@@ -652,6 +657,18 @@ const importTool: ToolDef = {
     if (!bool(a, "submit")) {
       lines.push(valid ? "  belum dikirim (submit=false); kirim dengan submit=true" : "  perbaiki Markdown lalu ulangi; tidak ada yang dikirim");
       return { text: lines.join("\n"), data: { ...extra, submitted: false, ...(bool(a, "detail") ? {} : { detail: false }), ...untrustedFields(["importSummary.dropped[].excerpt", "importSummary.issues", "importSummary.warnings"]) } };
+    }
+    // Swarm 1.3.3 row 75 (ST-10): a base conflict found by the dry run (stale baseRevisionNo, or edits since the
+    // chapter's last submission) is the SAME refusal R12 gives with 409, so it carries the same code, hint and
+    // details as studio_chapter_submit / studio_slot_fill, not CHAPTER_INVALID ("fix the Markdown"). Nothing is sent.
+    const conflict = validation.valid === true ? arr(dry.issues).find((i) => i.keyword === "SCOPE_CONFLICT") : undefined;
+    if (conflict !== undefined) {
+      throw new McpToolError("SCOPE_CONFLICT", String(conflict.message ?? ""), {
+        untrusted: true,
+        ...(reply.correlationId !== undefined ? { correlationId: reply.correlationId } : {}),
+        step: `POST ${IMPORT_ROUTE}?validate=1`,
+        details: { ...(isRecord(conflict.details) ? conflict.details : {}), detectedBy: "dry-run R08", sent: false },
+      });
     }
     if (!valid || !isRecord(r.submission)) {
       // F-1: isu/cuplikan berasal dari jawaban server -> rincian ditandai data tak tepercaya.

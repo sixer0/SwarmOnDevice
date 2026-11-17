@@ -58,6 +58,80 @@ export const META_MIRRORED_FIELDS = ["title", "typeCode", "language", "classific
 /** Hasil `mergeSubmission` + medan meta yang diisi (dokumen kosong -> nilai kiriman). */
 export interface MergeOutcome extends MergeResult {
   metaFilled: string[];
+  /** Swarm 1.3.3 row 74: pid blok figur yang dihapus dengan sengaja lewat `[[remove:<pid>]]`. */
+  removedFigurePids: string[];
+}
+
+// ── Swarm 1.3.3 row 74 (ST-10): penanda figur pada kiriman bab ────────────
+//
+// Markdown tidak dapat menyatakan grafik, dan kiriman ulang bab mengganti bab seutuhnya
+// (`upsertChapter`), jadi blok figur bab lama hilang bila kiriman tidak membawanya. Dua penanda,
+// masing-masing SATU paragraf yang isinya hanya penanda itu, menyebut blok lewat pid-nya:
+//   [[keep:<pid>]]    blok figur bab lama ber-pid itu ditaruh TEPAT di tempat penanda (isi dan pid
+//                     tetap). Posisi = posisi penanda; tidak pernah ditebak dari paragraf tetangga.
+//   [[remove:<pid>]]  blok itu dihapus dengan sengaja; penandanya sendiri tidak disimpan.
+// Kiriman tanpa penanda yang akan menghilangkan blok figur ditolak di jalur kiriman
+// (`submit/overwrite.ts`, 422 `PID_CONFLICT` `reason: FIGURE_BLOCKS_WOULD_BE_LOST`), bukan di sini: PATCH (R16) memanggil
+// `mergeSubmission` juga dan di sana penghapusan blok memang maksud pemanggil.
+
+/** Jenis blok yang dihitung figur (grafik, diagram, gambar). */
+export const FIGURE_BLOCK_TYPES: readonly string[] = ["chart", "diagram", "image"];
+
+const FIGURE_ANCHOR_RE = /^\[\[(keep|remove):([a-z0-9][a-z0-9-]{2,63})\]\]$/;
+
+function figureAnchorOf(b: BlockV2): { op: "keep" | "remove"; pid: string } | null {
+  if (b.type !== "paragraph") return null;
+  const text = (b as { text?: unknown }).text;
+  if (typeof text !== "string") return null;
+  const m = FIGURE_ANCHOR_RE.exec(text.trim());
+  return m ? { op: m[1] as "keep" | "remove", pid: m[2] } : null;
+}
+
+/**
+ * Selesaikan penanda figur bab kiriman terhadap bab lama berkunci sama. Tanpa penanda: bab
+ * kiriman dikembalikan apa adanya (objek yang sama). Penanda yang menunjuk pid yang bukan blok
+ * figur bab lama = 404 `PID_NOT_FOUND` berdaftar pid yang sah; pid disebut dua kali = 422
+ * `PID_CONFLICT`.
+ */
+function resolveFigureAnchors(c: ChapterV2, old: ChapterV2 | undefined, pointer: string): { chapter: ChapterV2; removed: string[] } {
+  const lists = [c.intro ?? [], ...c.sections.map((s) => s.blocks)];
+  if (!lists.some((l) => l.some((b) => figureAnchorOf(b) !== null))) return { chapter: c, removed: [] };
+  const figures = new Map<string, BlockV2>();
+  for (const b of [...(old?.intro ?? []), ...(old?.sections ?? []).flatMap((s) => s.blocks)]) {
+    if (b.id && FIGURE_BLOCK_TYPES.includes(b.type)) figures.set(b.id, b);
+  }
+  const named = new Set<string>();
+  const removed: string[] = [];
+  const resolve = (blocks: readonly BlockV2[], ptr: string): BlockV2[] =>
+    blocks.flatMap((b, j) => {
+      const a = figureAnchorOf(b);
+      if (!a) return [b];
+      const marker = `[[${a.op}:${a.pid}]]`;
+      const figure = figures.get(a.pid);
+      if (!figure) {
+        composeFail(
+          "PID_NOT_FOUND",
+          `Penanda ${marker} di bab ${c.key} tidak menunjuk blok grafik, diagram, atau gambar bab itu pada revisi terkini` +
+            (figures.size > 0 ? `; pid yang sah: ${[...figures.keys()].join(", ")}` : "; bab itu tidak memuat blok figur") +
+            ". Hapus penanda itu atau pakai pid dari studio_document_get",
+          { pid: a.pid, marker, chapterKey: c.key, pointer: `${ptr}/${j}`, figurePids: [...figures.keys()] },
+        );
+      }
+      if (named.has(a.pid)) {
+        composeFail("PID_CONFLICT", `Blok ${a.pid} disebut dua penanda di bab ${c.key}; satu blok hanya boleh disebut satu kali ([[keep:..]] atau [[remove:..]])`, {
+          pid: a.pid,
+          ownerScope: `chapter:${c.key}`,
+          pointer: `${ptr}/${j}`,
+        });
+      }
+      named.add(a.pid);
+      if (a.op === "keep") return [structuredClone(figure)];
+      removed.push(a.pid);
+      return [];
+    });
+  const chapter: ChapterV2 = { ...c, sections: c.sections.map((s, i) => ({ ...s, blocks: resolve(s.blocks, `${pointer}/sections/${i}/blocks`) })) };
+  if (c.intro) chapter.intro = resolve(c.intro, `${pointer}/intro`);
+  return { chapter, removed };
 }
 
 function param(params: ParamMap, key: string): unknown {
@@ -428,13 +502,18 @@ export function mergeSubmission(current: StudioDocV2Resolved, sub: AnySubmission
   }
 
   const touchedChapters: Array<{ chapter: ChapterV2; pointer: string }> = [];
-  const upsertChapter = (slot: TemplateSlotDef, c: ChapterV2, pointer: string) => {
+  const removedFigurePids: string[] = [];
+  const upsertChapter = (slot: TemplateSlotDef, sent: ChapterV2, pointer: string) => {
     const payload = (doc.sections?.[slot.slotKey] as RepeatablePayload | undefined) ?? ({ type: slot.sectionType } as RepeatablePayload);
     const chapters = [...(payload.chapters ?? [])];
-    const idx = chapters.findIndex((x) => x.key === c.key);
+    const idx = chapters.findIndex((x) => x.key === sent.key);
     const old = idx >= 0 ? chapters[idx] : undefined;
+    // Row 74: penanda [[keep:<pid>]] / [[remove:<pid>]] diselesaikan sebelum cek pid dan cek idempoten.
+    const anchors = resolveFigureAnchors(sent, old, pointer);
+    const c = anchors.chapter;
     assertExplicitPidsOwned(c, old, pidCtx);
     if (old && scopeSha256(old) === scopeSha256(c)) return; // tidak berubah: pid lama tetap
+    removedFigurePids.push(...anchors.removed);
     const next = assignChapterPids(c, old, slot, pidCtx);
     for (const p of chapterPids(next)) pidCtx.owners.set(p, `chapter:${c.key}`);
     if (idx >= 0) chapters[idx] = next;
@@ -494,5 +573,5 @@ export function mergeSubmission(current: StudioDocV2Resolved, sub: AnySubmission
   } else if (assetsChanged) {
     changed = true;
   }
-  return { doc, scopes, changed, metaFilled };
+  return { doc, scopes, changed, metaFilled, removedFigurePids };
 }

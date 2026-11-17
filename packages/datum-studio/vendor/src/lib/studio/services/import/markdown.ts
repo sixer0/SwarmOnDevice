@@ -319,6 +319,12 @@ const DIAGRAM_FENCE_INVALID = "DIAGRAM_FENCE_INVALID";
 const FENCE_KEPT_AS_CODE = "FENCE_KEPT_AS_CODE";
 const FENCE_TYPE_TOKEN_RE = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
 const DIAGRAM_FENCE_MAX_MESSAGES = 5;
+/**
+ * Swarm 1.3.3 row 76 (ST-10): pagar berinfo `chart` tidak pernah disimpan sebagai blok kode. Impor ditolak seluruhnya
+ * (tidak ada yang tersimpan) dengan kode ini; peringatan per-pagar dapat terpotong (20 entri di ringkasan alat) dan
+ * tidak menghentikan `submit`, jadi tidak cukup untuk menjamin agen diberi tahu.
+ */
+export const CHART_FENCE_REFUSED = "CHART_FENCE_REFUSED";
 
 type Rec = Record<string, unknown>;
 type Fence = { kind: "diagram"; block: Rec } | { kind: "invalid"; message: string } | { kind: "kept"; type: string };
@@ -339,6 +345,19 @@ function fenceOf(b: Extract<MdBlock, { kind: "code" }>): Fence | null {
   if (!parsed.ok) return { kind: "invalid", message: `body is not JSON (${parsed.error})` };
   if (!isRec(parsed.value)) return { kind: "invalid", message: 'body must be a JSON object: a diagram spec {family, nodes, edges} or a {"type": "diagram", spec, caption, source} block' };
   return { kind: "diagram", block: parsed.value.type === "diagram" ? parsed.value : { type: "diagram", spec: parsed.value } };
+}
+
+/** Pagar ```chart (atau ~~~chart) di tingkat dokumen: tolak seluruh impor, sebut nomor baris tiap pagar. */
+function refuseChartFences(blocks: MdBlock[]): void {
+  const lines: number[] = [];
+  for (const b of blocks) if (b.kind === "code" && (b.info.split(/\s+/)[0] ?? "").toLowerCase() === "chart") lines.push(b.line);
+  if (lines.length === 0) return;
+  const where = lines.length === 1 ? `line ${lines[0]}` : `lines ${lines.slice(0, 10).join(", ")}${lines.length > 10 ? `, and ${lines.length - 10} more` : ""}`;
+  throw new StudioEngineError(
+    "SCHEMA_INVALID",
+    `${CHART_FENCE_REFUSED}: a chart fence at ${where} cannot be imported (nothing was stored): the importer maps no chart; send the chart as a studio_write chart block ({"chart": {type, categories, series, caption, source}}) and leave it out of the Markdown`,
+    [{ pointer: "/markdown", keyword: CHART_FENCE_REFUSED, message: `chart fence at ${where}; use a studio_write chart block`, line: lines[0], lines }],
+  );
 }
 
 function parseJson(text: string): { ok: true; value: unknown } | { ok: false; error: string } {
@@ -732,6 +751,7 @@ class Converter {
   }
 
   run(blocks: MdBlock[]): void {
+    refuseChartFences(blocks);
     const fences = new Map<number, Fence>();
     blocks.forEach((b, idx) => {
       const f = b.kind === "code" ? fenceOf(b) : null;

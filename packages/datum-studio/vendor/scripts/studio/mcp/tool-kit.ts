@@ -92,6 +92,11 @@ export interface ToolDeps {
   now?: () => number;
   /** C2: keadaan sesi (satu per proses server); tanpa ini basis tidak diingat antarpanggilan. */
   session?: McpSession;
+  /**
+   * Swarm 1.3.3 row 69/77 (MC-8): the project folder of the mission that owns a document or a rendered file, for a
+   * project-relative `downloadDir`. Given by the host; absent or null = the call has no project folder (refused).
+   */
+  projectDirOf?: (ref: { documentId?: string; fileId?: string }) => string | null | Promise<string | null>;
 }
 
 export interface ToolContext {

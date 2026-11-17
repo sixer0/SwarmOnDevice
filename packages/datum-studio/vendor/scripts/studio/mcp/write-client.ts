@@ -14,6 +14,7 @@ import { validateBlockV2 } from "../../../src/lib/studio/services/revisions/v2/b
 import { McpToolError } from "./safety";
 import { tok, type ToolWarning } from "./tool-kit";
 import { isRows, NUMERAL_CELL, warnTableOverflow, type Cell, type ChartInput, type DiagramInput, type Rows } from "./write-content";
+import { intervalsChart, isIntervalsChart, negativeChartValues, negativeValueMessage } from "./write-figure-input";
 
 type Rec = Record<string, unknown>;
 const NOOP = { warn: () => undefined, drop: () => undefined };
@@ -295,6 +296,22 @@ function sourceOf(given: string | undefined, metaSource: string | null, warn: (w
 /** Data grafik: kode berbentuk categorical (P-01/P-02/P-04/W-02/W-04 ...) -> points; selain itu series. */
 const CATEGORICAL = new Set(["P-01", "P-02", "P-04", "P-09", "P-10", "P-11", "K-05", "K-06", "K-07", "K-08", "K-09", "K-10", "W-02", "W-04"]);
 export function chartBlock(c: ClientChart, metaSource: string | null, warn: (w: ToolWarning) => void, where: string, chapterTitle: string, issue: IssueSink = THROW): Rec {
+  // Swarm 1.3.3 row 39 (ST-1): per-figure width (`text` | `full`) goes on the block as given; absent = not written.
+  const finish = (code: string, data: Rec, caption: string): Rec => {
+    const source = sourceOf(c.source, metaSource, warn, issue, where, "grafik");
+    return { type: "chart", code, data, ...(c.unit ? { unit: c.unit } : {}), caption: inl(caption), ...(source !== null ? { source: inl(source) } : {}), ...(c.width !== undefined ? { width: c.width } : {}) };
+  };
+  // Row 39 (ST-2): W-07 intervals -> data {shape:"intervals", items, statusAt?, timeUnit?}, values unchanged; the
+  // contract's intervals shape decides what is refused (the issue names the input field).
+  if (isIntervalsChart(c)) {
+    const iv = intervalsChart(c as unknown as Rec);
+    if (iv.issues.length > 0) {
+      issue({ where, code: "CHART_DATA_INVALID", message: `grafik interval tidak sah: ${iv.issues.join("; ")}` });
+      return {};
+    }
+    if (!c.caption?.trim()) warn({ code: "CAPTION_GENERATED", message: `${where}: grafik tanpa caption; keterangan dibangkitkan dari judul bab` });
+    return finish(iv.code, iv.data, c.caption?.trim() ? stripCaptionPrefix(c.caption.trim(), warn, where) : `Jadwal ${chapterTitle}`);
+  }
   const len = c.categories.length;
   if (c.series.some((s) => s.values.length !== len)) {
     issue({ where, code: "CHART_DATA_INVALID", message: `setiap seri harus punya ${len} nilai (sama dengan jumlah categories)` });
@@ -310,9 +327,21 @@ export function chartBlock(c: ClientChart, metaSource: string | null, warn: (w: 
     }
     throw e;
   }
+  // Swarm 1.3.3 row 77 (ST-10): a value the engine refuses at render (CH-01) is refused here, before anything is stored;
+  // a one-series code given several series is refused too (the other series used to be left out without a word).
+  const single = CATEGORICAL.has(code);
+  if (single && c.series.length > 1) {
+    issue({ where, code: "CHART_DATA_INVALID", message: `${code} menggambar satu seri; diterima ${c.series.length} seri (series/1 dst. tidak akan tergambar). Kirim satu seri atau pakai type grouped / stacked` });
+    return {};
+  }
+  const negative = negativeChartValues(code, c.series);
+  if (negative.length > 0) {
+    issue({ where, code: "INVALID_ARGUMENT", message: `${negativeValueMessage(code, negative[0])}${negative.length > 1 ? ` (+${negative.length - 1} nilai negatif lain)` : ""}` });
+    return {};
+  }
   const cats = c.categories.map((x) => String(x));
   let data: Rec;
-  if (CATEGORICAL.has(code)) {
+  if (single) {
     const s = c.series[0];
     const points = cats.map((label, i) => ({ label, value: s.values[i] })).filter((p): p is { label: string; value: number } => typeof p.value === "number");
     if (points.length < len) warn({ code: "CHART_NULL_DROPPED", message: `${where}: ${len - points.length} nilai kosong dibuang dari grafik satu seri` });
@@ -320,8 +349,7 @@ export function chartBlock(c: ClientChart, metaSource: string | null, warn: (w: 
   } else data = { shape: "series", categories: cats, series: c.series.map((s) => ({ name: s.name, values: s.values })) };
   const caption = c.caption?.trim() ? stripCaptionPrefix(c.caption.trim(), warn, where) : `${c.series.map((s) => s.name).join(", ")} per ${chapterTitle}`;
   if (!c.caption?.trim()) warn({ code: "CAPTION_GENERATED", message: `${where}: grafik tanpa caption; keterangan dibangkitkan dari nama seri` });
-  const source = sourceOf(c.source, metaSource, warn, issue, where, "grafik");
-  return { type: "chart", code, data, ...(c.unit ? { unit: c.unit } : {}), caption: inl(caption), ...(source !== null ? { source: inl(source) } : {}) };
+  return finish(code, data, caption);
 }
 
 // ── diagram ─────────────────────────────────────────────────────────────
@@ -333,7 +361,7 @@ const DIAGRAM_MAX_ISSUES = 5;
  * awal caption dibuang seperti grafik; sumber tidak dikarang: blok, atau meta.source). Validator v2 bersama
  * (`validateBlockV2`, sama dengan R16) menolak spec yang tidak sah dengan pesannya sendiri (isu SCHEMA_INVALID).
  */
-function diagramBlock(d: DiagramInput, metaSource: string | null, warn: (w: ToolWarning) => void, where: string, issue: IssueSink = THROW): Rec {
+export function diagramBlock(d: DiagramInput, metaSource: string | null, warn: (w: ToolWarning) => void, where: string, issue: IssueSink = THROW): Rec {
   const { spec, artifactId, caption, source, keyRow, ...rest } = d as DiagramInput & Rec;
   const cap = typeof caption === "string" ? (caption.trim() === "" ? undefined : inl(stripCaptionPrefix(caption.trim(), warn, where))) : caption;
   let src: unknown = source;

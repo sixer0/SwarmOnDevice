@@ -24,7 +24,8 @@
  */
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
+import Ajv, { type ValidateFunction } from "ajv";
+import { argIssueLine, argIssues, MAX_ARG_ISSUES } from "./arg-issues";
 import { studioRoutePath } from "../../../src/lib/studio/contract/env";
 import { checkDraftLimits, draftLimitMessage, extractDraft, sequentialCreateSources } from "../../../src/lib/studio/services/draft";
 import { stripToolKeys } from "../../../src/lib/studio/services/draft/md-report";
@@ -58,7 +59,7 @@ import { DOCUMENT_TOOLS, guardReportSubmit } from "./doc-tools";
 import { FIGURE_TOOLS } from "./figure-tools";
 import { WRITE_TOOLS } from "./write-tools";
 import { deliveredDatumName, joinInside, safeDatumName } from "./datum-name";
-import { assertFileWriteEnabled, guardedFetch, McpToolError, prepareDownloadDir, resolveAllowedPath, resolveDownloadDir, virtualFs, writeFileGuarded, type VirtualFsLog } from "./safety";
+import { assertFileWriteEnabled, guardedFetch, isRelativeDownloadDir, McpToolError, prepareDownloadDir, resolveAllowedPath, resolveDownloadDir, virtualFs, writeFileGuarded, type VirtualFsLog } from "./safety";
 import {
   bool,
   compactSummary,
@@ -947,7 +948,9 @@ const fileVerifyTool: ToolDef = {
     const dirRaw = str(a, "downloadDir");
     if (dirRaw === null && bool(a, "overwrite")) throw new McpToolError("INVALID_ARGUMENT", "overwrite hanya bersama downloadDir");
     if (dirRaw !== null) assertFileWriteEnabled(ctx.deps.config.fileWriteEnabled, "studio_file_verify (downloadDir)");
-    const dir = dirRaw !== null ? resolveDownloadDir(dirRaw, ctx.deps.config.fileRoots, ctx.deps.nfs) : null;
+    // Row 69/77 (MC-8): a relative downloadDir is read against the project folder of the mission that owns the file.
+    const projectDir = dirRaw !== null && isRelativeDownloadDir(dirRaw) ? ((await ctx.deps.projectDirOf?.({ fileId })) ?? null) : null;
+    const dir = dirRaw !== null ? resolveDownloadDir(dirRaw, ctx.deps.config.fileRoots, ctx.deps.nfs, projectDir) : null;
     const head = await headWithRetry(ctx, `${r10}?verify=1`, "HEAD /api/studio/files/{id}?verify=1");
     const verified = head.headers.get("x-studio-sha256-verified") === "true";
     const finalFileName = head.headers.get("x-studio-final-filename") ?? "";
@@ -987,7 +990,7 @@ const fileVerifyTool: ToolDef = {
       if (dest === null) throw new McpToolError("OUT_NAME_UNSAFE", "nama DATUM dari server keluar dari folder unduhan; berkas tidak diunduh", { correlationId: dl.correlationId, untrusted: true, details: { fileName: datumName } });
       deliveredName = datumName ?? finalFileName;
       const nfs = ctx.deps.nfs;
-      prepareDownloadDir(dir, ctx.deps.config.fileRoots, nfs);
+      prepareDownloadDir(dir, ctx.deps.config.fileRoots, nfs, projectDir);
       const w = writeFileGuarded(dest, buf, { roots: ctx.deps.config.fileRoots, purpose: "write-file", overwrite: bool(a, "overwrite"), nfs, now: ctx.now, log: ctx.fsLog.writes, isSame: (existing) => sha256Hex(existing) === got });
       backup = w.backup;
       backupResidue = w.backupResidue;
@@ -1074,19 +1077,8 @@ export const TOOLS: readonly ToolDef[] = [
 const ajv = new Ajv({ allErrors: true, strict: true, useDefaults: true });
 const validators = new Map<string, ValidateFunction>(TOOLS.map((t) => [t.name, ajv.compile(t.inputSchema)]));
 
-/** L-4 (review 13): isu skema yang dikembalikan dibatasi; sisanya hanya dihitung (masukan besar tidak sah tidak menghasilkan MB). */
-export const MAX_ARG_ISSUES = 20;
-
-function argIssues(errors: ErrorObject[] | null | undefined): Array<{ pointer: string; keyword: string; message: string }> {
-  const all = errors ?? [];
-  const shown = all.slice(0, MAX_ARG_ISSUES).map((e) => ({
-    pointer: e.keyword === "additionalProperties" && isRecord(e.params) ? `${e.instancePath}/${String(e.params.additionalProperty)}`.slice(0, 300) : (e.instancePath || "/").slice(0, 300),
-    keyword: e.keyword,
-    message: (e.message ?? "tidak sah").slice(0, 300),
-  }));
-  if (all.length > MAX_ARG_ISSUES) shown.push({ pointer: "/", keyword: "truncated", message: `${all.length - MAX_ARG_ISSUES} isu skema lain tidak ditampilkan (total ${all.length})` });
-  return shown;
-}
+// Swarm 1.3.3 row 77 (ST-10): issue shaping (closest union branch, received kind) lives in arg-issues.ts.
+export { MAX_ARG_ISSUES };
 
 /** MCP-D3 F-1: kode galat server yang pesannya dapat memuat label/isi pihak lain (selalu dipindah ke blok). */
 const SERVER_TEXT_CODES = new Set(["SCOPE_CONFLICT", "BASE_CONFLICT", "META_CONFLICT", "TEMPLATE_MISMATCH", "OVERWRITE_CONFLICT", "PARAGRAPH_CONFLICT"]);
@@ -1176,7 +1168,11 @@ export async function executeTool(name: string, rawArgs: unknown, deps: ToolDeps
   const ctx: ToolContext = { deps, callId, fsLog, fetch, cids, session: deps.session ?? new McpSession(), now: deps.now ?? Date.now };
   try {
     const prepared = [...(unwrapped.warning !== null ? [unwrapped.warning] : []), ...(tool.prepare !== undefined && isRecord(args) ? tool.prepare(args) : [])];
-    if (!validate(args)) throw new McpToolError("INVALID_ARGUMENT", "argumen tidak sah menurut skema alat", { details: argIssues(validate.errors) });
+    if (!validate(args)) {
+      // Row 77 (ST-10): the head line names the first offending field; `details` keeps one line per field.
+      const issues = argIssues(validate.errors, args);
+      throw new McpToolError("INVALID_ARGUMENT", `argumen tidak sah menurut skema alat: ${argIssueLine(issues)}`, { details: issues });
+    }
     const out = await tool.run(args, ctx);
     ctx.session.noteOutcome(null);
     const writeCompact = (name === "studio_write" || name === "studio_edit") && !(isRecord(args) && args.detail === true);
