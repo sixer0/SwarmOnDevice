@@ -23,7 +23,6 @@
   },
   "main": "./out/main/index.js",
   "dependencies": {
-    "@swarm/office-addin": "workspace:*",
     "@zip.js/zip.js": "2.7.62",
     "asn1js": "3.0.10",
     "effect": "catalog:",
@@ -36,6 +35,7 @@
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {
+    "@swarm/office-addin": "workspace:*",
     "@actions/artifact": "4.0.0",
     "@lydell/node-pty": "catalog:",
     "@opencode-ai/app": "workspace:*",
