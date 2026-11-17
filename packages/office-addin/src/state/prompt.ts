@@ -84,8 +84,14 @@ export function sessionTitle(instruction: string) {
   return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut
 }
 
-// FR-04 / FR-13: text written to the document = reply text with \r\n normalised to
-// \n and trailing line breaks removed. Inner line breaks are kept.
+// FR-04 / FR-13: text written to the document (Insert, Replace, Excel matrix) and to the
+// clipboard (Copy) = reply text with \r\n normalised to \n, leading whitespace-only lines
+// removed (M8-02b, C91: thinker replies start with "\n\n"), and trailing line breaks
+// removed. The first non-empty line keeps its own indentation; inner breaks are kept.
+// The thread may still show the raw reply.
 export function writeText(reply: string) {
-  return reply.replaceAll("\r\n", "\n").replace(/[\r\n]+$/, "")
+  return reply
+    .replaceAll("\r\n", "\n")
+    .replace(/^(?:[ \t]*\n)+/, "")
+    .replace(/[\r\n]+$/, "")
 }

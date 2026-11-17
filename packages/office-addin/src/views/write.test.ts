@@ -717,3 +717,35 @@ describe("M8-03d tracked anchor release (C70)", () => {
     expect(releases(pane)).toBe(1)
   })
 })
+
+describe("M8-07c (C93) counts in the preview: singular and plural", () => {
+  test("Word: 1 paragraph / 1 character vs 2 paragraphs", async () => {
+    const one = await answered("A")
+    await click(one, "[data-control=insert]")
+    expect(text(one, "[data-part=preview-counts]")).toBe("1 character · 1 paragraph")
+    const two = await answered("Hi\nyo")
+    await click(two, "[data-control=insert]")
+    expect(text(two, "[data-part=preview-counts]")).toBe("5 characters · 2 paragraphs")
+  })
+
+  test("Excel: 1 cell looks like a formula vs 2 cells", async () => {
+    const one = await answered("=A1\tx", { host: "Excel" })
+    await click(one, "[data-control=insert]")
+    expect(text(one, "[data-part=preview-formula]")).toBe(
+      "1 cell looks like a formula. It is written as text and will not calculate.",
+    )
+    const two = await answered("=A1\t+B2", { host: "Excel" })
+    await click(two, "[data-control=insert]")
+    expect(text(two, "[data-part=preview-formula]")).toBe(
+      "2 cells look like formulas. They are written as text and will not calculate.",
+    )
+  })
+
+  test("1 hidden character uses the singular warning", async () => {
+    const pane = await answered("a\u200Bb")
+    await click(pane, "[data-control=insert]")
+    expect(text(pane, "[data-part=preview-invisible]")).toBe(
+      "1 hidden character will be written. It is shown as a marker below. Click Write again to confirm. \u27e8U+200B\u27e9",
+    )
+  })
+})

@@ -125,6 +125,20 @@ describe("U-XL-06 FR-13 tab reply", () => {
     })
   })
 
+  test("M8-02b leading empty rows dropped; first row keeps its leading empty cell; inner rows kept", () => {
+    expect(replyToMatrix("\n\r\n  \na\tb\n\nc\td\n")).toEqual({
+      rows: [
+        ["a", "b"],
+        ["", ""],
+        ["c", "d"],
+      ],
+      m: 3,
+      n: 2,
+    })
+    expect(replyToMatrix("\n\n\tx\ty\n")).toEqual({ rows: [["", "x", "y"]], m: 1, n: 3 })
+    expect(replyToMatrix("\n\nBRAVO LINE TWO.")).toEqual({ rows: [["BRAVO LINE TWO."]], m: 1, n: 1 })
+  })
+
   test("TSV round trip of FR-10 output", () => {
     const tsv = valuesToTsv([
       ["Name", "Qty"],

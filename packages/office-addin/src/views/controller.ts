@@ -21,7 +21,16 @@ import { valuesToTsv } from "../excel"
 import type { HostAdapter } from "../host/types"
 import type { MessageKey, Params } from "../i18n"
 import { initialState, reduce, type ConnectionEvent, type ConnectionState, type Effect } from "../state/machine"
-import { bodyBytes, composePrompt, normaliseContext, sendBlocker, sessionTitle, type ContextScope, type OfficeHost } from "../state/prompt"
+import {
+  bodyBytes,
+  composePrompt,
+  normaliseContext,
+  sendBlocker,
+  sessionTitle,
+  writeText,
+  type ContextScope,
+  type OfficeHost,
+} from "../state/prompt"
 import { dropSession, lookupSession, recentChats, saveSession, type SessionSummary } from "../state/session"
 import {
   acknowledgeDisclosure,
@@ -535,9 +544,11 @@ export function createPaneController(deps: PaneDeps) {
 
     // FR-57: clipboard only, never the document. The label reads "Copied" for 2 s on the
     // injected timers (design §4.2).
+    // M8-02b: Copy takes the same trimmed text as Insert/Replace (writeText).
     async copy(reply: { messageID: string; text: string }) {
-      if (reply.text === "") return false
-      const ok = deps.clipboard ? await deps.clipboard(reply.text) : false
+      const text = writeText(reply.text)
+      if (text === "") return false
+      const ok = deps.clipboard ? await deps.clipboard(text) : false
       if (!ok) {
         report("copy", "clipboard refused")
         return false

@@ -315,6 +315,16 @@ describe("U-UI-14 Copy (FR-57, AC-49)", () => {
     expect(pane.word.doc.calls).toEqual([])
   })
 
+  test("M8-02b Copy uses the write text: leading empty lines dropped, trailing breaks removed", async () => {
+    const pane = await track(connected)
+    await send(pane, "x")
+    reply(pane, { text: "\n\nBRAVO LINE TWO.\n" })
+    await settle()
+    pane.q("[data-control=copy]")!.click()
+    await settle()
+    expect(pane.copied).toEqual(["BRAVO LINE TWO."])
+  })
+
   test("an empty reply has Copy disabled; a refused clipboard keeps the Copy label", async () => {
     const storage = memoryStore()
     await storedSession(storage, "ses_e")

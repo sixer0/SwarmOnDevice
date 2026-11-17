@@ -91,6 +91,14 @@ describe("prompt composer", () => {
     expect(writeText("plain")).toBe("plain")
   })
 
+  test("M8-02b leading whitespace-only lines are removed; first line keeps its indentation", () => {
+    expect(writeText("\n\nBRAVO LINE TWO.")).toBe("BRAVO LINE TWO.")
+    expect(writeText("  \n\tX\n")).toBe("\tX")
+    expect(writeText("\r\n \t\r\n\n  indented\n\nnext\n")).toBe("  indented\n\nnext")
+    expect(writeText("   only spaces")).toBe("   only spaces")
+    expect(writeText("\n\n")).toBe("")
+  })
+
   test("U-PR-07 Word context normalisation (D15); Excel untouched", () => {
     expect(normaliseContext("Word", "Alpha line one.\r")).toBe("Alpha line one.\n")
     expect(normaliseContext("Word", "Charlie line three.\u0002")).toBe("Charlie line three.")
