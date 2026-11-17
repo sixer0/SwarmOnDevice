@@ -65,7 +65,7 @@ describe("1.2.6 row 103 blockers, decisions and contracts in swarm-workflow.md",
     const text = section(5)
     expect(text).toContain("- One decision source:")
     expect(text).toContain("studio_mission_record_decision")
-    expect(text).toContain("is its export (studio_mission_export)")
+    expect(text).toContain("is its export (datum-studio_studio_mission_export)")
     expect(text).toContain("never a second register edited by hand")
     expect(text).not.toContain("in docs/<task>/decisions.md when it happens")
   })

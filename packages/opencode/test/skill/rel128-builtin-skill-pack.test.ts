@@ -170,16 +170,19 @@ describe("MEM-f", () => {
     expect(workflow.split(N8_023).length - 1).toBe(1)
   })
 
-  test("mission-control: index entry before closing, the MEMORY_INDEX_MISSING refusal, at most 120 lines", () => {
+  test("mission-control: index entry before closing, the MEMORY_INDEX_MISSING refusal, at most 180 lines", () => {
+    // 1.3.3 row 14 (MC-3): the call is no longer written `remember {json}`; the same facts are named in prose.
     const before = missionControl.indexOf(
-      'Before closing, write the final report and its mission index entry: remember {kind: "index", missionId, text: "YYYY-MM-DD <mission-id> | <outcome> | triggers: k1, k2 | docs/<mission-id>/10_report/report.md"}.',
+      'write the final report, and write its mission index entry with the remember tool: kind "index", missionId, and text "YYYY-MM-DD <mission-id> | <outcome> | triggers: k1, k2 | docs/<mission-id>/10_report/report.md" (one line, at most 300 characters).',
     )
     expect(before > 0).toBe(true)
     expect(before < missionControl.indexOf("Close in one call")).toBe(true)
     expect(missionControl).toContain(
-      '- MEMORY_INDEX_MISSING: the project memory has no index entry for this mission. Write it with remember {kind: "index", missionId}, then close again. Other clients get warning MEMORY_INDEX_UNCHECKED instead.',
+      '- MEMORY_INDEX_MISSING: the project memory has no index entry for this mission. Write it with the remember tool (kind "index", missionId), then close again. Other clients get warning MEMORY_INDEX_UNCHECKED instead.',
     )
-    expect(missionControl.split("\n").length).toBeLessThanOrEqual(120)
+    // register section 9: at most 180 lines and 24 000 bytes (was 120 lines)
+    expect(missionControl.replace(/\n$/, "").split("\n").length).toBeLessThanOrEqual(180)
+    expect(Buffer.byteLength(missionControl)).toBeLessThanOrEqual(24_000)
   })
 
   test('remember.txt names kind "index"; swarm-rules.txt stays 2213 B; obsidian-memory does not restate the format', () => {
