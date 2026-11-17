@@ -114,8 +114,12 @@ export const autonomyHandlers = HttpApiBuilder.group(InstanceHttpApi, "autonomy"
       )
 
     const modeAt = Effect.fn("AutonomyHttpApi.modeAt")(function* (where: Autonomy.Where) {
+      // Row 109: "mode on, consent absent" still shows the mode on, so the app can ask to consent again or turn it off.
+      // The field is sent only while it holds, so every other answer keeps its shape; absent reads as false.
+      const needsReconsent = yield* autonomy.needsReconsent(where)
       return {
-        on: yield* autonomy.isOn(where),
+        ...(needsReconsent && { needsReconsent: true }),
+        on: needsReconsent || (yield* autonomy.isOn(where)),
         externalChange: yield* autonomy.externalChange(),
         bypass: (yield* autonomy.bypassOf(where)) !== undefined,
       }

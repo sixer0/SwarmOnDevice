@@ -29,6 +29,11 @@ type LookRules = {
   only?: string
   values?: string
   patterns?: boolean
+  /**
+   * 1.3.3 row 107 (MC-7): short flags whose value is a file to read (`grep -f`). Such a flag may only close its cluster
+   * (`-if pats.txt`), so the file is the next word and judged as a path; `-f.env` or `-fi` would hide it in the flag.
+   */
+  fileLast?: string
 }
 export const READS = new Map<string, LookRules>([
   ["ls", {}],
@@ -42,9 +47,9 @@ export const READS = new Map<string, LookRules>([
   ["pwd", {}],
   ["tree", { short: "oR", long: ["--output", "--fromfile"] }],
   // 1.2.7 row 47a (M1-01): `--hostname-bin=<program>` runs that program (ripgrep 13+), as `--pre` and `-z` do.
-  ["rg", { short: "uLz.", long: ["--pre", "--pre-glob", "--hostname-bin", "--hidden", "--no-ignore", "--follow", "--search-zip", "--unrestricted"] }],
-  ["grep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"] }],
-  ["egrep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"] }],
+  ["rg", { short: "uLz.", long: ["--pre", "--pre-glob", "--hostname-bin", "--hidden", "--no-ignore", "--follow", "--search-zip", "--unrestricted"], fileLast: "f" }],
+  ["grep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"], fileLast: "f" }],
+  ["egrep", { short: "rRdD", long: ["--recursive", "--dereference-recursive", "--directories", "--devices"], fileLast: "f" }],
   ["find", { exact: ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"] }],
   ["sort", { short: "oT", long: ["--output", "--temporary-directory", "--compress-program", "--files0-from"] }],
   ["uniq", { maxPaths: 1 }],
@@ -128,9 +133,17 @@ export function onlyLooks(words: readonly string[]) {
         !rules.long?.some((name) => word === name || word.startsWith(name + "-") || word.startsWith(name + "=")) &&
         // 1.1.1 F10a (G3-1): these programs take a long option by any shortening of it, so a shortening is that option.
         !Risk.abbreviates(word, rules.long ?? []) &&
-        (rules.exact !== undefined || word.startsWith("--") || ![...word.slice(1)].some((flag) => rules.short?.includes(flag)))),
+        (rules.exact !== undefined || word.startsWith("--") || ![...word.slice(1)].some((flag) => rules.short?.includes(flag))) &&
+        (word.startsWith("--") || ![...word.slice(1, -1)].some((flag) => rules.fileLast?.includes(flag)))),
   )
 }
+
+/**
+ * 1.3.3 row 107 (MC-7): the value of every `--name=value` a look carries (`grep --file=x`, `--exclude-from=x`). It is
+ * judged as a path, as a pattern or a count is: it lands inside and is readable, or the command is held.
+ */
+const flagValues = (words: readonly string[]) =>
+  words.slice(1).flatMap((word) => (/^--[a-z][a-z0-9-]*=/.test(word) ? [word.slice(word.indexOf("=") + 1)] : []))
 
 /** "read", "outside" when a path it names is beyond the folder, or undefined when it is not only a look. */
 export function readKind(words: readonly string[], cwd: string, instance: InstanceContext): "read" | "outside" | undefined {
@@ -138,7 +151,7 @@ export function readKind(words: readonly string[], cwd: string, instance: Instan
   const named = namedPaths(words)
   const cap = READS.get(words[0]!)?.maxPaths
   if (cap !== undefined && named.length > cap) return undefined
-  for (const word of named) {
+  for (const word of [...named, ...flagValues(words)]) {
     // A pattern or a count is judged as a path too. It lands inside, or the command is held: never the other way round.
     const file = path.resolve(cwd, word)
     if (!Reach.inside(file, instance)) return "outside"

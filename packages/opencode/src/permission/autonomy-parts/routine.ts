@@ -13,6 +13,7 @@ import { findProgram } from "../../util/find-program"
 import type { CommandKind } from "./types"
 import { DROP_ERRORS, printsOnly, single, unwrapped } from "./read-class"
 import { cdTarget } from "./shell-steps"
+import { SkillScript } from "./skill-script"
 const CHECK_NAMES = new Set(["test", "build", "typecheck", "lint", "check"])
 // Row 276: a script named for one of those with a part after a colon, as projects split them (`check:registry`, `test:unit`).
 const CHECK_SCRIPT = /^(test|check|lint|typecheck):[\w.-]+$/
@@ -208,8 +209,15 @@ export function lockfileUnchanged(names: readonly string[], cwd: string, instanc
  * after it, as in the shell. Splitting on line breaks and the literal " && " is enough: every piece must then pass
  * `Risk.plainWords`, so no other operator survives, and an empty line holds the whole command.
  */
-export function routine(command: string, cwd: string, instance: InstanceContext): CommandKind | undefined {
+export function routine(
+  command: string,
+  cwd: string,
+  instance: InstanceContext,
+  builtin: SkillScript.Builtin = SkillScript.current(),
+): CommandKind | undefined {
   if (!canRunIn(cwd, instance)) return undefined
+  // 1.3.3 row 108 (MC-7): a script Swarm ships in a built-in skill, as the whole command and nothing else.
+  if (SkillScript.matches(command, cwd, instance, builtin)) return "skill-script"
   let here = cwd
   const kinds: CommandKind[] = []
   // Words that are only text (`echo`, `printf`, `date +...`) are fine to look at, and to show; beside work the decider
