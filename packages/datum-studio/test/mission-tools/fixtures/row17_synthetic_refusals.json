@@ -1,0 +1,551 @@
+[
+ {
+  "kind": "field outside its object",
+  "tool": "studio_mission_request_decision",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "blockingRows": "[\"10\"]",
+   "request": {
+    "id": "D-1",
+    "question": "q",
+    "options": [
+     {
+      "id": "a",
+      "label": "A",
+      "consequence": "one"
+     },
+     {
+      "id": "b",
+      "label": "B",
+      "consequence": "two"
+     }
+    ]
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "copy of a value already in place",
+  "tool": "studio_mission_request_decision",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "blocking_rows": "[\"1\", \"2\"]",
+   "request": {
+    "id": "D-1",
+    "question": "q",
+    "options": [
+     {
+      "id": "a",
+      "label": "A",
+      "consequence": "one"
+     },
+     {
+      "id": "b",
+      "label": "B",
+      "consequence": "two"
+     }
+    ],
+    "blockingRows": [
+     "1",
+     "2"
+    ]
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "topic that is not reserved",
+  "tool": "studio_mission_request_decision",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "request": {
+    "id": "D-1",
+    "question": "q",
+    "options": [
+     {
+      "id": "a",
+      "label": "A",
+      "consequence": "one"
+     },
+     {
+      "id": "b",
+      "label": "B",
+      "consequence": "two"
+     }
+    ],
+    "topic": "blueprint approval"
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "context with line breaks that fits",
+  "tool": "studio_mission_request_decision",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "request": {
+    "id": "D-1",
+    "question": "q",
+    "options": [
+     {
+      "id": "a",
+      "label": "A",
+      "consequence": "one"
+     },
+     {
+      "id": "b",
+      "label": "B",
+      "consequence": "two"
+     }
+    ],
+    "context": "line one\n  line two"
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "context over 300 characters (never cut)",
+  "tool": "studio_mission_request_decision",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "request": {
+    "id": "D-1",
+    "question": "q",
+    "options": [
+     {
+      "id": "a",
+      "label": "A",
+      "consequence": "one"
+     },
+     {
+      "id": "b",
+      "label": "B",
+      "consequence": "two"
+     }
+    ],
+    "context": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "fields"
+ },
+ {
+  "kind": "top-level note for the only patch",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "note": "check: 5 pass",
+   "rows": [
+    {
+     "id": "1",
+     "status": "done"
+    }
+   ]
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "rows as a JSON string",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": "[{\"id\": \"3\", \"status\": \"running\"}]"
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "rows as a broken JSON string",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": "[{\"id\": \"3\", status: running}]"
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "fields"
+ },
+ {
+  "kind": "row field beside set",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "decision": "C2",
+     "id": "4",
+     "deps": [
+      "3:B"
+     ]
+    }
+   ]
+  },
+  "seed": {
+   "4": "pending"
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "checkpoint.id for the patch id, same status twice",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "2",
+     "status": "running"
+    },
+    {
+     "checkpoint": {
+      "n": 1,
+      "m": 4,
+      "label": "step one",
+      "id": "2"
+     },
+     "status": "running"
+    }
+   ]
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "lock name in upper case",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "1",
+     "status": "running",
+     "acquire": [
+      "DOC-LOCK"
+     ]
+    }
+   ]
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "tier beside the agent in a new row",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "decision": "C1",
+   "rows": [
+    {
+     "id": "30",
+     "add": {
+      "id": "30",
+      "title": "New step",
+      "agent": "document-writer",
+      "phase": "draft",
+      "tier": "worker"
+     }
+    }
+   ]
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "new row from a title only (row 16 defaults)",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "decision": "C1",
+   "rows": [
+    {
+     "id": "30",
+     "add": {
+      "title": "New step"
+     }
+    }
+   ]
+  },
+  "code": "-",
+  "expect": "ok"
+ },
+ {
+  "kind": "empty decision on an open finding",
+  "tool": "studio_mission_record_finding",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "finding": {
+    "id": "F1",
+    "severity": "medium",
+    "title": "finding",
+    "sourceRow": "3",
+    "ownerRow": "3",
+    "status": "open",
+    "decision": ""
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "enum value one spelling away",
+  "tool": "studio_mission_record_finding",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "finding": {
+    "id": "F1",
+    "severity": "Hihg",
+    "title": "finding",
+    "sourceRow": "3",
+    "ownerRow": "3",
+    "status": "open"
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "enum value with no near spelling",
+  "tool": "studio_mission_record_finding",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "finding": {
+    "id": "F1",
+    "severity": "major",
+    "title": "finding",
+    "sourceRow": "3",
+    "ownerRow": "3",
+    "status": "open"
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "fields"
+ },
+ {
+  "kind": "accepted finding without a decision",
+  "tool": "studio_mission_record_finding",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "finding": {
+    "id": "F1",
+    "severity": "medium",
+    "title": "finding",
+    "sourceRow": "3",
+    "ownerRow": "3",
+    "status": "accepted"
+   }
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "fields"
+ },
+ {
+  "kind": "argument name that swallowed its JSON value",
+  "tool": "studio_mission_record_finding",
+  "args": {
+   "finding\n{\"id\": \"F1\", \"severity\": \"medium\", \"title\": \"finding\", \"sourceRow\": \"3\", \"ownerRow\": \"3\", \"status\": \"open\"}\n</parameter": "",
+   "mission": "2026-11-17_row17-synthetic"
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "include value that is no section",
+  "tool": "studio_mission_get",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "include": [
+    "rows",
+    "sessions"
+   ]
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "corrected"
+ },
+ {
+  "kind": "pending -> done with a note",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "12",
+     "note": "review done: pass",
+     "status": "done"
+    }
+   ]
+  },
+  "seed": {
+   "12": "pending"
+  },
+  "code": "STATUS_TRANSITION",
+  "expect": "corrected"
+ },
+ {
+  "kind": "blocked -> done with a note",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "12",
+     "note": "gate passed",
+     "status": "done"
+    }
+   ]
+  },
+  "seed": {
+   "12": "blocked"
+  },
+  "code": "STATUS_TRANSITION",
+  "expect": "corrected"
+ },
+ {
+  "kind": "pending -> done without a note",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "12",
+     "status": "done"
+    }
+   ]
+  },
+  "seed": {
+   "12": "pending"
+  },
+  "code": "STATUS_TRANSITION",
+  "expect": "fields"
+ },
+ {
+  "kind": "row already in the status",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "3",
+     "note": "started",
+     "status": "running"
+    }
+   ]
+  },
+  "seed": {
+   "3": "running"
+  },
+  "code": "STATUS_TRANSITION",
+  "expect": "corrected"
+ },
+ {
+  "kind": "row added running",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "decision": "C1",
+   "rows": [
+    {
+     "id": "30",
+     "add": {
+      "id": "30",
+      "title": "New step",
+      "status": "running"
+     }
+    }
+   ]
+  },
+  "code": "STATUS_TRANSITION",
+  "expect": "corrected"
+ },
+ {
+  "kind": "mission approved -> done",
+  "tool": "studio_mission_set_status",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "to": "done"
+  },
+  "mission": "approved",
+  "code": "STATUS_TRANSITION",
+  "expect": "corrected"
+ },
+ {
+  "kind": "running -> done without a note",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "1",
+     "status": "done"
+    }
+   ]
+  },
+  "seed": {
+   "1": "running"
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "fields"
+ },
+ {
+  "kind": "checkpoint n above m",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "1",
+     "note": "n",
+     "checkpoint": {
+      "n": 7,
+      "m": 6
+     }
+    }
+   ]
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "fields"
+ },
+ {
+  "kind": "message to its own sender",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "messages": [
+    {
+     "from": "controller",
+     "to": "controller",
+     "kind": "report",
+     "text": "t"
+    }
+   ]
+  },
+  "code": "SCHEMA_INVALID",
+  "expect": "fields"
+ },
+ {
+  "kind": "refused patch inside an accepted call",
+  "tool": "studio_mission_update_row",
+  "args": {
+   "mission": "2026-11-17_row17-synthetic",
+   "rows": [
+    {
+     "id": "1",
+     "status": "running"
+    },
+    {
+     "id": "2",
+     "status": "done",
+     "note": "checked: pass"
+    }
+   ]
+  },
+  "seed": {
+   "1": "pending",
+   "2": "pending"
+  },
+  "code": "-",
+  "expect": "patch-corrected"
+ }
+]

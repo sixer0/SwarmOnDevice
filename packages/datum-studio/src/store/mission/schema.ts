@@ -8,9 +8,12 @@
  * sha updated; store migration 0005 moves stored rows (opus -> thinker, sonnet -> worker).
  * Exception, row 188 (decision L47): $defs/Decision gains the optional `autonomous: true` (only with by: controller),
  * the honest record of an autonomous self-approval (L19); edited in place, id kept, sha updated; migration 0006.
+ * Exception, 1.3.3 row 5 (register section 1): $defs/Row gains the optional host fields `deliverables`, `knowledge`,
+ * `awaitingHumanCheck` with the new $defs RowDeliverable, RowKnowledge, RowAwaitingHumanCheck; additive, every document
+ * valid before stays valid; edited in place, id kept, sha updated; migration 0009.
  */
 export const MISSION_SCHEMA_V1_ID = "studio.mission/v1"
-export const MISSION_SCHEMA_V1_SHA256 = "d809de4111b3e38487cd4e8d5cc4e9e4680b16c01601b28eaaa959932be61ed6"
+export const MISSION_SCHEMA_V1_SHA256 = "1a9c24adbeaf8fed09be2d52211fe0d2d132c248cb4baccfd03f2aad34c70560"
 
 export const MISSION_SCHEMA_V1: Record<string, unknown> = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -384,6 +387,140 @@ export const MISSION_SCHEMA_V1: Record<string, unknown> = {
         }
       }
     },
+    "RowDeliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "format",
+        "sha256",
+        "latest"
+      ],
+      "properties": {
+        "path": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Path"
+            },
+            {
+              "type": "string",
+              "pattern": "^deliverables/[^/\\\\]+/[^\\\\]+$"
+            }
+          ]
+        },
+        "format": {
+          "enum": [
+            "DOCX",
+            "PDF",
+            "HTML",
+            "XLSX",
+            "PPTX",
+            "MD",
+            "TXT"
+          ]
+        },
+        "docRev": {
+          "type": "string",
+          "pattern": "^[0-9A-Za-z]{1,8}$"
+        },
+        "revisionNo": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999999
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "latest": {
+          "type": "boolean"
+        },
+        "documentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]{20,40}$"
+        }
+      },
+      "dependentRequired": {
+        "documentId": [
+          "docRev",
+          "revisionNo"
+        ]
+      }
+    },
+    "RowKnowledge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domains"
+      ],
+      "properties": {
+        "domains": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 25,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "domain",
+              "firstFile",
+              "consulted"
+            ],
+            "properties": {
+              "domain": {
+                "type": "string",
+                "pattern": "^[A-Z0-9][A-Z0-9-]{0,63}$"
+              },
+              "firstFile": {
+                "$ref": "#/$defs/Path"
+              },
+              "consulted": {
+                "type": "array",
+                "maxItems": 20,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/Path"
+                }
+              }
+            }
+          }
+        },
+        "reason": {
+          "$ref": "#/$defs/Line"
+        }
+      }
+    },
+    "RowAwaitingHumanCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checks",
+        "since"
+      ],
+      "properties": {
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "labels_verified"
+            ]
+          }
+        },
+        "since": {
+          "$ref": "#/$defs/Instant"
+        },
+        "clearedBy": {
+          "type": "string",
+          "pattern": "^U[1-9][0-9]{0,3}$"
+        },
+        "clearedAt": {
+          "$ref": "#/$defs/Instant"
+        }
+      }
+    },
     "Row": {
       "type": "object",
       "additionalProperties": false,
@@ -486,6 +623,19 @@ export const MISSION_SCHEMA_V1: Record<string, unknown> = {
           "items": {
             "$ref": "#/$defs/ReportRef"
           }
+        },
+        "deliverables": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/RowDeliverable"
+          }
+        },
+        "knowledge": {
+          "$ref": "#/$defs/RowKnowledge"
+        },
+        "awaitingHumanCheck": {
+          "$ref": "#/$defs/RowAwaitingHumanCheck"
         }
       },
       "allOf": [
