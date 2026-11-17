@@ -366,6 +366,73 @@ export function drawsSvgKeyRow(spec: Pick<StudioDiagramV1, "legend"> & { nodes?:
 export const KEY_ROW_SEP = "  ·  ";
 
 /**
+ * Swarm 1.3.3 row 45 (ST-3.6, "satu bentuk baris kunci"; GSP manual GRM-09: the legend is one row at the
+ * foot of the figure, filled from `legend[]`): THE key row text of a figure, without its label. It is
+ * `legendRows(spec)` (author rows plus symbol rows), each row worded by `rowText` when given, joined by
+ * `KEY_ROW_SEP`. Every producer prints this string: the SVG key line (`keyLineTexts`, label + this text,
+ * wrapped only when it does not fit), the page row (HTML `keyRowHtml`, DOCX `keyRowXml`) and the composed
+ * block field `keyRow` (`blockKeyRow`). No rows = "".
+ */
+export function keyRowTextOf(spec: Pick<StudioDiagramV1, "legend"> & { nodes?: readonly object[] }, rowText?: (row: string) => string): string {
+  const rows = legendRows(spec);
+  return (rowText ? rows.map(rowText) : rows).join(KEY_ROW_SEP);
+}
+
+/**
+ * Row 45: word a printed key text row by row (the page side of `keyLineTexts`' `keyRowText` option), so
+ * the page and the SVG pass exactly the same rows to the same wording function. Text without the
+ * separator is one row.
+ */
+export function mapKeyRowText(text: string, rowText: (row: string) => string): string {
+  return text.split(KEY_ROW_SEP).map(rowText).join(KEY_ROW_SEP);
+}
+
+/** Row 45: what a composed diagram block carries as its key row (`blockKeyRow`). */
+export interface BlockKeyRow {
+  /** Key text without label; "" = the block prints no key row. */
+  text: string;
+  /** `legend` = `keyRowTextOf(spec)`; `authored` = the block's own `keyRow` text (spec has no key rows). */
+  source: "legend" | "authored" | "none";
+  /** The block wrote a `keyRow` that is not printed because the spec's own rows are the key (one form). */
+  authoredSuperseded: boolean;
+}
+
+/** Row 53: a notice in the shape of a compose warning (`ComposeWarning`: `{ code, message }`). */
+export interface KeyRowNotice {
+  code: "KEYROW_SUPERSEDED";
+  message: string;
+}
+
+/** Row 53: the message of the `KEYROW_SUPERSEDED` notice. */
+export const KEYROW_SUPERSEDED_MESSAGE =
+  "keyRow tulisan penulis tidak dicetak karena spec memiliki baris legend[]; baris legend[] adalah satu-satunya baris kunci (kosongkan legend[] bila kalimat keyRow yang dikehendaki)";
+
+/**
+ * Row 45 (seam for `services/compose/blocks.ts` `diagram()`): the one key row of a diagram block. The
+ * spec's rows (`legend[]` and symbol rows) are the single source, because they are the only key every
+ * producer can read (a stand-alone SVG never sees the block field); the block's authored `keyRow` text
+ * is the key only when the spec yields no row. With a non-empty result compose sets the block `keyRow`
+ * to this text and marks the spec `keyRowOnPage`, so in a document the page prints the row and the SVG
+ * does not draw a second one in another form.
+ */
+export function blockKeyRow(spec: Pick<StudioDiagramV1, "legend"> & { nodes?: readonly object[] }, authored?: string): BlockKeyRow {
+  const own = keyRowTextOf(spec);
+  const written = (authored ?? "").trim();
+  if (own !== "") return { text: own, source: "legend", authoredSuperseded: written !== "" && written !== own };
+  if (written !== "") return { text: written, source: "authored", authoredSuperseded: false };
+  return { text: "", source: "none", authoredSuperseded: false };
+}
+
+/**
+ * Row 53: the one notice for a `blockKeyRow` result whose authored key row was not printed because the spec has
+ * legend rows (`authoredSuperseded`), or `undefined`. The compose call sites push it to the compose warnings, so
+ * the authored sentence is never dropped silently. `BlockKeyRow` itself is unchanged (row 45 pins its shape).
+ */
+export function keyRowNotice(key: Pick<BlockKeyRow, "authoredSuperseded">): KeyRowNotice | undefined {
+  return key.authoredSuperseded ? { code: "KEYROW_SUPERSEDED", message: KEYROW_SUPERSEDED_MESSAGE } : undefined;
+}
+
+/**
  * Swarm patch (row 124, CP-46; ID p.63, 80 check 37): the key text broken into lines that fit
  * the sheet width `W` (measured with the calibrated Plex glyph table, caps, SemiBold, tracking of
  * the `table_header` role, as the geometry lint measures). Rows are kept whole where they fit; a
@@ -382,10 +449,11 @@ export function keyLineTexts(
   // pattern) before the rows are packed, so the measured width is the printed width.
   const rows = keyRowText ? legendRows(spec).map(keyRowText) : legendRows(spec);
   const first = `${keyLabel}  `;
-  const one = first + rows.join(KEY_ROW_SEP);
+  // Row 45: the one-line key is the label plus the single key row text (`keyRowTextOf` above).
+  const one = first + keyRowTextOf(spec, keyRowText);
   const r = role("table_header");
   const pt = r.size;
-  const font = { bold: (r.weight ?? 400) >= 600, trackMm: pt2mm(pt) * TRACK.micro_label_wider, caps: true };
+  const font = { bold: (r.weight ?? 400) >= 600, trackMm: pt2mm(pt) * TRACK.micro_label_wider, caps: false };
   const maxW = W - 0.5;
   const fits = (t: string) => measure(t, pt, "struct", font) <= maxW;
   if (fits(one)) return [one];
@@ -441,7 +509,10 @@ export function footReserveMm(
 export function nodeStrokeToken(nd: Pick<SheetNode, "spec">): string {
   const c = nd.spec.class ?? {};
   if (c.accent) return "signal";
-  if (c.external || nd.spec.shape === "shadowed") return "ink400";
+  // Row 53: `external` may sit on the node or in `class`; both mean the same. When both are present and disagree,
+  // the node-level value wins (it is the more specific one).
+  const external = typeof nd.spec.external === "boolean" ? nd.spec.external : c.external;
+  if (external || nd.spec.shape === "shadowed") return "ink400";
   if (nd.spec.shape === "bus") return "ink900";
   return "ink700";
 }

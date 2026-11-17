@@ -39,6 +39,7 @@ import type {
   DiagramBlock,
   DiagramSpecV2,
   DiagramV2,
+  FigureWidthV2,
   ImageBlock,
   ImageV2,
   ListBlock,
@@ -64,10 +65,11 @@ import type {
 import { TABLE_BLOCK_TYPES } from "../../contract";
 import { chartSpecFromDraft, type StudioChartDraft } from "../../engine/chart/core/custom";
 import { chartIntentOf } from "../../engine/chart/core/intent";
-import type { DiagramPageKeySignal } from "../../engine/diagram/core/sheet";
+import { blockKeyRow, keyRowNotice, type DiagramPageKeySignal } from "../../engine/diagram/core/sheet";
 import { PARAMS_BY_KEY } from "../../params";
 import { composeFail } from "./errors";
 import { apparatusInline, inlineV2Plain, mapInline, mapRuns, type InlineCtx } from "./inline";
+import type { ComposeWarning } from "./types";
 
 const TABLE_TYPES: ReadonlySet<string> = new Set<string>(TABLE_BLOCK_TYPES);
 
@@ -89,6 +91,11 @@ export interface BlockCtx extends InlineCtx {
   classification: string;
   /** Kunci aset internal untuk medan `asset` blok gambar. */
   assetKey?: (asset: string) => string;
+  /**
+   * Swarm 1.3.3 row 56 (row 53 request): compose warning of one block (`ComposeWarning`). The document compose
+   * (`snapshot.ts`) pushes it to `ComposeResult.warnings`; a caller that passes none drops it (as before).
+   */
+  warn?: (w: ComposeWarning) => void;
 }
 
 function param(params: ParamMap, key: string): unknown {
@@ -99,8 +106,37 @@ function num(v: unknown): number | undefined {
   return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined;
 }
 
-/** Lebar figur dari templat (figur v2 tanpa ukuran). */
-export function figureWidthMm(type: "chart" | "diagram" | "image" | "symbolSheet", params: ParamMap): number {
+/**
+ * Swarm 1.3.3 row 32 (ST-1; contract row 25): millimetres of a per-figure width class on the template grid. `text` =
+ * `grid.textColumnMm`; `full` = the widest member of `grid.allowedFigureWidthsMm`, which the registry derives as
+ * [textColumn, fullSpan] (params/page.ts P4G-13, engine/tokens/grid.ts `allowedFigureWidths`), so it equals
+ * `grid.fullSpanMm` (128 / 166 on A4 DATUM). Only keys of COMPOSE_PARAM_KEYS (context.ts) are read: the stored compose
+ * context of the inline preview holds exactly those, so preview and document compose resolve the same number.
+ */
+function widthClassMm(width: FigureWidthV2, params: ParamMap): number | undefined {
+  const allowed = param(params, "grid.allowedFigureWidthsMm");
+  const members = Array.isArray(allowed) ? allowed.map(num).filter((v): v is number => v !== undefined) : [];
+  if (width === "full") return members.length > 0 ? Math.max(...members) : undefined;
+  return num(param(params, "grid.textColumnMm")) ?? (members.length > 0 ? Math.min(...members) : undefined);
+}
+
+/**
+ * Lebar figur (figur v2 tanpa ukuran milimeter). Swarm 1.3.3 row 32 (ST-1): the block's own `width` (`text` | `full`)
+ * wins over the section template parameter `<kind>.widthClass`; an absent `width` keeps the template behaviour below
+ * unchanged. This is the single width decision for the standalone (inline) preview, the in-document preview and the
+ * render: all three read the block that `mapBlock` produced here.
+ */
+export function figureWidthMm(type: "chart" | "diagram" | "image" | "symbolSheet", params: ParamMap, width?: FigureWidthV2): number {
+  if (width !== undefined) {
+    const byClass = widthClassMm(width, params);
+    if (byClass === undefined) {
+      composeFail("BY_CONSTRUCTION_FAILED", `Lebar figur ${type} untuk width "${width}" tidak terbaca: grid.textColumnMm dan grid.allowedFigureWidthsMm absen di parameter templat`, {
+        checkId: "FIGURE_WIDTH",
+        keys: ["grid.textColumnMm", "grid.allowedFigureWidthsMm"],
+      });
+    }
+    return byClass;
+  }
   const byType = type === "chart" ? "chart.output.widthMm" : type === "diagram" ? "diagram.widthMm" : type === "image" ? "image.widthMm" : "symbolSheet.widthMm";
   const allowed = param(params, "grid.allowedFigureWidthsMm");
   const w = num(param(params, byType)) ?? num(param(params, "grid.textColumnMm")) ?? (Array.isArray(allowed) ? num(allowed[0]) : undefined);
@@ -281,6 +317,8 @@ export function diagramSpec(spec: DiagramSpecV2, title: string, sourceText: stri
   if (spec.zones) out.zones = spec.zones;
   if (spec.legend) out.legend = spec.legend;
   if (spec.notes) out.notes = spec.notes;
+  // Swarm 1.3.3 row 32 (contract row 26, ST-5): root `tiers` is carried unchanged; the layout that reads it is row 56.
+  if (spec.tiers !== undefined) out.tiers = spec.tiers;
   if (spec.per_row !== undefined) out.per_row = spec.per_row;
   // Swarm 1.2.6 row 45 (T-11): allow-list copy, otherwise the field is dropped silently before the v1 build.
   if (spec.direction !== undefined) out.direction = spec.direction;
@@ -399,7 +437,7 @@ function specParams(data: Record<string, ParamValue> | undefined, params: ParamM
 }
 
 function chart(b: ChartV2, pid: string, ctx: BlockCtx): ChartBlock {
-  const widthMm = figureWidthMm("chart", ctx.params);
+  const widthMm = figureWidthMm("chart", ctx.params, b.width);
   const title = inlineV2Plain(b.caption);
   const sourceText = inlineV2Plain(b.source);
   let spec: ChartBlock["spec"];
@@ -468,11 +506,23 @@ function chart(b: ChartV2, pid: string, ctx: BlockCtx): ChartBlock {
 }
 
 function diagram(b: DiagramV2, pid: string, ctx: BlockCtx): DiagramBlock {
-  const widthMm = figureWidthMm("diagram", ctx.params);
+  const widthMm = figureWidthMm("diagram", ctx.params, b.width);
   const spec: DiagramBlock["spec"] =
     b.artifactId !== undefined ? { artifactId: b.artifactId } : diagramSpec(b.spec as DiagramSpecV2, inlineV2Plain(b.caption), inlineV2Plain(b.source), widthMm, ctx);
   const out: DiagramBlock = withId({ type: "diagram" as const, caption: caption(b.caption, ctx), source: figureSource(b.source, ctx), widthMm, spec }, pid);
-  if (b.keyRow) {
+  // Swarm 1.3.3 row 45 (ST-3.6, one key row form; GRM-09): the key of an inline diagram spec is its own rows
+  // (`legend[]` plus symbol rows, `blockKeyRow`), the text the stand-alone SVG draws. The block carries that
+  // text as `keyRow`, the page prints it, and the SVG draws no second key in another form. The block's
+  // authored `keyRow` is the key only when the spec has no row. A block that refers to an artefact is
+  // resolved at build time (`services/render/figures.ts` `artifactBlockKeyRow`).
+  const key = "artifactId" in spec ? undefined : blockKeyRow(spec, b.keyRow ? inlineV2Plain(b.keyRow) : undefined);
+  // Row 56 (row 53 request): the authored keyRow that legend[] supersedes is named in the compose warnings, not dropped silently.
+  const notice = key ? keyRowNotice(key) : undefined;
+  if (notice) ctx.warn?.({ ...notice, message: `diagram ${ctx.artifactLabel ?? pid}: ${notice.message}` });
+  if (key?.source === "legend") {
+    out.keyRow = apparatusInline({ text: key.text }, "key", ctx);
+    (spec as DiagramPageKeySignal).keyRowOnPage = true;
+  } else if (b.keyRow) {
     out.keyRow = apparatusInline(b.keyRow, "key", ctx);
     // D-288 (satu aparatus, D-145/RQ-10): halaman mencetak baris KUNCI, jadi mesin
     // diagram tidak menggambar baris KEY di dalam SVG (legenda tetap untuk DATUM-34).
@@ -487,7 +537,7 @@ function image(b: ImageV2, pid: string, ctx: BlockCtx): ImageBlock {
       type: "image" as const,
       caption: caption(b.caption, ctx),
       source: figureSource(b.source, ctx),
-      widthMm: figureWidthMm("image", ctx.params),
+      widthMm: figureWidthMm("image", ctx.params, b.width),
       asset: ctx.assetKey ? ctx.assetKey(b.asset) : b.asset,
     },
     pid,

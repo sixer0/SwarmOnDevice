@@ -24,7 +24,10 @@ import { figureGrid } from "../../engine/chart/core/guards";
 import type { ChartLang } from "../../engine/chart/core/lang";
 import { APPARATUS_TEXT, keyLineText, wrapperLangOf, type WrapperLang } from "../../engine/front/texts";
 import { type DiagramBuildOptions } from "../../engine/diagram/build";
+import { blockKeyRow, keyRowNotice } from "../../engine/diagram/core/sheet";
+import { FIGURE_LABELS, FIGURE_LABEL_SPACING } from "../../engine/docx/figures/defaults";
 import { buildDiagramSvgAuto } from "../../engine/diagram/elk";
+import { diagramLabelsUnchecked, LABELS_UNCHECKED_TEXT } from "../../engine/lint/structure/checks-d";
 import { rasterizeSvg, StudioBrowserError } from "../../engine/browser";
 import { prepareFigureStore, type FigureSvgSheet, type PreparedFigureStore } from "../../engine/docx/figures";
 import { symbolSheetSvg, type SymbolSheetOptions } from "../../engine/symbols";
@@ -38,6 +41,27 @@ import { renderVegaFigure, vegaCodeOf } from "./vega-figure";
 export type { SymbolSheetOptions };
 
 export const LABELS_VERIFIED_CHECK = "P1-labels_verified";
+
+/**
+ * Swarm 1.3.3 row 60 (ST-9 item 2, owner decision U20; register 03 sections 1 and 7). A diagram whose
+ * `labels_verified` is not true is not a fault: the document is a DRAFT that waits for a person. The state travels as
+ *  - one lint row per such diagram: `{ checkId: "P1-labels_verified", status: "REPORT" }` at every tier (PASS when the
+ *    flag is true at TERBIT/SERAH, as before; never FAIL), and
+ *  - `awaitingHumanCheck`: the list of human checks still open, in the vocabulary of the mission row field
+ *    `awaitingHumanCheck.checks` (one value today). Not empty = the document is a draft.
+ */
+export const LABELS_VERIFIED_HUMAN_CHECK = "labels_verified";
+export { diagramLabelsUnchecked, LABELS_UNCHECKED_TEXT };
+
+/**
+ * The reader of the awaiting state (rows 63, 65, 66): the open human checks of a lint report's `checks` (the stored
+ * `revision.lint_report.checks`, a `LintReport.checks`, or `FigureBuild.extra`). `[]` = nothing waits for a person.
+ * Pure; reads only `checkId` and `status`, so it works on the JSON read back from the store.
+ */
+export function awaitingHumanCheckOf(checks: ReadonlyArray<{ checkId?: unknown; status?: unknown }> | null | undefined): string[] {
+  if (!Array.isArray(checks)) return [];
+  return checks.some((c) => c !== null && typeof c === "object" && c.checkId === LABELS_VERIFIED_CHECK && c.status === "REPORT") ? [LABELS_VERIFIED_HUMAN_CHECK] : [];
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -92,8 +116,42 @@ export class ArtifactSpecReader {
  * mandiri (R09, `render/artifact.ts`) tidak punya baris KUNCI halaman sehingga tetap menggambar KEY.
  */
 export function diagramSpecForBlock(spec: StudioDiagramV1, content: Readonly<Record<string, unknown>>): StudioDiagramV1 {
-  if (!isArtifactRef(content.spec) || !content.keyRow || spec.keyRowOnPage === true) return spec;
+  if (!isArtifactRef(content.spec) || spec.keyRowOnPage === true) return spec;
+  // Swarm 1.3.3 row 45 (ST-3.6, one key row form): an artefact with key rows prints them as the page row of
+  // this block (same rule and text as an inline spec in compose), so the block of this build gets the row.
+  // Only the in-memory block content of the job is written, never the stored artefact or revision; content
+  // that cannot be written keeps the earlier behaviour (key drawn inside the SVG, same text).
+  const key = artifactBlockKeyRow(spec, content);
+  if (key) {
+    if (!Object.isExtensible(content) || Object.isFrozen(content)) return spec;
+    (content as Record<string, unknown>).keyRow = key;
+  }
+  if (!content.keyRow) return spec;
   return { ...spec, keyRowOnPage: true };
+}
+
+/** Plain text of a composed key row inline without its structural label run ("KUNCI  "). */
+function keyRowPlain(keyRow: unknown): string | undefined {
+  if (!isRecord(keyRow)) return undefined;
+  if (typeof keyRow.text === "string") return keyRow.text;
+  if (!Array.isArray(keyRow.runs)) return undefined;
+  const label = FIGURE_LABELS.key + FIGURE_LABEL_SPACING.keyAfter;
+  const texts = keyRow.runs.map((r) => (isRecord(r) && typeof r.t === "string" ? r.t : ""));
+  return (texts[0] === label ? texts.slice(1) : texts).join("");
+}
+
+/**
+ * Swarm 1.3.3 row 45 (ST-3.6): the key row of a diagram block that REFERS to an artefact. Compose cannot
+ * read the artefact spec, so the rule compose applies to an inline spec (`compose/blocks.ts` `diagram()`,
+ * `blockKeyRow`) is applied when the spec is read: the artefact's own rows (`legend[]` plus symbol rows)
+ * are the key, in the block form compose writes (label run + one text run). Undefined when the block is
+ * not an artefact reference or the artefact has no row (an authored `keyRow` then stays as written). Pure.
+ */
+export function artifactBlockKeyRow(spec: StudioDiagramV1, content: Readonly<Record<string, unknown>>): { runs: { t: string }[] } | undefined {
+  if (!isArtifactRef(content.spec)) return undefined;
+  const key = blockKeyRow(spec, keyRowPlain(content.keyRow));
+  if (key.source !== "legend") return undefined;
+  return { runs: [{ t: FIGURE_LABELS.key + FIGURE_LABEL_SPACING.keyAfter }, { t: key.text }] };
 }
 
 /**
@@ -167,11 +225,22 @@ export interface FigureBuild {
   store: PreparedFigureStore;
   /** Laporan SVG mesin per figur (urutan blok). */
   svgs: SvgResult[];
-  /** Cek tambahan (gerbang labels_verified tier rilis). */
+  /** Cek tambahan (keadaan labels_verified: PASS pada tier rilis, REPORT = menunggu pemeriksa manusia). */
   extra: LintIssue[];
+  /** Row 60 (ST-9): human checks still open for this build (`awaitingHumanCheckOf(extra)`); not empty = draft. */
+  awaitingHumanCheck: string[];
 }
 
 const FIGURE_TYPES: readonly string[] = ["chart", "diagram", "symbolSheet"];
+
+/** Row 56 (row 50 request): words appended to a render job error whose capacity refusal carries `details.split`. */
+export const RENDER_SPLIT_NOTE = "Kerangka pecahan dua spec ada di details.split galat ini (sama dengan pratinjau studio_figure_preview).";
+
+/** Row 56: the split skeleton of a capacity refusal (`details.split`, row 51), or undefined. */
+export function capacitySplitOf(err: unknown): unknown {
+  if (!(err instanceof StudioEngineError) || !isRecord(err.details)) return undefined;
+  return err.details.split ?? undefined;
+}
 
 /**
  * Swarm patch (row 124b, CP-35 / C69; ID p.13, p.41, p.67 Tabel 10.4): apparatus words a diagram
@@ -233,17 +302,29 @@ export async function buildFigures(i: {
         return { svg: r.svg, widthMm: r.widthMm, heightMm: r.heightMm };
       }
       if (block.type === "diagram") {
-        const spec = diagramSpecForBlock(await i.reader.diagram(c.spec), c);
+        const read = await i.reader.diagram(c.spec);
+        // Swarm 1.3.3 row 56 (row 53 request): an artefact-reference block whose authored keyRow is superseded by the
+        // artefact's legend[] gets the KEYROW_SUPERSEDED notice here (compose cannot read the artefact; an inline spec
+        // got it from compose). It travels as a REPORT row of the figure lint (beside P1-labels_verified) and the job log.
+        const superseded = isArtifactRef(c.spec) ? keyRowNotice(blockKeyRow(read, keyRowPlain(c.keyRow))) : undefined;
+        if (superseded) {
+          extra.push({ checkId: superseded.code, status: "REPORT", detail: `diagram ${current}: ${superseded.message}`, address });
+          i.job.log.warn(`figure ${current}: ${superseded.message}`, { code: superseded.code });
+        }
+        const spec = diagramSpecForBlock(read, c);
         assertFigureCapacity("diagram", spec, figureBytesIssues(block.content, "/content"));
         // D-245/D-252: grid turunan kertas (lebar sah, blok teks, kisi X) dari templat efektif.
         // Row 124b (CP-35): caption label and key words drawn inside the SVG follow the document language.
         const r = await buildDiagramSvgAuto(spec, { release: false, grid: figureGrid(i.tpl.params), ...diagramApparatusOptions(wrapperLangOf(i.snapshot.doc.meta)) });
         svgs.push(r);
-        if (releaseTier) {
+        // Row 60 (ST-9 item 2): not true = REPORT at every tier (awaiting a person, the document is a draft), never
+        // FAIL; true keeps the earlier rows (PASS at TERBIT/SERAH, nothing at NOTA).
+        const unchecked = diagramLabelsUnchecked(spec);
+        if (releaseTier || unchecked) {
           extra.push({
             checkId: LABELS_VERIFIED_CHECK,
-            status: spec.labels_verified === true ? "PASS" : "FAIL",
-            detail: spec.labels_verified === true ? undefined : `diagram ${spec.id}: labels_verified wajib true untuk tier ${i.tier}`,
+            status: unchecked ? "REPORT" : "PASS",
+            detail: unchecked ? `diagram ${spec.id}: ${LABELS_UNCHECKED_TEXT.ID} (labels_verified bukan true); dokumen berstatus draf` : undefined,
             address,
           });
         }
@@ -256,7 +337,11 @@ export async function buildFigures(i: {
     } catch (err) {
       const code = err instanceof StudioEngineError ? err.code : "RENDER_FAILED";
       const label = block.artifactLabel ?? i.snapshot.numbering[block.blockId] ?? block.blockId;
-      i.job.addError(code, `figure ${label}${address ? ` (${address})` : ""} failed: ${err instanceof Error ? err.message : String(err)}`, undefined, err);
+      // Swarm 1.3.3 row 56 (row 50 request): a capacity refusal that carries the split skeleton (`details.split`, row 51)
+      // keeps it at render: the message names it and the job error carries `details.split`, as the preview reply does.
+      const split = code === "FIGURE_OVER_CAPACITY" ? capacitySplitOf(err) : undefined;
+      i.job.addError(code, `figure ${label}${address ? ` (${address})` : ""} failed: ${err instanceof Error ? err.message : String(err)}${split ? ` ${RENDER_SPLIT_NOTE}` : ""}`, undefined, err);
+      if (split) Object.assign(i.job.errors[i.job.errors.length - 1], { details: { split } });
       // Swarm 1.2.6 (row 68, T-15): remembered so `prepareFigureStore` records the FIGURE_PREPARE_FAILED marker
       // (`failureFor`) and the DOCX prints a marked placeholder for this figure instead of aborting; the job stays
       // PARTIAL through the error above.
@@ -298,5 +383,5 @@ export async function buildFigures(i: {
     fixedDate: i.snapshot.doc.meta.issueDate,
     types: FIGURE_TYPES,
   });
-  return { store, svgs, extra };
+  return { store, svgs, extra, awaitingHumanCheck: awaitingHumanCheckOf(extra) };
 }
