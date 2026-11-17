@@ -65,7 +65,8 @@ import { startRenderBridge } from "./datum-render"
 import { createRenderEnvGate } from "./sidecar-env"
 import { createToolHealth } from "./tool-health/startup"
 import { refreshStagedProxy } from "./proxy-refresh"
-import { getStore } from "./store"
+import { crashSignalListenerReport, getStore } from "./store"
+import { createMemoryWatch } from "./memory-watch"
 import { OFFICE_ADDIN_ENABLED_KEY } from "./store-keys"
 import type { OfficeAddinController } from "./office-addin/controller"
 
@@ -356,11 +357,40 @@ const main = Effect.gen(function* () {
   )
   const handoff = (applierArgv: readonly string[]) => launchHandoff([...applierArgv])
   const patchGuard = createPatchFlowGuard()
+  // Language of the memory-watch offer (row 19); follows the renderer's language like the menu does.
+  let memoryWatchLocale = "en"
   const patchWindow = () => getLastFocusedWindow() ?? null
   const patchMessageBox = (win: BrowserWindow | null, options: MessageBoxOptions) =>
     win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)
   const patchLog = (level: "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) =>
     writeLog("swarm-patch", message, extra, level)
+  // SB-1 (rows 18, 19). Row 18's seam: what the store's signal pass removed, logged once (its catch path only
+  // returns `error`). Then the memory watch: one "main memory" line per minute, one event per threshold, and the
+  // offer of a controlled reopen through the same message box and the same `relaunch` as the menu's Reload.
+  const crashSignals = crashSignalListenerReport()
+  writeLog(
+    "main",
+    "crash signal listeners",
+    { ...crashSignals },
+    crashSignals.error || crashSignals.remaining !== 0 ? "error" : "info",
+  )
+  const memoryWatch = createMemoryWatch({
+    clock: {
+      setInterval: (fn, ms) => {
+        const timer = setInterval(fn, ms)
+        timer.unref()
+        return timer
+      },
+      clearInterval: (timer) => clearInterval(timer as ReturnType<typeof setInterval>),
+    },
+    readMemory: () => process.memoryUsage(),
+    showMessageBox: (options) => patchMessageBox(patchWindow(), options),
+    relaunch,
+    log: writeLog,
+    locale: () => memoryWatchLocale,
+  })
+  memoryWatch.start()
+  app.once("will-quit", () => memoryWatch.stop())
   const updateFromFile = createPatchUpdateFlow({
     window: patchWindow,
     showOpenDialog: (win, options) => (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options)),
@@ -499,6 +529,7 @@ const main = Effect.gen(function* () {
     exportDebugLogs: () => exportDebugLogs(),
     recordFatalRendererError: (error) => writeLog("renderer", "fatal renderer error", { ...error }, "error"),
     setNativeTranslations: (bundle) => {
+      memoryWatchLocale = bundle.locale
       if (setNativeTranslations(bundle)) {
         rebuildMenu()
         setAboutPanel(bundle.locale)

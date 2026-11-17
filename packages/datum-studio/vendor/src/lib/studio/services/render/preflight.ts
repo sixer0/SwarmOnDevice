@@ -50,6 +50,7 @@ export type PdfNotReadyCauseCode =
   | "FONT_REGISTRY_UNREADABLE"
   | "SESSION_FONT_CHECK_FAILED"
   | "PDF_ENGINE_MISSING"
+  | "PDF_BRIDGE_TIMEOUT"
   | "RENDER_SANDBOX_INACTIVE"
   | "RENDER_ENV_MANIFEST"
   | "READINESS_CHECK_FAILED"
@@ -140,6 +141,16 @@ const CAUSE_RULES: readonly CauseRule[] = [
     code: "RENDER_SANDBOX_INACTIVE",
     test: /sandbox is not active|not locked down/i,
     message: () => "Jendela render PDF di aplikasi Swarm tidak terkunci (sandbox tidak aktif), jadi PDF ditolak; mulai ulang aplikasi Swarm.",
+    operator: true,
+  },
+  {
+    // Swarm 1.3.3 row 20 (SB-1): must stay BEFORE `PDF_ENGINE_MISSING`, whose /render bridge/ also matches
+    // this text. The bridge exists but did not answer the handshake in time (engine/browser/runtime.ts
+    // `BRIDGE_HANDSHAKE_TIMEOUT_MESSAGE`): the Swarm app is hung or overloaded, not absent.
+    code: "PDF_BRIDGE_TIMEOUT",
+    test: /render bridge handshake timed out/i,
+    message: () =>
+      "Jembatan render PDF di aplikasi Swarm tidak menjawab dalam batas waktu; aplikasi Swarm kemungkinan macet atau kehabisan memori. Mulai ulang aplikasi Swarm, lalu coba lagi.",
     operator: true,
   },
   {
