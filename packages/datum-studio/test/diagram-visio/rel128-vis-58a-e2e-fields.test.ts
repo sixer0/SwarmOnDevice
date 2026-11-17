@@ -36,7 +36,13 @@ const WEIGHT = (T.WEIGHT_MM ?? {}) as Record<string, number>
 const NEW_FIELDS = { spec: ["lane_orientation", "phases", "pools", "jumps"], node: ["event_type"], class: ["phase", "pool"], edge: ["route", "from_side", "to_side", "from_slot", "to_slot", "via", "arrow_start", "arrow_end", "arrow_start_size", "arrow_end_size", "dash", "weight", "label_at"], zone: ["style"] } as const
 
 type Fx = { spec: J; caption: string; source: string }
-const readFx = (name: string): Fx => JSON.parse(readFileSync(path.join(TEST_ROOT, "fixtures", "syn128", `${name}.json`), "utf8"))
+// Swarm 1.3.3 row 61 (U20): an agent tool call that carries labels_verified: true is refused (LABELS_VERIFIED_PERSON_ONLY),
+// so the copy sent through the host has the flag false; the fixture file on disk is unchanged.
+const readFx = (name: string): Fx => {
+  const fx = JSON.parse(readFileSync(path.join(TEST_ROOT, "fixtures", "syn128", `${name}.json`), "utf8")) as Fx
+  fx.spec.labels_verified = false
+  return fx
+}
 /** vis0_carry_a with the lanes moved so it fits 128 mm: pool p1 holds Lajur 2 (a, b, c), pool p2 Lajur 1 (d, e, f). */
 function fitA(fx: Fx): Fx {
   const out = clone(fx)
@@ -57,7 +63,7 @@ function crossing(): Fx {
   const all = JSON.parse(readFileSync(path.join(TEST_ROOT, "fixtures", "syn128", "vis9_labels_jumps.json"), "utf8")) as J
   const { $schema: _a, id: _b, title: _c, width_mm: _d, apparatus: _e, sources: _f, classification: _g, ...spec } = all.crossing as J
   spec.edges[1] = { ...spec.edges[1], from_side: "bottom", to_side: "top", from_slot: 0.25, to_slot: 0.25 }
-  return { spec: { ...spec, jumps: "off" }, caption: "Alur sintetis konektor bersilang.", source: "Sumber sintetis uji." }
+  return { spec: { ...spec, jumps: "off", labels_verified: false }, caption: "Alur sintetis konektor bersilang.", source: "Sumber sintetis uji." }
 }
 
 /** Every 1.2.8 field the spec uses, as "<at>.<field>". */
@@ -158,7 +164,8 @@ function expectEffects(name: string, fx: Fx, svg: string): void {
     if (n.event_type === "none") expect(decoOf(svg, n.id), `${name}: no marker in ${n.id}`).not.toContain("<path")
   }
   for (const z of (s.zones ?? []) as J[]) {
-    const g = new RegExp(`<rect [^>]*rx="1.6"[^>]*stroke-dasharray="${DASH.dashdot}"\\/>\\s*<text [^>]*>${String(z.label).toUpperCase()}</text>`)
+    // Swarm 1.3.3 rows 40/42: the zone label sits on a paper-coloured ground rect (fill paper, stroke none) drawn right before its text.
+    const g = new RegExp(`<rect [^>]*rx="1.6"[^>]*stroke-dasharray="${DASH.dashdot}"\\/>\\s*(?:<rect [^>]*fill="#FCFCFB" stroke="none"\\/>\\s*)?<text [^>]*>${String(z.label).toUpperCase()}</text>`)
     if (z.style === "group") expect(svg, `${name}: BPMN group ${z.id} rounded dash-dot`).toMatch(g)
     else expect(svg, `${name}: zone ${z.id} is not a group`).not.toMatch(g)
   }

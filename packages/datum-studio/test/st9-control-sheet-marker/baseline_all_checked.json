@@ -1,0 +1,607 @@
+{
+ "checked_with_method": {
+  "mode": "auto",
+  "data": {
+   "kicker": {
+    "text": "Lembar Kendali"
+   },
+   "title": {
+    "text": "Lembar Kendali"
+   },
+   "revisionHistory": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Rev"
+       },
+       {
+        "text": "Tanggal"
+       },
+       {
+        "text": "Uraian"
+       },
+       {
+        "text": "Oleh"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "A"
+       },
+       {
+        "text": "2026-10-23"
+       },
+       {
+        "text": "Terbit pertama"
+       },
+       {
+        "text": "Tim Survei"
+       }
+      ]
+     }
+    ]
+   },
+   "verificationChain": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Lapis"
+       },
+       {
+        "text": "Peran"
+       },
+       {
+        "text": "Nama"
+       },
+       {
+        "text": "Tanggal"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "1"
+       },
+       {
+        "text": "Penyusun"
+       },
+       {
+        "text": "A. Pratama"
+       },
+       {
+        "text": ""
+       }
+      ]
+     }
+    ]
+   },
+   "methodStatement": {
+    "text": "Pengukuran langsung di lapangan."
+   },
+   "distribution": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Salinan"
+       },
+       {
+        "text": "Pemegang"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "1"
+       },
+       {
+        "text": "Manajer Proyek"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "checked_no_method": {
+  "mode": "auto",
+  "data": {
+   "kicker": {
+    "text": "Lembar Kendali"
+   },
+   "title": {
+    "text": "Lembar Kendali"
+   },
+   "revisionHistory": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Rev"
+       },
+       {
+        "text": "Tanggal"
+       },
+       {
+        "text": "Uraian"
+       },
+       {
+        "text": "Oleh"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "A"
+       },
+       {
+        "text": "2026-10-23"
+       },
+       {
+        "text": "Terbit pertama"
+       },
+       {
+        "text": "Tim Survei"
+       }
+      ]
+     }
+    ]
+   },
+   "verificationChain": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Lapis"
+       },
+       {
+        "text": "Peran"
+       },
+       {
+        "text": "Nama"
+       },
+       {
+        "text": "Tanggal"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "1"
+       },
+       {
+        "text": "Penyusun"
+       },
+       {
+        "text": "A. Pratama"
+       },
+       {
+        "text": ""
+       }
+      ]
+     }
+    ]
+   },
+   "distribution": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Salinan"
+       },
+       {
+        "text": "Pemegang"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "1"
+       },
+       {
+        "text": "Manajer Proyek"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "no_figure": {
+  "mode": "auto",
+  "data": {
+   "kicker": {
+    "text": "Lembar Kendali"
+   },
+   "title": {
+    "text": "Lembar Kendali"
+   },
+   "revisionHistory": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Rev"
+       },
+       {
+        "text": "Tanggal"
+       },
+       {
+        "text": "Uraian"
+       },
+       {
+        "text": "Oleh"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "A"
+       },
+       {
+        "text": "2026-10-23"
+       },
+       {
+        "text": "Terbit pertama"
+       },
+       {
+        "text": "Tim Survei"
+       }
+      ]
+     }
+    ]
+   },
+   "verificationChain": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Lapis"
+       },
+       {
+        "text": "Peran"
+       },
+       {
+        "text": "Nama"
+       },
+       {
+        "text": "Tanggal"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "1"
+       },
+       {
+        "text": "Penyusun"
+       },
+       {
+        "text": "A. Pratama"
+       },
+       {
+        "text": ""
+       }
+      ]
+     }
+    ]
+   },
+   "methodStatement": {
+    "text": "Pengukuran langsung di lapangan."
+   },
+   "distribution": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Salinan"
+       },
+       {
+        "text": "Pemegang"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "1"
+       },
+       {
+        "text": "Manajer Proyek"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "checked_en": {
+  "mode": "auto",
+  "data": {
+   "kicker": {
+    "text": "Control Sheet"
+   },
+   "title": {
+    "text": "Control Sheet"
+   },
+   "revisionHistory": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Rev"
+       },
+       {
+        "text": "Date"
+       },
+       {
+        "text": "Change"
+       },
+       {
+        "text": "Prepared by"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "A"
+       },
+       {
+        "text": "2026-10-23"
+       },
+       {
+        "text": "Terbit pertama"
+       },
+       {
+        "text": "Tim Survei"
+       }
+      ]
+     }
+    ]
+   },
+   "verificationChain": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Layer"
+       },
+       {
+        "text": "Role"
+       },
+       {
+        "text": "Name"
+       },
+       {
+        "text": "Date"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "1"
+       },
+       {
+        "text": "Penyusun"
+       },
+       {
+        "text": "A. Pratama"
+       },
+       {
+        "text": ""
+       }
+      ]
+     }
+    ]
+   },
+   "methodStatement": {
+    "text": "Pengukuran langsung di lapangan."
+   },
+   "distribution": {
+    "type": "registerTable",
+    "columns": [
+     {
+      "role": "id"
+     },
+     {
+      "role": "text"
+     }
+    ],
+    "rows": [
+     {
+      "cells": [
+       {
+        "text": "Copy"
+       },
+       {
+        "text": "Holder"
+       }
+      ],
+      "kind": "header"
+     },
+     {
+      "cells": [
+       {
+        "text": "1"
+       },
+       {
+        "text": "Manajer Proyek"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ }
+}

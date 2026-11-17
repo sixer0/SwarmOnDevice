@@ -7,6 +7,7 @@
  */
 import { docNumberSafe, newId } from "../store/index.ts"
 import { dayOf, inList, jsonCol, msOf, type SqlParam, type StudioTx } from "./db.ts"
+import { refuseAgentRaisedLabelsVerified } from "./labels-verified.ts"
 import { documentOf, revisionOf, templateOf, templateVersionOf, type Row, type StudioDocument, type StudioRevision, type StudioTemplate, type StudioTemplateVersion } from "./rows.ts"
 
 // ── documents ─────────────────────────────────────────────────────────────
@@ -174,6 +175,9 @@ export interface RevisionCreate {
 }
 
 export function insertRevision(tx: StudioTx, r: RevisionCreate): StudioRevision {
+  // 1.3.3 row 61 (ST-9, U20): the one revision insert of every writer. Inside an agent tool request a snapshot that
+  // raises `labels_verified` is refused here (LABELS_VERIFIED_PERSON_ONLY); see ./labels-verified.ts for the rule.
+  refuseAgentRaisedLabelsVerified(tx, r)
   const id = newId()
   tx.run(
     `INSERT INTO revision (id, document_id, revision_no, parent_revision_no, template_version_id, snapshot, snapshot_sha256, input_sha256,

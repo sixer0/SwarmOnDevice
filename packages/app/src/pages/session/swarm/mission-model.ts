@@ -30,6 +30,8 @@ export type MissionRowWire = {
   agent: string
   status: RowStatus
   note?: string
+  /** 1.3.3 row 155 (S7): written by the host when a row closes with an unchecked figure label; the person clears it. */
+  awaitingHumanCheck?: { checks?: string[]; since?: string; clearedBy?: string; clearedAt?: string }
 }
 
 export type DecisionRequestWire = {
@@ -85,6 +87,28 @@ export type DeliverableWire = {
   /** Row 136b: spec output verification §7.2 Final, the same rule as the row done gate; absent = false. */
   final?: boolean
   outputs: DeliverableOutputWire[]
+  /** 1.3.3 row 71/72 (MC-8): the host found project copies in <project>/deliverables/<mission>/; absent (older host) = none. */
+  hasProjectCopy?: boolean
+  /** 1.3.3 row 71/72: newest revision first, then PDF, DOCX, HTML; only with `hasProjectCopy`. */
+  projectFiles?: ProjectFileWire[]
+}
+
+/** 1.3.3 row 71 (host `ProjectFileWire`): one copy of a deliverable in the mission's project folder. */
+export type ProjectFileWire = {
+  /** project-relative, `/` separators: `deliverables/<mission id>/<name>` */
+  path: string
+  /** the disk path the host built from the mission's project folder; absent when the stored path would leave it */
+  absolutePath?: string
+  format: string
+  /** revision letter */
+  docRev?: string
+  /** Studio revision number */
+  revisionNo?: number
+  sha256: string
+  /** the highest Studio revision of the document */
+  latest: boolean
+  /** the file exists in the project folder now */
+  present: boolean
 }
 
 export type MissionDerivedWire = {
@@ -158,6 +182,33 @@ export type MissionAgentVM = {
   note?: string
   heldBy: string[]
   deliverableId?: string
+  /** 1.3.3 row 155 (S7): present only while the row awaits a person's label check. `figures` come from the open
+   * label-check request (the row field holds no figures); `requestId` only when that request is the card shown. */
+  awaitingCheck?: { figures: string[]; requestId?: string }
+}
+
+function awaitingCheckOf(
+  row: MissionRowWire,
+  open: DecisionRequestWire[],
+  shownRequestId: string | undefined,
+): { awaitingCheck?: NonNullable<MissionAgentVM["awaitingCheck"]> } {
+  const mark = row.awaitingHumanCheck
+  if (!mark || mark.clearedBy || mark.clearedAt) return {}
+  const req = open.find((r) => labelCheckFigures(r, row.id))
+  return {
+    awaitingCheck: {
+      figures: req ? labelCheckFigures(req, row.id)! : [],
+      ...(req && req.id === shownRequestId ? { requestId: req.id } : {}),
+    },
+  }
+}
+
+const LABELS_LINE =/^labels_verified row=(\S+) document=\S+ revision=\d+ figures=(\S+)$/
+/** Figures named by an open label-check request for this row (the host's one-line context grammar), else none. */
+export function labelCheckFigures(req: { context?: string; status: string }, rowId: string): string[] | undefined {
+  if (req.status !== "open") return undefined
+  const m = LABELS_LINE.exec((req.context ?? "").trim())
+  return m && m[1] === rowId ? m[2].split(",") : undefined
 }
 export type MissionWaveVM = { wave: number; done: number; total: number; tone: "done" | "issue" | "run" }
 export type MissionDecisionVM = {
@@ -165,6 +216,8 @@ export type MissionDecisionVM = {
   question: string
   context?: string
   options: Array<{ id: string; label: string; consequence: string; recommended: boolean; group?: string; groupKind?: string }>
+  /** 1.3.3 row 73: the rows the request blocks, as sent; the card shows the links of their deliverables. */
+  blockingRows?: string[]
   /** 1.2.8 row 46: "project-placement" renders the placement card (01d §4). */
   topic?: string
   /** 1.2.8 row 46b: the tidy list lines of a "project-tidy" request (01d §5). */
@@ -194,6 +247,9 @@ export type MissionDeliverableVM = {
   /** Row 165D: `fileName` = the delivered DATUM title name when the host sent a plain one. */
   files: Array<{ format: DeliverableFormat; finalFileName: string; fileName?: string }>
   projectPath: string | null
+  /** 1.3.3 row 72 (MC-8): the host's project copies as sent (row 71); absent = no copy. Shaped for the view by
+   * mission-deliverables-model.ts `deliverableLinks`, which is the only place that decides what opens. */
+  projectFiles?: ProjectFileWire[]
   /**
    * 1.2.7 U-2 (N7-123, C10): "studio" = a Studio deliverable; "folder" = a file in docs/<m>/11_deliverables/ that no
    * Studio output claims (no status badge, not counted in n/m final). Absent (older callers) = studio.
@@ -382,6 +438,7 @@ function deliverableVM(
         ? `docs/${missionId}/${flat}`
         : null,
     origin: "studio",
+    ...(wire.hasProjectCopy === true && Array.isArray(wire.projectFiles) ? { projectFiles: wire.projectFiles } : {}),
   }
 }
 
@@ -473,6 +530,7 @@ export function buildMission(
   ]
 
   const agents: Record<string, MissionAgentVM> = {}
+  const shownRequestId = [...open].sort((a, b) => timeOf(a.createdAt) - timeOf(b.createdAt))[0]?.id
   for (const row of shown) {
     const heldBy = open.filter((req) => req.blockingRows?.includes(row.id)).map((req) => req.id)
     const status = agentStatus(row.status, heldBy)
@@ -492,6 +550,7 @@ export function buildMission(
       note: row.note,
       heldBy: status === "blocked" ? heldBy : [],
       deliverableId: deliverables.find((d) => d.rowId === row.id)?.documentId,
+      ...(awaitingCheckOf(row, open, shownRequestId)),
     }
   }
 
@@ -539,6 +598,7 @@ export function buildMission(
           ...(opt.group === undefined ? {} : { group: opt.group }),
           ...(opt.groupKind === undefined ? {} : { groupKind: opt.groupKind }),
         })),
+        ...(Array.isArray(oldestOpen.blockingRows) ? { blockingRows: oldestOpen.blockingRows.filter((r) => typeof r === "string") } : {}),
         ...(oldestOpen.topic === undefined ? {} : { topic: oldestOpen.topic }),
         ...(Array.isArray(oldestOpen.proposal) ? { proposal: oldestOpen.proposal } : {}),
       }

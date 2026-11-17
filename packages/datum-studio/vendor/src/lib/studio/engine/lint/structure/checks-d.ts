@@ -315,7 +315,25 @@ function d08(ctx: StructCtx): CheckOutcome {
   return findings(f, `${ctx.walk.units.length} unit interior membawa klasifikasi "${cls}" di kepala/blok register`);
 }
 
-/** D09 labels_verified true untuk diagram terbit. */
+/**
+ * Swarm 1.3.3 row 60 (ST-9 item 2, owner decision U20; register 03 section 7): the one rule for "the labels of
+ * this diagram are not yet checked by a person". `labels_verified` false or absent is a STATE of the document
+ * (draft, awaiting a person), not a fault: lint D09, the render check `P1-labels_verified` and the figure preview
+ * all read it through this predicate. Only `true` counts as checked; a spec that is not an object is not judged.
+ */
+export function diagramLabelsUnchecked(spec: unknown): boolean {
+  if (typeof spec !== "object" || spec === null || Array.isArray(spec)) return false;
+  return (spec as { labels_verified?: unknown }).labels_verified !== true;
+}
+
+/** Marker text of the awaiting-human state (register 03 section 7, same words as the control sheet line of row 63). */
+export const LABELS_UNCHECKED_TEXT = { ID: "label belum diperiksa manusia", EN: "labels not yet checked by a person" } as const;
+
+/**
+ * D09 label diagram diperiksa manusia (`labels_verified`).
+ * Swarm 1.3.3 row 60: a diagram whose flag is not true is reported (status REPORT, never FAIL, at every tier the
+ * rule runs); the document is a draft until a person sets the flag. All flags true -> PASS as before.
+ */
 function d09(ctx: StructCtx): CheckOutcome {
   const f: Finding[] = [];
   let n = 0;
@@ -325,8 +343,8 @@ function d09(ctx: StructCtx): CheckOutcome {
     const spec = it.block.spec as Partial<StudioDiagramV1> & { artifactId?: string };
     if (spec?.$schema !== "studio.diagram/v1") {
       f.push({ pointer: `${it.pointer}/spec`, status: "REPORT", detail: `${lbl(it, "diagram")}: spesifikasi dirujuk sebagai artefak ${spec?.artifactId ?? "?"}; labels_verified diperiksa layanan render (DT-39)` });
-    } else if (spec.labels_verified !== true) {
-      f.push({ pointer: `${it.pointer}/spec/labels_verified`, detail: `${lbl(it, "diagram")}: labels_verified bukan true untuk diagram terbit (DT-39; ditetapkan PRISMA, H07)` });
+    } else if (diagramLabelsUnchecked(spec)) {
+      f.push({ pointer: `${it.pointer}/spec/labels_verified`, status: "REPORT", detail: `${lbl(it, "diagram")}: ${LABELS_UNCHECKED_TEXT.ID} (labels_verified bukan true; dokumen berstatus draf sampai orang menetapkannya; DT-39, H07)` });
     }
   }
   return findings(f, n ? `${n} diagram berlabel terverifikasi` : "tidak ada diagram");

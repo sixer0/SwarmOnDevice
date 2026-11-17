@@ -75,6 +75,7 @@ import { buildFigures, type FigureBuild } from "../figures";
 import { finalStatus, withJobTimeout, type JobEngineInfo, type RenderJobHandle } from "../job";
 import { registerJobLog, unregisterJobLog, type JobLogEntry } from "../joblog";
 import { lintAfterRender } from "../lint";
+import { pairOffpageConnectors } from "../offpage-pairs";
 import { draftFileName, draftScopeSuffix, FORMAT_EXT, FORMAT_MIME, figureFileName, inlineText, normalizeFormats, type DraftScopeLayout } from "../naming";
 import { printHtmlToPdf } from "../pdf";
 import { isCompositeChart } from "./chart";
@@ -169,6 +170,8 @@ export interface PureRenderResult {
   scopeLayout?: DraftScopeLayout;
   /** Slot wajib kosong yang dirender sebagai placeholder. */
   placeholderSlots: string[];
+  /** Swarm 1.3.3 row 63 (ST-9): human checks still open (`awaitingHumanCheckOf`); not empty = the document is a draft. */
+  awaitingHumanCheck: string[];
   log: { entries: JobLogEntry[]; dropped: number };
   durationMs: number;
 }
@@ -222,7 +225,7 @@ export async function renderSnapshot(snapshotIn: AnyNormSnapshot, template: Reso
   const tier = (opts.tier ?? snapshot.doc.meta.tier ?? "NOTA") as StudioTier;
   const files: PureRenderFile[] = [];
   const failed = new Set<StudioOutputFormat>();
-  const state: { tpl: ResolvedTemplate; lint?: LintReport; composites: number } = { tpl: template, composites: 0 };
+  const state: { tpl: ResolvedTemplate; lint?: LintReport; composites: number; awaiting: string[] } = { tpl: template, composites: 0, awaiting: [] };
 
   if (registerLog) registerJobLog(job.log);
   job.startedAt = new Date();
@@ -273,6 +276,7 @@ export async function renderSnapshot(snapshotIn: AnyNormSnapshot, template: Reso
     draft,
     ...(scoped.layout ? { scopeLayout: scoped.layout } : {}),
     placeholderSlots: scoped.placeholderSlots,
+    awaitingHumanCheck: state.awaiting,
     log: job.log.snapshot(),
     durationMs: Date.now() - t0,
   };
@@ -309,7 +313,7 @@ async function runPure(
   run: RunScope,
   files: PureRenderFile[],
   failed: Set<StudioOutputFormat>,
-  state: { tpl: ResolvedTemplate; lint?: LintReport; composites: number },
+  state: { tpl: ResolvedTemplate; lint?: LintReport; composites: number; awaiting: string[] },
 ): Promise<void> {
   const want = new Set(fmts);
   const needPdf = want.has("PDF");
@@ -358,12 +362,25 @@ async function runPure(
       context: { count: state.composites },
     });
   }
+  // Swarm 1.3.3 row 50 (ST-4): off-page connectors are paired across the figures of the document before any figure
+  // is drawn, and their labels are written from the real figure numbers. An unpaired connector refuses the render:
+  // no document or figure file is produced (OFFPAGE_UNPAIRED in the job errors and as a FAIL lint row).
+  const offpage = await pairOffpageConnectors(snapshot, new InlineSpecReader(opts.artifacts), { scope: run.scope });
+  snapshot = offpage.snapshot;
+  for (const n of offpage.notes) {
+    job.log.info(`off-page connector label generated: ${n.figure} node ${n.node}: "${n.authored}" -> "${n.generated}"`, { code: "OFFPAGE_LABEL_GENERATED", context: { ...n } });
+  }
   let figures: FigureBuild | undefined;
-  try {
-    figures = await buildFigures({ snapshot, tpl, tier, job, reader: new InlineSpecReader(opts.artifacts) });
-  } catch (err) {
-    job.addError(errorCodeOf(err, "RENDER_FAILED"), `figure assembly failed: ${errorMessageOf(err)}`, undefined, err);
+  if (offpage.refusals.length > 0) {
+    for (const r of offpage.refusals) job.addError("RENDER_FAILED", r.message);
     for (const f of fmts) failed.add(f);
+  } else {
+    try {
+      figures = await buildFigures({ snapshot, tpl, tier, job, reader: offpage.reader });
+    } catch (err) {
+      job.addError(errorCodeOf(err, "RENDER_FAILED"), `figure assembly failed: ${errorMessageOf(err)}`, undefined, err);
+      for (const f of fmts) failed.add(f);
+    }
   }
   if (figures && figures.store.entries().length > 0) await noteChromium(job);
 
@@ -470,8 +487,9 @@ async function runPure(
 
   // 5. Lint -> status rilis per tier (tidak menahan berkas).
   job.checkAborted("lint");
-  const lint = lintAfterRender({ snapshot, tpl, tier, html: lintHtml, metrics, svgs: figures?.svgs ?? [], extra: figures?.extra, log: job.log });
+  const lint = lintAfterRender({ snapshot, tpl, tier, html: lintHtml, metrics, svgs: figures?.svgs ?? [], extra: [...(figures?.extra ?? []), ...offpage.checks], log: job.log });
   state.lint = lint;
+  state.awaiting = figures?.awaitingHumanCheck ?? [];
   job.log.info(`lint ${lint.tier}: ${lint.releaseStatus}`, { code: "LINT_DONE", context: { checks: lint.checks.length } });
 
   // 6. Berkas figur (SVG/PNG) bila diminta; penyimpanan milik pemanggil.

@@ -15,6 +15,9 @@ const TEMPLATES = path.join(PKG, "templates")
 
 export type S = Record<string, any>
 export const FIXTURE = JSON.parse(readFileSync(path.join(PKG, "test", "fixtures", "syn128", "hna_flow_v2.json"), "utf8")) as { block: S; writeBlock: S; chapter: S }
+// Swarm 1.3.3 row 61 (U20): an agent tool call that carries labels_verified: true is refused (LABELS_VERIFIED_PERSON_ONLY),
+// so the copy sent through the host has the flag false; the fixture file on disk is unchanged.
+for (const d of [FIXTURE.block, FIXTURE.writeBlock.diagram, ...diagramsOf(FIXTURE.chapter)]) d.spec.labels_verified = false
 export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 export const CHANGE = { what: "uji sintetis", why: "uji persistensi diagram", impact: "tidak ada" }
 export const META = { title: "Nota uji diagram", author: "Alfa Bravo", source: "Sumber sintetis meta." }
