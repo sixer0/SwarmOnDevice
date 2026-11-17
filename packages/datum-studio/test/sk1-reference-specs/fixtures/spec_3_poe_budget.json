@@ -1,0 +1,134 @@
+{
+ "type": "diagram",
+ "caption": {
+  "text": "Switch A passes with 30 % margin, while Switch B falls short because two Type 4 PTZs are counted at full PSE allocation."
+ },
+ "source": {
+  "text": "Contoh ilustrasi GSP, data rekaan untuk pengajaran. Nilai alokasi PSE per Type dari IEEE 802.3af/at/bt. PROVENANS alokasi per port [DITURUNKAN dari Type dan Class] · anggaran switch [PEMASOK]"
+ },
+ "spec": {
+  "family": "layered",
+  "classification": "BIASA",
+  "labels_verified": false,
+  "sources": [
+   "GSP reference set, Gambar 10.4 Pohon Anggaran Daya PoE"
+  ],
+  "nodes": [
+   {
+    "id": "ups",
+    "label": "UPS rak",
+    "sub": "3 kVA · 30 mnt",
+    "tag": "=PWR+POS1-TB1",
+    "shape": "box",
+    "class": {
+     "tier": 0
+    }
+   },
+   {
+    "id": "swa",
+    "label": "Switch A",
+    "sub": "anggaran 370 W · alokasi 257,2 W",
+    "shape": "box",
+    "class": {
+     "tier": 1
+    }
+   },
+   {
+    "id": "swb",
+    "label": "Switch B",
+    "sub": "anggaran 240 W · alokasi 241,6 W",
+    "shape": "box",
+    "class": {
+     "tier": 1
+    }
+   },
+   {
+    "id": "g1",
+    "label": "8 kamera, 2 pembaca",
+    "sub": "8×15,4 + 2×7 W",
+    "shape": "box",
+    "class": {
+     "tier": 2
+    }
+   },
+   {
+    "id": "g2",
+    "label": "2 PTZ Type 3",
+    "sub": "2 × 60 W",
+    "shape": "box",
+    "class": {
+     "tier": 2
+    }
+   },
+   {
+    "id": "g3",
+    "label": "2 PTZ Type 4",
+    "sub": "2 × 90 W",
+    "shape": "box",
+    "class": {
+     "tier": 2
+    }
+   },
+   {
+    "id": "g4",
+    "label": "4 kamera tetap",
+    "sub": "4 × 15,4 W",
+    "shape": "box",
+    "class": {
+     "tier": 2
+    }
+   }
+  ],
+  "edges": [
+   {
+    "from": "ups",
+    "to": "swa",
+    "kind": "data",
+    "label": "AC 230 V"
+   },
+   {
+    "from": "ups",
+    "to": "swb",
+    "kind": "data",
+    "label": "AC 230 V"
+   },
+   {
+    "from": "swa",
+    "to": "g1",
+    "kind": "data",
+    "label": "137,2 W"
+   },
+   {
+    "from": "swa",
+    "to": "g2",
+    "kind": "data",
+    "label": "120 W"
+   },
+   {
+    "from": "swb",
+    "to": "g3",
+    "kind": "alert",
+    "label": "180 W"
+   },
+   {
+    "from": "swb",
+    "to": "g4",
+    "kind": "data",
+    "label": "61,6 W"
+   }
+  ],
+  "legend": [
+   {
+    "symbol": "data",
+    "label": "alokasi PSE dalam batas"
+   },
+   {
+    "symbol": "alert",
+    "label": "kelompok yang membuat anggaran terlampaui"
+   }
+  ],
+  "notes": [
+   "Reference designation =PWR+POS1-TB1 carried in tag because desig is not a Studio field"
+  ]
+ }
+}

@@ -1,0 +1,1399 @@
+{
+ "root_relative": "4 Knowledge Bank/ekas-lapis-teks",
+ "folders": [
+  {
+   "folder": "00_START-HERE",
+   "files": 3,
+   "holds": "peta dan cara pakai pustaka",
+   "open_when": "awal sesi, sekali"
+  },
+  {
+   "folder": "01_GOVERNANCE",
+   "files": 5,
+   "holds": "tingkat keyakinan sumber dan gerbang jaminan",
+   "open_when": "saat menilai seberapa kuat sebuah sumber"
+  },
+  {
+   "folder": "02_REGISTERS",
+   "files": 5,
+   "holds": "register induk rujukan, kebutuhan, hitungan, uji",
+   "open_when": "saat mencari nomor rujukan atau menelusur"
+  },
+  {
+   "folder": "04_KNOWLEDGE-CARDS",
+   "files": 61,
+   "holds": "kartu ringkas per sumber: apa yang dipasok, halaman jangkar",
+   "open_when": "langkah pertama per domain"
+  },
+  {
+   "folder": "05_DOMAIN-KNOWLEDGE",
+   "files": 84,
+   "holds": "resume buku dan standar per domain, rantai jaminan",
+   "open_when": "setelah kartu, untuk rumus dan batas"
+  },
+  {
+   "folder": "06_ENGINEERING",
+   "files": 6,
+   "holds": "katalog rumus, asumsi baku, contoh kartu hitung",
+   "open_when": "setiap perhitungan"
+  },
+  {
+   "folder": "07_VERIFICATION-VALIDATION",
+   "files": 10,
+   "holds": "ambang terima induk, ITP, FAT, SAT",
+   "open_when": "saat menetapkan kriteria lulus atau uji"
+  },
+  {
+   "folder": "08_EVIDENCE",
+   "files": 8,
+   "holds": "pola bukti ukur (OTDR, OLTS, pembumian, listrik)",
+   "open_when": "saat merencanakan atau menilai bukti"
+  },
+  {
+   "folder": "09_HANDOVER",
+   "files": 9,
+   "holds": "as-built, berita acara, O&M, pelatihan",
+   "open_when": "saat serah terima"
+  },
+  {
+   "folder": "10_TEMPLATES",
+   "files": 10,
+   "holds": "templat kartu kendali sampai NCR",
+   "open_when": "saat membuat dokumen kendali"
+  }
+ ],
+ "domains": {
+  "AI-ML": {
+   "cards": [],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/AI-ML/R3 - Data-Driven Science and Engineering (Brunton & Kutz).md",
+     "lines": 47,
+     "sections": [
+      "1. Peta bagian (bookmark PDF, terverifikasi isi)",
+      "2. Butir bertambat yang sudah dibuka teksnya",
+      "3. Metode yang bisa diadopsi",
+      "4. Batas pemakaian"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/AI-ML/R3 - Deep Learning (Goodfellow et al.).md",
+     "lines": 41,
+     "sections": [
+      "1. Peta bagian (bookmark PDF)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Batas pemakaian"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/AI-ML/R3 - Designing Machine Learning Systems (Chip Huyen).md",
+     "lines": 51,
+     "sections": [
+      "1. Inti dalam satu halaman",
+      "2. Bagian bertambat halaman (hasil buka teks, bukan daftar isi)",
+      "3. Metode yang bisa diadopsi (tanpa angka ambang)",
+      "4. Batas pemakaian"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/AI-ML/R3 - Hands-On Machine Learning (Geron).md",
+     "lines": 47,
+     "sections": [
+      "1. Peta bab (bookmark PDF terverifikasi isi teks)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi",
+      "4. Batas pemakaian",
+      "5. Butir bertambat tambahan (tambalan W10 BUKUV3-JURY-1009, 09-10-2026)"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/AI-ML/RANTAI-JAMINAN.md"
+  },
+  "BUILDING-CONSTRUCTION": {
+   "cards": [
+    {
+     "id": "REF-BLD-001",
+     "title": "Building Construction Illustrated (Ching, 2020)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/BUILDING-CONSTRUCTION/REF-BLD-001.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-BLD-002",
+     "title": "BIM Handbook (Sacks dkk.)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/BUILDING-CONSTRUCTION/REF-BLD-002.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-BLD-003",
+     "title": "Building Codes Illustrated (Ching & Winkel)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/BUILDING-CONSTRUCTION/REF-BLD-003.md",
+     "supplies": ""
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/BUILDING-CONSTRUCTION/R3 - BIM Handbook (Sacks dkk.).md",
+     "lines": 46,
+     "sections": [
+      "Untuk apa dipakai di GSP",
+      "Yang dapat dipakai",
+      "⚠ Cacat berkas",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/BUILDING-CONSTRUCTION/R3 - Building Codes Illustrated (Ching & Winkel).md",
+     "lines": 52,
+     "sections": [
+      "⚠ Ini kode Amerika, bukan Indonesia",
+      "Untuk apa tetap berguna",
+      "Susunan lain",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/BUILDING-CONSTRUCTION/R3 - Building Construction Illustrated (Ching).md",
+     "lines": 59,
+     "sections": [
+      "Untuk apa dipakai di GSP",
+      "Susunan",
+      "Yang paling berguna",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/BUILDING-CONSTRUCTION/RANTAI-JAMINAN.md"
+  },
+  "CIVIL-STRUCTURAL": {
+   "cards": [
+    {
+     "id": "REF-CIV-001",
+     "title": "Structural Analysis (Hibbeler, 2017)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CIVIL-STRUCTURAL/REF-CIV-001.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-CIV-002",
+     "title": "Design of Concrete Structures (Darwin, Dolan & Nilson)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CIVIL-STRUCTURAL/REF-CIV-002.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-CIV-003",
+     "title": "Steel Design (Segui, 2017)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CIVIL-STRUCTURAL/REF-CIV-003.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-CIV-004",
+     "title": "Materials for Civil and Construction Engineering (Mamlouk & Zaniewski)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CIVIL-STRUCTURAL/REF-CIV-004.md",
+     "supplies": ""
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/R3 - Design of Concrete Structures (Darwin, Dolan & Nilson).md",
+     "lines": 63,
+     "sections": [
+      "Untuk apa buku ini dipakai di GSP",
+      "Susunan",
+      "Yang paling sering dipakai",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/R3 - Materials for Civil and Construction Engineering (Mamlouk & Zaniewski).md",
+     "lines": 84,
+     "sections": [
+      "Untuk apa buku ini dipakai di GSP",
+      "Susunan",
+      "Yang dapat dipakai langsung",
+      "Batas pemakaian",
+      "Menopang",
+      "Catatan verifikasi RR3A (2026-10-11, kartu t_bd122a56)"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/R3 - Steel Design (Segui).md",
+     "lines": 63,
+     "sections": [
+      "Untuk apa buku ini dipakai di GSP",
+      "Susunan",
+      "Yang paling sering dipakai",
+      "Struktur standar yang dijelaskan (PDF 24)",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/R3 - Structural Analysis (Hibbeler).md",
+     "lines": 73,
+     "sections": [
+      "Untuk apa buku ini dipakai di GSP",
+      "Susunan",
+      "Yang dapat dipakai langsung",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/RANTAI-JAMINAN.md"
+  },
+  "COMPUTER-VISION": {
+   "cards": [],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/COMPUTER-VISION/R3 - Multiple View Geometry (Hartley & Zisserman).md",
+     "lines": 39,
+     "sections": [
+      "1. Peta bagian (dari daftar isi berkas + teks dibuka)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi",
+      "4. Batas pemakaian"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/COMPUTER-VISION/RANTAI-JAMINAN.md"
+  },
+  "CONSTRUCTION": {
+   "cards": [
+    {
+     "id": "REF-CON-001",
+     "title": "Construction Planning, Equipment, and Methods (Peurifoy, ed. 9)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CONSTRUCTION/REF-CON-001.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-CON-002",
+     "title": "Construction Cost Estimating (Holm & Schaufelberger, 2021)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CONSTRUCTION/REF-CON-002.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-CON-003",
+     "title": "Construction Project Scheduling and Control (Mubarak, 2019)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CONSTRUCTION/REF-CON-003.md",
+     "supplies": ""
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CONSTRUCTION/R3 - Construction Cost Estimating (Holm & Schaufelberger).md",
+     "lines": 63,
+     "sections": [
+      "Untuk apa buku ini dipakai di GSP",
+      "Susunan",
+      "Yang paling berguna",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CONSTRUCTION/R3 - Construction Planning, Equipment, and Methods (Peurifoy).md",
+     "lines": 70,
+     "sections": [
+      "Untuk apa buku ini dipakai di GSP",
+      "Susunan",
+      "Yang paling berguna bagi GSP",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CONSTRUCTION/R3 - Construction Project Scheduling and Control (Mubarak).md",
+     "lines": 71,
+     "sections": [
+      "Untuk apa buku ini dipakai di GSP",
+      "Susunan",
+      "Yang paling berguna",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/CONSTRUCTION/RANTAI-JAMINAN.md"
+  },
+  "CRITICAL-INFRASTRUCTURE": {
+   "cards": [
+    {
+     "id": "REF-CIP-001",
+     "title": "Cybersecurity Protecting Critical Infrastructures",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CRITICAL-INFRASTRUCTURE/REF-CIP-001.md",
+     "supplies": "Klasifikasi aset kritis, defense-in-depth, pemetaan ketergantungan"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CRITICAL-INFRASTRUCTURE/R3 - Cybersecurity Protecting Critical Infrastructures.md",
+     "lines": 112,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Batas buku ini"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/CRITICAL-INFRASTRUCTURE/RANTAI-JAMINAN.md"
+  },
+  "CYBERSECURITY": {
+   "cards": [
+    {
+     "id": "REF-SEC-001",
+     "title": "The NICE Cyber Security Framework",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CYBERSECURITY/REF-SEC-001.md",
+     "supplies": "Proses forensik 4 tahap: collection · examination · analysis · reporting + rantai kustodi"
+    },
+    {
+     "id": "REF-SEC-002",
+     "title": "Security Engineering",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/CYBERSECURITY/REF-SEC-002.md",
+     "supplies": "Kerangka keamanan sistem dan integritas catatan"
+    },
+    {
+     "id": "REF-SEC-003",
+     "title": "Keamanan Siber Operasional",
+     "level": "R5",
+     "path": "04_KNOWLEDGE-CARDS/CYBERSECURITY/REF-SEC-003.md",
+     "supplies": "Hardening, event logging, threat detection, AD, program pembelajaran"
+    },
+    {
+     "id": "REF-SEC-004",
+     "title": "Keamanan Siber dan Forensik Digital (Universitas Indonesia)",
+     "level": "R5",
+     "path": "04_KNOWLEDGE-CARDS/CYBERSECURITY/REF-SEC-004.md",
+     "supplies": "Penunjuk ke UU 11/2008 (ITE) dan Peraturan BSSN No. 4/2021"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/CYBERSECURITY/R3 - Security Engineering.md",
+     "lines": 127,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": null
+  },
+  "DRAWING-CAD": {
+   "cards": [
+    {
+     "id": "REF-DRW-001",
+     "title": "Engineering Drawing and Design (Madsen, 2016)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-001.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-DRW-002",
+     "title": "Architectural Graphics (Ching, 2015)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-002.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-DRW-003",
+     "title": "The Professional Practice of Architectural Working Drawings",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-003.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-DRW-004",
+     "title": "AutoCAD Electrical 2026: A Tutorial Approach, ed. 7 (Tickoo, 2025)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-004.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-DRW-005",
+     "title": "AutoCAD Electrical 2026 for Electrical Control Designers, ed. 17 (Tickoo, 2025)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-005.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-DRW-006",
+     "title": "AutoCAD Civil 3D 2011 Tutorial (Autodesk, 2010)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-006.md",
+     "supplies": ""
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/R3 - Architectural Graphics (Ching).md",
+     "lines": 52,
+     "sections": [
+      "Untuk apa dipakai di GSP",
+      "Susunan",
+      "Yang paling berguna",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/R3 - AutoCAD Electrical 2026 (Tickoo) - dua judul.md",
+     "lines": 65,
+     "sections": [
+      "⚠ Ini tutorial perangkat lunak",
+      "Asal berkas — penting untuk pengutipan",
+      "Isi — REF-DRW-005 (yang lebih lengkap)",
+      "Yang benar-benar berguna",
+      "Perbedaan dua judul",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/R3 - Engineering Drawing and Design (Madsen).md",
+     "lines": 53,
+     "sections": [
+      "Untuk apa dipakai di GSP",
+      "Susunan",
+      "Yang paling berguna",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/R3 - The Professional Practice of Architectural Working Drawings.md",
+     "lines": 51,
+     "sections": [
+      "Untuk apa dipakai di GSP",
+      "Susunan",
+      "Yang paling berguna",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/RANTAI-JAMINAN.md"
+  },
+  "ELECTRICAL": {
+   "cards": [
+    {
+     "id": "REF-ELC-001",
+     "title": "Electrical Power Equipment Maintenance and Testing",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/ELECTRICAL/REF-ELC-001.md",
+     "supplies": "Empat metode ukur isolasi, batas tegangan uji ≤ 75% terima / ≤ 60% pabrik"
+    },
+    {
+     "id": "REF-ELC-002",
+     "title": "ANSI-NETA ATS-2017",
+     "level": "R2",
+     "path": "04_KNOWLEDGE-CARDS/ELECTRICAL/REF-ELC-002.md",
+     "supplies": "600 V → 100 MΩ · 5 kV → 1.500 MΩ · 15 kV → 5.000 MΩ. ΔT > 15 °C antar komponen serupa atau > 40 °C terhadap udara"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/ELECTRICAL/R3 - Electrical Power Equipment Maintenance and Testing.md",
+     "lines": 190,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/ELECTRICAL/RANTAI-JAMINAN.md"
+  },
+  "FIBER-OPTIC": {
+   "cards": [
+    {
+     "id": "REF-FO-001",
+     "title": "FOA Reference Guide to Fiber Optics",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/FIBER-OPTIC/REF-FO-001.md",
+     "supplies": "Loss budget, batas TIA-568 0,75 dB/konektor, 1 dB/km SM premises · 0,5 dB/km OSP, ambang = kolom terburuk"
+    },
+    {
+     "id": "REF-FO-002",
+     "title": "Reference Guide to Fiber Optic Testing Vol 1",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/FIBER-OPTIC/REF-FO-002.md",
+     "supplies": "OTDR, ketidakpastian ukur lab 0,02–0,05 dB/hari"
+    },
+    {
+     "id": "REF-FO-003",
+     "title": "IEC 61280-4-2",
+     "level": "R2",
+     "path": "04_KNOWLEDGE-CARDS/FIBER-OPTIC/REF-FO-003.md",
+     "supplies": "Empat metode: one-cord · three-cord · two-cord · OTDR. RTM penyelesai perselisihan. ORL Annex E Method A"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/R2 - IEC 61280-4-2.md",
+     "lines": 109,
+     "sections": [
+      "Mengapa standar ini penting untuk rak GSP",
+      "Empat metode pengukuran redaman (PDF 17)",
+      "Ketidakpastian — sumber utamanya (PDF 20)",
+      "Definisi reflektansi (PDF 14)",
+      "Optical Return Loss — Annex E, Method A (PDF 43)",
+      "Pemakaian di GSP",
+      "Batas standar ini"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/R3 - FOA Reference Guide to Fiber Optics.md",
+     "lines": 252,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/R3 - Reference Guide to Fiber Optic Testing Vol 1.md",
+     "lines": 104,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/RANTAI-JAMINAN.md"
+  },
+  "GEOSPATIAL-SURVEY": {
+   "cards": [
+    {
+     "id": "REF-GEO-001",
+     "title": "GIS Fundamentals (Bolstad & Manson)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/GEOSPATIAL-SURVEY/REF-GEO-001.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-GEO-002",
+     "title": "Surveying: Principles and Applications (Kavanagh & Mastin, 2014)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/GEOSPATIAL-SURVEY/REF-GEO-002.md",
+     "supplies": ""
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/GEOSPATIAL-SURVEY/R3 - GIS Fundamentals (Bolstad & Manson).md",
+     "lines": 79,
+     "sections": [
+      "Untuk apa dipakai di GSP",
+      "⚠ Dua cacat berkas yang menentukan cara memakainya",
+      "Yang dapat dipakai",
+      "Batas pemakaian",
+      "Menopang",
+      "Catatan koreksi RR3A (2026-10-11, kartu t_bd122a56)"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/GEOSPATIAL-SURVEY/R3 - Surveying Principles and Applications (Kavanagh & Mastin).md",
+     "lines": 53,
+     "sections": [
+      "Untuk apa dipakai di GSP",
+      "Susunan",
+      "Yang paling berguna",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/GEOSPATIAL-SURVEY/RANTAI-JAMINAN.md"
+  },
+  "GROUNDING-LIGHTNING": {
+   "cards": [
+    {
+     "id": "REF-GRD-001",
+     "title": "Grounds for Grounding",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/GROUNDING-LIGHTNING/REF-GRD-001.md",
+     "supplies": "Wenner, fall-of-potential, Apendiks G (daftar periksa) dan H (isi dokumentasi)"
+    },
+    {
+     "id": "REF-LPS-001",
+     "title": "The Art and Science of Lightning Protection",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/GROUNDING-LIGHTNING/REF-LPS-001.md",
+     "supplies": "Tingkat proteksi, radius bola gelinding, peringatan mesh"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/GROUNDING-LIGHTNING/R3 - Grounds for Grounding.md",
+     "lines": 250,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/GROUNDING-LIGHTNING/R3 - The Art and Science of Lightning Protection.md",
+     "lines": 182,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/GROUNDING-LIGHTNING/RANTAI-JAMINAN.md"
+  },
+  "HVAC-BUILDING": {
+   "cards": [
+    {
+     "id": "REF-HVA-001",
+     "title": "Mechanical and Electrical Equipment for Buildings (Grondzik & Kwok)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/HVAC-BUILDING/REF-HVA-001.md",
+     "supplies": ""
+    }
+   ],
+   "resumes": [],
+   "chain": "05_DOMAIN-KNOWLEDGE/HVAC-BUILDING/RANTAI-JAMINAN.md"
+  },
+  "MECHANICAL": {
+   "cards": [
+    {
+     "id": "REF-MEC-001",
+     "title": "Shigley's Mechanical Engineering Design",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/MECHANICAL/REF-MEC-001.md",
+     "supplies": "Perhitungan mekanik — sangat banyak rumus"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/MECHANICAL/R3 - Shigley's Mechanical Engineering Design.md",
+     "lines": 99,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/MECHANICAL/RANTAI-JAMINAN.md"
+  },
+  "NETWORKING": {
+   "cards": [
+    {
+     "id": "REF-NET-001",
+     "title": "Network Warrior",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/NETWORKING/REF-NET-001.md",
+     "supplies": "Pola gangguan jaringan"
+    },
+    {
+     "id": "REF-NET-002",
+     "title": "CCNA 200-301 Official Cert Guide Library",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/NETWORKING/REF-NET-002.md",
+     "supplies": "Praktik jaringan terkini"
+    },
+    {
+     "id": "REF-NET-003",
+     "title": "Computer Networking A Top-Down Approach",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/NETWORKING/REF-NET-003.md",
+     "supplies": "Dasar jaringan"
+    },
+    {
+     "id": "REF-NET-004",
+     "title": "TCP-IP Illustrated Vol 1",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/NETWORKING/REF-NET-004.md",
+     "supplies": "Window scaling wajib bila BDP > 64 kB"
+    },
+    {
+     "id": "REF-OEM-NET",
+     "title": "Lembar data perangkat jaringan, PBX, interkom",
+     "level": "R4",
+     "path": "04_KNOWLEDGE-CARDS/NETWORKING/REF-OEM-NET.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-OPS-001",
+     "title": "The Practice of System and Network Administration",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/NETWORKING/REF-OPS-001.md",
+     "supplies": "Praktik operasional TI"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - CCNA 200-301 Official Cert Guide Library.md",
+     "lines": 94,
+     "sections": [
+      "Struktur",
+      "Kegunaan",
+      "Pemakaian di GSP",
+      "Catatan"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - Computer Networking A Top-Down Approach.md",
+     "lines": 101,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - Network Warrior.md",
+     "lines": 117,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - TCP-IP Illustrated Vol 1.md",
+     "lines": 197,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - The Practice of System and Network Administration.md",
+     "lines": 115,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/NETWORKING/RANTAI-JAMINAN.md"
+  },
+  "NUMERICAL-METHODS": {
+   "cards": [],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/NUMERICAL-METHODS/R3 - Applied Numerical Methods with MATLAB (Chapra).md",
+     "lines": 69,
+     "sections": [
+      "1. Peta bagian/bab (bookmark PDF terverifikasi)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi GSP",
+      "4. Batas pemakaian",
+      "5. Butir bertambat tambahan (tambalan W10 BUKUV3-JURY-1009, 09-10-2026)",
+      "KOREKSI-W11B (catatan koreksi tertanggal 11-10-2026 — bukan sunting senyap)"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/NUMERICAL-METHODS/R3 - Numerical Methods for Engineers (Chapra & Canale).md",
+     "lines": 45,
+     "sections": [
+      "1. Peta bab (bookmark PDF terverifikasi)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi GSP",
+      "4. Batas pemakaian"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/NUMERICAL-METHODS/RANTAI-JAMINAN.md"
+  },
+  "POWER-BACKUP": {
+   "cards": [
+    {
+     "id": "REF-BAT-001",
+     "title": "Battery Reference Book",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-BAT-001.md",
+     "supplies": "Kerangka hitung kapasitas, rentang suhu timbal-asam tersegel −20…+50 °C"
+    },
+    {
+     "id": "REF-BAT-002",
+     "title": "IEEE 1188-2005 dan IEC 62485-2",
+     "level": "R2",
+     "path": "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-BAT-002.md",
+     "supplies": "Ambang ganti baterai < 90% rating · turun > 10% · 85% umur layan. Ventilasi ruang baterai"
+    },
+    {
+     "id": "REF-OEM-UPS",
+     "title": "Katalog UPS Riello (190 hal)",
+     "level": "R4",
+     "path": "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-OEM-UPS.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-PWR-001",
+     "title": "Diesel Generator Handbook",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-PWR-001.md",
+     "supplies": "Kerangka derating lokasi, kelas rating genset"
+    },
+    {
+     "id": "REF-PWR-002",
+     "title": "Uninterruptible Power Supplies and Active Filters",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-PWR-002.md",
+     "supplies": "Rugi daya dan beban pendinginan UPS"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/R2 - IEEE 1188-2005 dan IEC 62485-2.md",
+     "lines": 155,
+     "sections": [
+      "Mengapa keduanya penting untuk rak GSP",
+      "Kriteria penurunan mutu dan penggantian (PDF 17)",
+      "Jadwal pemeriksaan",
+      "Faktor koreksi suhu (Tabel 1, PDF 19)",
+      "Rumus ventilasi (PDF 21)",
+      "Proteksi listrik (PDF 14)",
+      "Pemakaian di GSP",
+      "Batas kedua standar"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/R3 - Battery Reference Book.md",
+     "lines": 176,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/R3 - Diesel Generator Handbook.md",
+     "lines": 195,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/R3 - Uninterruptible Power Supplies and Active Filters.md",
+     "lines": 168,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/RANTAI-JAMINAN.md"
+  },
+  "PROJECT-QUALITY": {
+   "cards": [
+    {
+     "id": "REF-PRQ-001",
+     "title": "Project Management for Engineering, Business and Technology (Nicholas & Steyn)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-001.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-PRQ-002",
+     "title": "Engineering Project Management (Siegel, 2019)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-002.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-PRQ-003",
+     "title": "Quality Management in Construction Projects (Rumane)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-003.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-PRQ-004",
+     "title": "Quality Auditing in Construction Projects (Rumane, 2019)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-004.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-PRQ-005",
+     "title": "Construction Quality Management: Principles and Practice (2012)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-005.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-PRQ-006",
+     "title": "Engineering Documentation Control Handbook (Watts)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-006.md",
+     "supplies": ""
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Construction Quality Management - Principles and Practice.md",
+     "lines": 47,
+     "sections": [
+      "Untuk apa buku ini dipakai",
+      "Catatan berkas",
+      "Yang dapat dipakai langsung",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Engineering Documentation Control Handbook (Watts).md",
+     "lines": 84,
+     "sections": [
+      "Mengapa buku ini penting bagi EKAS sendiri",
+      "Susunan",
+      "Yang membuatnya berguna: kaidah bernomor",
+      "Catatan berkas",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Engineering Project Management (Siegel).md",
+     "lines": 53,
+     "sections": [
+      "Untuk apa buku ini dipakai",
+      "Yang dapat dipakai langsung",
+      "Catatan berkas",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Project Management for Engineering, Business and Technology.md",
+     "lines": 47,
+     "sections": [
+      "Untuk apa buku ini dipakai",
+      "Yang dapat dipakai langsung",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Quality Auditing in Construction Projects (Rumane).md",
+     "lines": 60,
+     "sections": [
+      "Untuk apa buku ini dipakai",
+      "Susunan",
+      "Yang dapat dipakai langsung",
+      "Batas pemakaian",
+      "Menopang"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/RANTAI-JAMINAN.md"
+  },
+  "RCM": {
+   "cards": [
+    {
+     "id": "REF-RCM-001",
+     "title": "Maintenance and Reliability Best Practices",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/RCM/REF-RCM-001.md",
+     "supplies": "Tujuh pertanyaan RCM, konsekuensi, 89% moda kegagalan tidak terkait umur"
+    },
+    {
+     "id": "REF-RCM-002",
+     "title": "Maintenance Planning Coordination and Scheduling",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/RCM/REF-RCM-002.md",
+     "supplies": "Tata kelola, KPI, organisasi pemeliharaan"
+    },
+    {
+     "id": "REF-RCM-003",
+     "title": "RCM II (John Moubray)",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/RCM/REF-RCM-003.md",
+     "supplies": "Perencanaan dan penjadwalan kerja pemeliharaan"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/RCM/R3 - Maintenance Planning Coordination and Scheduling.md",
+     "lines": 132,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/RCM/R3 - Maintenance and Reliability Best Practices.md",
+     "lines": 125,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/RCM/R3 - RCM II (John Moubray).md",
+     "lines": 354,
+     "sections": [
+      "1. Inti dalam satu halaman",
+      "Perhitungan siap pakai",
+      "2. Ringkasan per bab",
+      "3. Angka dan rumus yang perlu diingat",
+      "4. Kesalahan penerapan yang disorot buku",
+      "5. Pemakaian di GSP"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/RCM/RANTAI-JAMINAN.md"
+  },
+  "RF-WIRELESS": {
+   "cards": [],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/RF-WIRELESS/R3 - Antenna Theory (Balanis).md",
+     "lines": 42,
+     "sections": [
+      "1. Peta bab (bookmark PDF terverifikasi isi)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi GSP",
+      "4. Batas pemakaian"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/RF-WIRELESS/R3 - Microwave Engineering (Pozar).md",
+     "lines": 52,
+     "sections": [
+      "1. Peta bab (bookmark PDF terverifikasi isi)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi GSP",
+      "4. Batas pemakaian",
+      "5. Butir bertambat tambahan (tambalan W10 BUKUV3-JURY-1009, 09-10-2026)"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/RF-WIRELESS/R3 - Wireless Communications (Goldsmith).md",
+     "lines": 41,
+     "sections": [
+      "1. Peta bab (bookmark PDF terverifikasi isi)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi GSP",
+      "4. Batas pemakaian"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/RF-WIRELESS/RANTAI-JAMINAN.md"
+  },
+  "SOFTWARE-DATA": {
+   "cards": [
+    {
+     "id": "REF-SWD-001",
+     "title": "Deep Learning (LeCun, Bengio & Hinton - Nature 2015)",
+     "level": "R5",
+     "path": "04_KNOWLEDGE-CARDS/SOFTWARE-DATA/REF-SWD-001.md",
+     "supplies": "Tinjauan tingkat gagasan pembelajaran mendalam: representasi berjenjang, jaringan konvolusi, jaringan berulang, dan propagasi balik untuk melatih arsitektur berlapis. Berguna untuk memahami istilah yang muncul pada spesifikasi analitik video dan ASR. **Tidak** memuat rumus siap pakai, ambang unjuk k"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/SOFTWARE-DATA/R5 - Deep Learning (LeCun, Bengio & Hinton 2015).md",
+     "lines": 46,
+     "sections": [
+      "⚠ Ini makalah, bukan buku",
+      "Untuk apa dipakai",
+      "Batas pemakaian",
+      "Celah yang tersisa"
+     ]
+    }
+   ],
+   "chain": null
+  },
+  "STORAGE": {
+   "cards": [
+    {
+     "id": "REF-OEM-STG",
+     "title": "Lembar data server, SSD, komputer tepi",
+     "level": "R4",
+     "path": "04_KNOWLEDGE-CARDS/STORAGE/REF-OEM-STG.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-STG-001",
+     "title": "Storage Networks Explained",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/STORAGE/REF-STG-001.md",
+     "supplies": "Kapasitas terpakai, peringatan RAID 5, beban rekonstruksi"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/STORAGE/R3 - Storage Networks Explained.md",
+     "lines": 187,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/STORAGE/RANTAI-JAMINAN.md"
+  },
+  "SYSTEMS-ENGINEERING": {
+   "cards": [],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/SYSTEMS-ENGINEERING/R3 - INCOSE Systems Engineering Handbook (Walden).md",
+     "lines": 41,
+     "sections": [
+      "1. Peta bab (bookmark PDF, isi terverifikasi dibuka)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi GSP",
+      "4. Batas pemakaian"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/SYSTEMS-ENGINEERING/R3 - System Engineering Management (Blanchard).md",
+     "lines": 42,
+     "sections": [
+      "1. Peta bab (bookmark PDF terverifikasi heading)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi GSP",
+      "4. Batas pemakaian"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/SYSTEMS-ENGINEERING/R3 - Systems Engineering Principles and Practice (Kossiakoff).md",
+     "lines": 42,
+     "sections": [
+      "1. Peta bab (daftar isi berkas, terverifikasi lewat teks)",
+      "2. Butir bertambat (teks dibuka)",
+      "3. Metode yang bisa diadopsi GSP",
+      "4. Batas pemakaian"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/SYSTEMS-ENGINEERING/RANTAI-JAMINAN.md"
+  },
+  "THERMAL": {
+   "cards": [
+    {
+     "id": "REF-THM-001",
+     "title": "Infrared Thermal Imaging",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/THERMAL/REF-THM-001.md",
+     "supplies": "Delapan parameter wajib kamera, aturan IFOV"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/THERMAL/R3 - Infrared Thermal Imaging.md",
+     "lines": 196,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Perhitungan siap pakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/THERMAL/RANTAI-JAMINAN.md"
+  },
+  "VIDEO-SURVEILLANCE": {
+   "cards": [
+    {
+     "id": "REF-OEM-CAM",
+     "title": "Lembar data kamera & PTZ",
+     "level": "R4",
+     "path": "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-OEM-CAM.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-OEM-VMS",
+     "title": "Lembar data NVR, VMS, server analitik",
+     "level": "R4",
+     "path": "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-OEM-VMS.md",
+     "supplies": ""
+    },
+    {
+     "id": "REF-VAI-001",
+     "title": "Computer Vision Algorithms and Applications",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-VAI-001.md",
+     "supplies": "Dasar analitik video dan penglihatan komputer"
+    },
+    {
+     "id": "REF-VSS-001",
+     "title": "CCTV From Light to Pixels",
+     "level": "R3",
+     "path": "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-VSS-001.md",
+     "supplies": "Lensa, kerapatan piksel FI 250 / FR 125 pix/m, bitrate, kapasitas rekaman"
+    },
+    {
+     "id": "REF-VSS-002",
+     "title": "BS EN 62676-1-2",
+     "level": "R2",
+     "path": "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-VSS-002.md",
+     "supplies": "Persyaratan unjuk kerja transmisi video per security grade"
+    }
+   ],
+   "resumes": [
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/VIDEO-SURVEILLANCE/R2 - BS EN 62676-1-2.md",
+     "lines": 122,
+     "sections": [
+      "Mengapa standar ini penting untuk rak GSP",
+      "Yang diatur",
+      "Yang paling langsung terpakai",
+      "Pemakaian di GSP",
+      "Batas standar ini"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/VIDEO-SURVEILLANCE/R3 - CCTV From Light to Pixels.md",
+     "lines": 251,
+     "sections": [
+      "Peta isi",
+      "Perhitungan siap pakai",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    },
+    {
+     "path": "05_DOMAIN-KNOWLEDGE/VIDEO-SURVEILLANCE/R3 - Computer Vision Algorithms and Applications.md",
+     "lines": 121,
+     "sections": [
+      "Peta isi",
+      "Bagian yang paling sering dipakai",
+      "Pemakaian di GSP",
+      "Catatan mutu berkas"
+     ]
+    }
+   ],
+   "chain": "05_DOMAIN-KNOWLEDGE/VIDEO-SURVEILLANCE/RANTAI-JAMINAN.md"
+  }
+ },
+ "formula_catalogue": {
+  "path": "06_ENGINEERING/CALCULATIONS/KATALOG-RUMUS.md",
+  "sections": [
+   {
+    "title": "Cara memakai",
+    "line": 24
+   },
+   {
+    "title": "Indeks cepat — pertanyaan ke rumus",
+    "line": 33
+   },
+   {
+    "title": "1. Optik dan sistem video",
+    "line": 72
+   },
+   {
+    "title": "2. Serat optik",
+    "line": 120
+   },
+   {
+    "title": "3. Pembumian",
+    "line": 170
+   },
+   {
+    "title": "4. Proteksi petir",
+    "line": 211
+   },
+   {
+    "title": "5. Pengujian instalasi listrik",
+    "line": 240
+   },
+   {
+    "title": "6. Keandalan dan interval pemeliharaan",
+    "line": 278
+   },
+   {
+    "title": "7. Penyimpanan",
+    "line": 312
+   },
+   {
+    "title": "8. Baterai",
+    "line": 342
+   },
+   {
+    "title": "9. UPS",
+    "line": 364
+   },
+   {
+    "title": "10. Genset",
+    "line": 381
+   },
+   {
+    "title": "11. Jaringan",
+    "line": 403
+   },
+   {
+    "title": "12. Termografi",
+    "line": 420
+   },
+   {
+    "title": "13. Standar — ambang terima",
+    "line": 446
+   },
+   {
+    "title": "Yang TIDAK ada di rak ini",
+    "line": 564
+   },
+   {
+    "title": "Peta resume",
+    "line": 586
+   }
+  ]
+ },
+ "always": [
+  "06_ENGINEERING/ASSUMPTIONS/ASUMSI-BAKU.md",
+  "07_VERIFICATION-VALIDATION/ACCEPTANCE-CRITERIA/AMBANG-TERIMA-INDUK.md"
+ ]
+}

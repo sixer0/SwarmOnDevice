@@ -1,0 +1,1255 @@
+{
+ "how_to_use": "Cocokkan kata di tugas, judul misi, atau baris misi dengan `terms`. Untuk tiap domain yang cocok, buka berkas di `read_order` dari kiri ke kanan; untuk perhitungan buka juga `formula_sections`.",
+ "domains": {
+  "AI-ML": {
+   "terms": [
+    "ai",
+    "machine",
+    "learning",
+    "model",
+    "inferensi",
+    "pelatihan",
+    "gpu",
+    "neural"
+   ],
+   "terms_from_cards": [],
+   "read_order": [
+    "05_DOMAIN-KNOWLEDGE/AI-ML/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/AI-ML/R3 - Data-Driven Science and Engineering (Brunton & Kutz).md",
+    "05_DOMAIN-KNOWLEDGE/AI-ML/R3 - Deep Learning (Goodfellow et al.).md",
+    "05_DOMAIN-KNOWLEDGE/AI-ML/R3 - Designing Machine Learning Systems (Chip Huyen).md",
+    "05_DOMAIN-KNOWLEDGE/AI-ML/R3 - Hands-On Machine Learning (Geron).md"
+   ],
+   "formula_sections": []
+  },
+  "BUILDING-CONSTRUCTION": {
+   "terms": [
+    "bangunan",
+    "gedung",
+    "konstruksi",
+    "building",
+    "arsitektur",
+    "ruang"
+   ],
+   "terms_from_cards": [
+    "ching",
+    "codes",
+    "construction",
+    "illustrated",
+    "sacks",
+    "winkel"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/BUILDING-CONSTRUCTION/REF-BLD-001.md",
+    "04_KNOWLEDGE-CARDS/BUILDING-CONSTRUCTION/REF-BLD-002.md",
+    "04_KNOWLEDGE-CARDS/BUILDING-CONSTRUCTION/REF-BLD-003.md",
+    "05_DOMAIN-KNOWLEDGE/BUILDING-CONSTRUCTION/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/BUILDING-CONSTRUCTION/R3 - BIM Handbook (Sacks dkk.).md",
+    "05_DOMAIN-KNOWLEDGE/BUILDING-CONSTRUCTION/R3 - Building Codes Illustrated (Ching & Winkel).md",
+    "05_DOMAIN-KNOWLEDGE/BUILDING-CONSTRUCTION/R3 - Building Construction Illustrated (Ching).md"
+   ],
+   "formula_sections": []
+  },
+  "CIVIL-STRUCTURAL": {
+   "terms": [
+    "sipil",
+    "civil",
+    "struktur",
+    "pondasi",
+    "beton",
+    "tiang",
+    "menara",
+    "tower",
+    "beban",
+    "angin"
+   ],
+   "terms_from_cards": [
+    "analysis",
+    "concrete",
+    "construction",
+    "darwin",
+    "design",
+    "dolan",
+    "engineering",
+    "hibbeler",
+    "mamlouk",
+    "materials",
+    "nilson",
+    "segui",
+    "steel",
+    "structural",
+    "structures",
+    "zaniewski"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/CIVIL-STRUCTURAL/REF-CIV-001.md",
+    "04_KNOWLEDGE-CARDS/CIVIL-STRUCTURAL/REF-CIV-002.md",
+    "04_KNOWLEDGE-CARDS/CIVIL-STRUCTURAL/REF-CIV-003.md",
+    "04_KNOWLEDGE-CARDS/CIVIL-STRUCTURAL/REF-CIV-004.md",
+    "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/R3 - Design of Concrete Structures (Darwin, Dolan & Nilson).md",
+    "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/R3 - Materials for Civil and Construction Engineering (Mamlouk & Zaniewski).md",
+    "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/R3 - Steel Design (Segui).md",
+    "05_DOMAIN-KNOWLEDGE/CIVIL-STRUCTURAL/R3 - Structural Analysis (Hibbeler).md"
+   ],
+   "formula_sections": []
+  },
+  "COMPUTER-VISION": {
+   "terms": [
+    "computer",
+    "vision",
+    "visi",
+    "komputer",
+    "deteksi",
+    "objek",
+    "analitik",
+    "video",
+    "citra"
+   ],
+   "terms_from_cards": [],
+   "read_order": [
+    "05_DOMAIN-KNOWLEDGE/COMPUTER-VISION/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/COMPUTER-VISION/R3 - Multiple View Geometry (Hartley & Zisserman).md"
+   ],
+   "formula_sections": [
+    {
+     "title": "1. Optik dan sistem video",
+     "line": 72
+    }
+   ]
+  },
+  "CONSTRUCTION": {
+   "terms": [
+    "konstruksi",
+    "pelaksanaan",
+    "pemasangan",
+    "instalasi",
+    "lapangan",
+    "metode",
+    "kerja"
+   ],
+   "terms_from_cards": [
+    "construction",
+    "control",
+    "cost",
+    "equipment",
+    "estimating",
+    "holm",
+    "methods",
+    "mubarak",
+    "peurifoy",
+    "planning",
+    "project",
+    "schaufelberger",
+    "scheduling"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/CONSTRUCTION/REF-CON-001.md",
+    "04_KNOWLEDGE-CARDS/CONSTRUCTION/REF-CON-002.md",
+    "04_KNOWLEDGE-CARDS/CONSTRUCTION/REF-CON-003.md",
+    "05_DOMAIN-KNOWLEDGE/CONSTRUCTION/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/CONSTRUCTION/R3 - Construction Cost Estimating (Holm & Schaufelberger).md",
+    "05_DOMAIN-KNOWLEDGE/CONSTRUCTION/R3 - Construction Planning, Equipment, and Methods (Peurifoy).md",
+    "05_DOMAIN-KNOWLEDGE/CONSTRUCTION/R3 - Construction Project Scheduling and Control (Mubarak).md"
+   ],
+   "formula_sections": []
+  },
+  "CRITICAL-INFRASTRUCTURE": {
+   "terms": [
+    "infrastruktur",
+    "kritis",
+    "objek",
+    "vital",
+    "perlindungan",
+    "fasilitas",
+    "critical",
+    "infrastructure"
+   ],
+   "terms_from_cards": [
+    "aset",
+    "cybersecurity",
+    "defense-in-depth",
+    "infrastructures",
+    "ketergantungan",
+    "klasifikasi",
+    "pemetaan",
+    "protecting"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/CRITICAL-INFRASTRUCTURE/REF-CIP-001.md",
+    "05_DOMAIN-KNOWLEDGE/CRITICAL-INFRASTRUCTURE/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/CRITICAL-INFRASTRUCTURE/R3 - Cybersecurity Protecting Critical Infrastructures.md"
+   ],
+   "formula_sections": []
+  },
+  "CYBERSECURITY": {
+   "terms": [
+    "keamanan",
+    "siber",
+    "cyber",
+    "security",
+    "firewall",
+    "enkripsi",
+    "autentikasi",
+    "hardening",
+    "ancaman",
+    "threat",
+    "kerentanan",
+    "zona"
+   ],
+   "terms_from_cards": [
+    "analysis",
+    "bssn",
+    "catatan",
+    "collection",
+    "detection",
+    "digital",
+    "engineering",
+    "event",
+    "examination",
+    "forensik",
+    "framework",
+    "indonesia",
+    "integritas",
+    "kerangka",
+    "kustodi",
+    "logging",
+    "nice",
+    "operasional",
+    "pembelajaran",
+    "penunjuk",
+    "peraturan",
+    "program",
+    "proses",
+    "rantai",
+    "reporting"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/CYBERSECURITY/REF-SEC-001.md",
+    "04_KNOWLEDGE-CARDS/CYBERSECURITY/REF-SEC-002.md",
+    "04_KNOWLEDGE-CARDS/CYBERSECURITY/REF-SEC-003.md",
+    "04_KNOWLEDGE-CARDS/CYBERSECURITY/REF-SEC-004.md",
+    "05_DOMAIN-KNOWLEDGE/CYBERSECURITY/R3 - Security Engineering.md"
+   ],
+   "formula_sections": []
+  },
+  "DRAWING-CAD": {
+   "terms": [
+    "gambar",
+    "teknik",
+    "drawing",
+    "cad",
+    "denah",
+    "as-built",
+    "simbol",
+    "skala"
+   ],
+   "terms_from_cards": [
+    "approach",
+    "architectural",
+    "autocad",
+    "autodesk",
+    "ching",
+    "civil",
+    "control",
+    "design",
+    "designers",
+    "drawings",
+    "electrical",
+    "engineering",
+    "graphics",
+    "madsen",
+    "practice",
+    "professional",
+    "tickoo",
+    "tutorial",
+    "working"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-001.md",
+    "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-002.md",
+    "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-003.md",
+    "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-004.md",
+    "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-005.md",
+    "04_KNOWLEDGE-CARDS/DRAWING-CAD/REF-DRW-006.md",
+    "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/R3 - Architectural Graphics (Ching).md",
+    "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/R3 - AutoCAD Electrical 2026 (Tickoo) - dua judul.md",
+    "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/R3 - Engineering Drawing and Design (Madsen).md",
+    "05_DOMAIN-KNOWLEDGE/DRAWING-CAD/R3 - The Professional Practice of Architectural Working Drawings.md"
+   ],
+   "formula_sections": []
+  },
+  "ELECTRICAL": {
+   "terms": [
+    "listrik",
+    "electrical",
+    "panel",
+    "kabel",
+    "pengaman",
+    "mcb",
+    "tegangan",
+    "arus",
+    "jatuh",
+    "tegangan",
+    "voltage",
+    "drop",
+    "isolasi",
+    "megger",
+    "instalasi"
+   ],
+   "terms_from_cards": [
+    "ansi-neta",
+    "antar",
+    "ats-",
+    "empat",
+    "equipment",
+    "komponen",
+    "maintenance",
+    "metode",
+    "pabrik",
+    "power",
+    "serupa",
+    "terhadap",
+    "terima",
+    "testing",
+    "udara",
+    "ukur"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/ELECTRICAL/REF-ELC-001.md",
+    "04_KNOWLEDGE-CARDS/ELECTRICAL/REF-ELC-002.md",
+    "05_DOMAIN-KNOWLEDGE/ELECTRICAL/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/ELECTRICAL/R3 - Electrical Power Equipment Maintenance and Testing.md"
+   ],
+   "formula_sections": [
+    {
+     "title": "5. Pengujian instalasi listrik",
+     "line": 240
+    },
+    {
+     "title": "13. Standar — ambang terima",
+     "line": 446
+    }
+   ]
+  },
+  "FIBER-OPTIC": {
+   "terms": [
+    "serat",
+    "optik",
+    "fiber",
+    "fibre",
+    "optic",
+    "otdr",
+    "olts",
+    "loss",
+    "budget",
+    "anggaran",
+    "rugi",
+    "redaman",
+    "sambungan",
+    "splice",
+    "konektor",
+    "odf",
+    "pon",
+    "gpon",
+    "single-mode",
+    "multimode",
+    "db/km"
+   ],
+   "terms_from_cards": [
+    "ambang",
+    "annex",
+    "empat",
+    "hari",
+    "ketidakpastian",
+    "method",
+    "metode",
+    "one-cord",
+    "optics",
+    "penyelesai",
+    "perselisihan",
+    "premises",
+    "terburuk",
+    "testing",
+    "three-cord",
+    "tia-",
+    "two-cord",
+    "ukur"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/FIBER-OPTIC/REF-FO-001.md",
+    "04_KNOWLEDGE-CARDS/FIBER-OPTIC/REF-FO-002.md",
+    "04_KNOWLEDGE-CARDS/FIBER-OPTIC/REF-FO-003.md",
+    "05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/R2 - IEC 61280-4-2.md",
+    "05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/R3 - FOA Reference Guide to Fiber Optics.md",
+    "05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/R3 - Reference Guide to Fiber Optic Testing Vol 1.md"
+   ],
+   "formula_sections": [
+    {
+     "title": "2. Serat optik",
+     "line": 120
+    },
+    {
+     "title": "13. Standar — ambang terima",
+     "line": 446
+    }
+   ]
+  },
+  "GEOSPATIAL-SURVEY": {
+   "terms": [
+    "survei",
+    "geospasial",
+    "peta",
+    "koordinat",
+    "gnss",
+    "gps",
+    "topografi",
+    "ukur",
+    "tanah"
+   ],
+   "terms_from_cards": [
+    "applications",
+    "bolstad",
+    "fundamentals",
+    "kavanagh",
+    "manson",
+    "mastin",
+    "principles",
+    "surveying"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/GEOSPATIAL-SURVEY/REF-GEO-001.md",
+    "04_KNOWLEDGE-CARDS/GEOSPATIAL-SURVEY/REF-GEO-002.md",
+    "05_DOMAIN-KNOWLEDGE/GEOSPATIAL-SURVEY/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/GEOSPATIAL-SURVEY/R3 - GIS Fundamentals (Bolstad & Manson).md",
+    "05_DOMAIN-KNOWLEDGE/GEOSPATIAL-SURVEY/R3 - Surveying Principles and Applications (Kavanagh & Mastin).md"
+   ],
+   "formula_sections": []
+  },
+  "GROUNDING-LIGHTNING": {
+   "terms": [
+    "pembumian",
+    "pentanahan",
+    "grounding",
+    "earthing",
+    "petir",
+    "lightning",
+    "lps",
+    "rolling",
+    "sphere",
+    "bola",
+    "gelinding",
+    "spd",
+    "surja",
+    "resistans",
+    "tanah",
+    "wenner",
+    "elektroda"
+   ],
+   "terms_from_cards": [
+    "apendiks",
+    "daftar",
+    "dokumentasi",
+    "fall-of-potential",
+    "grounds",
+    "mesh",
+    "periksa",
+    "peringatan",
+    "protection",
+    "proteksi",
+    "radius",
+    "science",
+    "tingkat"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/GROUNDING-LIGHTNING/REF-GRD-001.md",
+    "04_KNOWLEDGE-CARDS/GROUNDING-LIGHTNING/REF-LPS-001.md",
+    "05_DOMAIN-KNOWLEDGE/GROUNDING-LIGHTNING/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/GROUNDING-LIGHTNING/R3 - Grounds for Grounding.md",
+    "05_DOMAIN-KNOWLEDGE/GROUNDING-LIGHTNING/R3 - The Art and Science of Lightning Protection.md"
+   ],
+   "formula_sections": [
+    {
+     "title": "3. Pembumian",
+     "line": 170
+    },
+    {
+     "title": "4. Proteksi petir",
+     "line": 211
+    },
+    {
+     "title": "13. Standar — ambang terima",
+     "line": 446
+    }
+   ]
+  },
+  "HVAC-BUILDING": {
+   "terms": [
+    "hvac",
+    "pendingin",
+    "pendinginan",
+    "cooling",
+    "tata",
+    "udara",
+    "ac",
+    "ventilasi",
+    "beban",
+    "panas",
+    "btu",
+    "ruang",
+    "server"
+   ],
+   "terms_from_cards": [
+    "buildings",
+    "electrical",
+    "equipment",
+    "grondzik",
+    "kwok",
+    "mechanical"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/HVAC-BUILDING/REF-HVA-001.md",
+    "05_DOMAIN-KNOWLEDGE/HVAC-BUILDING/RANTAI-JAMINAN.md"
+   ],
+   "formula_sections": []
+  },
+  "MECHANICAL": {
+   "terms": [
+    "mekanikal",
+    "mechanical",
+    "struktur",
+    "baja",
+    "braket",
+    "getaran",
+    "beban",
+    "torsi"
+   ],
+   "terms_from_cards": [
+    "banyak",
+    "design",
+    "engineering",
+    "mekanik",
+    "perhitungan",
+    "rumus",
+    "sangat",
+    "shigley"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/MECHANICAL/REF-MEC-001.md",
+    "05_DOMAIN-KNOWLEDGE/MECHANICAL/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/MECHANICAL/R3 - Shigley's Mechanical Engineering Design.md"
+   ],
+   "formula_sections": []
+  },
+  "NETWORKING": {
+   "terms": [
+    "jaringan",
+    "network",
+    "switch",
+    "router",
+    "vlan",
+    "ip",
+    "routing",
+    "wan",
+    "lan",
+    "bandwidth",
+    "lebar",
+    "pita",
+    "latency",
+    "tcp",
+    "qos",
+    "ospf",
+    "bgp",
+    "throughput"
+   ],
+   "terms_from_cards": [
+    "administration",
+    "approach",
+    "bila",
+    "ccna",
+    "cert",
+    "computer",
+    "dasar",
+    "data",
+    "gangguan",
+    "illustrated",
+    "interkom",
+    "lembar",
+    "library",
+    "networking",
+    "official",
+    "operasional",
+    "perangkat",
+    "pola",
+    "practice",
+    "praktik",
+    "scaling",
+    "system",
+    "tcp-ip",
+    "terkini",
+    "top-down"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/NETWORKING/REF-NET-001.md",
+    "04_KNOWLEDGE-CARDS/NETWORKING/REF-NET-002.md",
+    "04_KNOWLEDGE-CARDS/NETWORKING/REF-NET-003.md",
+    "04_KNOWLEDGE-CARDS/NETWORKING/REF-NET-004.md",
+    "04_KNOWLEDGE-CARDS/NETWORKING/REF-OEM-NET.md",
+    "04_KNOWLEDGE-CARDS/NETWORKING/REF-OPS-001.md",
+    "05_DOMAIN-KNOWLEDGE/NETWORKING/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - CCNA 200-301 Official Cert Guide Library.md",
+    "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - Computer Networking A Top-Down Approach.md",
+    "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - Network Warrior.md",
+    "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - TCP-IP Illustrated Vol 1.md",
+    "05_DOMAIN-KNOWLEDGE/NETWORKING/R3 - The Practice of System and Network Administration.md"
+   ],
+   "formula_sections": [
+    {
+     "title": "11. Jaringan",
+     "line": 403
+    }
+   ]
+  },
+  "NUMERICAL-METHODS": {
+   "terms": [
+    "metode",
+    "numerik",
+    "numerical",
+    "interpolasi",
+    "regresi",
+    "optimasi",
+    "galat"
+   ],
+   "terms_from_cards": [],
+   "read_order": [
+    "05_DOMAIN-KNOWLEDGE/NUMERICAL-METHODS/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/NUMERICAL-METHODS/R3 - Applied Numerical Methods with MATLAB (Chapra).md",
+    "05_DOMAIN-KNOWLEDGE/NUMERICAL-METHODS/R3 - Numerical Methods for Engineers (Chapra & Canale).md"
+   ],
+   "formula_sections": []
+  },
+  "POWER-BACKUP": {
+   "terms": [
+    "ups",
+    "baterai",
+    "battery",
+    "genset",
+    "generator",
+    "diesel",
+    "daya",
+    "cadangan",
+    "backup",
+    "autonomi",
+    "ah",
+    "kva",
+    "derating",
+    "bypass",
+    "inverter",
+    "vrla"
+   ],
+   "terms_from_cards": [
+    "active",
+    "ambang",
+    "beban",
+    "filters",
+    "ganti",
+    "hitung",
+    "ieee",
+    "kapasitas",
+    "katalog",
+    "kelas",
+    "kerangka",
+    "layan",
+    "lokasi",
+    "pendinginan",
+    "power",
+    "rating",
+    "rentang",
+    "riello",
+    "ruang",
+    "rugi",
+    "suhu",
+    "supplies",
+    "tersegel",
+    "timbal-asam",
+    "turun"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-BAT-001.md",
+    "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-BAT-002.md",
+    "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-OEM-UPS.md",
+    "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-PWR-001.md",
+    "04_KNOWLEDGE-CARDS/POWER-BACKUP/REF-PWR-002.md",
+    "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/R2 - IEEE 1188-2005 dan IEC 62485-2.md",
+    "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/R3 - Battery Reference Book.md",
+    "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/R3 - Diesel Generator Handbook.md",
+    "05_DOMAIN-KNOWLEDGE/POWER-BACKUP/R3 - Uninterruptible Power Supplies and Active Filters.md"
+   ],
+   "formula_sections": [
+    {
+     "title": "8. Baterai",
+     "line": 342
+    },
+    {
+     "title": "9. UPS",
+     "line": 364
+    },
+    {
+     "title": "10. Genset",
+     "line": 381
+    }
+   ]
+  },
+  "PROJECT-QUALITY": {
+   "terms": [
+    "mutu",
+    "quality",
+    "proyek",
+    "itp",
+    "inspeksi",
+    "qa",
+    "qc",
+    "manajemen",
+    "proyek"
+   ],
+   "terms_from_cards": [
+    "auditing",
+    "business",
+    "construction",
+    "control",
+    "documentation",
+    "engineering",
+    "management",
+    "nicholas",
+    "practice",
+    "principles",
+    "project",
+    "projects",
+    "rumane",
+    "siegel",
+    "steyn",
+    "technology",
+    "watts"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-001.md",
+    "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-002.md",
+    "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-003.md",
+    "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-004.md",
+    "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-005.md",
+    "04_KNOWLEDGE-CARDS/PROJECT-QUALITY/REF-PRQ-006.md",
+    "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Construction Quality Management - Principles and Practice.md",
+    "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Engineering Documentation Control Handbook (Watts).md",
+    "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Engineering Project Management (Siegel).md",
+    "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Project Management for Engineering, Business and Technology.md",
+    "05_DOMAIN-KNOWLEDGE/PROJECT-QUALITY/R3 - Quality Auditing in Construction Projects (Rumane).md"
+   ],
+   "formula_sections": []
+  },
+  "RCM": {
+   "terms": [
+    "keandalan",
+    "reliability",
+    "rcm",
+    "pemeliharaan",
+    "maintenance",
+    "interval",
+    "p-f",
+    "kegagalan",
+    "failure",
+    "mtbf",
+    "ketersediaan",
+    "availability"
+   ],
+   "terms_from_cards": [
+    "best",
+    "coordination",
+    "john",
+    "kelola",
+    "kerja",
+    "konsekuensi",
+    "moda",
+    "moubray",
+    "organisasi",
+    "penjadwalan",
+    "perencanaan",
+    "pertanyaan",
+    "planning",
+    "practices",
+    "scheduling",
+    "tata",
+    "terkait",
+    "tidak",
+    "tujuh",
+    "umur"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/RCM/REF-RCM-001.md",
+    "04_KNOWLEDGE-CARDS/RCM/REF-RCM-002.md",
+    "04_KNOWLEDGE-CARDS/RCM/REF-RCM-003.md",
+    "05_DOMAIN-KNOWLEDGE/RCM/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/RCM/R3 - Maintenance Planning Coordination and Scheduling.md",
+    "05_DOMAIN-KNOWLEDGE/RCM/R3 - Maintenance and Reliability Best Practices.md",
+    "05_DOMAIN-KNOWLEDGE/RCM/R3 - RCM II (John Moubray).md"
+   ],
+   "formula_sections": [
+    {
+     "title": "6. Keandalan dan interval pemeliharaan",
+     "line": 278
+    }
+   ]
+  },
+  "RF-WIRELESS": {
+   "terms": [
+    "radio",
+    "rf",
+    "wireless",
+    "nirkabel",
+    "antena",
+    "link",
+    "budget",
+    "frekuensi",
+    "microwave",
+    "gelombang",
+    "mikro",
+    "fresnel",
+    "spektrum"
+   ],
+   "terms_from_cards": [],
+   "read_order": [
+    "05_DOMAIN-KNOWLEDGE/RF-WIRELESS/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/RF-WIRELESS/R3 - Antenna Theory (Balanis).md",
+    "05_DOMAIN-KNOWLEDGE/RF-WIRELESS/R3 - Microwave Engineering (Pozar).md",
+    "05_DOMAIN-KNOWLEDGE/RF-WIRELESS/R3 - Wireless Communications (Goldsmith).md"
+   ],
+   "formula_sections": []
+  },
+  "SOFTWARE-DATA": {
+   "terms": [
+    "perangkat",
+    "lunak",
+    "software",
+    "basis",
+    "data",
+    "database",
+    "api",
+    "data",
+    "aplikasi"
+   ],
+   "terms_from_cards": [
+    "ambang",
+    "analitik",
+    "arsitektur",
+    "balik",
+    "bengio",
+    "berguna",
+    "berjenjang",
+    "berlapis",
+    "berulang",
+    "deep",
+    "gagasan",
+    "hinton",
+    "istilah",
+    "jaringan",
+    "konvolusi",
+    "learning",
+    "lecun",
+    "melatih",
+    "memahami",
+    "memuat",
+    "mendalam",
+    "muncul",
+    "nature",
+    "pakai",
+    "pembelajaran"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/SOFTWARE-DATA/REF-SWD-001.md",
+    "05_DOMAIN-KNOWLEDGE/SOFTWARE-DATA/R5 - Deep Learning (LeCun, Bengio & Hinton 2015).md"
+   ],
+   "formula_sections": []
+  },
+  "STORAGE": {
+   "terms": [
+    "penyimpanan",
+    "storage",
+    "raid",
+    "san",
+    "nas",
+    "cakram",
+    "disk",
+    "kapasitas",
+    "tb",
+    "iops",
+    "replikasi",
+    "backup",
+    "arsip"
+   ],
+   "terms_from_cards": [
+    "beban",
+    "data",
+    "explained",
+    "komputer",
+    "lembar",
+    "networks",
+    "peringatan",
+    "rekonstruksi",
+    "server",
+    "tepi",
+    "terpakai"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/STORAGE/REF-OEM-STG.md",
+    "04_KNOWLEDGE-CARDS/STORAGE/REF-STG-001.md",
+    "05_DOMAIN-KNOWLEDGE/STORAGE/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/STORAGE/R3 - Storage Networks Explained.md"
+   ],
+   "formula_sections": [
+    {
+     "title": "7. Penyimpanan",
+     "line": 312
+    }
+   ]
+  },
+  "SYSTEMS-ENGINEERING": {
+   "terms": [
+    "rekayasa",
+    "sistem",
+    "systems",
+    "engineering",
+    "kebutuhan",
+    "requirement",
+    "verifikasi",
+    "validasi",
+    "antarmuka"
+   ],
+   "terms_from_cards": [],
+   "read_order": [
+    "05_DOMAIN-KNOWLEDGE/SYSTEMS-ENGINEERING/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/SYSTEMS-ENGINEERING/R3 - INCOSE Systems Engineering Handbook (Walden).md",
+    "05_DOMAIN-KNOWLEDGE/SYSTEMS-ENGINEERING/R3 - System Engineering Management (Blanchard).md",
+    "05_DOMAIN-KNOWLEDGE/SYSTEMS-ENGINEERING/R3 - Systems Engineering Principles and Practice (Kossiakoff).md"
+   ],
+   "formula_sections": []
+  },
+  "THERMAL": {
+   "terms": [
+    "termal",
+    "thermal",
+    "termografi",
+    "inframerah",
+    "infrared",
+    "suhu",
+    "emisivitas",
+    "kamera",
+    "termal"
+   ],
+   "terms_from_cards": [
+    "aturan",
+    "delapan",
+    "ifov",
+    "imaging",
+    "parameter",
+    "wajib"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/THERMAL/REF-THM-001.md",
+    "05_DOMAIN-KNOWLEDGE/THERMAL/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/THERMAL/R3 - Infrared Thermal Imaging.md"
+   ],
+   "formula_sections": [
+    {
+     "title": "12. Termografi",
+     "line": 420
+    }
+   ]
+  },
+  "VIDEO-SURVEILLANCE": {
+   "terms": [
+    "cctv",
+    "kamera",
+    "video",
+    "pengawasan",
+    "vms",
+    "nvr",
+    "lensa",
+    "piksel",
+    "pix/m",
+    "dori",
+    "bitrate",
+    "laju",
+    "bit",
+    "rekaman",
+    "retensi",
+    "fps",
+    "resolusi",
+    "onvif",
+    "camera",
+    "surveillance"
+   ],
+   "terms_from_cards": [
+    "algorithms",
+    "analitik",
+    "applications",
+    "computer",
+    "dasar",
+    "data",
+    "grade",
+    "kapasitas",
+    "kerapatan",
+    "kerja",
+    "komputer",
+    "lembar",
+    "light",
+    "penglihatan",
+    "persyaratan",
+    "pixels",
+    "security",
+    "server",
+    "transmisi",
+    "unjuk",
+    "vision"
+   ],
+   "read_order": [
+    "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-OEM-CAM.md",
+    "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-OEM-VMS.md",
+    "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-VAI-001.md",
+    "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-VSS-001.md",
+    "04_KNOWLEDGE-CARDS/VIDEO-SURVEILLANCE/REF-VSS-002.md",
+    "05_DOMAIN-KNOWLEDGE/VIDEO-SURVEILLANCE/RANTAI-JAMINAN.md",
+    "05_DOMAIN-KNOWLEDGE/VIDEO-SURVEILLANCE/R2 - BS EN 62676-1-2.md",
+    "05_DOMAIN-KNOWLEDGE/VIDEO-SURVEILLANCE/R3 - CCTV From Light to Pixels.md",
+    "05_DOMAIN-KNOWLEDGE/VIDEO-SURVEILLANCE/R3 - Computer Vision Algorithms and Applications.md"
+   ],
+   "formula_sections": [
+    {
+     "title": "1. Optik dan sistem video",
+     "line": 72
+    },
+    {
+     "title": "7. Penyimpanan",
+     "line": 312
+    }
+   ]
+  },
+  "DIAGRAM-STANDARD": {
+   "terms": [
+    "diagram",
+    "gambar",
+    "topologi",
+    "arsitektur",
+    "satu garis",
+    "urutan",
+    "jadwal",
+    "alur"
+   ],
+   "terms_from_cards": [],
+   "read_order": [
+    "skill:gsp-diagram-standard/references/index.md"
+   ],
+   "formula_sections": []
+  }
+ },
+ "questions": [
+  {
+   "question": "Lensa berapa mm supaya wajah terbaca pada jarak X?",
+   "formula": "f = pD × d × s / ph",
+   "book": "Damjanovski",
+   "page": "PDF 240"
+  },
+  {
+   "question": "Berapa kerapatan piksel yang disyaratkan?",
+   "formula": "FI 250 pix/m · FR 125 pix/m",
+   "book": "Damjanovski",
+   "page": "PDF 237–241"
+  },
+  {
+   "question": "Berapa lebar pita per kamera?",
+   "formula": "Mb/s = MB/s × 8",
+   "book": "Damjanovski",
+   "page": "PDF 290"
+  },
+  {
+   "question": "Berapa kapasitas rekaman yang dibutuhkan?",
+   "formula": "GB = Mb/s ÷ 8 × 3600 × jam × hari × kamera ÷ 1000",
+   "book": "Damjanovski",
+   "page": "PDF 277, 290"
+  },
+  {
+   "question": "Berapa rugi total jalur serat optik?",
+   "formula": "rugi serat + rugi konektor + rugi sambungan",
+   "book": "Hayes (FOA)",
+   "page": "PDF 129"
+  },
+  {
+   "question": "Berapa ambang lulus uji serat?",
+   "formula": "Hasil loss budget kolom terburuk",
+   "book": "Hayes (FOA)",
+   "page": "PDF 145"
+  },
+  {
+   "question": "Berapa resistivitas tanah di lokasi?",
+   "formula": "ρ = 2πaR",
+   "book": "Joffe & Lock",
+   "page": "PDF 580"
+  },
+  {
+   "question": "Radius rolling sphere untuk desain proteksi petir?",
+   "formula": "Level IV = 60 m; lihat Tabel 4.1",
+   "book": "Uman",
+   "page": "PDF 89–90"
+  },
+  {
+   "question": "Isolasi peralatan masih layak?",
+   "formula": "PI = R₁₀menit / R₁menit",
+   "book": "Gill",
+   "page": "PDF 144"
+  },
+  {
+   "question": "Isolasi perlu diselidiki?",
+   "formula": "DAR = R₆₀detik / R₃₀detik` < 1,25",
+   "book": "Gill",
+   "page": "PDF 144"
+  },
+  {
+   "question": "Tegangan uji pemeliharaan rutin maksimum?",
+   "formula": "≤ 75% V uji terima · ≤ 60% V pabrik",
+   "book": "Gill",
+   "page": "PDF 145"
+  },
+  {
+   "question": "Seberapa sering perangkat proteksi diuji?",
+   "formula": "FFI = 2 × M_perangkat × M_terproteksi ÷ M_majemuk",
+   "book": "Moubray",
+   "page": "PDF 198"
+  },
+  {
+   "question": "Seberapa sering pemeriksaan on-condition?",
+   "formula": "interval = ½ × interval P-F",
+   "book": "Moubray",
+   "page": "PDF 164"
+  },
+  {
+   "question": "Apakah tugas on-condition layak?",
+   "formula": "nett P-F > waktu yang dibutuhkan bertindak",
+   "book": "Moubray",
+   "page": "PDF 166"
+  },
+  {
+   "question": "Kapasitas terpakai setelah RAID?",
+   "formula": "RAID 5 `(n−1)×C` · RAID 6 `(n−2)×C",
+   "book": "Troppens",
+   "page": "PDF 46–70"
+  },
+  {
+   "question": "Berapa Ah bank baterai?",
+   "formula": "Ah = I × t ÷ DoD` lalu koreksi C-rate",
+   "book": "Crompton",
+   "page": "PDF 104, 117"
+  },
+  {
+   "question": "Berapa rugi daya dan beban pendinginan UPS?",
+   "formula": "Rugi = P × (1÷η − 1)",
+   "book": "Emadi dkk.",
+   "page": "PDF 20"
+  },
+  {
+   "question": "Berapa derating genset di lokasi ini?",
+   "formula": "Suhu, ketinggian, kelembapan",
+   "book": "Mahon",
+   "page": "PDF 40–42"
+  },
+  {
+   "question": "Mengapa transfer lambat padahal bandwidth besar?",
+   "formula": "BDP = RTT × kapasitas penyempit",
+   "book": "Fall & Stevens",
+   "page": "PDF 769"
+  },
+  {
+   "question": "Parameter apa yang wajib disetel di kamera termal?",
+   "formula": "Delapan parameter",
+   "book": "Vollmer & Möllmann",
+   "page": "PDF 25"
+  },
+  {
+   "question": "Berapa MΩ minimum tahanan isolasi?",
+   "formula": "Tabel 100.1 per tegangan nominal",
+   "book": "ANSI/NETA ATS-2017",
+   "page": "PDF 223"
+  },
+  {
+   "question": "Bagaimana mengoreksi hasil ukur ke 20 °C?",
+   "formula": "Tabel 100.14 faktor pengali",
+   "book": "ANSI/NETA ATS-2017",
+   "page": "PDF 241"
+  },
+  {
+   "question": "Berapa ΔT termal yang berarti cacat?",
+   "formula": "Tabel 100.18 empat tingkat tindakan",
+   "book": "ANSI/NETA ATS-2017",
+   "page": "PDF 246"
+  },
+  {
+   "question": "Kapan baterai harus diganti?",
+   "formula": "< 90% rating · turun > 10% · 85% umur",
+   "book": "IEEE 1188-2005",
+   "page": "PDF 17"
+  },
+  {
+   "question": "Berapa ventilasi ruang baterai?",
+   "formula": "Q = v × q × s × n × I_gas × C_rt × 10⁻³",
+   "book": "IEC 62485-2",
+   "page": "PDF 21"
+  },
+  {
+   "question": "Berapa waktu deteksi hilang sinyal video?",
+   "formula": "Tabel 7 per security grade: 8/4/2 detik",
+   "book": "BS EN 62676-1-2",
+   "page": "PDF 34"
+  },
+  {
+   "question": "Metode uji redaman serat singlemode?",
+   "formula": "Empat metode reference",
+   "book": "IEC 61280-4-2",
+   "page": "PDF 17"
+  }
+ ],
+ "weak": [
+  "ac",
+  "ai",
+  "alur",
+  "aplikasi",
+  "arsip",
+  "arus",
+  "backup",
+  "beban",
+  "data",
+  "gambar",
+  "instalasi",
+  "ip",
+  "jadwal",
+  "kabel",
+  "kapasitas",
+  "kebutuhan",
+  "kerja",
+  "lapangan",
+  "metode",
+  "model",
+  "mutu",
+  "objek",
+  "panel",
+  "pelatihan",
+  "peta",
+  "proyek",
+  "ruang",
+  "struktur",
+  "suhu",
+  "ukur",
+  "urutan",
+  "video"
+ ]
+}

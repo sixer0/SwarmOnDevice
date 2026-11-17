@@ -91,8 +91,8 @@ export function shippedLintClosure(): { sha256: string; files: number } {
 export type GuardClass = "S1" | "S2" | "S3" | "S4" | "S5";
 /** U.2 S3: an automated verdict plus a manual half ("mata", Rev A Tabel 13.1). */
 export const GUARD_EYE_CHECKS: ReadonlySet<string> = new Set(["DATUM-08", "DATUM-12", "DATUM-13", "DATUM-15"]);
-/** U.2 S2: report-only checks (DATUM-36 "lapor", Rev A ID:80; the C INFO entry). */
-export const GUARD_REPORT_ONLY_CHECKS: ReadonlySet<string> = new Set(["DATUM-36", "C-INFO-OPENER"]);
+/** U.2 S2: report-only checks (DATUM-36 "lapor", Rev A ID:80; the C INFO entry; D09 "lapor", 1.3.3 row 60). */
+export const GUARD_REPORT_ONLY_CHECKS: ReadonlySet<string> = new Set(["DATUM-36", "C-INFO-OPENER", "D09"]);
 
 /** Static class of one registry check at a lint tier. */
 export function guardClassOf(def: Pick<LintDef, "id" | "group" | "tiers" | "notRunReason">, lintTier: "TERBIT" | "SERAH"): GuardClass {

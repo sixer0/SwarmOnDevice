@@ -47,7 +47,8 @@ export function priceTarget(input: { cfg: ConfigV1.Info; model: Provider.Model; 
   return Math.max(0, limit - reserved)
 }
 
-function count(tokens: SessionV1.Assistant["tokens"]) {
+/** The context size the overflow and price-target checks compare; the turn fact line prints the same number (MC-6). */
+export function count(tokens: SessionV1.Assistant["tokens"]) {
   return tokens.total || tokens.input + tokens.output + tokens.cache.read + tokens.cache.write
 }
 

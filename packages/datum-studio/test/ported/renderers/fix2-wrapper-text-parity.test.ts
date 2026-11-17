@@ -97,7 +97,7 @@ describe('engine/front/texts: tabel teks bawaan pembungkus', () => {
     ]);
     expect(controlBlockRowsText({ ...meta, language: 'EN' }, { 'cover.controlBlock.fields': ['REVISI', 'BAHASA'] }, 'EN')).toEqual([['Revision', 'A · 8 October 2026', 'Language', 'English (UK)']]); // G-FIX1 LB-07 (D-606): EN:18, EN:883
     expect(controlBlockRowsText(meta, { 'cover.controlBlock.fields': ['KUSTODIAN'] }, 'ID')).toBeUndefined();
-    expect(colophonTexts(meta, { 'org.nib': '123' })).toEqual({ left: 'PT GEMILANG SATRIA PERKASA · NIB 123', right: '// 20261008 ID T — TERBITAN 1' }); // row42 ADAPT A3 (C40, row 122 CP-14; front/texts.ts:55-61,544-545): the default stamp prints U+2014; the registry default keeps '--'.
+    expect(colophonTexts(meta, { 'org.nib': '123' })).toEqual({ left: 'PT GEMILANG SATRIA PERKASA · NIB 123 · Klasifikasi : TERBATAS', right: '// 20261008 ID T — TERBITAN 1' }); // Swarm 1.3.3 row 87 (INTENT): the colophon prints the one classification field (meta.classification) after the NIB; row42 ADAPT A3 (C40, row 122 CP-14; front/texts.ts:55-61,544-545): the default stamp prints U+2014; the registry default keeps '--'.
     expect(colophonTexts(meta, { 'cover.colophon.fields': ['entitas'], 'org.entityName': 'X' })).toEqual({ left: 'X', right: '' });
   });
 });

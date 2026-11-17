@@ -558,8 +558,20 @@ test("a copy the real verifier rejects fails afterPack, removes the staging, and
 })
 
 // ROW 45 (packaging spec §3.1): the three DATUM folders, their slots and their gate.
+// 1.3.3 (rows 31, 96, 143): gsp-diagram-standard rides beside DATUM (test and golden files stay out) and the library
+// scripts ride beside the staged library (test files, testdata and the repo snapshot of the indexes stay out).
+const KNOWLEDGE_LIBRARY_SCRIPTS = {
+  from: "datum/knowledge-library",
+  to: "knowledge-library",
+  filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc", "!scripts/test_*.py", "!scripts/testdata{,/**}", "!scripts/indeks_*"],
+}
 const DATUM_SLOTS = [
   { from: "datum/datum-house-style", to: "datum-house-style", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
+  {
+    from: "datum/gsp-diagram-standard",
+    to: "gsp-diagram-standard",
+    filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc", "!scripts/test_*.py", "!scripts/testdata{,/**}"],
+  },
   { from: ".datum-runtime-stage", to: "datum-runtime", filter: ["**/*", "!**/__pycache__{,/**}", "!**/*.pyc"] },
   { from: ".datum-studio-stage", to: "datum-studio" },
 ]
@@ -708,8 +720,8 @@ test("electron-vite builds the datum-studio-host entry and resolves its host mod
 for (const channel of channels) {
   test(`carries the swarm-patch release and slot for ${channel.channel} (SP-BC)`, async () => {
     const config = await importConfig(`swarm-patch=${channel.channel}`, channel.channel)
-    expect(SWARM_RELEASE).toBe("1.3.2")
-    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.3.2" })
+    expect(SWARM_RELEASE).toBe("1.3.3")
+    expect(config.mac?.extendInfo).toEqual({ SwarmRelease: "1.3.3" })
     expect(config.mac).not.toHaveProperty("bundleShortVersion")
     expect(config.mac).not.toHaveProperty("bundleVersion")
     expect(config.files).toContain("!resources/swarm-patch{,/**/*}")
@@ -745,9 +757,9 @@ for (const channel of channels) {
   })
 }
 
-test("package.json version equals the release 1.3.2 (U4)", async () => {
+test("package.json version equals the release 1.3.3 (U4)", async () => {
   const pkg = await Bun.file(path.join(import.meta.dir, "package.json")).json()
-  expect(pkg.version).toBe("1.3.2")
+  expect(pkg.version).toBe("1.3.3")
   expect(pkg.version).toBe(SWARM_RELEASE)
 })
 
@@ -793,6 +805,7 @@ const DARWIN_RESOURCES = [
   { from: "resources/swarm-setup", to: "swarm-setup" },
   { from: "resources/swarm-cli", to: "swarm-cli" },
   { from: ".library-stage", to: "knowledge-library" },
+  KNOWLEDGE_LIBRARY_SCRIPTS,
   ...DATUM_SLOTS,
   // M9-01 (IM-16, U5): the Office add-in stage, macOS list only.
   { from: ".office-addin-stage", to: "office-addin" },
@@ -831,7 +844,7 @@ for (const [label, target] of [
   })
 }
 
-const PORTABLE_TO = "LICENSE,NOTICE,THIRD_PARTY_LICENSES.txt,RG,swarm-cli,knowledge-library,datum-house-style,datum-runtime,datum-studio"
+const PORTABLE_TO = "LICENSE,NOTICE,THIRD_PARTY_LICENSES.txt,RG,swarm-cli,knowledge-library,knowledge-library,datum-house-style,gsp-diagram-standard,datum-runtime,datum-studio"
 
 for (const [target, rg] of [
   ["linux-x64", { from: "resources/rg-linux-x64/rg", to: "rg" }],
@@ -844,6 +857,7 @@ for (const [target, rg] of [
     expect(resources.map((entry) => entry.to).join(",")).toBe(PORTABLE_TO.replace("RG", rg.to))
     expect(resources).toContainEqual(rg)
     for (const slot of DATUM_SLOTS) expect(resources).toContainEqual(slot)
+    expect(resources).toContainEqual(KNOWLEDGE_LIBRARY_SCRIPTS)
     for (const gone of ["resources/rg", "resources/swarm-patch", "resources/swarm-setup", "native/", "resources/"])
       expect(resources.map((entry) => entry.from)).not.toContain(gone)
     // The asar exclusions are the same on every target.

@@ -1,0 +1,16 @@
+{
+  "caption": {"text": "SPD tipe 1 plus 2 membatasi lebih tegangan sampai 1,5 kV pada rel MDP."},
+  "source": {"text": "hal 88 Gambar 12.2; IEC 60617 DB; IEC 61643-11 untuk tipe SPD; nilai contoh"},
+  "spec": {
+    "family": "layered",
+    "labels_verified": false,
+    "legend": ["subject: SPD", "jalur pembatas lebih tegangan", "koordinasi LPZ", "IEC 60617 DB · IEC 81346"],
+    "nodes": [
+      {"class": {"tier": 1}, "id": "mdp3", "label": "=G01-WD1", "shape": "box", "sub": "MDP 400/230 V"},
+      {"class": {"accent": true, "tier": 2}, "id": "fa1", "label": "=G01-FA1 SPD", "shape": "box", "sub": "T1+2 · Iimp 25 kA", "symbol": "iec:fuse"}
+    ],
+    "edges": [
+      {"from": "mdp3", "kind": "verify", "label": "Up 1,5 kV", "to": "fa1"}
+    ]
+  }
+}

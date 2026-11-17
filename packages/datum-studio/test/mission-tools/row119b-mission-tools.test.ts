@@ -83,6 +83,8 @@ const EXPECTED_TOOLS = [
   "studio_mission_request_decision",
   "studio_mission_answer_decision",
   "studio_mission_place", // 1.2.8 row 45 (PROJ-b, INTENT 40 -> 41)
+  "studio_witness_list", // 1.3.3 row 59 (ST-9, INTENT 41 -> 42)
+  "studio_library_read", // 1.3.3 row 100 (KL-2, INTENT 42 -> 43)
   // Row 50c (1.2.6, W-13): host built-in, last
   "studio_asset_put",
 ]
@@ -221,7 +223,7 @@ describe("row 119b: tool list and the wrapper seam", () => {
     const names = tools.map((t) => t.name)
     quote("tool count", names.length)
     expect(names).toEqual(EXPECTED_TOOLS)
-    expect(names.length).toBe(41) // W-13 / row 50c: +studio_asset_put; 1.2.8 row 45: + studio_mission_place
+    expect(names.length).toBe(43) // W-13 / row 50c: +studio_asset_put; 1.2.8 row 45: + studio_mission_place; 1.3.3: + studio_witness_list (row 59), studio_library_read (row 100)
     const props = (n: string) => Object.keys((tools.find((t) => t.name === n)!.inputSchema as S).properties ?? {})
     expect(props("studio_report_template")).toContain("row")
     expect(props("studio_report_check")).toContain("row")

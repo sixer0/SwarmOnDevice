@@ -359,19 +359,22 @@ describe("SD-1 Office prompt profile", () => {
         for (const present of [
           GLOBAL_MARK,
           PROJECT_MARK,
-          MCP_MARK,
           SKILL_NAME,
           "<agent_routing>",
           "<auto_workflow>",
           "<gsp_workflow>",
-          "<mcp_instructions>",
           "<available_skills>",
           "<swarm_rules>",
           "<env>",
           `Working directory: ${result.dir}`,
-          `Today's date: ${new Date().toDateString()}`,
         ])
           expect(system).toContain(present)
+        // SB-2 (row 112): the date and MCP instructions change during a session, so they reach the model in the turn
+        // facts block on the newest person message, not in the cached system prefix.
+        for (const moved of [MCP_MARK, "<mcp_instructions>", `Today's date: ${new Date().toDateString()}`]) {
+          expect(system).not.toContain(moved)
+          expect(result.body).toContain(moved)
+        }
       }),
     20_000,
   )

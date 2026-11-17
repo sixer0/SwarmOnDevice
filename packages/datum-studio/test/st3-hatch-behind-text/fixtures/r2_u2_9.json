@@ -1,0 +1,23 @@
+{
+  "caption": {"text": "Objek yang tidak cocok diberi tag karantina lalu panggilan kembali dengan code 9."},
+  "source": {"text": "hal 183 Gambar 18.7; notasi UML 2.5.1 subset sequence"},
+  "spec": {
+    "family": "sequence",
+    "labels_verified": false,
+    "legend": [
+      "kepala terisi = panggilan sinkron",
+      "kepala terbuka = balasan",
+      "waktu hanya ke bawah",
+      "akhir urutan"
+    ],
+    "nodes": [
+      {"class": {}, "id": "api", "label": ":EvidenceAPI", "sub": "C05/K1"},
+      {"class": {}, "id": "os", "label": ":ObjectStore", "sub": "C09 · MinIO"},
+      {"class": {}, "id": "iw", "label": ":IngestWorker", "sub": "C08 · Rust"}
+    ],
+    "edges": [
+      {"from": "api", "kind": "data", "label": "14 quarantine tag", "to": "os"},
+      {"from": "api", "kind": "control", "label": "16 code 9", "to": "iw"}
+    ]
+  }
+}

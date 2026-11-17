@@ -4,6 +4,8 @@
  * 103 LintDef = 87 otomatis (A 39 DATUM + B 4 guard + C 19 pemindai bahasa +
  * D 25 struktur: D01-D21 + LD-01..LD-04 lint rilis struktur v2) + 16
  * (riwayat 1.2.5: C-27 dihapus -> 102; Swarm 1.2.6 row 72 menambah D22 kuota gambar -> 103, D 26)
+ * Swarm 1.3.3 row 27: C-35..C-37 (peringatan bahasa) -> 106, C 21; PLACEHOLDER_UNFILLED (row 52), D23 (row 86)
+ * dan OFFPAGE_UNPAIRED (row 137) -> 109, D 29 (dihitung dari registri; A 39, B 4, C 21, D 29, H 16).
  * pemeriksaan manusia (H01-H16).
  * Sumber isi: research/01_manual_parameter_catalog.md §5 (tier), §6.1-§6.3
  * (butir, batas, tahap, mode HQ). Acuan perilaku (read-only): datum_lint.py
@@ -379,6 +381,39 @@ function defC(row: RowC): LintDef {
   };
 }
 
+// ── C (lanjutan). Aturan prosa Swarm 1.3.3 (register 03 §7; ST-12, KL-3) ──
+//
+// Peringatan saja: limit tepat "lapor" (status REPORT, tidak pernah FAIL; enforcement.ts defaultEnforcement).
+// Berstatus bertahap: `notRunReason` terisi sampai pemindainya ada (row 84, 85, 103); pemilik pemindai
+// menghapus `notRunReason` pada barisnya dan mendaftarkan pemindai di LANGUAGE_SCANNERS.
+const NOT_RUN_STAGED_133 = "pemindai tidak tersedia sampai dibangun di Swarm 1.3.3 (register 03 §7). ";
+
+function stagedC133(id: string, title: string, ruleRef: string, row: number): LintDef {
+  return {
+    id,
+    group: "C",
+    title,
+    limit: "lapor",
+    stage: "file",
+    hqMode: ["X"],
+    partial: false,
+    ruleRef,
+    tiers: TERBIT_SERAH,
+    blocksIngest: false,
+    module: "language",
+    notRunReason: NOT_RUN_STAGED_133 + `Pemilik: row ${row}.`,
+  };
+}
+
+const GROUP_C_133: readonly LintDef[] = [
+  // C-35: pemindai ada sejak row 84 (engine/lint/language/lowercase-after-stop.ts), tanda bertahap dilepas.
+  { ...stagedC133("C-35", "Huruf kecil setelah titik akhir kalimat (singkatan terdaftar tidak mengakhiri kalimat)", "ST-12", 84), notRunReason: undefined },
+  // C-36: pemindai ada sejak row 85 (engine/lint/language/sentence-without-predicate.ts), tanda bertahap dilepas (row 86).
+  { ...stagedC133("C-36", "Kalimat tanpa predikat", "ST-12", 85), notRunReason: undefined },
+  // C-37: pemindai ada sejak row 103 (engine/lint/language/internal-abbreviation.ts), tanda bertahap dilepas.
+  { ...stagedC133("C-37", "Singkatan internal pada judul, keterangan gambar, atau paragraf", "KL-3", 103), notRunReason: undefined },
+];
+
 // ── D. Struktur dan aparatus (research/01 §6.2 grup D) ────────────────────
 
 type RowD = readonly [
@@ -400,7 +435,9 @@ const ROWS_D: readonly RowD[] = [
   ["D06", "Logo tepat sekali", "1 per dokumen", "DT-14, 16.4, P4V-04", TERBIT_SERAH, false, "cover.logo.maxOccurrencesPerDocument"],
   ["D07", "REQ, kuantitas, dan total cocok di seluruh paket", "0 selisih", "research/01 §6.2 D07", SERAH_ONLY, false],
   ["D08", "Klasifikasi di setiap halaman produk operasional", "0 halaman tanpa klasifikasi", "DT-28", TERBIT_SERAH, false],
-  ["D09", "labels_verified true untuk diagram terbit", "0 diagram terbit tanpa labels_verified", "DT-39", TERBIT_SERAH, false],
+  // Swarm 1.3.3 row 60 (ST-9 item 2, U20): labels_verified bukan true = keadaan "menunggu pemeriksa manusia", bukan cacat:
+  // batas tepat "lapor" (REPORT, tidak pernah FAIL; enforcement.ts defaultEnforcement). Dokumennya berstatus draf.
+  ["D09", "Label diagram diperiksa manusia (labels_verified)", "lapor", "DT-39", TERBIT_SERAH, false],
   ["D10", "KENDALI >= 5 uji + bendera induk", "maks. 5 uji, bendera induk ada", "research/01 §6.2 D10", TERBIT_SERAH, false],
   ["D11", "Caption satu kalimat dan tanggal berlaku", "1 kalimat; tanggal berlaku ada", "DT-15, research/01 §6.2 D11", TERBIT_SERAH, true],
   ["D12", "Jenis chart cocok kelompok tujuan", "0 jenis tak cocok (Tabel 7.2)", "Tabel 7.2", TERBIT_SERAH, false],
@@ -423,6 +460,8 @@ const ROWS_D: readonly RowD[] = [
   ["D21", "Istilah ICD 203 dalam kosakata pita dan tidak dicampur keyakinan", "0 istilah di luar kosakata pita", "research/01 §6.2 D21", TERBIT_SERAH, true],
   // Swarm 1.2.6 row 72 (T-18/W-10, register N-115): kuota gambar per dokumen; alasan tercatat -> REPORT, bukan FAIL.
   ["D22", "Kuota gambar per dokumen", "≤ figure.quota.maxPerDocument kecuali alasan tercatat", "T-18, W-10", TERBIT_SERAH, false, "figure.quota.maxPerDocument"],
+  // Swarm 1.3.3 row 86 (ST-12, register 03 s7): peringatan (REPORT, tidak pernah FAIL); heuristik, maka partial.
+  ["D23", "Angka dan nama pada caption ada di gambar, kuncinya, atau tabel tepat di bawahnya", "lapor", "ST-12, register 03 s7", TERBIT_SERAH, true],
 ];
 
 /** Modul pemilik grup D (S46): audit angka/struktur di `structure`. */
@@ -506,6 +545,38 @@ const GROUP_D_STRUCTURE_V2: readonly LintDef[] = [
     blocksIngest: false,
     module: "scan",
   },
+  // Swarm 1.3.3 row 52 (ST-5, register 03 s7): the check is engine/lint/structure/checks-placeholder.ts; the same id
+  // is the build refusal of engine/diagram/core/spec.ts (preview and render).
+  // Row 137 (C19): the same check also reads printed document text; tier set by the check: spec FAIL at every tier,
+  // document text FAIL TERBIT/SERAH and REPORT NOTA (form of CONTENT_CHAPTER_GAP).
+  {
+    id: "PLACEHOLDER_UNFILLED",
+    group: "D",
+    title: "Penanda {{kunci}} di spec diagram dan di teks dokumen yang tercetak sudah terisi (tidak dicetak apa adanya)",
+    limit: "0 {{kunci}} belum terisi",
+    stage: "build",
+    hqMode: ["S"],
+    partial: false,
+    ruleRef: "register 03 s7",
+    tiers: ALL_TIERS,
+    blocksIngest: false,
+    module: "structure",
+  },
+  // Swarm 1.3.3 row 137 (C20; row 50's text): the check is engine/lint/structure/checks-offpage.ts over row 50's
+  // services/render/offpage-pairs.ts; the render step refuses the same pairs (job error, no file).
+  {
+    id: "OFFPAGE_UNPAIRED",
+    group: "D",
+    title: "Penghubung luar-halaman berpasangan di gambar yang dirujuk (ref.figure dan ref.key sama di kedua ujung)",
+    limit: "0 konektor luar halaman tanpa pasangan",
+    stage: "build",
+    hqMode: ["S"],
+    partial: false,
+    ruleRef: "register 03 s7",
+    tiers: ALL_TIERS,
+    blocksIngest: false,
+    module: "structure",
+  },
 ];
 
 // ── H. Pemeriksaan manusia (research/01 §6.3, Tabel 16.2 langkah 7-9) ─────
@@ -569,6 +640,7 @@ export const LINT_REGISTRY: readonly LintDef[] = [
   ...ROWS_A.map(defA),
   ...GROUP_B,
   ...ROWS_C.map(defC),
+  ...GROUP_C_133,
   ...ROWS_D.map(defD),
   ...GROUP_D_STRUCTURE_V2,
   ...ROWS_H.map(defH),

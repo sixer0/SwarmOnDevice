@@ -1,0 +1,33 @@
+{
+  "caption": {"text": "Sumber PLN masuk lewat RMU, pemutus vakum, dan trafo ke rel MDP."},
+  "source": {"text": "hal 88 Gambar 12.2; IEC 60617 DB sebagai rujukan yang dibaca; IEC 81346 designations; nilai contoh latihan"},
+  "spec": {
+    "family": "layered",
+    "labels_verified": false,
+    "legend": [
+      "subject: rel MDP",
+      "ikatan pembumian",
+      "arus pada tiap tahap",
+      "IEC 60617 DB · IEC 81346"
+    ],
+    "nodes": [
+      {"class": {"tier": 1}, "id": "pln", "label": "PLN 20 kV", "shape": "box", "sub": "Sk″ 350 MVA"},
+      {"class": {"tier": 2}, "id": "qb1", "label": "=E01-QB1", "shape": "box", "sub": "RMU 630 A", "symbol": "iec:disconnector"},
+      {"class": {"tier": 2}, "id": "vcb", "label": "=E01-QA1", "shape": "box", "sub": "VCB 16 kA", "symbol": "iec:breaker"},
+      {"class": {"tier": 3}, "id": "ta1", "label": "=E01-TA1", "shape": "box", "sub": "Dyn5 uk 4 %", "symbol": "iec:transformer"},
+      {"class": {"tier": 3}, "id": "npe", "label": "N-PE TN-S", "shape": "box", "symbol": "iec:earth"},
+      {"class": {"tier": 4}, "id": "qa1", "label": "=G01-QA1", "shape": "box", "sub": "ACB 50 kA", "symbol": "iec:breaker"},
+      {"class": {"accent": true, "tier": 5}, "id": "wd1", "label": "=G01-WD1", "shape": "box", "sub": "MDP 400/230 V"},
+      {"class": {"tier": 5}, "id": "out", "label": "lanjut WD1", "shape": "circle"}
+    ],
+    "edges": [
+      {"from": "pln", "kind": "data", "label": "20 kV", "to": "qb1"},
+      {"from": "qb1", "kind": "data", "label": "20 kV", "to": "vcb"},
+      {"from": "vcb", "kind": "data", "label": "20 kV", "to": "ta1"},
+      {"from": "ta1", "kind": "verify", "label": "N-PE", "to": "npe"},
+      {"from": "ta1", "kind": "data", "label": "909 A", "to": "qa1"},
+      {"from": "qa1", "kind": "data", "label": "1000 A", "to": "wd1"},
+      {"from": "wd1", "kind": "data", "label": "WD1", "to": "out"}
+    ]
+  }
+}

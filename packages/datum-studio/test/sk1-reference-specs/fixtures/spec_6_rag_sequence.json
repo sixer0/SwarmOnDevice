@@ -1,0 +1,125 @@
+{
+ "type": "diagram",
+ "caption": {
+  "text": "One RAG query shows the access filter runs in the vector store before any context reaches the model."
+ },
+ "source": {
+  "text": "Contoh ilustrasi GSP, data rekaan untuk pengajaran · notasi UML 2.5.1 subset"
+ },
+ "spec": {
+  "family": "sequence",
+  "classification": "BIASA",
+  "labels_verified": false,
+  "sources": [
+   "GSP reference set, Gambar 13.4 Urutan Kueri RAG"
+  ],
+  "nodes": [
+   {
+    "id": "an",
+    "label": "Analis",
+    "sub": "Person",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "k2",
+    "label": "Gerbang API",
+    "sub": "K2",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "k3",
+    "label": "Layanan RAG",
+    "sub": "K3",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "k7",
+    "label": "Vector Store",
+    "sub": "K7",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "k4",
+    "label": "Server Inferensi",
+    "sub": "K4",
+    "shape": "box",
+    "class": {}
+   }
+  ],
+  "edges": [
+   {
+    "from": "an",
+    "to": "k2",
+    "kind": "data",
+    "label": "01 · kueri + token OIDC"
+   },
+   {
+    "from": "k2",
+    "to": "k3",
+    "kind": "data",
+    "label": "02 · kueri + klaim peran"
+   },
+   {
+    "from": "k3",
+    "to": "k7",
+    "kind": "accent",
+    "label": "03 · cari + filter ACL"
+   },
+   {
+    "from": "k7",
+    "to": "k3",
+    "kind": "data",
+    "dash": "dashed",
+    "label": "04 · 8 chunk + sumber"
+   },
+   {
+    "from": "k3",
+    "to": "k4",
+    "kind": "data",
+    "label": "05 · prompt + konteks"
+   },
+   {
+    "from": "k4",
+    "to": "k3",
+    "kind": "data",
+    "dash": "dashed",
+    "label": "06 · draf jawaban"
+   },
+   {
+    "from": "k3",
+    "to": "k2",
+    "kind": "data",
+    "dash": "dashed",
+    "label": "07 · jawaban tersaring"
+   },
+   {
+    "from": "k2",
+    "to": "an",
+    "kind": "data",
+    "dash": "dashed",
+    "label": "08 · jawaban + sitasi"
+   }
+  ],
+  "legend": [
+   {
+    "symbol": "data",
+    "label": "panggilan sinkron"
+   },
+   {
+    "symbol": "data-dashed",
+    "label": "balasan"
+   },
+   {
+    "symbol": "accent",
+    "label": "titik penegakan hak akses"
+   }
+  ],
+  "notes": [
+   "Message numbers are typed into the labels as printed"
+  ]
+ }
+}

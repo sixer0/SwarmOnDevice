@@ -40,15 +40,16 @@ describe('lintStructure: cakupan dan tier', () => {
   // SR-42 (D-178): SR-18 menambah 3 cek bermodul structure (LD-01..LD-03), 45 -> 48.
   it('semua entri registri bermodul structure terimplementasi (48, D-178)', () => {
     expect(structureCoverageGaps()).toEqual([]);
-    expect(STRUCTURE_LINT_DEFS).toHaveLength(49); // + D22 kuota gambar (Swarm 1.2.6 row 72, T-18): 48 -> 49
+    expect(STRUCTURE_LINT_DEFS).toHaveLength(52); // + D22 kuota gambar (Swarm 1.2.6 row 72, T-18): 48 -> 49; Swarm 1.3.3: + PLACEHOLDER_UNFILLED (row 52), OFFPAGE_UNPAIRED (row 137) and the row 86 / D23 pair: 49 -> 52 (counted)
   });
 
-  it('hanya cek yang berlaku untuk tier yang dijalankan: NOTA hanya 4 cek struktur v2, D01-D03/D07 hanya SERAH', () => {
+  it('hanya cek yang berlaku untuk tier yang dijalankan: NOTA hanya 6 cek struktur v2, D01-D03/D07 hanya SERAH', () => {
     const run = (tier: StudioTier) => lintStructure(snapshotOf(makeDoc({ tier })), KAN, tier).filter((i) => i.checkId !== 'STRUCT-XREF');
     // SR-42 (D-178/D-180): LD-01..LD-04 bertier "semua" (slot wajib kosong tidak
     // pernah rilis-PASS, termasuk NOTA); dokumen uji berisi -> keempatnya PASS.
     const nota = run('NOTA');
-    expect(nota.map((i) => i.checkId).sort()).toEqual(['CONTENT_CHAPTER_GAP', 'INLINE_FORMAT_STRIPPED', 'SCHEMA_V1_ADAPTED', 'SLOT_CONTENT_MISSING']);
+    // Swarm 1.3.3: + OFFPAGE_UNPAIRED (row 137) and PLACEHOLDER_UNFILLED (row 52) at NOTA: 4 -> 6.
+    expect(nota.map((i) => i.checkId).sort()).toEqual(['CONTENT_CHAPTER_GAP', 'INLINE_FORMAT_STRIPPED', 'OFFPAGE_UNPAIRED', 'PLACEHOLDER_UNFILLED', 'SCHEMA_V1_ADAPTED', 'SLOT_CONTENT_MISSING']);
     expect(nota.every((i) => i.status === 'PASS')).toBe(true);
     const terbit = new Set(run('TERBIT').map((i) => i.checkId));
     const serah = new Set(run('SERAH').map((i) => i.checkId));
@@ -113,8 +114,8 @@ describe('penegakan struktur per profil templat', () => {
 describe('lintLanguage: NOT_RUN jujur (KT-13)', () => {
   const snapWith = (text: string, language: 'ID' | 'EN' = 'ID') => snapshotOf(makeDoc({ language, blocks: [{ type: 'paragraph', text }] }));
 
-  it('18 butir (19 sebelum C-27 dihapus, 1.2.5); 10 tanpa implementasi -> NOT_RUN dengan notRunReason registri persis, tidak pernah PASS', () => {
-    expect(LANGUAGE_LINT_DEFS).toHaveLength(18);
+  it('21 butir (19 sebelum C-27 dihapus, 1.2.5; 1.3.3 row 27: + C-35..C-37); 10 tanpa implementasi -> NOT_RUN dengan notRunReason registri persis, tidak pernah PASS', () => {
+    expect(LANGUAGE_LINT_DEFS).toHaveLength(21); // 18 + C-35, C-36, C-37 (Swarm 1.3.3 row 27); rows 84, 85, 103 run them, so the unimplemented count stays 10
     const out = lintLanguage(snapWith('Kalimat netral pertama. Kalimat netral kedua.'), KAN.params);
     const unimpl = LANGUAGE_LINT_DEFS.filter((d) => !isLintImplemented(d));
     expect(unimpl).toHaveLength(10);

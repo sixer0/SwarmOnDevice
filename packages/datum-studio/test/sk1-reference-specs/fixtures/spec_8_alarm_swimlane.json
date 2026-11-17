@@ -1,0 +1,251 @@
+{
+ "type": "diagram",
+ "caption": {
+  "text": "The automatic part of the alarm path uses 5 s of the budget and the operator has 55 s to acknowledge, so REQ-NET-04 is tested on the machine path alone."
+ },
+ "source": {
+  "text": "GSP-BRD-OPS-200 Rev B; SOP-BRD-01 and -03 (illustrative)"
+ },
+ "spec": {
+  "family": "swimlane",
+  "classification": "BIASA",
+  "labels_verified": false,
+  "sources": [
+   "GSP-BRD-OPS-200 Rev B",
+   "SOP-BRD-01 and -03 (illustrative)"
+  ],
+  "phases": [
+   {
+    "id": "t0",
+    "label": "t0"
+   },
+   {
+    "id": "t1",
+    "label": "+1 s"
+   },
+   {
+    "id": "t3",
+    "label": "+3 s"
+   },
+   {
+    "id": "t5",
+    "label": "+5 s"
+   },
+   {
+    "id": "t60",
+    "label": "+60 s"
+   },
+   {
+    "id": "m5",
+    "label": "+5 min"
+   },
+   {
+    "id": "m30",
+    "label": "+30 min"
+   },
+   {
+    "id": "cl",
+    "label": "close"
+   }
+  ],
+  "nodes": [
+   {
+    "id": "det",
+    "label": "Detect",
+    "sub": "radar or fence",
+    "shape": "box",
+    "class": {
+     "lane": "POST BP05",
+     "phase": "t0"
+    }
+   },
+   {
+    "id": "cor",
+    "label": "Correlate",
+    "sub": "≥ 3 plots",
+    "shape": "box",
+    "class": {
+     "lane": "C2 · PSIM",
+     "phase": "t1"
+    }
+   },
+   {
+    "id": "cue",
+    "label": "Cue PTZ",
+    "sub": "clip 10 s",
+    "shape": "box",
+    "class": {
+     "lane": "C2 · PSIM",
+     "phase": "t3"
+    }
+   },
+   {
+    "id": "alm",
+    "label": "Raise alarm",
+    "sub": "P1",
+    "shape": "box",
+    "class": {
+     "lane": "C2 · PSIM",
+     "phase": "t5",
+     "accent": true
+    }
+   },
+   {
+    "id": "ack",
+    "label": "Ack + verify",
+    "sub": "thermal",
+    "shape": "box",
+    "class": {
+     "lane": "SHQ OPERATOR",
+     "phase": "t60"
+    }
+   },
+   {
+    "id": "thr",
+    "label": "Threat?",
+    "shape": "diamond",
+    "class": {
+     "lane": "SHQ OPERATOR",
+     "phase": "m5"
+    }
+   },
+   {
+    "id": "cfa",
+    "label": "Close FA",
+    "sub": "reason",
+    "shape": "box",
+    "class": {
+     "lane": "SHQ OPERATOR",
+     "phase": "m30"
+    }
+   },
+   {
+    "id": "dec",
+    "label": "Decide",
+    "sub": "SOP-03",
+    "shape": "box",
+    "class": {
+     "lane": "DUTY OFFICER",
+     "phase": "m5"
+    }
+   },
+   {
+    "id": "qrf",
+    "label": "Intercept",
+    "sub": "radio",
+    "shape": "box",
+    "class": {
+     "lane": "QRF PATROL",
+     "phase": "m30"
+    }
+   },
+   {
+    "id": "cop",
+    "label": "COP view",
+    "sub": "track",
+    "shape": "box",
+    "class": {
+     "lane": "CCC",
+     "phase": "t60"
+    }
+   },
+   {
+    "id": "rec",
+    "label": "Record",
+    "sub": "+ evidence",
+    "shape": "box",
+    "class": {
+     "lane": "CCC",
+     "phase": "cl"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "from": "det",
+    "to": "cor",
+    "kind": "data",
+    "label": "ONVIF event"
+   },
+   {
+    "from": "cor",
+    "to": "cue",
+    "kind": "data",
+    "label": "TBC · no label printed on p382"
+   },
+   {
+    "from": "cue",
+    "to": "alm",
+    "kind": "data",
+    "label": "TBC · no label printed on p382"
+   },
+   {
+    "from": "alm",
+    "to": "ack",
+    "kind": "accent",
+    "label": "TBC · no label printed on p382"
+   },
+   {
+    "from": "alm",
+    "to": "cop",
+    "kind": "data",
+    "label": "≤ 10 s · MPLS"
+   },
+   {
+    "from": "ack",
+    "to": "thr",
+    "kind": "data",
+    "label": "TBC · no label printed on p382"
+   },
+   {
+    "from": "thr",
+    "to": "cfa",
+    "kind": "data",
+    "label": "no"
+   },
+   {
+    "from": "thr",
+    "to": "dec",
+    "kind": "data",
+    "label": "yes"
+   },
+   {
+    "from": "dec",
+    "to": "qrf",
+    "kind": "control",
+    "label": "order"
+   },
+   {
+    "from": "qrf",
+    "to": "rec",
+    "kind": "data",
+    "label": "TBC · no label printed on p382"
+   },
+   {
+    "from": "cfa",
+    "to": "rec",
+    "kind": "data",
+    "label": "TBC · no label printed on p382"
+   }
+  ],
+  "legend": [
+   {
+    "symbol": "accent",
+    "label": "alarm path (subject)"
+   },
+   {
+    "symbol": "data",
+    "label": "information"
+   },
+   {
+    "symbol": "control",
+    "label": "decision / order"
+   }
+  ],
+  "notes": [
+   "Six edges carry no label on p382; Studio refuses an empty label, so each needs a real one from SOP-BRD-01 or the budget table before first run",
+   "Label ≤ 10 s · MPLS floats beside the Raise alarm to COP view line on p382; its attachment to that edge is ASSUMED",
+   "Lane and phase of each node are read from its position under the tick marks (ASSUMED)"
+  ]
+ }
+}

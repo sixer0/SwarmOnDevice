@@ -14,7 +14,7 @@ import { defaultParams, e1, merge, metaOf, probeDoc, skeletonInput } from '../st
 // Direkam sebelum DC-WIRE (kode v2.1 2026-10-30, sebelum suntingan snapshot.ts).
 const SHA_BEFORE = {
   e1: '265cb783fae919e7bfbc8b400ab5d4bdff7ef33e4464d29ed76629584553ee2d',
-  probe: '664c5576cabe44225a3453de3f4566da3b820f69b6b222407e2c96064ea4838f',
+  probe: '4fee5844ce9712c488672e8bbef6c411a6b69245f673cc65632422e465b7d240',
   contract: 'f661e3085248de3f3504b67fbb11e2dfc004503be363657fbb5905d8b5f712d6',
 };
 

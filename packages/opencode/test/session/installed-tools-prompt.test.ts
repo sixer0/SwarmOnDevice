@@ -78,7 +78,10 @@ const env = testEffect(
 
 const environment = Effect.gen(function* () {
   const prompt = yield* SystemPrompt.Service
-  return yield* prompt.environment(model)
+  // SB-2 (row 112): the installed-tools block left environment() for installed() (the turn facts block); both are
+  // checked together so no hostile string reaches either.
+  const tools = yield* prompt.installed()
+  return [...(yield* prompt.environment(model)), ...(tools ? [tools] : [])]
 })
 
 describe("installed tools block: hostile state file (row 236)", () => {
@@ -438,6 +441,12 @@ const textOf = (body: Record<string, unknown>, role: string) =>
     )
     .join("\n")
 
+/** SB-2 (row 112): the block now travels in the turn facts part of the newest person message, not in the system. */
+const newestUserOf = (body: Record<string, unknown>) => {
+  const last = ((body.messages ?? []) as Message[]).findLast((message) => message.role === "user")
+  return last ? textOf({ messages: [last] }, "user") : ""
+}
+
 const allowAll = [{ permission: "*", pattern: "*", action: "allow" as const }]
 
 describe("installed tools block through the prompt loop (row 236)", () => {
@@ -479,8 +488,9 @@ describe("installed tools block through the prompt loop (row 236)", () => {
             return asked.includes("CHILD-ASK-236") && !asked.includes("PARENT-ASK-236")
           })
           expect(child).toHaveLength(1)
-          expect(textOf(child[0]!.body, "system")).toContain(expected)
-          expect(textOf(hits[0]!.body, "system")).toContain(expected)
+          expect(textOf(child[0]!.body, "user")).toContain(expected)
+          expect(newestUserOf(hits[0]!.body)).toContain(expected)
+          for (const hit of hits) expect(textOf(hit.body, "system")).not.toContain("<installed_tools>")
           // The child request is a session of its own, not the parent's continuation.
           expect(textOf(child[0]!.body, "user")).not.toContain("PARENT-ASK-236")
         }),
@@ -522,13 +532,16 @@ describe("installed tools block through the prompt loop (row 236)", () => {
           rmSync(stateFile(), { force: true })
           yield* turn("fourth")
 
-          const systems = (yield* llm.hits).map((hit) => textOf(hit.body, "system"))
-          expect(systems).toHaveLength(4)
-          expect(systems[0]).not.toContain("<installed_tools>")
-          expect(systems[1]).toContain(SystemPrompt.installedTools(["rtk"], WEB) ?? "")
-          expect(systems[2]).toContain(SystemPrompt.installedTools(["firecrawl"], WEB) ?? "")
-          expect(systems[2]).not.toContain("rtk:")
-          expect(systems[3]).not.toContain("<installed_tools>")
+          const hits = yield* llm.hits
+          for (const hit of hits) expect(textOf(hit.body, "system")).not.toContain("<installed_tools>")
+          const newest = hits.map((hit) => newestUserOf(hit.body))
+          expect(newest).toHaveLength(4)
+          expect(newest[0]).not.toContain("<installed_tools>")
+          expect(newest[1]).toContain(SystemPrompt.installedTools(["rtk"], WEB) ?? "")
+          expect(newest[2]).toContain(SystemPrompt.installedTools(["firecrawl"], WEB) ?? "")
+          expect(newest[2]).not.toContain("rtk:")
+          // A block that goes away is stated as gone in that turn (appended, never a rewrite of an older message).
+          expect(newest[3]).toContain("<installed_tools>\n  none now\n</installed_tools>")
         }),
         { config: providerCfg },
       ),
@@ -561,11 +574,13 @@ describe("installed tools block through the prompt loop (row 236)", () => {
           status = bothConnected()
           yield* turn("second")
 
-          const systems = (yield* llm.hits).map((hit) => textOf(hit.body, "system"))
-          expect(systems).toHaveLength(2)
-          expect(systems[0]).toContain(SystemPrompt.installedTools(["graft"], ["graft"]) ?? "")
-          expect(systems[0]).not.toContain("vault_inbox")
-          expect(systems[1]).toContain(SystemPrompt.installedTools(["graft", "obsidian"], BOTH) ?? "")
+          const hits = yield* llm.hits
+          const newest = hits.map((hit) => newestUserOf(hit.body))
+          expect(newest).toHaveLength(2)
+          expect(newest[0]).toContain(SystemPrompt.installedTools(["graft"], ["graft"]) ?? "")
+          expect(newest[0]).not.toContain("vault_inbox")
+          expect(newest[1]).toContain(SystemPrompt.installedTools(["graft", "obsidian"], BOTH) ?? "")
+          for (const hit of hits) expect(textOf(hit.body, "system")).not.toContain("<installed_tools>")
         }),
         { config: providerCfg },
       ),

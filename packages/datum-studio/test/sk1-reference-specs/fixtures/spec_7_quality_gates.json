@@ -1,0 +1,137 @@
+{
+ "type": "diagram",
+ "caption": {
+  "text": "Seven gates run in a fixed order, and a failure at any gate returns the work to its source, so the finished file is never patched."
+ },
+ "source": {
+  "text": "DATUM §19 release gate; Panduan Diagram GSP Fig. 19.1"
+ },
+ "spec": {
+  "family": "flow",
+  "direction": "TB",
+  "classification": "BIASA",
+  "labels_verified": false,
+  "sources": [
+   "DATUM §19 release gate",
+   "Panduan Diagram GSP Fig. 19.1"
+  ],
+  "nodes": [
+   {
+    "id": "g1",
+    "label": "G1 Brief",
+    "sub": "reader + question",
+    "tag": "01",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "g2",
+    "label": "G2 Register",
+    "sub": "marks + sources",
+    "tag": "02",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "g3",
+    "label": "G3 Spec validation",
+    "sub": "schema + notation",
+    "tag": "03",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "g4",
+    "label": "G4 Build lint",
+    "sub": "23–37",
+    "tag": "04",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "g5",
+    "label": "G5 Domain checklist",
+    "sub": "chapter list",
+    "tag": "05",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "g6",
+    "label": "G6 Independent check",
+    "sub": "TBC · truncated on p492 (prints: reconcile + 5 s…)",
+    "tag": "06",
+    "shape": "box",
+    "class": {
+     "accent": true
+    }
+   },
+   {
+    "id": "g7",
+    "label": "G7 Approve + issue",
+    "sub": "TBC · truncated on p492 (prints: title block +…)",
+    "tag": "07",
+    "shape": "box",
+    "class": {}
+   }
+  ],
+  "edges": [
+   {
+    "from": "g1",
+    "to": "g2",
+    "kind": "data",
+    "label": "pass"
+   },
+   {
+    "from": "g2",
+    "to": "g3",
+    "kind": "data",
+    "label": "pass"
+   },
+   {
+    "from": "g3",
+    "to": "g4",
+    "kind": "data",
+    "label": "pass"
+   },
+   {
+    "from": "g4",
+    "to": "g5",
+    "kind": "data",
+    "label": "pass"
+   },
+   {
+    "from": "g5",
+    "to": "g6",
+    "kind": "data",
+    "label": "pass"
+   },
+   {
+    "from": "g6",
+    "to": "g7",
+    "kind": "data",
+    "label": "pass"
+   },
+   {
+    "from": "g6",
+    "to": "g2",
+    "kind": "alert",
+    "label": "fail · back to source"
+   }
+  ],
+  "legend": [
+   {
+    "symbol": "data",
+    "label": "gate passed"
+   },
+   {
+    "symbol": "alert",
+    "label": "failure returns the work to its source"
+   }
+  ],
+  "notes": [
+   "The return edge is not drawn on p492; only a red arrowhead under G2 and a tick under G6 remain. Endpoints G6 to G2 are reconstructed from those marks and from the caption (ASSUMED)",
+   "Legend wording is not printed on p492 (the figure has no key row)"
+  ]
+ }
+}

@@ -115,14 +115,14 @@ afterAll(async () => {
 })
 
 describe("row 50c: studio_asset_put is listed", () => {
-  test("tools/list has studio_asset_put last, 41 tools, write hints, a description that teaches the sha256 reference; own entry < 2 KB", async () => {
+  test("tools/list has studio_asset_put last, 43 tools, write hints, a description that teaches the sha256 reference; own entry < 2 KB", async () => {
     const tools = (await c.listTools()).tools
     const names = tools.map((t) => t.name)
-    expect(names.length).toBe(41) // 1.2.8 row 45: + studio_mission_place
+    expect(names.length).toBe(43) // 1.2.8 row 45: + studio_mission_place; 1.3.3: + studio_witness_list (row 59), studio_library_read (row 100)
     expect(names[names.length - 1]).toBe(TOOL)
     const t = tools.find((x) => x.name === TOOL)!
     expect(t.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true })
-    expect(Object.keys((t.inputSchema as S).properties).sort()).toEqual(["dataBase64", "documentId", "path"])
+    expect(Object.keys((t.inputSchema as S).properties).sort()).toEqual(["dataBase64", "documentId", "path", "svg", "width"]) // 1.3.3 row 116 adds `svg` + `width` (framed SVG intake)
     expect((t.inputSchema as S).additionalProperties).toBe(false)
     expect(t.description).toContain('"asset":"sha256:<hex>"')
     expect(t.description).toContain('![caption](sha256:<hex> "Sumber:')

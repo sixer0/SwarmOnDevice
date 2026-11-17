@@ -168,9 +168,10 @@ describe("row 67: sample and registry facts", () => {
       expect(c.S1 + c.S2 + c.S3 + c.S4 + c.S5).toBe(count);
       expect(c.S3).toBe(4);
       expect(c.S4).toBe(16);
+      expect(c.S2).toBe(3); // DATUM-36, C-INFO-OPENER and D09 (1.3.3 row 60, C16: D09 is report-only)
     }
-    expect(count).toBe(103); // 103 before 1.2.5 (C-27 removed) -> 102; 1.2.6 row 72 adds D22 (T-18 figure quota) -> 103
-    expect(registry.LINT_GROUP_COUNTS.C).toBe(18); // 19 before 1.2.5
+    expect(count).toBe(109); // 103 before 1.2.5 (C-27 removed) -> 102; 1.2.6 row 72 adds D22 (T-18 figure quota) -> 103; 1.3.3: C-35..C-37 (row 27), PLACEHOLDER_UNFILLED (52), D23 (86), OFFPAGE_UNPAIRED (137) -> 109
+    expect(registry.LINT_GROUP_COUNTS.C).toBe(21); // 19 before 1.2.5; 18 after; + C-35..C-37 (1.3.3 row 27)
   });
 
   test("U.5: skillSha = sha of the shipped lint closure; every closure entry of vendor/provenance.json matches the file on disk", () => {

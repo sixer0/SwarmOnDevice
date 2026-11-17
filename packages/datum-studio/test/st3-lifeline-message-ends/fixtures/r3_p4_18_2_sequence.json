@@ -1,0 +1,19 @@
+{
+  "caption": {"text": "Bukti masuk buku custody hanya setelah hash cocok; ketidakcocokan berujung karantina."},
+  "source": {"text": "SUMBER: GSP Diagram Manual Rev B bab 18 h. 183; notasi UML 2.5.1 sequence."},
+  "spec": {
+    "family": "sequence",
+    "classification": "BIASA",
+    "labels_verified": true,
+    "nodes": [
+      {"id": "iw", "label": "Worker", "sub": "C08 Rust", "shape": "box", "class": {}},
+      {"id": "cl", "label": "Ledger", "sub": "C05 K3", "shape": "box", "class": {"accent": true}}
+    ],
+    "edges": [
+      {"from": "iw", "to": "cl", "kind": "data", "label": "CommitEvidence"}
+    ],
+    "legend": ["data: panggilan dan balasan"],
+    "notes": ["Keluarga sequence pada lebar 128 mm menempatkan ujung konektor pada bingkai, bukan pada garis tepi simpul, sehingga gambar ini hanya menahan dua peserta. Contoh manual memakai enam peserta dengan nama kelas yang panjang. API gerbang, HashVerifier, baca objek pada MinIO dan layanan tanda tangan BSrE RFC 3161 tidak digambar sebagai lajur; ketiganya berjalan berurutan setelah pesan ini. Fragment loop dan alt tidak dibuat mesin, sehingga pengulangan unggah bagian dibaca dari arah tepi. Balasan dan jalur gagal dengan kode 9 tidak digambar. Semua garis memakai jenis data karena batas lima nilai warna per gambar. Ukuran objek 512 GiB adalah nilai ajar dengan tanda ASUMSI."],
+    "sources": ["GSP Diagram Manual Rev B bab 18 h. 183"]
+  }
+}

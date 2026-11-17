@@ -47,13 +47,13 @@ describe("about panel build date comes from the commit (1.3.1)", () => {
     expect(main).toContain("import.meta.env.SWARM_BUILD_DATE")
     expect(main).toContain("buildDate: BUILD_DATE")
   })
-  test("the commit date of this checkout formats as the About line, with the 1.3.2 version", () => {
+  test("the commit date of this checkout formats as the About line, with the 1.3.3 version", () => {
     const iso = execFileSync("git", ["log", "-1", "--format=%cs"], { cwd: root, encoding: "utf8" }).trim()
     expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string }
-    expect(pkg.version).toBe("1.3.2")
+    expect(pkg.version).toBe("1.3.3")
     const o = aboutPanelOptions({ name: "Swarm", version: pkg.version, buildDate: iso, locale: "id" })
-    expect(o.applicationVersion).toBe("1.3.2")
+    expect(o.applicationVersion).toBe("1.3.3")
     expect(o.copyright).toBe(`Diperbarui ${formatBuildDate(iso, "id")}`)
   })
 })

@@ -77,8 +77,8 @@ afterAll(async () => {
 const desc = (name: string): string => String(tools.find((t) => t.name === name)?.description ?? "")
 
 describe("1.2.9 AC-A13: host tool descriptions", () => {
-  test(`41 tools, every description <= ${HOST_DESCRIPTION_MAX} characters (N9-052)`, () => {
-    expect(tools.length).toBe(41)
+  test(`43 tools, every description <= ${HOST_DESCRIPTION_MAX} characters (N9-052)`, () => {
+    expect(tools.length).toBe(43) // 41 + studio_witness_list (1.3.3 row 59) + studio_library_read (row 100)
     const lengths = tools.map((t) => [t.name, String(t.description ?? "").length] as const).sort((a, b) => b[1] - a[1])
     console.log(`rel129 A13 longest descriptions: ${lengths.slice(0, 10).map(([n, l]) => `${n} ${l}`).join(", ")}`)
     expect(lengths.filter(([, l]) => l > HOST_DESCRIPTION_MAX)).toEqual([])

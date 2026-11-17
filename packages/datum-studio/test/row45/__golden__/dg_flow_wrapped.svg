@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="166.0mm" height="66.675mm" viewBox="0 0 166.0 66.675" version="1.1">
+<svg xmlns="http://www.w3.org/2000/svg" width="166.0mm" height="71.437mm" viewBox="0 0 166.0 71.437" version="1.1">
 <!-- generator studio engine/diagram (port datum_diagram.py v2.0.0 Garis A, rebuild DHS-RB-04) | family=flow | token=tokens.json -->
 <!-- DATUM-APPARATUS-REQUIRED: caption, source dan baris kunci dicetak oleh halaman, bukan oleh SVG ini (P6, lint cek 36) -->
 <defs>
 <marker id="head-data" markerUnits="userSpaceOnUse" markerWidth="5.2" markerHeight="4.85" refX="4.02" refY="2.42" orient="auto"><path d="M1.0,1.0 L4.2,2.42 L1.0,3.85 Z" fill="#101418"/></marker>
 <marker id="head-verify" markerUnits="userSpaceOnUse" markerWidth="5.2" markerHeight="4.85" refX="4.58" refY="2.42" orient="auto"><path d="M1.0,1.0 L4.2,2.42 L1.0,3.85" fill="none" stroke="#2F6F6B" stroke-width="0.45"/></marker>
 </defs>
-<rect x="0" y="0" width="166.0" height="66.675" fill="#FCFCFB"/>
+<rect x="0" y="0" width="166.0" height="71.437" fill="#FCFCFB"/>
 <path d="M 53.33 16.67 L 64.0 16.67" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="0"/>
 <path d="M 106.67 14.29 L 117.33 14.29" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="1"/>
 <path d="M 117.33 19.05 L 117.33 33.34 L 53.33 33.34 L 53.33 38.1" fill="none" stroke="#101418" stroke-width="0.45" marker-end="url(#head-data)" data-mark="link" data-series="data" data-index="2"/>
@@ -14,14 +14,14 @@
 <path d="M 106.67 40.48 L 117.33 40.48" fill="none" stroke="#2F6F6B" stroke-width="0.45" stroke-dasharray="7.1,1.6,0.2,1.6" marker-end="url(#head-verify)" data-mark="link" data-series="verify" data-index="4"/>
 <line x1="58.67" y1="16.67" x2="58.67" y2="8.62" fill="none" stroke="#101418" stroke-width="0.2"/>
 <rect x="52.87" y="5.09" width="11.59" height="3.54" fill="#FCFCFB"/>
-<text x="58.67" y="7.48" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">FORMULIR</text>
+<text x="58.67" y="7.48" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">formulir</text>
 <line x1="112.0" y1="14.29" x2="112.0" y2="8.62" fill="none" stroke="#101418" stroke-width="0.2"/>
 <rect x="104.33" y="5.09" width="15.34" height="3.54" fill="#FCFCFB"/>
-<text x="112.0" y="7.48" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">SPESIFIKASI</text>
+<text x="112.0" y="7.48" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">spesifikasi</text>
 <rect x="113.41" y="26.95" width="7.84" height="3.54" fill="#FCFCFB"/>
-<text x="117.33" y="29.34" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">HARGA</text>
+<text x="117.33" y="29.34" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">harga</text>
 <rect x="54.12" y="44.79" width="9.09" height="3.54" fill="#FCFCFB"/>
-<text x="58.67" y="47.18" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">BARANG</text>
+<text x="58.67" y="47.18" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#101418" text-anchor="middle">barang</text>
 <rect x="109.61" y="37.66" width="2.85" height="3.54" fill="#FCFCFB"/>
 <text x="111.03" y="40.06" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2F6F6B" text-anchor="middle">1</text>
 <rect x="10.67" y="9.52" width="42.67" height="14.29" rx="7.14" ry="7.14" data-node="a" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="0"/>
@@ -37,6 +37,7 @@
 <rect x="117.33" y="33.34" width="42.67" height="14.29" rx="7.14" ry="7.14" data-node="f" fill="none" stroke="#2B3640" stroke-width="0.45" data-mark="node" data-index="5"/>
 <text x="138.67" y="40.48" font-family="IBM Plex Sans Condensed" font-size="2.681" font-weight="400" fill="#101418" text-anchor="middle">Gudang</text>
 <text x="0.0" y="52.39" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2F6F6B" text-anchor="start">1</text>
-<text x="2.45" y="52.39" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2F6F6B" text-anchor="start">UJI TERIMA</text>
-<text x="0" y="57.15" font-family="IBM Plex Sans Condensed" font-size="2.399" font-weight="600" fill="#6B7783" text-anchor="start" letter-spacing="0.216">KEY  SOLID DATA  ·  DASH-DOT UJI TERIMA</text>
+<text x="2.45" y="52.39" font-family="IBM Plex Mono" font-size="2.081" font-weight="400" fill="#2F6F6B" text-anchor="start">uji terima</text>
+<text data-st-note="1" x="0" y="57.15" font-family="IBM Plex Sans Condensed" font-size="2.328" font-weight="400" fill="#6B7783" text-anchor="start">CATATAN  per_row membungkus rantai (E-30).</text>
+<text x="0" y="61.91" font-family="IBM Plex Sans Condensed" font-size="2.399" font-weight="600" fill="#6B7783" text-anchor="start" letter-spacing="0.216">KEY  solid data  ·  dash-dot uji terima</text>
 </svg>

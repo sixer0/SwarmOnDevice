@@ -1,0 +1,228 @@
+{
+ "type": "diagram",
+ "caption": {
+  "text": "The security riser shows paths from field devices to the control room with cable counts per link."
+ },
+ "source": {
+  "text": "Contoh ilustrasi GSP, data rekaan untuk pengajaran. Isi riser mengikuti UFC 4-021-02 (2025) jumlah kabel pada tautan riser. PROVENANS jumlah perangkat [ASUMSI] · jumlah kabel [DITURUNKAN dari jadwal kamera dan jadwal zona]"
+ },
+ "spec": {
+  "family": "topology",
+  "classification": "BIASA",
+  "labels_verified": false,
+  "sources": [
+   "GSP reference set, Gambar 12.3 Riser Sistem Keamanan"
+  ],
+  "nodes": [
+   {
+    "id": "camp",
+    "label": "Kamera Perimeter",
+    "sub": "16 unit",
+    "shape": "box",
+    "class": {
+     "tier": 0
+    }
+   },
+   {
+    "id": "camg",
+    "label": "Kamera Gedung",
+    "sub": "6 unit",
+    "shape": "box",
+    "class": {
+     "tier": 0
+    }
+   },
+   {
+    "id": "pids",
+    "label": "Sensor PIDS",
+    "sub": "16 zona",
+    "shape": "box",
+    "class": {
+     "tier": 0
+    }
+   },
+   {
+    "id": "door",
+    "label": "Pintu Terkendali",
+    "sub": "8 pintu",
+    "shape": "box",
+    "class": {
+     "tier": 0
+    }
+   },
+   {
+    "id": "poe",
+    "label": "Switch PoE",
+    "sub": "4 lemari",
+    "shape": "box",
+    "class": {
+     "tier": 1
+    }
+   },
+   {
+    "id": "cpids",
+    "label": "Kontroler PIDS",
+    "sub": "16 input",
+    "shape": "box",
+    "class": {
+     "tier": 1
+    }
+   },
+   {
+    "id": "cacc",
+    "label": "Kontroler Akses",
+    "sub": "8 pintu",
+    "shape": "box",
+    "class": {
+     "tier": 1
+    }
+   },
+   {
+    "id": "core",
+    "label": "Switch Inti",
+    "sub": "redundan",
+    "shape": "box",
+    "class": {
+     "tier": 2,
+     "accent": true
+    }
+   },
+   {
+    "id": "ups",
+    "label": "UPS Keamanan",
+    "sub": "30 menit",
+    "shape": "box",
+    "class": {
+     "tier": 2
+    }
+   },
+   {
+    "id": "vms",
+    "label": "Server VMS",
+    "sub": "integrasi alarm",
+    "shape": "box",
+    "class": {
+     "tier": 3
+    }
+   },
+   {
+    "id": "rec",
+    "label": "Server Rekam",
+    "sub": "retensi 30 hari",
+    "shape": "box",
+    "class": {
+     "tier": 3
+    }
+   },
+   {
+    "id": "wall",
+    "label": "Video Wall",
+    "sub": "3 × 2 layar",
+    "shape": "box",
+    "class": {
+     "tier": 4
+    }
+   },
+   {
+    "id": "ops",
+    "label": "Konsol Operator",
+    "sub": "3 posisi",
+    "shape": "box",
+    "class": {
+     "tier": 4
+    }
+   }
+  ],
+  "edges": [
+   {
+    "from": "camp",
+    "to": "poe",
+    "kind": "data",
+    "label": "Cat6 × 16"
+   },
+   {
+    "from": "camg",
+    "to": "poe",
+    "kind": "data",
+    "label": "Cat6 × 6"
+   },
+   {
+    "from": "pids",
+    "to": "cpids",
+    "kind": "control",
+    "label": "koaksial × 16"
+   },
+   {
+    "from": "door",
+    "to": "cacc",
+    "kind": "control",
+    "label": "kabel komposit × 8"
+   },
+   {
+    "from": "poe",
+    "to": "core",
+    "kind": "data",
+    "label": "FO SM 2 inti × 4"
+   },
+   {
+    "from": "cpids",
+    "to": "core",
+    "kind": "control",
+    "label": "Cat6 × 1"
+   },
+   {
+    "from": "cacc",
+    "to": "core",
+    "kind": "control",
+    "label": "Cat6 × 1"
+   },
+   {
+    "from": "ups",
+    "to": "core",
+    "kind": "sync",
+    "label": "catu 230 V"
+   },
+   {
+    "from": "core",
+    "to": "vms",
+    "kind": "data",
+    "label": "10G × 2"
+   },
+   {
+    "from": "core",
+    "to": "rec",
+    "kind": "data",
+    "label": "10G × 2"
+   },
+   {
+    "from": "vms",
+    "to": "wall",
+    "kind": "data",
+    "label": "1G × 1"
+   },
+   {
+    "from": "vms",
+    "to": "ops",
+    "kind": "data",
+    "label": "1G × 3"
+   }
+  ],
+  "legend": [
+   {
+    "symbol": "data",
+    "label": "video dan data IP"
+   },
+   {
+    "symbol": "control",
+    "label": "sinyal alarm dan kendali"
+   },
+   {
+    "symbol": "sync",
+    "label": "catu daya"
+   }
+  ],
+  "notes": [
+   "Power feed drawn dotted on p554; mapped to sync only to keep the printed pattern, although sync means replication in the Studio grammar"
+  ]
+ }
+}

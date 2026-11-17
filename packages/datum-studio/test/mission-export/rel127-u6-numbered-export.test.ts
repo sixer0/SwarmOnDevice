@@ -242,7 +242,9 @@ describe("rel127 U-6 (d): the guide and both skill texts name the numbered layou
     // the light layout of swarm-workflow (ruling R-3) and the deliverables folder
     expect(texts["swarm-workflow.md"]).toContain("01_identification/plan.md")
     expect(texts["swarm-workflow.md"]).toContain("10_report/report.md")
-    expect(texts["swarm-workflow.md"]).toContain("11_deliverables/")
+    // 1.3.3 row 153 (S5): one deliverable folder, deliverables/<mission-id>/ in the project; not a numbered docs/ folder.
+    expect(texts["swarm-workflow.md"]).toContain("deliverables/<mission-id>/")
+    expect(texts["swarm-workflow.md"]).not.toContain("11_deliverables")
     expect(texts["mission-control.md"]).toContain('studio_file_verify, downloadDir "docs/<mission>/11_deliverables"')
     expect(texts.guide).toContain("01_identification")
   })

@@ -2399,6 +2399,7 @@ export type AutonomyMode = {
    * True only while a consented activation is live for this scope; a restart turns it off
    */
   bypass: boolean
+  needsReconsent?: boolean
 }
 
 export type NotFoundError = {
@@ -2438,6 +2439,7 @@ export type AutonomyAuditLine =
         | "check"
         | "file-op"
         | "git-local"
+        | "skill-script"
         | "edit-not-ordinary"
         | "own_api_read"
         | "outside_folder"
@@ -2487,6 +2489,7 @@ export type AutonomyAuditLine =
         | "check"
         | "file-op"
         | "git-local"
+        | "skill-script"
         | "edit-not-ordinary"
         | "own_api_read"
         | "outside_folder"
@@ -2633,6 +2636,7 @@ export type AutonomySession = {
    * True only while a consented activation is live for the session's root; a restart turns it off
    */
   bypass: boolean
+  needsReconsent?: boolean
   open: number
   lines: Array<AutonomyAuditLine>
   intact: boolean
