@@ -211,6 +211,18 @@ describe("stream reducer (U-ST-13, D5a-D5d, D9)", () => {
     expect(replies(out.state)[0]?.text).toBe("partial")
   })
 
+  test("F-SG2-2 a Stop (MessageAbortedError) ends busy without an error banner; text kept", () => {
+    const out = feed([
+      { type: "sessionKnown", sessionID: SES },
+      { type: "beginTurn" },
+      ...frames([message(ASSIST_MSG, "assistant"), part("prt_a", ASSIST_MSG, "text"), delta("prt_a", ASSIST_MSG, "partial")]),
+      ...frames([frame("session.error", { sessionID: SES, error: { name: "MessageAbortedError", data: {} } })]),
+    ])
+    expect(out.state.status).toBe("idle")
+    expect(out.effects.some((e) => e.type === "error")).toBe(false)
+    expect(replies(out.state)[0]?.text).toBe("partial")
+  })
+
   test("a second turn marks firstText again only when new assistant text arrives", () => {
     const first = feed([{ type: "sessionKnown", sessionID: SES }, { type: "beginTurn" }, ...frames(capture())])
     const second = feed(

@@ -140,16 +140,25 @@ function apply(state: StreamState, frame: { type: string; properties: Record<str
   }
 
   if (frame.type === "session.idle") return { ...state, status: "idle" }
-  if (frame.type === "session.error") return { ...state, status: "error" }
+  if (frame.type === "session.error") return { ...state, status: aborted(frame) ? "idle" : "error" }
   // session.created: only used to match buffered frames (REG §7.7 rev 3).
   return state
+}
+
+/**
+ * F-SG2-2 (live SP-S5): Stop aborts the turn and the sidecar reports that as `session.error` named MessageAbortedError.
+ * That is the outcome the person asked for (FR-39: Stop keeps the text so far), not a failure, so no error banner.
+ */
+function aborted(frame: { properties: Record<string, unknown> }) {
+  const error = frame.properties.error
+  return typeof error === "object" && error !== null && (error as { name?: unknown }).name === "MessageAbortedError"
 }
 
 function step(state: StreamState, frame: { type: string; properties: Record<string, unknown> }) {
   const next = apply(state, frame)
   const effects: StreamEffect[] = []
   if (frame.type === "session.idle") effects.push({ type: "idle" })
-  if (frame.type === "session.error") effects.push({ type: "error", key: "office.error.generic" })
+  if (frame.type === "session.error" && !aborted(frame)) effects.push({ type: "error", key: "office.error.generic" })
   if (next.firstText || renderedLength(next) <= next.baseline) return { state: next, effects }
   return {
     state: { ...next, firstText: true },
