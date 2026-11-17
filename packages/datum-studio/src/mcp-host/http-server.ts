@@ -54,6 +54,17 @@ export const MISSION_CONTROL_KEY_HEADER = "x-swarm-mission-control-key"
  */
 export const HOST_HTTP_TIMEOUTS = { requestTimeout: 0, headersTimeout: 30_000, timeout: 0 } as const
 export const MAX_SESSIONS = 64
+/**
+ * U21 / ECO-1 F-4: sessions were never expired, so a client that opened sessions and never sent DELETE locked every
+ * caller out (503) once 64 were open, the app's own Mission Control included. Two rules keep the cap from becoming a
+ * lockout: an attested session (Mission Control key) may use ATTESTED_RESERVE slots above the cap, and at the cap the
+ * least recently used ABANDONED session is closed to make room. Abandoned = unattested, no open GET stream (every live
+ * bridge holds one), no request in flight, and idle for at least IDLE_EVICT_MS.
+ */
+/** @internal test seam */
+export const ATTESTED_RESERVE = 8
+/** @internal test seam */
+export const IDLE_EVICT_MS = 60_000
 const AGENT_RE = /^[A-Za-z0-9_.-]{1,40}$/
 const LOOPBACK = new Set(["127.0.0.1", "::ffff:127.0.0.1"])
 
@@ -80,6 +91,8 @@ export interface EndpointOptions {
   /** Build the session's server for (agent, raw caller-cwd header); throw SessionRefused to refuse. */
   openSession(i: { sessionId: string; agentId: string; callerCwd: string | null; callerSession?: string | null; attested?: boolean }): Promise<SessionHandle> | SessionHandle
   log: (rec: Record<string, unknown>) => void
+  /** Test seam for the idle clock (U21 F-4); default Date.now. */
+  now?: () => number
 }
 
 export interface Endpoint {
@@ -149,9 +162,36 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
   interface Entry {
     transport: StreamableHTTPServerTransport
     handle: SessionHandle
+    attested: boolean
+    lastActive: number
+    inFlight: number
+    streams: number
   }
   const sessions = new Map<string, Entry>()
   let port = 0
+  const now = opts.now ?? Date.now
+
+  /** U21 F-4: the least recently used abandoned session, or undefined when every session is live or attested. */
+  const abandoned = (): [string, Entry] | undefined => {
+    let pick: [string, Entry] | undefined
+    for (const item of sessions) {
+      const e = item[1]
+      if (e.attested || e.streams > 0 || e.inFlight > 0 || now() - e.lastActive < IDLE_EVICT_MS) continue
+      if (!pick || e.lastActive < pick[1].lastActive) pick = item
+    }
+    return pick
+  }
+
+  /** Count a request against its session until the response closes (a GET is the session's stream). */
+  const track = (entry: Entry, method: string, res: ServerResponse) => {
+    entry.lastActive = now()
+    const key = method === "GET" ? "streams" : "inFlight"
+    entry[key] += 1
+    res.once("close", () => {
+      entry[key] -= 1
+      entry.lastActive = now()
+    })
+  }
 
   const authorized = (req: IncomingMessage): number => {
     if (!LOOPBACK.has(req.socket.remoteAddress ?? "")) return 403
@@ -203,11 +243,22 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
     if (sid !== undefined) {
       const entry = sessions.get(sid)
       if (!entry) return rpcError(res, 404, "Session not found")
+      track(entry, method, res)
       await requestKey.run(keyOk, () => entry.transport.handleRequest(req, res, body))
       return
     }
     if (method !== "POST" || !isInitializeRequest(body)) return rpcError(res, 400, "Bad Request: no valid session id")
-    if (sessions.size >= MAX_SESSIONS) return rpcError(res, 503, "Too many DATUM Studio sessions")
+    const unattested = [...sessions.values()].filter((e) => !e.attested).length
+    const full = keyOk ? sessions.size >= MAX_SESSIONS + ATTESTED_RESERVE : unattested >= MAX_SESSIONS
+    if (full) {
+      const victim = keyOk && unattested < MAX_SESSIONS ? undefined : abandoned()
+      if (!victim) return rpcError(res, 503, "Too many DATUM Studio sessions")
+      const [vid, ventry] = victim
+      sessions.delete(vid)
+      opts.log({ level: "warn", event: "session_evicted", ...sessionLogRef({ sessionId: vid }), idleMs: now() - ventry.lastActive })
+      await ventry.transport.close().catch(() => undefined)
+      await ventry.handle.close().catch(() => undefined)
+    }
     const agentRaw = req.headers[AGENT_HEADER]
     const agentId = typeof agentRaw === "string" ? agentRaw : ""
     if (!AGENT_RE.test(agentId)) return rpcError(res, 400, "X-Studio-Agent is required (1..40 of A-Z a-z 0-9 _ . -)")
@@ -229,11 +280,18 @@ export function startEndpoint(opts: EndpointOptions): Promise<Endpoint> {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => sessionId,
       onsessioninitialized: (id) => {
-        sessions.set(id, { transport, handle: sessionHandle })
+        sessions.set(id, { transport, handle: sessionHandle, attested, lastActive: now(), inFlight: 1, streams: 0 })
+        res.once("close", () => {
+          const e = sessions.get(id)
+          if (!e) return
+          e.inFlight -= 1
+          e.lastActive = now()
+        })
         opts.log({ level: "info", event: "session_open", ...logRef, agentId })
       },
       onsessionclosed: (id) => {
-        sessions.delete(id)
+        // A DELETE from the client: logged like a transport close (ECO-1: DELETE left no session_closed line).
+        if (sessions.delete(id)) opts.log({ level: "info", event: "session_closed", ...logRef })
       },
     })
     transport.onclose = () => {
