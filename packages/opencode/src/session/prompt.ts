@@ -10,7 +10,7 @@ import { Session } from "./session"
 import { Agent } from "../agent/agent"
 import { Provider } from "@/provider/provider"
 
-import { type Tool as AITool, tool, jsonSchema } from "ai"
+import { type Tool as AITool, tool, jsonSchema, asSchema } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import { SessionCompaction } from "./compaction"
 import { SessionSpend } from "./spend"
@@ -21,6 +21,7 @@ import { Plugin } from "../plugin"
 import { MAX_STEPS_PROMPT } from "@opencode-ai/core/session/runner/max-steps"
 import { ToolRegistry } from "@/tool/registry"
 import { MCP } from "../mcp"
+import { McpCatalog } from "@/mcp/catalog"
 import { LSP } from "@/lsp/lsp"
 import { ulid } from "ulid"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
@@ -59,7 +60,10 @@ import { eq } from "drizzle-orm"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
+import { detectTextCall, type TextCallTool } from "./text-call"
+import { MissionBinding } from "./mission-binding"
 import { OfficeProfile } from "./office-profile"
+import { TurnFacts } from "./turn-facts"
 import { LLMEvent } from "@opencode-ai/llm"
 
 // @ts-ignore
@@ -97,6 +101,20 @@ function formatMcpResourceBytes(value: number) {
   if (value < 1024 * 1024) return `${Math.ceil(value / 1024)} KB`
   return `${Math.ceil(value / (1024 * 1024))} MB`
 }
+
+// MC-1 (1.3.3 row 11): the fence at the loop exit. A final step that wrote a tool call as text, or that is empty while
+// the session has a running mission row, does not end the turn: the model gets one synthetic user message and the loop
+// goes on. Names, texts and the limit are from the 1.3.3 register (section 4). The call is never run from the text.
+/** Corrections and continues in a row per turn; a step with a real tool call resets the count, the next one ends the turn. */
+export const MAX_TURN_CORRECTIONS = 2
+export const TEXT_CALL_CORRECTION_MARK = "text_call_correction"
+export const EMPTY_STEP_CONTINUE_MARK = "empty_step_continue"
+export const textCallCorrection = (tool: string) =>
+  `Your last message wrote a tool call as text (${tool}). Nothing ran. Call the tool itself now with the same arguments; never write a call in your answer.`
+export const emptyStepContinue = (mission: string, rows: readonly string[]) =>
+  `Your last step was empty and mission ${mission} still has a running row (${rows.join(", ")}). Continue with a tool call, or set the row's status with its note.`
+/** One log line per final step the fence acted on or recognised (`action`: correction, continue, end, none). */
+export const LOOP_GUARD_LOG = "loop exit guard"
 
 function isOrphanedInterruptedTool(part: SessionV1.ToolPart) {
   // cleanup() marks abandoned tool_use blocks this way after retries/aborts.
@@ -155,17 +173,31 @@ const layer = Layer.effect(
     const delegationBlocks = Effect.fn("SessionPrompt.delegationBlocks")(function* (agent: Agent.Info) {
       if (agent.name !== "build") return [] as string[]
       const canTask = (name: string) => Permission.evaluate("task", name, agent.permission).action !== "deny"
-      const connected = Object.entries(yield* mcp.status())
-        .filter(([, entry]) => entry.status === "connected")
-        .map(([key]) => key)
       const available = Permission.disabled(["skill"], agent.permission).has("skill")
         ? []
         : yield* skill.available(agent)
       const taskOn = !Permission.disabled(["task"], agent.permission).has("task")
       return [
-        ...SystemPrompt.routing(agent.name, yield* agents.list(), canTask, connected),
+        // SB-2 (row 112): lines that need a connected MCP server are left out here (`routingNow` carries them in the
+        // turn facts block), so a server connecting mid-session does not rewrite the cached prefix.
+        ...SystemPrompt.routing(agent.name, yield* agents.list(), canTask, []),
         ...SystemPrompt.autoWorkflow(agent.name, available, taskOn),
       ]
+    })
+
+    /** The routing lines that depend on an MCP server connected right now (the researcher line), or undefined. */
+    const routingNow = Effect.fn("SessionPrompt.routingNow")(function* (agent: Agent.Info) {
+      if (agent.name !== "build") return undefined
+      const canTask = (name: string) => Permission.evaluate("task", name, agent.permission).action !== "deny"
+      const connected = Object.entries(yield* mcp.status())
+        .filter(([, entry]) => entry.status === "connected")
+        .map(([key]) => key)
+      const list = yield* agents.list()
+      const lines = (block: string[]) => (block[0] ?? "").split("\n")
+      const full = lines(SystemPrompt.routing(agent.name, list, canTask, connected))
+      const fixed = new Set(lines(SystemPrompt.routing(agent.name, list, canTask, [])))
+      const extra = full.filter((line) => line.startsWith("- ") && !fixed.has(line))
+      return extra.length === 0 ? undefined : extra.join("\n")
     })
 
     const instruction = yield* Instruction.Service
@@ -1127,10 +1159,133 @@ const layer = Layer.effect(
         return yield* work
       }).pipe(Effect.ensuring(Effect.sync(() => RunLease.end(sessionID))))
 
+    // MC-1 (1.3.3 row 11): looked at once per finished step that made no error, before the loop exit can end the turn.
+    //   "work"   the step has a tool part: not a final answer, nothing to do
+    //   "exit"   an ordinary answer (or an empty step of a session without a running mission row): exits as before
+    //   "again"  one correction or continue message was inserted: the loop goes on with it as the newest user message
+    //   "ended"  the turn was ended through `endWithoutWork` (the reason is in `finish`); the loop exit then ends it
+    // The detector's `args` are only reported, never passed to a tool: the model has to repeat the call itself.
+    const guardExit = Effect.fnUntraced(function* (input: {
+      sessionID: SessionID
+      handle: SessionProcessor.Handle
+      tools: Record<string, AITool>
+      agent: Agent.Info
+      session: Session.Info
+      user: SessionV1.User
+      corrections: number
+    }) {
+      const { sessionID, handle, corrections } = input
+      const parts = yield* MessageV2.parts(handle.message.id).pipe(Effect.provideService(Database.Service, database))
+      if (parts.some((part) => part.type === "tool")) return "work" as const
+      const text = parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+      const fields = { "session.id": sessionID, messageID: handle.message.id, corrections }
+
+      const nudge = Effect.fnUntraced(function* (mark: string, body: string) {
+        const now = Date.now()
+        // Same agent, model, format, system and tool switches as the message it continues: it is the same turn.
+        const msg = yield* sessions.updateMessage({
+          id: MessageID.ascending(),
+          role: "user",
+          sessionID,
+          time: { created: now },
+          agent: input.user.agent,
+          model: input.user.model,
+          ...(input.user.format ? { format: input.user.format } : {}),
+          ...(input.user.system !== undefined ? { system: input.user.system } : {}),
+          ...(input.user.tools ? { tools: input.user.tools } : {}),
+        } satisfies SessionV1.User)
+        yield* sessions.updatePart({
+          id: PartID.ascending(),
+          messageID: msg.id,
+          sessionID,
+          type: "text",
+          // Internal mark, as `compaction_continue` (compaction.ts): not a stable plugin contract.
+          metadata: { [mark]: true },
+          synthetic: true,
+          text: body,
+          time: { start: now, end: now },
+        })
+      })
+
+      if (text.trim() === "") {
+        const binding = MissionBinding.get(sessionID)
+        if (!binding || binding.runningRows.length === 0) return "exit" as const
+        const seen = { ...fields, kind: "empty-step", mission: binding.missionID, rows: binding.runningRows.join(",") }
+        if (corrections >= MAX_TURN_CORRECTIONS) {
+          yield* Effect.logWarning(LOOP_GUARD_LOG, { ...seen, action: "end" })
+          yield* handle.endWithoutWork({ reason: "empty-step", corrections })
+          return "ended" as const
+        }
+        yield* nudge(EMPTY_STEP_CONTINUE_MARK, emptyStepContinue(binding.missionID, binding.runningRows))
+        yield* Effect.logWarning(LOOP_GUARD_LOG, { ...seen, action: "continue" })
+        return "again" as const
+      }
+
+      // Every form the detector knows has a brace or an angle bracket; most answers stop here.
+      if (!text.includes("{") && !text.includes("<")) return "exit" as const
+
+      // The set the model was offered: `LLMRequestPrep.resolveTools` (llm/request.ts) drops the same keys.
+      const disabled = Permission.disabled(
+        Object.keys(input.tools),
+        Permission.merge(input.agent.permission, input.session.permission ?? []),
+      )
+      const active: TextCallTool[] = []
+      for (const [name, item] of Object.entries(input.tools)) {
+        if (input.user.tools?.[name] === false || disabled.has(name)) continue
+        // A schema that cannot be read leaves the tool known by name; the detector then only asks for an object.
+        const schema = yield* Effect.tryPromise(() => Promise.resolve(asSchema(item.inputSchema).jsonSchema)).pipe(
+          Effect.catch(() => Effect.succeed(undefined)),
+        )
+        active.push({ name, schema })
+      }
+      const servers = Object.entries((yield* config.get()).mcp ?? {}).flatMap(([key, entry]) =>
+        entry?.enabled === false ? [] : [key],
+      )
+      const found = detectTextCall({ text, tools: active, hasToolCalls: false, servers })
+      if (found.kind === "none") return "exit" as const
+      const seen = {
+        ...fields,
+        kind: found.kind,
+        form: found.form,
+        ...(found.tool ? { tool: found.tool } : {}),
+        ...(found.registered !== undefined ? { registered: found.registered } : {}),
+        ...(found.server ? { server: found.server } : {}),
+        ...(found.kind === "damaged" ? { cause: found.cause } : {}),
+      }
+      // Damaged markup that names no tool: nothing to tell the model to repeat. Logged, and the turn ends as before.
+      if (!found.tool) {
+        yield* Effect.logWarning(LOOP_GUARD_LOG, { ...seen, action: "none" })
+        return "exit" as const
+      }
+      if (found.registered === true) {
+        if (corrections >= MAX_TURN_CORRECTIONS) {
+          yield* Effect.logWarning(LOOP_GUARD_LOG, { ...seen, action: "end" })
+          yield* handle.endWithoutWork({ reason: "text-tool-call", corrections })
+          return "ended" as const
+        }
+        yield* nudge(TEXT_CALL_CORRECTION_MARK, textCallCorrection(found.tool))
+        yield* Effect.logWarning(LOOP_GUARD_LOG, { ...seen, action: "correction" })
+        return "again" as const
+      }
+      // The model cannot call this tool, so a correction cannot succeed: none is sent. When no tool of the tool's
+      // server is in the active set the reason names the server; otherwise it is a text call like any other.
+      const prefix = found.server ? `${McpCatalog.sanitize(found.server)}_` : undefined
+      const lost = prefix !== undefined && !active.some((item) => item.name.startsWith(prefix))
+      yield* Effect.logWarning(LOOP_GUARD_LOG, { ...seen, action: "end" })
+      yield* handle.endWithoutWork(
+        lost && found.server
+          ? { reason: "tools-unavailable", server: found.server, corrections }
+          : { reason: "text-tool-call", corrections },
+      )
+      return "ended" as const
+    })
+
     const runLoop: (sessionID: SessionID) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.run")(
       function* (sessionID: SessionID) {
         const ctx = yield* InstanceState.context
         let structured: unknown
+        // MC-1: corrections and continues sent in a row in this turn (MAX_TURN_CORRECTIONS).
+        let corrections = 0
         let step = 0
         let coldChecked = false
         let compactedForPriceAt: number | undefined
@@ -1282,6 +1437,44 @@ const layer = Layer.effect(
           }
           const maxSteps = agent.steps ?? Infinity
           const isLastStep = step >= maxSteps
+          // SB-2 + MC-6 (rows 112, 105): once per person message, the facts that change during a session (date, the
+          // routing line and installed tools that need a connected server, MCP instructions) and the context fact
+          // line go into one synthetic part saved on that message, after the cached prefix. Later steps and turns
+          // repeat it byte for byte; a fact is written again only when it changed. Office sessions keep their own
+          // one-line prefix (SD-1) and get no block.
+          const newestUser = msgs.findLast((item) => item.info.id === lastUser.id)
+          if (newestUser && !OfficeProfile.isOfficeSession(session) && !TurnFacts.has(newestUser)) {
+            const [routing, tools, mcpText] = yield* Effect.all([
+              routingNow(agent),
+              sys.installed(),
+              sys.mcp(agent, session.permission),
+            ])
+            const facts = TurnFacts.render({
+              seen: TurnFacts.seen(msgs),
+              now: { date: new Date().toDateString(), routing, tools, mcp: mcpText },
+              line: TurnFacts.contextLine(
+                TurnFacts.context({
+                  cfg: yield* config.get(),
+                  model,
+                  // The same step the overflow check above reads; a summary step is skipped there and here.
+                  tokens: lastFinished && lastFinished.summary !== true ? lastFinished.tokens : undefined,
+                  outputTokenMax: flags.outputTokenMax,
+                  priceTargetOff,
+                }),
+              ),
+            })
+            const part = yield* sessions.updatePart({
+              id: PartID.ascending(),
+              messageID: lastUser.id,
+              sessionID,
+              type: "text",
+              text: facts.text,
+              synthetic: true,
+              metadata: { [TurnFacts.METADATA_KEY]: facts.emitted },
+            })
+            // A new message object, so the title fiber forked on step 1 keeps the history it was given.
+            msgs = msgs.map((item) => (item === newestUser ? { ...item, parts: [...item.parts, part] } : item))
+          }
           // SD-1 (M6-01b): no plan-mode or build-switch reminders for an Office add-in session; they can carry the
           // plan file path, which holds the user's home folder.
           msgs = OfficeProfile.isOfficeSession(session)
@@ -1334,7 +1527,7 @@ const layer = Layer.effect(
             const bypassAgentCheck = (lastUserMsg?.parts ?? []).flatMap((p) => (p.type === "agent" ? [p.name] : []))
             const promptOps = yield* ops()
 
-            const tools = yield* SessionTools.resolve({
+            const resolved = yield* SessionTools.resolve({
               agent,
               session,
               model,
@@ -1353,7 +1546,21 @@ const layer = Layer.effect(
               Effect.provideService(RuntimeFlags.Service, flags),
               // SK-g: the mission-type suggestion line on `studio_mission_create` (N8-048) reads the agent's skills.
               Effect.provideService(Skill.Service, skill),
+              // MC-2 (rows 7, 11): a server that had tools has none now. `mcp.tools()` raises it as a defect; it comes
+              // back as a value here so the step ends with the named reason. Every other cause is re-raised unchanged.
+              Effect.catchCause((cause) => {
+                const lost = MCP.toolsUnavailable(cause)
+                return lost ? Effect.succeed(lost) : Effect.failCause(cause)
+              }),
             )
+            if (resolved instanceof MCP.ToolsUnavailableError) {
+              // No model request is made without the tools. `finish` becomes `tools-unavailable:<server>`, `error`
+              // stays unset, and the loop exit ends the turn on the next pass (it writes the "exiting loop" line).
+              yield* handle.endWithoutWork({ reason: "tools-unavailable", server: resolved.server, corrections })
+              corrections = 0
+              return "continue" as const
+            }
+            const tools = resolved
 
             if (lastUser.format?.type === "json_schema") {
               tools["StructuredOutput"] = createStructuredOutputTool({
@@ -1380,7 +1587,8 @@ const layer = Layer.effect(
               const firstParts = msgs.find((msg) => msg.info.role === "user")?.parts ?? []
               // SD-1: an Office add-in session gets one date line and none of the producers below run (no files read,
               // no remote instruction URLs fetched).
-              const [skills, env, instructions, remembered, mcpInstructions, delegation] =
+              // SB-2 (row 112): MCP instructions are in the turn facts block now; the Office prefix never had them.
+              const [skills, env, instructions, remembered, , delegation] =
                 OfficeProfile.isOfficeSession(session)
                   ? OfficeProfile.prefix()
                   : yield* Effect.all([
@@ -1395,7 +1603,7 @@ const layer = Layer.effect(
                           .join("\n"),
                         directory: session.directory,
                       }),
-                      sys.mcp(agent, session.permission),
+                      Effect.succeed(undefined),
                       delegationBlocks(agent),
                     ])
               frozenSystem = {
@@ -1406,7 +1614,6 @@ const layer = Layer.effect(
                   ...env,
                   ...instructions,
                   ...(remembered ? [remembered] : []),
-                  ...(mcpInstructions ? [mcpInstructions] : []),
                   ...(skills ? [skills] : []),
                 ],
               }
@@ -1414,10 +1621,11 @@ const layer = Layer.effect(
             const system = [...frozenSystem.parts]
             const format = lastUser.format ?? { type: "text" as const }
             if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+            // SD-1 (M6-01b): an Office session never gets a configured agent prompt, only the built-in one.
+            const stepAgent = OfficeProfile.isOfficeSession(session) ? OfficeProfile.agent(agent) : agent
             const result = yield* handle.process({
               user: lastUser,
-              // SD-1 (M6-01b): an Office session never gets a configured agent prompt, only the built-in one.
-              agent: OfficeProfile.isOfficeSession(session) ? OfficeProfile.agent(agent) : agent,
+              agent: stepAgent,
               permission: session.permission,
               sessionID,
               parentSessionID: session.parentID,
@@ -1461,6 +1669,23 @@ const layer = Layer.effect(
                 yield* sessions.updateMessage(handle.message)
                 return "break" as const
               }
+            }
+
+            // MC-1 (row 11): the fence before the loop exit. It looks only at a step that finished without an error,
+            // was not stopped or sent to compaction, and is not the agent's last allowed step (there the model was
+            // told to answer in text). A structured-output turn never reaches this line with a finished step.
+            if (handle.message.finish === "tool-calls") corrections = 0
+            if (result === "continue" && finished && !handle.message.error && !isLastStep) {
+              const verdict = yield* guardExit({
+                sessionID,
+                handle,
+                tools,
+                agent: stepAgent,
+                session,
+                user: lastUser,
+                corrections,
+              })
+              corrections = verdict === "again" ? corrections + 1 : 0
             }
 
             if (result === "stop") return "break" as const

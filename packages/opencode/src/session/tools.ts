@@ -36,6 +36,7 @@ import { Reach } from "@/tool/reach"
 import { missionTypeSuggestion } from "./system"
 import { Memory } from "@/memory/memory"
 import { VaultMirror } from "@/memory/vault-mirror"
+import { MissionBinding } from "./mission-binding"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -721,6 +722,24 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
                 })
               }
             }
+          }
+
+          // MC-1 item 2 / MC-6 (1.3.3 row 9): a successful mission call of the built-in Studio server tells this session
+          // which mission it works on, its running rows and held locks; a close (done, cancelled) clears it. The parse is
+          // defensive and cannot fail or change the call; other sessions never see the binding.
+          if (studio && !result.isError) {
+            const bound = MissionBinding.observe({
+              sessionID: input.session.id,
+              tool: entry.def.name,
+              args: callArgs,
+              result,
+            })
+            if (bound === "cleared")
+              yield* Effect.logInfo("mission binding cleared", {
+                source: "SessionTools.missionBinding",
+                "session.id": input.session.id,
+                tool: entry.def.name,
+              })
           }
 
           // OBS-d T3 and the OBS-g close nudge (01c §5, §8.3, N8-437): a successful close (done or cancelled) refreshes
