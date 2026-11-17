@@ -1,0 +1,13 @@
+{
+  "owner": "PT GSP",
+  "title": "Arsitektur VMS: rekaman di situs, manajemen terpusat",
+  "dwg_no": "GSP-UJI-VSS-110",
+  "rev": "A",
+  "sheet": "1/6",
+  "scale": "NTS",
+  "classification": "BIASA",
+  "status": "DRAFT",
+  "date": "2026-11-17",
+  "standards": "IEC 62676-4:2025",
+  "key": [["data", "video"], ["control", "kendali/API"], ["accent", "subjek"]]
+}

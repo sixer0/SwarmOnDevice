@@ -37,13 +37,16 @@ import {
   type DecodedImageDetail,
 } from "@/lib/studio/services/images";
 import { McpToolError } from "../../../../vendor/scripts/studio/mcp/safety";
+import type { FigureWidthV2 } from "@/lib/studio/contract/types/v2/doc";
 import type { RouteContext } from "../types.ts";
+import { fromSvgSummary } from "../../asset-tool.ts";
+import { framedSvgToPng, svgInputProblem, SvgIntakeRefusal } from "../../svg-intake.ts";
 import { ASSET_PATH_HTTP, assetMetadataWarning, readAssetFile } from "./r18-asset-path";
 
 const ROUTE = STUDIO_ROUTES.R18;
 const SOURCE = "studio.api.assets";
 const SHA_RE = /^[0-9a-f]{64}$/i;
-const JSON_KEYS: ReadonlySet<string> = new Set(["mime", "dataBase64", "path", "agentId"]);
+const JSON_KEYS: ReadonlySet<string> = new Set(["mime", "dataBase64", "path", "agentId", "svg", "width"]);
 
 /** Guide §10: 60 uploads per minute per caller. */
 export const R18_UPLOADS_PER_MINUTE = 60;
@@ -87,21 +90,23 @@ export async function POST(req: Request, rc: RouteContext): Promise<Response> {
       message: stored.created ? "asset uploaded" : "asset upload deduplicated",
       code: stored.created ? "ASSET_UPLOADED" : "ASSET_DEDUPED",
       status: stored.created ? 201 : 200,
-      context: { sha256: stored.asset.sha256, bytes: stored.asset.bytes, source: input.source, requester: rc.caller.requester, metadata: input.img.metadata },
+      context: { sha256: stored.asset.sha256, bytes: stored.asset.bytes, source: input.source, requester: rc.caller.requester, metadata: input.img.metadata, ...(input.fromSvg ? { fromSvg: input.fromSvg } : {}) },
     });
     return json(
-      { asset: stored.asset, created: stored.created, ref: assetRefOf(stored.asset.sha256), metadata: input.img.metadata, ...(warning ? { warning } : {}) },
+      { asset: stored.asset, created: stored.created, ref: assetRefOf(stored.asset.sha256), metadata: input.img.metadata, ...(warning ? { warning } : {}), ...(input.fromSvg ? { fromSvg: input.fromSvg } : {}) },
       stored.created ? 201 : 200,
       ctx,
       NO_STORE,
     );
   } catch (e) {
     if (e instanceof McpToolError) return pathRefusal(ctx, e);
+    // Row 116: SVG intake refusals name the construct or the size (details carry reason, construct, limits).
+    if (e instanceof SvgIntakeRefusal) return reject(ctx, e.code, e.message, e.details, { requester: rc.caller.requester });
     return failure(e, ctx, { op: "POST assets", context: { requester: rc.caller.requester } });
   }
 }
 
-type AssetInput = { img: DecodedImageDetail; mime?: string; source: "multipart" | "base64" | "path" };
+type AssetInput = { img: DecodedImageDetail; mime?: string; source: "multipart" | "base64" | "path" | "svg"; fromSvg?: Record<string, unknown> };
 
 async function readInput(req: Request, ctx: ReqCtx, rc: RouteContext): Promise<AssetInput | Response> {
   const contentType = req.headers.get("content-type") ?? "";
@@ -116,10 +121,19 @@ async function readInput(req: Request, ctx: ReqCtx, rc: RouteContext): Promise<A
   if (b.mime !== undefined && typeof b.mime !== "string") return reject(ctx, "SCHEMA_INVALID", "mime must be a string", [{ pointer: "/mime", keyword: "type", message: "must be string" }]);
   const hasData = b.dataBase64 !== undefined;
   const hasPath = b.path !== undefined;
-  if (hasData === hasPath) {
-    return reject(ctx, "SCHEMA_INVALID", "Send exactly one of dataBase64 and path", [{ pointer: "", keyword: "oneOf", message: "exactly one of dataBase64, path" }]);
+  const hasSvg = b.svg !== undefined;
+  if (Number(hasData) + Number(hasPath) + Number(hasSvg) !== 1) {
+    return reject(ctx, "SCHEMA_INVALID", "Send exactly one of dataBase64, path and svg", [{ pointer: "", keyword: "oneOf", message: "exactly one of dataBase64, path, svg" }]);
   }
+  if (b.width !== undefined && !hasSvg) return reject(ctx, "SCHEMA_INVALID", "width is only for svg", [{ pointer: "/width", keyword: "dependencies", message: "requires svg" }]);
   const mime = typeof b.mime === "string" ? b.mime : undefined;
+  if (hasSvg) {
+    // Row 116 (ST-8, Q4): framed SVG -> sanitised -> PNG at the printed width; only the PNG is stored.
+    const bad = svgInputProblem(b.svg, b.width);
+    if (bad) return reject(ctx, "SCHEMA_INVALID", bad.message, [{ pointer: bad.pointer, keyword: "type", message: bad.message }]);
+    const f = await framedSvgToPng(b.svg as string, b.width as FigureWidthV2);
+    return { img: decodeImageDetailed({ bytes: f.png }), source: "svg", fromSvg: fromSvgSummary(f) };
+  }
   if (hasData) {
     if (typeof b.dataBase64 !== "string") return reject(ctx, "SCHEMA_INVALID", "dataBase64 must be a string", [{ pointer: "/dataBase64", keyword: "type", message: "must be string" }]);
     return { img: decodeImageDetailed({ base64: b.dataBase64 }), mime, source: "base64" };
