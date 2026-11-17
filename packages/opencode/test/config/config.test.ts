@@ -2542,3 +2542,23 @@ describe("CFG-04 merge-under: shipped defaults sit under the user's swarm.jsonc"
     ),
   )
 })
+
+it.effect("ECO-1 F-8: a local MCP entry's legacy `env` block is read as `environment` (environment wins)", () =>
+  withConfigTree(
+    {
+      global: {
+        mcp: {
+          graft: { type: "local", command: ["/n", "/c", "mcp"], env: { DO_NOT_TRACK: "1", SHARED: "env" } },
+          both: { type: "local", command: ["x"], env: { SHARED: "env" }, environment: { SHARED: "environment" } },
+          remote: { type: "remote", url: "https://example.com/mcp", env: { A: "1" } },
+        },
+      },
+    },
+    Effect.gen(function* () {
+      const mcp = (yield* Config.use.get()).mcp ?? {}
+      expect(mcp.graft).toMatchObject({ environment: { DO_NOT_TRACK: "1", SHARED: "env" } })
+      expect(mcp.both).toMatchObject({ environment: { SHARED: "environment" } })
+      expect(mcp.remote).not.toHaveProperty("environment")
+    }),
+  ),
+)
