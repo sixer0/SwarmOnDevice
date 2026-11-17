@@ -4,14 +4,14 @@
   "text": "Every zone has its own VRF and subnet, and traffic between zones only crosses the internal firewall."
  },
  "source": {
-  "text": "Kajian Teknis 004/GSP/KT/XI/2026 §5.2 Table 5.4"
+  "text": "Kajian Teknis 000/GSP/KT/XI/2026 §5.2 Table 5.4"
  },
  "spec": {
   "family": "layered",
   "classification": "BIASA",
   "labels_verified": false,
   "sources": [
-   "Kajian Teknis 004/GSP/KT/XI/2026 §5.2 Table 5.4"
+   "Kajian Teknis 000/GSP/KT/XI/2026 §5.2 Table 5.4"
   ],
   "nodes": [
    {
