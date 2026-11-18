@@ -16,13 +16,12 @@ export const MEMORY_URGENT_MB = 3_300
 
 type MemoryLevel = "warn" | "urgent"
 
-// Bytes, the shape of `process.memoryUsage()`. The watched metric is `rss` (logged as `rssMb`); the same value is
-// used for the log line and for the thresholds.
+// Bytes, the shape of `process.memoryUsage()`. 1.3.4 (T-07): the thresholds watch max(rss, heapUsed); both are logged.
 /** @internal test seam */
 export type MemoryReading = { rss: number; heapUsed: number; heapTotal: number; external: number }
 
 /** @internal test seam */
-export type MemoryThresholdEvent = { level: MemoryLevel; rssMb: number; thresholdMb: number }
+export type MemoryThresholdEvent = { level: MemoryLevel; rssMb: number; heapUsedMb: number; watchedMb: number; thresholdMb: number }
 
 // A subset of Electron's MessageBoxOptions, so `dialog.showMessageBox` fits without a cast.
 /** @internal test seam */
@@ -156,18 +155,23 @@ export function createMemoryWatch(deps: MemoryWatchDeps) {
     try {
       const reading = deps.readMemory()
       const rssMb = toMb(reading.rss)
+      const heapUsedMb = toMb(reading.heapUsed)
+      // 1.3.4 (T-07): the thresholds watch the larger of RSS and the V8 heap. On 2026-11-18 the main process ran out
+      // of heap at 3,806 MB while macOS compressed memory kept RSS at 1,600-2,200 MB, so an RSS-only watch never
+      // offered the reopen before either crash.
+      const watchedMb = Math.max(rssMb, heapUsedMb)
       deps.log(LOG_NAME, "main memory", {
         rssMb,
-        heapUsedMb: toMb(reading.heapUsed),
+        heapUsedMb,
         heapTotalMb: toMb(reading.heapTotal),
         externalMb: toMb(reading.external),
       })
 
-      const crossed = THRESHOLDS.find((t) => rssMb >= t.mb)
+      const crossed = THRESHOLDS.find((t) => watchedMb >= t.mb)
       if (crossed && !raised.has(crossed.level)) {
         raised.add(crossed.level)
         if (crossed.level === "urgent") raised.add("warn")
-        const event: MemoryThresholdEvent = { level: crossed.level, rssMb, thresholdMb: crossed.mb }
+        const event: MemoryThresholdEvent = { level: crossed.level, rssMb, heapUsedMb, watchedMb, thresholdMb: crossed.mb }
         deps.log(LOG_NAME, "main memory threshold", { ...event }, "warn")
         deps.onEvent?.(event)
       }
@@ -176,7 +180,7 @@ export function createMemoryWatch(deps: MemoryWatchDeps) {
       // offer was answered with Later.
       if (dialogOpen || reopening) return
       const due = THRESHOLDS.find((t) => raised.has(t.level) && !offered.has(t.level))
-      if (due) offer(due.level, rssMb)
+      if (due) offer(due.level, watchedMb)
     } catch (error) {
       deps.log(LOG_NAME, "main memory watch failed", errorFields(error), "error")
     }

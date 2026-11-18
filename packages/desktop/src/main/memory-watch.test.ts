@@ -18,6 +18,7 @@ type LogLine = { name: string; message: string; extra?: Record<string, unknown>;
 
 function harness(input: { answers?: Array<number | Error>; locale?: string; holdDialog?: boolean } = {}) {
   let rssMb = 500
+  let heapMb = 100.4
   let tick: (() => void) | undefined
   let intervalMs: number | undefined
   let cleared = 0
@@ -43,7 +44,7 @@ function harness(input: { answers?: Array<number | Error>; locale?: string; hold
     },
     readMemory: (): MemoryReading => {
       if (readFails) throw new Error("reader broke")
-      return { rss: rssMb * MB, heapUsed: 100.4 * MB, heapTotal: 200.6 * MB, external: 3 * MB }
+      return { rss: rssMb * MB, heapUsed: heapMb * MB, heapTotal: 200.6 * MB, external: 3 * MB }
     },
     showMessageBox: (options) => {
       dialogs.push(options)
@@ -66,6 +67,7 @@ function harness(input: { answers?: Array<number | Error>; locale?: string; hold
     dialogs,
     pending,
     setRss: (mb: number) => (rssMb = mb),
+    setHeap: (mb: number) => (heapMb = mb),
     failReads: (on: boolean) => (readFails = on),
     // One interval elapses, then pending promise callbacks (the dialog answer) run.
     elapse: async () => {
@@ -140,12 +142,12 @@ describe("warn threshold", () => {
     h.watch.start()
     h.setRss(2_700)
     await h.elapse()
-    expect(h.events).toEqual([{ level: "warn", rssMb: 2_700, thresholdMb: 2_700 }])
+    expect(h.events).toEqual([{ level: "warn", rssMb: 2_700, heapUsedMb: 100, watchedMb: 2_700, thresholdMb: 2_700 }])
     expect(h.thresholdLines()).toEqual([
       {
         name: "memory",
         message: "main memory threshold",
-        extra: { level: "warn", rssMb: 2_700, thresholdMb: 2_700 },
+        extra: { level: "warn", rssMb: 2_700, heapUsedMb: 100, watchedMb: 2_700, thresholdMb: 2_700 },
         level: "warn",
       },
     ])
@@ -210,7 +212,7 @@ describe("urgent threshold", () => {
     await h.elapse()
     await h.elapse()
     expect(h.events.map((e) => e.level)).toEqual(["warn", "urgent"])
-    expect(h.events[1]).toEqual({ level: "urgent", rssMb: 3_300, thresholdMb: 3_300 })
+    expect(h.events[1]).toEqual({ level: "urgent", rssMb: 3_300, heapUsedMb: 100, watchedMb: 3_300, thresholdMb: 3_300 })
     expect(h.dialogs).toHaveLength(2)
     expect(h.relaunched()).toBe(0)
   })
@@ -299,5 +301,31 @@ describe("offer text (register section 10)", () => {
     await h.elapse()
     expect(h.dialogs[0].buttons).toEqual(["Buka ulang", "Nanti"])
     expect(h.dialogs[0].message).toContain("(2,8 GB)")
+  })
+})
+
+// 1.3.4 T-07: the heap alone reaches the thresholds while RSS stays low (macOS memory compression). On 2026-11-18 the
+// main process crashed at a 3,806 MB heap with RSS between 1,600 and 2,200 MB, and no offer was ever made.
+describe("T-07 heap-driven threshold", () => {
+  test("heap over the warn line with RSS far below raises warn and offers the reopen", async () => {
+    const h = harness()
+    h.watch.start()
+    h.setRss(1_600)
+    h.setHeap(2_750)
+    await h.elapse()
+    expect(h.events).toEqual([{ level: "warn", rssMb: 1_600, heapUsedMb: 2_750, watchedMb: 2_750, thresholdMb: 2_700 }])
+    expect(h.dialogs.length).toBe(1)
+  })
+
+  test("the 2026-11-18 readings: urgent at heap 3,308 MB with RSS 1,608 MB", async () => {
+    const h = harness({ answers: [1, 1] })
+    h.watch.start()
+    for (const [rss, heap] of [[1_411, 3_171], [1_608, 3_308]] as const) {
+      h.setRss(rss)
+      h.setHeap(heap)
+      await h.elapse()
+    }
+    expect(h.events.map((e) => e.level)).toEqual(["warn", "urgent"])
+    expect(h.events[1]!.watchedMb).toBe(3_308)
   })
 })

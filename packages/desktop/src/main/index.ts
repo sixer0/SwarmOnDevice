@@ -9,7 +9,6 @@ import type { Event, MessageBoxOptions } from "electron"
 import { app, BrowserWindow, dialog } from "electron"
 
 import { Deferred, Effect, Fiber } from "effect"
-import contextMenu from "electron-context-menu"
 
 import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
@@ -141,7 +140,8 @@ function ensureLoopbackNoProxy() {
 }
 
 const main = Effect.gen(function* () {
-  contextMenu({ showSaveImageAs: true, showLookUpSelection: false, showSearchWithGoogle: false })
+  // 1.3.4 (T-06): the context menu is attached per app window in windows.ts (wireContextMenu), not app-wide. The
+  // app-wide form registered every BrowserWindow, including each hidden render window, and kept them all.
 
   // on macOS apps run in `/` which can cause issues with ripgrep
   try {

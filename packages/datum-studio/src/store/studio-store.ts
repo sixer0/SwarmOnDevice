@@ -1004,6 +1004,24 @@ export class SqliteStudioStore implements StudioStore {
     return readVerified(abs, { sha256: row.sha256, bytes: Number(row.bytes), relPath: row.rel_path })
   }
 
+  /**
+   * 1.3.4 (T-10): a store opened by a new host process cannot have a render running yet, so every QUEUED or RUNNING
+   * render job left by a previous process (crash, force quit, restart) is closed as FAILED / RENDER_INTERRUPTED.
+   * Before this, such rows stayed RUNNING forever and blocked a new render of the same revision with
+   * RENDER_IN_PROGRESS for STUDIO_RENDER_JOB_TIMEOUT_MS (10 minutes). Returns the ids it closed.
+   */
+  async failInterruptedRenderJobs(): Promise<string[]> {
+    return this.transaction(async (tx) => {
+      const rows = tx.all<{ id: string }>("SELECT id FROM render_job WHERE status IN ('QUEUED','RUNNING')", [])
+      for (const { id } of rows)
+        tx.run(
+          "UPDATE render_job SET status = 'FAILED', error_code = 'RENDER_INTERRUPTED', error_message = ?, time_finished = ? WHERE id = ?",
+          ["the process that ran this render stopped before it finished; render again", tx.now, id],
+        )
+      return rows.map((r) => r.id)
+    })
+  }
+
   async recordRender(tx: StoreTx, job: RenderJobUpdate, revisionLint?: { releaseStatus: string; lintReport: unknown }): Promise<void> {
     const id = job.id ?? newId()
     const exists = tx.get("SELECT id FROM render_job WHERE id = ?", [id])
