@@ -32,6 +32,8 @@ const DELIBERATE_EXITS = new Set([0, 130, 143])
 
 const held = new Map<string, Lease>()
 let enabled = false
+// 1.3.4 (T-12): set by handOver(). The process is about to exit so that a relaunched Swarm can continue its runs.
+let handingOver = false
 let pending: Interrupted[] = []
 
 const directory = () => path.join(Global.Path.state, "runs")
@@ -59,7 +61,7 @@ export function enable() {
   if (enabled) return
   enabled = true
   process.on("exit", (code) => {
-    if (DELIBERATE_EXITS.has(code)) markStopped()
+    if (DELIBERATE_EXITS.has(code) && !handingOver) markStopped()
   })
   // An unhandled signal kills the process before "exit" fires, which would read as a crash on the next start. SIGHUP is
   // left alone on purpose: a dropped ssh session or closed terminal is not a decision to stop the agent.
@@ -99,9 +101,21 @@ export function touch(sessionID: string) {
 }
 
 export function end(sessionID: string) {
-  if (!enabled) return
+  if (!enabled || handingOver) return
   held.delete(sessionID)
   rmSync(file(sessionID), { force: true })
+}
+
+/**
+ * 1.3.4 (T-12): the desktop is restarting itself (menu Restart, or the person accepted the memory reopen) and wants the
+ * running work to carry on. Leases are left exactly as they are, never marked stopped and never removed, so the next
+ * process claims them as `continue`, the same path a crash takes. The caller exits right after, without stopping runs.
+ * Returns the number of runs handed over.
+ */
+export function handOver(): number {
+  if (!enabled) return 0
+  handingOver = true
+  return held.size
 }
 
 /**

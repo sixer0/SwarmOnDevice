@@ -2,13 +2,21 @@
 // Pure: the row 129 view model -> what each deliverable line shows, and what a click does. The view never re-derives.
 // 1.2.7 row 26 (U-2; U3, C10, SR7-12): every line found on disk carries `revealAbsPath` for "Reveal in Finder / File
 // Explorer" (desktop `reveal-path`, showItemInFolder only); folder lines (origin "folder") are the non-Studio files in
-// docs/<m>/11_deliverables/. Open is an allowlist by final extension; executables and every other type are reveal only.
+// docs/<m>/11_deliverables/ (legacy, before 1.3.3). Open is an allowlist by final extension; executables and every other type are reveal only.
+// 1.3.3 row 72 (MC-8 item 5, U16): each copy in <project>/deliverables/<mission>/ that the host lists (row 71
+// `projectFiles`) becomes a `DeliverableLink` with Open (system default app) and Preview (PDF, HTML in the file tab).
+// The path rules live here only; the view and row 73's two views call `deliverableLinks` / `runDeliverableLink`.
+import { canonicalPathKey } from "@/utils/path-key"
 import { fileNameOf, isStudioOutputName } from "../file-preview-policy"
-import type { DeliverableStatus, MissionDeliverableVM, MissionVM } from "./mission-model"
+import type { DeliverableStatus, MissionDeliverableVM, MissionVM, ProjectFileWire } from "./mission-model"
 
 type DeliverableOrigin = NonNullable<MissionDeliverableVM["origin"]>
 
-/** N7-018: the numbered export folder that holds a mission's deliverables (equals Studio's N7-011, pinned by a test). */
+/**
+ * LEGACY source (1.3.3 row 153, S5): the numbered export folder that held a mission's final files before 1.3.3 (equals
+ * Studio's N7-011, pinned by a test). Missions made earlier still have files there and the export still creates the
+ * folder, so the app keeps reading it, as "folder" lines. New finals live in `deliverables/<mission>/` (PROJECT_DELIVERABLES_DIR).
+ */
 export const MISSION_DELIVERABLES_DIR = "11_deliverables"
 
 export type DeliverableLine = {
@@ -35,13 +43,21 @@ export type DeliverableLine = {
   origin: DeliverableOrigin
   /** this deliverable's row is the selected row/agent of the HQ deck */
   selected: boolean
+  /** 1.3.3 row 72: the project copies, newest revision first (host order); empty without a project copy */
+  links: DeliverableLink[]
 }
 
 // §12: the only path ever opened is docs/<mission id>/<name> (legacy flat) or docs/<mission id>/11_deliverables/<name>
 // (N7-019, 1.2.7 U-2), nothing deeper and no "..". A Studio line's name is the delivered DATUM title name (row 165D) or
 // the C51 final name (C102, row 165D), so a Studio PDF/HTML opens rendered in the tab. A folder line opens only by the
 // SR7-12 allowlist of final extensions; a non-Studio .html opens as code (C101: it is never registered).
-const PROJECT_PATH = /^docs\/[^/\\\u0000-\u001f]+\/(?:11_deliverables\/)?[^/\\\u0000-\u001f]+$/
+// 1.3.3 row 72 (register section 5): also deliverables/<mission id>/<name>, the project copy of row 68.
+const PROJECT_PATH =
+  /^(?:docs\/[^/\\\u0000-\u001f]+\/(?:11_deliverables\/)?|deliverables\/[^/\\\u0000-\u001f]+\/)[^/\\\u0000-\u001f]+$/
+
+/** Register section 5 `PROJECT_DELIVERABLES_DIR`: the one folder per project that holds every mission's copies. */
+export const PROJECT_DELIVERABLES_DIR = "deliverables"
+const PROJECT_COPY = /^deliverables\/[^/\\\u0000-\u001f]+\/[^/\\\u0000-\u001f]+$/
 
 /** SR7-12: the only types a folder line opens in the file tab (pdf html docx xlsx pptx md txt), case-insensitive. */
 const FOLDER_OPEN = new Set(["pdf", "html", "docx", "xlsx", "pptx", "md", "txt"])
@@ -78,12 +94,155 @@ function revealPathOf(directory: string | undefined, path: string | null | undef
   return `${root}${sep}${path.split("/").join(sep)}`
 }
 
+// ── 1.3.3 row 72: project copies (MC-8 item 5)
+
+/** One project copy of a deliverable, shaped for a link with two actions. Built only by `deliverableLinks`. */
+export type DeliverableLink = {
+  /** project-relative path as the host sent it (the link's key) */
+  path: string
+  /** upper case: PDF, DOCX, HTML */
+  format: string
+  /** "Rev D · rev 256": revision letter and Studio revision number; "" when the host sent neither */
+  revision: string
+  /** the revision the mission refers to (the highest Studio revision of the document) */
+  latest: boolean
+  /** the file is in the project folder now; false = the not-in-project state, no action */
+  present: boolean
+  /** absolute path handed to the desktop's open-deliverable channel; null = no Open */
+  openAbsPath: string | null
+  /** session-relative path for the existing file tab (PDF and HTML only); null = no Preview */
+  previewPath: string | null
+}
+
+type DeliverableLinkAction = "open" | "preview"
+
+const PREVIEW_FORMATS = new Set(["PDF", "HTML"])
+const REV_LETTER = /^[0-9A-Za-z]{1,8}$/
+
+/** `deliverables/<mission>/<name>`: two plain segments below the folder, no dot segment, no hidden name. */
+function projectCopyShape(path: unknown): path is string {
+  if (typeof path !== "string" || path.length > 1024 || !PROJECT_COPY.test(path)) return false
+  return path.split("/").every((part) => part !== "." && part !== ".." && !part.startsWith("."))
+}
+
+/** The same file in both spellings: `<directory>/<project path>` and the host's absolute path. */
+function isProjectFile(absolutePath: string | undefined, directory: string | undefined, path: string) {
+  if (!absolutePath || !directory) return false
+  const root = directory.replace(/[\\/]+$/, "")
+  if (!root) return false
+  return canonicalPathKey(absolutePath) === canonicalPathKey(`${root}/${path}`)
+}
+
+function revisionLabel(file: Pick<ProjectFileWire, "docRev" | "revisionNo">) {
+  const letter = typeof file.docRev === "string" && REV_LETTER.test(file.docRev) ? `Rev ${file.docRev}` : ""
+  const no = Number.isInteger(file.revisionNo) && file.revisionNo! >= 0 ? `rev ${file.revisionNo}` : ""
+  return [letter, no].filter(Boolean).join(" · ")
+}
+
+/**
+ * The links of one deliverable's project copies, in the host's order (newest revision first, then PDF, DOCX, HTML).
+ * `directory` = the mission's project folder as the app knows it; `sessionDirectory` = the folder the file tab reads
+ * (default: the same). Rules, all fail closed:
+ * - Open: present, the document type equals the name's extension (pdf html docx xlsx pptx md txt), the path is
+ *   `deliverables/<mission>/<name>`, and the host's absolute path is that same file under `directory`.
+ * - Preview: Open's rules, PDF or HTML, a Studio output name, and the project folder is the session's folder (the
+ *   file tab reads nowhere else).
+ */
+/** @internal test seam */
+export function deliverableLinks(
+  files: readonly ProjectFileWire[] | null | undefined,
+  directory?: string,
+  sessionDirectory: string | undefined = directory,
+): DeliverableLink[] {
+  return (files ?? []).flatMap((file) => {
+    if (!file || typeof file.path !== "string" || typeof file.format !== "string") return []
+    const format = displayName(file.format).toUpperCase()
+    const shaped = projectCopyShape(file.path)
+    const ext = shaped ? extensionOf(fileNameOf(file.path)) : ""
+    const openable =
+      file.present === true &&
+      shaped &&
+      FOLDER_OPEN.has(ext) &&
+      ext === format.toLowerCase() &&
+      isProjectFile(file.absolutePath, directory, file.path)
+    const previewable =
+      openable &&
+      PREVIEW_FORMATS.has(format) &&
+      openablePath(file.path, "studio") !== null &&
+      isProjectFile(file.absolutePath, sessionDirectory, file.path)
+    return [
+      {
+        path: displayName(file.path),
+        format,
+        revision: revisionLabel(file),
+        latest: file.latest === true,
+        present: file.present === true,
+        openAbsPath: openable ? file.absolutePath! : null,
+        previewPath: previewable ? file.path : null,
+      },
+    ]
+  })
+}
+
+export type DeliverableLinkActions = {
+  /** `(abs) => platform.openDeliverable(abs)`: the desktop checks the path again and opens it in the default app */
+  openSystem?: (absPath: string) => void
+  /** opens the session-relative path in the existing file tab and shows the pane */
+  previewFile?: (path: string) => void
+}
+
+/** The actions a link offers; with `actions`, only those that have a handler (no desktop bridge = no Open). */
+export function linkActions(link: DeliverableLink, actions?: DeliverableLinkActions): DeliverableLinkAction[] {
+  const open = link.present && link.openAbsPath !== null && (!actions || !!actions.openSystem)
+  const preview = link.present && link.previewPath !== null && (!actions || !!actions.previewFile)
+  return [...(open ? (["open"] as const) : []), ...(preview ? (["preview"] as const) : [])]
+}
+
+/** Runs one action of a link; false when the link does not offer it. The path is passed as data, nothing is built. */
+export function runDeliverableLink(link: DeliverableLink, action: DeliverableLinkAction, actions: DeliverableLinkActions) {
+  if (!linkActions(link, actions).includes(action)) return false
+  if (action === "open") actions.openSystem!(link.openAbsPath!)
+  else actions.previewFile!(link.previewPath!)
+  return true
+}
+
+/** Consecutive links of one revision, so the view prints the revision once: latest first, older after. */
+export function linkGroups(links: readonly DeliverableLink[]) {
+  const groups: Array<{ revision: string; latest: boolean; links: DeliverableLink[] }> = []
+  for (const link of links) {
+    const last = groups[groups.length - 1]
+    if (last && last.revision === link.revision && last.latest === link.latest) last.links.push(link)
+    else groups.push({ revision: link.revision, latest: link.latest, links: [link] })
+  }
+  return groups
+}
+
+/** The links of the revision the mission refers to (for a compact place such as the decision card). */
+export const latestLinks = (links: readonly DeliverableLink[]) => links.filter((link) => link.latest)
+
+/** Row 73's entry: the links of a row's deliverable(s), or of one document, from the same view model. */
+export function missionDeliverableLinks(
+  model: Pick<MissionVM, "deliverables"> | null | undefined,
+  of: { rowId?: string; documentId?: string },
+  directory?: string,
+  sessionDirectory: string | undefined = directory,
+): DeliverableLink[] {
+  if (!of.rowId && !of.documentId) return []
+  return (model?.deliverables ?? [])
+    .filter((d) => (of.documentId ? d.documentId === of.documentId : d.rowId === of.rowId))
+    .flatMap((d) => deliverableLinks(d.projectFiles, directory, sessionDirectory))
+}
+
 export function deliverableLine(
   d: MissionDeliverableVM,
   selectedRow: string | undefined,
   directory?: string,
+  sessionDirectory: string | undefined = directory,
 ): DeliverableLine {
   const origin: DeliverableOrigin = d.origin ?? "studio"
+  const links = origin === "studio" ? deliverableLinks(d.projectFiles, directory, sessionDirectory) : []
+  // 1.3.3 row 72: without a docs/<m>/ copy, the line's own click and Reveal use the latest project copy.
+  const current = latestLinks(links)
   const ext = origin === "folder" ? extensionOf(d.title).toUpperCase() : ""
   return {
     documentId: d.documentId,
@@ -95,10 +254,12 @@ export function deliverableLine(
     rev: d.docRev,
     status: d.status,
     verified: d.verified === true,
-    path: openablePath(d.projectPath, origin),
-    revealAbsPath: revealPathOf(directory, d.projectPath),
+    path: openablePath(d.projectPath, origin) ?? current.find((link) => link.previewPath)?.previewPath ?? null,
+    revealAbsPath:
+      revealPathOf(directory, d.projectPath) ?? current.find((link) => link.openAbsPath)?.openAbsPath ?? null,
     origin,
     selected: !!selectedRow && d.rowId === selectedRow,
+    links,
   }
 }
 
@@ -106,8 +267,9 @@ export function deliverableLines(
   model: Pick<MissionVM, "deliverables"> | null | undefined,
   selectedRow?: string,
   directory?: string,
+  sessionDirectory: string | undefined = directory,
 ) {
-  return (model?.deliverables ?? []).map((d) => deliverableLine(d, selectedRow, directory))
+  return (model?.deliverables ?? []).map((d) => deliverableLine(d, selectedRow, directory, sessionDirectory))
 }
 
 /** `n/m final` (§7.2): Final count over all deliverables. Final already requires verified (row 129). */
@@ -144,3 +306,21 @@ export function activateDeliverable(line: DeliverableLine, actions: DeliverableA
   actions.openPane?.(path)
   return "opened"
 }
+
+// ── 1.3.3 row 73: the same links on the decision card, the row view and the mission summary
+
+/**
+ * The documents an open decision concerns: deliverables of the rows the request blocks (`blockingRows`, as the host
+ * sent them) that have at least one project copy. Order of the model's deliverables. Nothing comes from decision text.
+ */
+export function decisionDocumentIds(model: Pick<MissionVM, "decision" | "deliverables"> | null | undefined) {
+  const rows = new Set(model?.decision?.blockingRows ?? [])
+  if (!model || rows.size === 0) return []
+  return model.deliverables
+    .filter((d) => d.rowId !== undefined && rows.has(d.rowId) && (d.projectFiles?.length ?? 0) > 0)
+    .map((d) => d.documentId)
+}
+
+/** The document ids of the mission summary: every deliverable with a project copy, once. */
+export const summaryDocumentIds = (model: Pick<MissionVM, "deliverables"> | null | undefined) =>
+  (model?.deliverables ?? []).filter((d) => (d.projectFiles?.length ?? 0) > 0).map((d) => d.documentId)

@@ -28,12 +28,15 @@ type Listener = {
 
 const parentPort = getParentPort()
 let listener: Listener | undefined
+let runLease: { handOver: () => number } | undefined
+let consentCarry: { write: () => number } | undefined
 
 parentPort.on("message", (event) => {
   const command = parseSidecarCommand(event.data)
   if (!command) return
   if (command.type === "stop") {
-    void stop()
+    if (command.resume) handOver()
+    else void stop()
     return
   }
   void start(command)
@@ -47,6 +50,10 @@ async function start(command: StartCommand) {
     useEnvProxy()
     // Row 38b (SEC-06): DesktopNonce.set with the start message's nonce runs before Server.listen (sidecar-start.ts).
     listener = await listenWithNonce(command, await import("virtual:opencode-server"))
+    // 1.3.4 (T-12): the same (cached) module instance; its RunLease holds this process's leases for a hand-over.
+    const server = await import("virtual:opencode-server")
+    runLease = server.RunLease
+    consentCarry = server.ConsentCarry
     parentPort.postMessage({ type: "ready" })
   } catch (error) {
     parentPort.postMessage({ type: "error", error: serializeError(error) })
@@ -61,6 +68,24 @@ async function stop() {
     listener = undefined
     parentPort.postMessage({ type: "stopped" })
     setImmediate(() => process.exit(0))
+  }
+}
+
+// 1.3.4 (T-12): a restart that keeps the work going. The running turns are not stopped: their leases stay in place and
+// this process exits with a code that does not mean "stop" (75, EX_TEMPFAIL), so the relaunched server continues them
+// through the crash-recovery path (SessionResume), each open tool call marked as interrupted for the model to check.
+function handOver() {
+  let runs = 0
+  let scopes = 0
+  try {
+    runs = runLease?.handOver() ?? 0
+    // Owner U4: this restart was started by the person, so the consent they gave is carried once (2 minutes, 0600 file).
+    scopes = consentCarry?.write() ?? 0
+  } finally {
+    console.log(`sidecar hand-over for restart: ${runs} running turn(s) left to resume, ${scopes} consented scope(s) carried`)
+    listener = undefined
+    parentPort.postMessage({ type: "stopped" })
+    setImmediate(() => process.exit(75))
   }
 }
 

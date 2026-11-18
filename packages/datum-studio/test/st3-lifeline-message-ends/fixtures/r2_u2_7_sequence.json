@@ -1,0 +1,25 @@
+{
+  "caption": {"text": "Hash diverifikasi ulang dari objek tersimpan sebelum hasilnya kembali ke API."},
+  "source": {"text": "hal 183 Gambar 18.7; notasi UML 2.5.1 subset sequence"},
+  "spec": {
+    "family": "sequence",
+    "labels_verified": false,
+    "legend": [
+      "kepala terisi = panggilan sinkron",
+      "kepala terbuka = balasan",
+      "waktu hanya ke bawah",
+      "lanjut ke Gambar 3.3"
+    ],
+    "nodes": [
+      {"class": {}, "id": "api", "label": ":EvidenceAPI", "sub": "C05/K1"},
+      {"class": {}, "id": "hv", "label": ":HashVerifier", "sub": "C05/K4"},
+      {"class": {}, "id": "os", "label": ":ObjectStore", "sub": "C09 · MinIO"}
+    ],
+    "edges": [
+      {"from": "api", "kind": "data", "label": "6 verify", "to": "hv"},
+      {"from": "hv", "kind": "data", "label": "7 GetObject", "to": "os"},
+      {"from": "os", "kind": "control", "label": "8 512 GiB", "to": "hv"},
+      {"from": "hv", "kind": "control", "label": "9 VerifyResult", "to": "api"}
+    ]
+  }
+}

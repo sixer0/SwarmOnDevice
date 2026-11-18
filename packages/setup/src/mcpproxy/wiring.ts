@@ -8,7 +8,7 @@
 //   swarmWebMcpEntry()  — §6.1 entry verbatim: type local, command = [PC-PATH-14 absolute],
 //                         enabled true, timeout 30000 ms. No env here: the proxy inherits
 //                         SWARM_* from the parent environment at spawn (mcp/index.ts merges
-//                         entry.env + process.env, 01f §6.1), so no secret ever sits in the file.
+//                         entry.environment + process.env, 01f §6.1), so no secret ever sits in the file.
 //   graftMcpEntry()     — PC-MCP-01 `graft` via r88's graftLaunch (private node + private CLI,
 //                         absolute argv, PATH never consulted nor mutated) running `mcp` ONLY.
 //                         `graft init` is structurally unreachable from this module (P-10); the
@@ -35,7 +35,8 @@ export interface McpLocalEntry {
   readonly command: readonly string[]
   readonly enabled: true
   readonly timeout: number
-  readonly env?: Readonly<Record<string, string>>
+  /** The key the runtime reads (ConfigMCPV1 `environment`); M12 CR-5: `env` was ignored before F-8. */
+  readonly environment?: Readonly<Record<string, string>>
 }
 
 export function swarmWebMcpEntry(binaryPath?: string): McpLocalEntry {
@@ -103,7 +104,7 @@ export function graftMcpEntry(opts: GraftEntryOptions = {}): GraftEntryResult {
       command: [res.nodePath, res.cliPath, "mcp"], // the ONE sanctioned subcommand (01f §9)
       enabled: true,
       timeout: MCP_STARTUP_TIMEOUT_MS,
-      env: { DO_NOT_TRACK: childEnv.DO_NOT_TRACK ?? "1" },
+      environment: { DO_NOT_TRACK: childEnv.DO_NOT_TRACK ?? "1" },
     },
   }
 }

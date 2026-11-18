@@ -74,8 +74,9 @@ describe("CP-45 node symbol reaches the engine (Table 10.1, SM-01/03/04, ID p.63
 
   test("the key of that figure has a row naming the symbol, besides every legend row", () => {
     const key = keyLines(build.buildDiagramSvg(case04WithBattery(), { release: false }).svg).join("  ·  ");
-    expect(key).toContain("IEC:BATTERY = BATERAI (IEC 60617 DB)");
-    for (const row of CASE04.legend) expect(key).toContain(String(row).toUpperCase());
+    // Swarm 1.3.3 row 43 (ST-3.4): the key prints its rows as written (the label and the ID edge-kind words stay capitals).
+    expect(key).toContain("iec:battery = Baterai (IEC 60617 DB)");
+    for (const row of CASE04.legend) expect(key).toContain(String(row));
   });
 });
 
@@ -92,16 +93,16 @@ describe("CP-35 in-SVG key label from the figure caller", () => {
     expect(lines[0].startsWith("KUNCI  ")).toBe(true);
     const key = lines.join("  ·  ");
     expect(key).not.toMatch(/\bKEY\b/);
-    expect(key).toContain("PENUH = ALIRAN DATA SENSOR");
-    expect(key).toContain("PUTUS-PUTUS = CATU DAYA");
-    expect(key).toContain("TITIK-TITIK = PEREKAMAN");
-    expect(key).toContain("DITURUNKAN = NILAI TURUNAN");
+    expect(key).toContain("PENUH = aliran data sensor"); // Swarm 1.3.3 row 43 (ST-3.4): the key prints legend rows as written; edge-kind words are the engine's
+    expect(key).toContain("PUTUS-PUTUS = catu daya");
+    expect(key).toContain("TITIK-TITIK = perekaman");
+    expect(key).toContain("DITURUNKAN = nilai turunan");
   });
 
   test("an EN document's in-SVG key reads KEY with the rows as written", () => {
     const lines = keyLines(svgIn("EN"));
     expect(lines[0].startsWith("KEY  ")).toBe(true);
-    expect(lines.join("  ·  ")).toContain("DATA = ALIRAN DATA SENSOR");
+    expect(lines.join("  ·  ")).toContain("data = aliran data sensor"); // Swarm 1.3.3 row 43 (ST-3.4): the key prints legend rows as written
   });
 
   test("the ID key is reserved in full: every key line inside the sheet, no text past the right edge", () => {
@@ -118,6 +119,6 @@ describe("CP-35 in-SVG key label from the figure caller", () => {
 
   test("no language passed = output unchanged (KEY, rows as written)", () => {
     const plain = build.buildDiagramSvg(case05Spec(), { release: false }).svg;
-    expect(keyLines(plain)[0].startsWith("KEY  DATA = ")).toBe(true);
+    expect(keyLines(plain)[0].startsWith("KEY  data = ")).toBe(true); // Swarm 1.3.3 row 43 (ST-3.4): the key prints legend rows as written
   });
 });

@@ -25,7 +25,12 @@ export function emphasised(text: string): JSX.Element {
 }
 
 /** Asks once per activation, before autonomous mode turns on with the main agent deciding. Turning off never asks. */
-export function DialogAutonomyBypass(props: { onAccept: () => void; onGone: () => void }) {
+export function DialogAutonomyBypass(props: {
+  onAccept: () => void
+  onGone: () => void
+  /** Autonomy was on before a restart and its consent is gone (1.3.3 MC-7): the same text, a different heading. */
+  reconsent?: boolean
+}) {
   const language = useLanguage()
   const dialog = useDialog()
   // Another dialog may replace this one without closing it: that is a no, never a pending question.
@@ -34,8 +39,10 @@ export function DialogAutonomyBypass(props: { onAccept: () => void; onGone: () =
     <DialogV2 fit>
       <DialogHeader hideClose>
         <DialogTitleGroup
-          title={language.t("dialog.autonomyBypass.title")}
-          description={emphasised(language.t("dialog.autonomyBypass.intro"))}
+          title={language.t(props.reconsent ? "session.autonomy.reconsent.title" : "dialog.autonomyBypass.title")}
+          description={emphasised(
+            language.t(props.reconsent ? "session.autonomy.reconsent.intro" : "dialog.autonomyBypass.intro"),
+          )}
         />
       </DialogHeader>
       <DialogBody class="flex max-h-[min(420px,calc(100vh-200px))] flex-col gap-2 overflow-y-auto px-4 pb-1">
@@ -49,7 +56,7 @@ export function DialogAutonomyBypass(props: { onAccept: () => void; onGone: () =
       </DialogBody>
       <DialogFooter>
         <ButtonV2 variant="ghost" onClick={() => dialog.close()}>
-          {language.t("common.cancel")}
+          {language.t(props.reconsent ? "session.autonomy.reconsent.decline" : "common.cancel")}
         </ButtonV2>
         <ButtonV2
           data-autonomy-bypass-accept
@@ -59,7 +66,7 @@ export function DialogAutonomyBypass(props: { onAccept: () => void; onGone: () =
             dialog.close()
           }}
         >
-          {language.t("dialog.autonomyBypass.accept")}
+          {language.t(props.reconsent ? "session.autonomy.reconsent.allow" : "dialog.autonomyBypass.accept")}
         </ButtonV2>
       </DialogFooter>
     </DialogV2>
@@ -69,7 +76,7 @@ export function DialogAutonomyBypass(props: { onAccept: () => void; onGone: () =
 type Dialog = Pick<ReturnType<typeof useDialog>, "show" | "close">
 
 /** True only when the person agreed. Cancel, Escape, a click outside or any other close is false. */
-export function confirmAutonomyBypass(dialog: Dialog): Promise<boolean> {
+export function confirmAutonomyBypass(dialog: Dialog, options?: { reconsent?: boolean }): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let accepted = false
     const settle = () => resolve(accepted)
@@ -77,6 +84,7 @@ export function confirmAutonomyBypass(dialog: Dialog): Promise<boolean> {
       dialog.show(
         () => (
           <DialogAutonomyBypass
+            reconsent={options?.reconsent}
             onAccept={() => {
               accepted = true
             }}

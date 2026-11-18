@@ -6,9 +6,13 @@ import * as os from "node:os"
 import * as path from "node:path"
 import {
   checkCatalog,
+  checkIndex,
   derivedPath,
   editionSource,
+  INDEX_FILES,
   LIBRARY_FOLDER,
+  SCRIPT_SOURCE,
+  SHIPPED_SCRIPTS,
   type Pin,
   reportLines,
   sealedHashes,
@@ -49,8 +53,17 @@ const listed = () => ({
   "tools/library.py": "print('synthetic')\n",
   "1 Workflow/a, b.md": "comma and space\n",
   "knowledge/deep/c.md": "deep\n",
+  ...bank(),
   ...skills(),
 })
+// Row 96: the smallest knowledge bank the index builder reads. FIBER-OPTIC is a seeded domain, so it has trigger words.
+const BANK = "4 Knowledge Bank/ekas-lapis-teks"
+function bank(domain = "FIBER-OPTIC") {
+  return {
+    [`${BANK}/04_KNOWLEDGE-CARDS/${domain}/REF-1.md`]: `---\nreference_id: REF-1\ntitle: synthetic card\n---\nbody\n`,
+    [`${BANK}/05_DOMAIN-KNOWLEDGE/${domain}/RESUME.md`]: "## One\nbody\n",
+  }
+}
 const listedCount = Object.keys(listed()).length + 1
 
 let tmp: string
@@ -124,7 +137,7 @@ test("STG-1 copies exactly the listed files and the manifest, with their bytes",
 
   expect((await stageLibrary(source, stage, pin)).files).toBe(listedCount)
 
-  expect(await tree(stage)).toEqual([...Object.keys(files), "MANIFEST.csv"].toSorted())
+  expect(await tree(stage)).toEqual([...Object.keys(files), "MANIFEST.csv", ...INDEX_FILES].toSorted())
   expect(await Bun.file(path.join(stage, "tools/library.py")).text()).toBe(files["tools/library.py"])
   expect(await Bun.file(path.join(stage, "1 Workflow/a, b.md")).text()).toBe(files["1 Workflow/a, b.md"])
   expect(sha256(await Bun.file(path.join(stage, "MANIFEST.csv")).bytes())).toBe(pin.manifestSha256)
@@ -438,7 +451,7 @@ test("STG-10 unlisted files never reach staging and the source is never listed",
   readdir.mockRestore()
   expect(folders.length).toBeGreaterThan(0)
   expect(folders.filter((folder) => !folder.startsWith(stage))).toEqual([])
-  expect(await tree(stage)).toEqual([...Object.keys(files), "MANIFEST.csv"].toSorted())
+  expect(await tree(stage)).toEqual([...Object.keys(files), "MANIFEST.csv", ...INDEX_FILES].toSorted())
 })
 
 test("STG-11 changing HOME does not move the source", async () => {
@@ -580,8 +593,12 @@ const controls: [string, (pin: Pin) => Promise<Pin | void>, string][] = [
     },
     "LIB_SYMLINK: README.md",
   ],
-  ["9 manifest row ../x", unsafeRow("../x"), "LIB_UNSAFE_PATH: manifest row 9 has an unsafe path"],
-  ["10 manifest row with an absolute path", unsafeRow("/x"), "LIB_UNSAFE_PATH: manifest row 9 has an unsafe path"],
+  ["9 manifest row ../x", unsafeRow("../x"), `LIB_UNSAFE_PATH: manifest row ${listedCount} has an unsafe path`],
+  [
+    "10 manifest row with an absolute path",
+    unsafeRow("/x"),
+    `LIB_UNSAFE_PATH: manifest row ${listedCount} has an unsafe path`,
+  ],
   [
     "11 manifest and file changed together, old pin",
     async () => {
@@ -714,8 +731,92 @@ test("the report gives one count line per check and states what a pass does not 
   expect(reportLines({ ...report, sealed: 9 }, pin)).toContain("INT-8 seal: 9 files2 entries match, codesign exit 0")
 })
 
-test("the checker neither runs nor names an interpreter", async () => {
-  expect(await Bun.file(script).text()).not.toMatch(/python|library\.py/)
+// Row 96 changed this pin: the checker now runs one interpreter, on the repo's index builder only, never on a file of the edition.
+// Row 148 (security finding L4) tightened it again: exactly one Bun.spawn, the builder's argv array; Bun `$` templates
+// only for six fixed programs, none an interpreter; nothing that could start a system shell.
+test("the checker runs no file of the edition and names only the repo's index builder", async () => {
+  const text = await Bun.file(script).text()
+  const code = text
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//"))
+    .join("\n")
+  expect(code).not.toMatch(/library\.py/)
+  expect(code.match(/Bun\.spawn\(/g)).toEqual(["Bun.spawn("])
+  expect(code).toContain(
+    'Bun.spawn([python, "-I", BUILDER, "--root", path.join(stage, BANK), "--out", stage], {\n' +
+      "    cwd: SCRIPT_SOURCE,\n" +
+      "    env: { PATH: path.dirname(python) },\n" +
+      '    stdin: "ignore",\n',
+  )
+  expect(code).toContain('const BUILDER = path.join(SCRIPT_SOURCE, "build_kl_index.py")')
+  expect(code).toContain('export const SCRIPT_SOURCE = path.join(import.meta.dir, "..", "datum", "knowledge-library", "scripts")')
+  // The Bun shell templates (Bun's own parser, interpolated values escaped, no system shell) start these fixed programs
+  // and no other: the home lookup, the two git ignore checks, the plutil read and the codesign check of the app seal.
+  expect(code.match(/\$`\S+/g)).toEqual([
+    "$`/usr/bin/id",
+    "$`/usr/bin/getent",
+    "$`git",
+    "$`git",
+    "$`/usr/bin/plutil",
+    "$`/usr/bin/codesign",
+  ])
+  for (const launcher of [/spawnSync/, /child_process/, /execFile/, /execSync/, /\bshell\s*:/, /\bsh -c\b/, /"(ba)?sh"/])
+    expect(code).not.toMatch(launcher)
+  expect(SCRIPT_SOURCE.startsWith(path.join(import.meta.dir, ".."))).toBe(true)
+})
+
+// Row 148 (L4), the same pin by behaviour: a stand-in python3 first on the search path records what it was started with,
+// then hands the identical argv to the real interpreter, so staging completes. Expected launch:
+//   argv  = [python3 found on the search path, "-I", <repo>/datum/knowledge-library/scripts/build_kl_index.py,
+//            "--root", <stage>/4 Knowledge Bank/ekas-lapis-teks, "--out", <stage>]
+//   env   = exactly { PATH: the folder python3 was found in } (no HOME, no PYTHON* variable, nothing inherited)
+//   cwd   = the repo scripts folder; stdin = /dev/null; parent = this test process (no shell between).
+test("KL1-8 the builder is started with the exact argv, a one-variable environment and no shell", async () => {
+  const pin = await edition()
+  const real = await fs.realpath(Bun.which("python3") ?? "")
+  expect(real).not.toMatch(/\s/)
+  const bin = path.join(tmp, "bin")
+  const record = path.join(tmp, "launch.json")
+  await fs.mkdir(bin)
+  await Bun.write(
+    path.join(bin, "python3"),
+    [
+      `#!${real} -I`,
+      "import json, os, sys",
+      "info = os.fstat(0)",
+      `json.dump({"argv": sys.argv, "env": dict(os.environ), "cwd": os.getcwd(), "ppid": os.getppid(),`,
+      `           "stdin": [info.st_rdev, os.stat("/dev/null").st_rdev]}, open(${JSON.stringify(record)}, "w"))`,
+      `os.execv(${JSON.stringify(real)}, [${JSON.stringify(real)}] + sys.argv[1:])`,
+      "",
+    ].join("\n"),
+  )
+  await fs.chmod(path.join(bin, "python3"), 0o755)
+
+  await stageLibrary(source, stage, pin, { searchPath: bin })
+  const launch = await Bun.file(record).json()
+
+  expect(launch.argv).toEqual([
+    path.join(bin, "python3"),
+    "-I",
+    path.join(SCRIPT_SOURCE, "build_kl_index.py"),
+    "--root",
+    path.join(stage, BANK),
+    "--out",
+    stage,
+  ])
+  expect(path.join(SCRIPT_SOURCE, "build_kl_index.py")).toBe(
+    path.join(import.meta.dir, "..", "datum", "knowledge-library", "scripts", "build_kl_index.py"),
+  )
+  expect(path.join(stage, BANK).startsWith(stage + path.sep)).toBe(true)
+  // Two variables are the platform's own, not passed: macOS may add its text-encoding variable to a process it starts,
+  // and Python sets LC_CTYPE=C.UTF-8 itself when it starts with no locale at all (PEP 538 locale coercion).
+  const { __CF_USER_TEXT_ENCODING: _platform, LC_CTYPE: coerced, ...env } = launch.env
+  expect(env).toEqual({ PATH: bin })
+  expect([undefined, "C.UTF-8"]).toContain(coerced)
+  expect(await fs.realpath(launch.cwd)).toBe(await fs.realpath(SCRIPT_SOURCE))
+  expect(launch.ppid).toBe(process.pid)
+  expect(launch.stdin[0]).toBe(launch.stdin[1])
+  for (const file of INDEX_FILES) expect((await fs.lstat(path.join(stage, file))).isFile()).toBe(true)
 })
 
 // SKR-3. Names, paths and content are synthetic (SKR-4); only the folder structure the gate reads is the edition's.
@@ -923,6 +1024,14 @@ test("the seal reader refuses what it cannot read instead of skipping it", () =>
 
 // INT-8 against a real ad hoc seal. The bundle is built here from a system binary and is never launched.
 const onMac = test.skipIf(process.platform !== "darwin")
+// What electron-builder adds beside the staged library: the repo's knowledge-library scripts that ship (row 96).
+const sealedCount = listedCount + INDEX_FILES.length + SHIPPED_SCRIPTS.length
+async function addScripts(copy: string) {
+  for (const file of SHIPPED_SCRIPTS) {
+    await fs.mkdir(path.dirname(path.join(copy, file)), { recursive: true })
+    await fs.copyFile(path.join(SCRIPT_SOURCE, path.basename(file)), path.join(copy, file))
+  }
+}
 
 async function bundle(sign = true) {
   const pin = await staged()
@@ -930,6 +1039,7 @@ async function bundle(sign = true) {
   await fs.mkdir(path.join(app, "Contents", "MacOS"), { recursive: true })
   await fs.mkdir(path.join(app, "Contents", "Resources"))
   await fs.rename(stage, path.join(app, "Contents", "Resources", LIBRARY_FOLDER))
+  await addScripts(path.join(app, "Contents", "Resources", LIBRARY_FOLDER))
   await fs.copyFile("/usr/bin/true", path.join(app, "Contents", "MacOS", "Synthetic"))
   await Bun.write(
     path.join(app, "Contents", "Info.plist"),
@@ -947,7 +1057,7 @@ const editSeal = async (app: string, change: (text: string) => string) => {
 onMac("INT-8 a freshly sealed app passes, with one entry per listed file", async () => {
   const { app, pin } = await bundle()
 
-  expect(await verifyApp(app, pin)).toMatchObject({ files: listedCount, sealed: listedCount, finderFiles: 0 })
+  expect(await verifyApp(app, pin)).toMatchObject({ files: listedCount, sealed: sealedCount, finderFiles: 0 })
 })
 
 onMac("INT-8 an unsigned app fails", async () => {
@@ -1020,7 +1130,7 @@ onMac("INT-P2 a .DS_Store fails --app and is counted by --installed, because the
   await Bun.write(path.join(copy, ".DS_Store"), "x")
 
   expect(await tokenOf(verifyApp(app, pin))).toBe("LIB_STAGE_TREE")
-  expect(await verifyApp(app, pin, { finderFiles: true })).toMatchObject({ sealed: listedCount, finderFiles: 1 })
+  expect(await verifyApp(app, pin, { finderFiles: true })).toMatchObject({ sealed: sealedCount, finderFiles: 1 })
 })
 
 for (const args of [
@@ -1040,4 +1150,177 @@ test("the app modes exit non-zero on a missing app, with a token and no absolute
     expect(result.exitCode).toBe(1)
     expect(result.stderr.trim()).toBe("LIB_STAGE_TREE: copy folder")
   }
+})
+
+// Row 96 (KL-1 items 1 and 3): the index builder runs inside staging and writes its five files at the library root.
+const indexOf = async (root: string) => Bun.file(path.join(root, "indeks_pemicu.json")).json()
+
+test("KL1-1 staging writes the five indexes at the root with the builder, and the tree check accepts them", async () => {
+  const pin = await edition()
+
+  const report = await stageLibrary(source, stage, pin)
+
+  expect(report).toMatchObject({ files: listedCount, indexes: INDEX_FILES.length, scripts: 0 })
+  for (const file of INDEX_FILES) {
+    const info = await fs.lstat(path.join(stage, file))
+    expect(info.isFile()).toBe(true)
+    expect(info.mode & 0o777).toBe(0o644)
+  }
+  const index = await indexOf(stage)
+  expect(Object.keys(index.domains)).toEqual(["FIBER-OPTIC", "DIAGRAM-STANDARD"])
+  expect(index.domains["FIBER-OPTIC"].read_order).toEqual([
+    `04_KNOWLEDGE-CARDS/FIBER-OPTIC/REF-1.md`,
+    `05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/RESUME.md`,
+  ])
+  expect(index.weak.length).toBeGreaterThan(0)
+  expect((await verifyCopy(stage, pin)).indexes).toBe(INDEX_FILES.length)
+  expect(reportLines(report, pin)).toContain(
+    `index: ${INDEX_FILES.length} files at the root, 2 domains, each with trigger words and a reading order`,
+  )
+})
+
+test("KL1-1 the indexes equal what the builder writes for the same staged library, run by hand", async () => {
+  const pin = await edition()
+  await stageLibrary(source, stage, pin)
+  const out = path.join(tmp, "by-hand")
+
+  const run = Bun.spawnSync([
+    "python3",
+    "-I",
+    path.join(SCRIPT_SOURCE, "build_kl_index.py"),
+    "--root",
+    path.join(stage, BANK),
+    "--out",
+    out,
+  ])
+
+  expect(run.exitCode).toBe(0)
+  for (const file of INDEX_FILES)
+    expect(await Bun.file(path.join(stage, file)).text()).toBe(await Bun.file(path.join(out, file)).text())
+})
+
+test("KL1-2 a domain without trigger words fails staging with its name and leaves no staging folder", async () => {
+  const pin = await edition({ ...listed(), ...bank("UNSEEDED-DOMAIN") })
+
+  expect(await reasonOf(stageLibrary(source, stage, pin))).toBe(
+    "LIB_INDEX_DOMAIN: domain UNSEEDED-DOMAIN has no trigger words",
+  )
+  expect(await exists(stage)).toBe(false)
+})
+
+test("KL1-2 the strict check refuses a domain without a reading order, and any index it cannot read", () => {
+  const check = (index: unknown) =>
+    reasonOf(Promise.resolve().then(() => checkIndex(new TextEncoder().encode(JSON.stringify(index)))))
+  const domain = { terms: ["serat"], read_order: ["04_KNOWLEDGE-CARDS/X/a.md"] }
+
+  expect(checkIndex(new TextEncoder().encode(JSON.stringify({ domains: { "FIBER-OPTIC": domain } })))).toEqual({
+    domains: 1,
+  })
+  return Promise.all([
+    expect(check({ domains: { "FIBER-OPTIC": { ...domain, read_order: [] } } })).resolves.toBe(
+      "LIB_INDEX_DOMAIN: domain FIBER-OPTIC has no reading order",
+    ),
+    expect(check({ domains: { "FIBER-OPTIC": { ...domain, terms: [""] } } })).resolves.toBe(
+      "LIB_INDEX_DOMAIN: domain FIBER-OPTIC has no trigger words",
+    ),
+    expect(check({ domains: { "FIBER-OPTIC": { terms: ["serat"] } } })).resolves.toBe(
+      "LIB_INDEX_DOMAIN: domain FIBER-OPTIC has no reading order",
+    ),
+    expect(check({ domains: {} })).resolves.toBe("LIB_INDEX_DOMAIN: no domains"),
+    expect(check([])).resolves.toBe("LIB_INDEX_DOMAIN: no domains"),
+    expect(check({ domains: { "bad name\n": { terms: [], read_order: [] } } })).resolves.toBe(
+      "LIB_INDEX_DOMAIN: domain 1 has no trigger words",
+    ),
+    expect(reasonOf(Promise.resolve().then(() => checkIndex(new TextEncoder().encode("{"))))).resolves.toBe(
+      "LIB_INDEX_DOMAIN: indeks_pemicu.json is not json",
+    ),
+  ])
+})
+
+test("KL1-2 verify refuses a copy whose index lost a reading order", async () => {
+  const pin = await staged()
+  const index = await indexOf(stage)
+  index.domains["FIBER-OPTIC"].read_order = []
+  await Bun.write(path.join(stage, "indeks_pemicu.json"), JSON.stringify(index))
+
+  expect(await reasonOf(verifyCopy(stage, pin))).toBe("LIB_INDEX_DOMAIN: domain FIBER-OPTIC has no reading order")
+})
+
+test("KL1-3 without python3 on the search path staging fails with its named error and no staging folder", async () => {
+  const pin = await edition()
+  const empty = path.join(tmp, "no-python")
+  await fs.mkdir(empty)
+
+  expect(await reasonOf(stageLibrary(source, stage, pin, { searchPath: empty }))).toBe(
+    "LIB_INDEX_PYTHON: python3 (3.7 or later, standard library only) is needed on PATH to build the library indexes",
+  )
+  expect(await exists(stage)).toBe(false)
+})
+
+test("KL1-4 a builder that exits non-zero fails staging with its exit code and no absolute path", async () => {
+  const {
+    [`${BANK}/04_KNOWLEDGE-CARDS/FIBER-OPTIC/REF-1.md`]: _card,
+    [`${BANK}/05_DOMAIN-KNOWLEDGE/FIBER-OPTIC/RESUME.md`]: _resume,
+    ...noBank
+  } = listed()
+  const pin = await edition(noBank)
+
+  const reason = await reasonOf(stageLibrary(source, stage, pin))
+  expect(reason).toBe("LIB_INDEX_BUILD: index builder exit 1: akar pustaka tidak ada: 4 Knowledge Bank/ekas-lapis-teks")
+  expect(reason).not.toContain(tmp)
+  expect(await exists(stage)).toBe(false)
+})
+
+test("KL1-5 a listed file with an index name is refused before the builder could overwrite it", async () => {
+  const pin = await edition({ ...listed(), "indeks_pemicu.md": "listed\n" })
+
+  expect(await reasonOf(stageLibrary(source, stage, pin))).toBe(
+    "LIB_STAGE_TREE: listed file has a generated name: indeks_pemicu.md",
+  )
+})
+
+test("KL1-6 verify needs every index file and accepts no other root file", async () => {
+  const pin = await staged()
+  await fs.rm(path.join(stage, "indeks_struktur.md"))
+  expect(await reasonOf(verifyCopy(stage, pin))).toBe("LIB_NOT_REGULAR: missing: indeks_struktur.md")
+
+  const again = await staged()
+  await Bun.write(path.join(stage, "indeks_extra.md"), "x")
+  expect(await reasonOf(verifyCopy(stage, again))).toBe("LIB_STAGE_TREE: unexpected entry: indeks_extra.md")
+})
+
+test("KL1-7 a packaged copy carries the shipped scripts byte for byte, and nothing else in scripts/", async () => {
+  const pin = await staged()
+  expect(await reasonOf(verifyCopy(stage, pin, { scripts: true }))).toBe("LIB_NOT_REGULAR: missing: scripts/README.md")
+
+  await addScripts(stage)
+  expect(await verifyCopy(stage, pin, { scripts: true })).toMatchObject({ scripts: SHIPPED_SCRIPTS.length })
+  // The stage itself never holds scripts: electron-builder adds them from datum/knowledge-library.
+  expect(await reasonOf(verifyCopy(stage, pin))).toBe("LIB_STAGE_TREE: unexpected folder: scripts")
+
+  await Bun.write(path.join(stage, "scripts/test_build_kl_index_diagram.py"), "x")
+  expect(await reasonOf(verifyCopy(stage, pin, { scripts: true }))).toBe(
+    "LIB_STAGE_TREE: unexpected entry: scripts/test_build_kl_index_diagram.py",
+  )
+  await fs.rm(path.join(stage, "scripts/test_build_kl_index_diagram.py"))
+
+  await Bun.write(path.join(stage, "scripts/build_kl_index.py"), "changed\n")
+  expect(await reasonOf(verifyCopy(stage, pin, { scripts: true }))).toBe("LIB_HASH: scripts/build_kl_index.py")
+})
+
+test("KL1-7 the shipped script list is what the packaging filter leaves of the repo folder", async () => {
+  const repo = (await fs.readdir(SCRIPT_SOURCE, { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.posix.join("scripts", path.relative(SCRIPT_SOURCE, path.join(entry.parentPath, entry.name))))
+    .filter(
+      (file) =>
+        !/(^|\/)__pycache__\//.test(file) &&
+        !file.endsWith(".pyc") &&
+        !/^scripts\/test_[^/]*\.py$/.test(file) &&
+        !file.startsWith("scripts/testdata/") &&
+        !/^scripts\/indeks_[^/]*$/.test(file),
+    )
+    .toSorted()
+
+  expect(repo).toEqual([...SHIPPED_SCRIPTS].toSorted())
 })

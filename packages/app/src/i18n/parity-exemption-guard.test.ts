@@ -371,6 +371,27 @@ const APPROVED_EXEMPT_KEYS = [
   "memory.refused.classified",
   "memory.refused.notDeviceOnly",
   "memory.refused.archived",
+  // Office Add-in desktop strings, decision C13 (EN and ID only) of docs/2026-11-16_swarm_office_addin, row 45 (M1-04): +17; C49 (M1-04b): +1 (`error.uninstallFailed`); C65 (M1-04c): +2 (`error.notInstalled`, `error.certRemovalFailed`).
+  "desktop.menu.officeAddin",
+  "desktop.menu.officeAddin.enable",
+  "desktop.menu.officeAddin.disconnect",
+  "desktop.menu.officeAddin.clearCache",
+  "desktop.officeAddin.pair.title",
+  "desktop.officeAddin.pair.message",
+  "desktop.officeAddin.pair.deny",
+  "desktop.officeAddin.installed",
+  "desktop.officeAddin.error.portInUse",
+  "desktop.officeAddin.error.certUntrusted",
+  "desktop.officeAddin.error.startFailed",
+  "desktop.officeAddin.error.installFailed",
+  "desktop.officeAddin.clearCache.confirm",
+  "desktop.officeAddin.clearCache.confirmButton",
+  "desktop.officeAddin.disable.confirm",
+  "desktop.officeAddin.disable.removeCertificate",
+  "desktop.officeAddin.disable.confirmButton",
+  "desktop.officeAddin.error.uninstallFailed",
+  "desktop.officeAddin.error.notInstalled",
+  "desktop.officeAddin.error.certRemovalFailed",
 ]
 
 function arrayLiteral(name: string) {
@@ -388,10 +409,13 @@ function arrayLiteral(name: string) {
 describe("i18n parity exemption guard", () => {
   const exemptKeys = arrayLiteral("UNTRANSLATED_KEY_PRESENCE_EXEMPTION")
 
-  test("the exemption holds exactly the three-hundred-and-forty-nine approved keys and nothing else", () => {
+  // 349 + 17 = 366: the Office Add-in desktop strings, decision C13 of docs/2026-11-16_swarm_office_addin (row 45, M1-04);
+  // 366 + 1 = 367: `desktop.officeAddin.error.uninstallFailed`, decision C49 of the same task (M1-04b);
+  // 367 + 2 = 369: `desktop.officeAddin.error.notInstalled` and `.certRemovalFailed`, decision C65 of the same task (M1-04c).
+  test("the exemption holds exactly the three-hundred-and-sixty-nine approved keys and nothing else", () => {
     expect([...exemptKeys].sort()).toEqual([...APPROVED_EXEMPT_KEYS].sort())
-    expect(exemptKeys.length).toBe(349)
-    expect(new Set(exemptKeys).size).toBe(349)
+    expect(exemptKeys.length).toBe(369)
+    expect(new Set(exemptKeys).size).toBe(369)
   })
 
   test("every exemption entry is a literal dotted key, never a wildcard or pattern", () => {

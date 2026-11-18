@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="142.000mm" height="111.000mm" viewBox="0 0 142.000 111.000" version="1.1">
+<!-- bingkai_lembar.py: lapisan luar GSP Diagram Manual Rev B bab 7; isi = SVG Studio tanpa perubahan -->
+<rect x="0" y="0" width="142.000" height="111.000" fill="#FFFFFF"/>
+<rect x="0.3" y="0.3" width="141.400" height="110.400" fill="none" stroke="#C3CBD1" stroke-width="0.18"/>
+<rect x="5.000" y="5.000" width="132.000" height="101.000" fill="none" stroke="#2B3640" stroke-width="0.5"/>
+<text x="13.250" y="3.400" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">1</text>
+<text x="13.250" y="109.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">1</text>
+<text x="29.750" y="3.400" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">2</text>
+<text x="29.750" y="109.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">2</text>
+<path d="M21.500,5.000 v-1.2 M21.500,106.000 v1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="46.250" y="3.400" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">3</text>
+<text x="46.250" y="109.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">3</text>
+<path d="M38.000,5.000 v-1.2 M38.000,106.000 v1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="62.750" y="3.400" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">4</text>
+<text x="62.750" y="109.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">4</text>
+<path d="M54.500,5.000 v-1.2 M54.500,106.000 v1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="79.250" y="3.400" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">5</text>
+<text x="79.250" y="109.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">5</text>
+<path d="M71.000,5.000 v-1.2 M71.000,106.000 v1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="95.750" y="3.400" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">6</text>
+<text x="95.750" y="109.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">6</text>
+<path d="M87.500,5.000 v-1.2 M87.500,106.000 v1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="112.250" y="3.400" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">7</text>
+<text x="112.250" y="109.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">7</text>
+<path d="M104.000,5.000 v-1.2 M104.000,106.000 v1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="128.750" y="3.400" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">8</text>
+<text x="128.750" y="109.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">8</text>
+<path d="M120.500,5.000 v-1.2 M120.500,106.000 v1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="2.500" y="14.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">A</text>
+<text x="139.500" y="14.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">A</text>
+<text x="2.500" y="32.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">B</text>
+<text x="139.500" y="32.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">B</text>
+<path d="M5.000,23.000 h-1.2 M137.000,23.000 h1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="2.500" y="50.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">C</text>
+<text x="139.500" y="50.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">C</text>
+<path d="M5.000,41.000 h-1.2 M137.000,41.000 h1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="2.500" y="68.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">D</text>
+<text x="139.500" y="68.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">D</text>
+<path d="M5.000,59.000 h-1.2 M137.000,59.000 h1.2" stroke="#6B7783" stroke-width="0.18"/>
+<text x="2.500" y="86.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">E</text>
+<text x="139.500" y="86.600" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="middle">E</text>
+<path d="M5.000,77.000 h-1.2 M137.000,77.000 h1.2" stroke="#6B7783" stroke-width="0.18"/>
+<svg x="7.000" y="7.000" width="128.000" height="80.000" viewBox="0.000 0.000 128.000 80.000">
+<rect x="4" y="4" width="30" height="12" fill="none" stroke="#2B3640" stroke-width="0.3"/><path d="M34,10 H60" stroke="#2B3640" stroke-width="0.45"/><text x="6" y="11" font-size="2.2">Kamera</text>
+</svg>
+<path d="M5.000,89.000 h132.000" stroke="#C3CBD1" stroke-width="0.18"/>
+<text x="7.000" y="92.900" font-family="IBM Plex Mono" font-size="1.80" font-weight="400" fill="#6B7783" text-anchor="start" letter-spacing="0.25">KEY</text>
+<path d="M17.000,92.200 h9" fill="none" stroke="#2B3640" stroke-width="0.45"/>
+<text x="27.500" y="92.900" font-family="IBM Plex Sans Condensed" font-size="1.90" font-weight="400" fill="#2B3640" text-anchor="start">video</text>
+<path d="M39.750,92.200 h9" fill="none" stroke="#2B3640" stroke-width="0.45" stroke-dasharray="1.6 1.0"/>
+<text x="50.250" y="92.900" font-family="IBM Plex Sans Condensed" font-size="1.90" font-weight="400" fill="#2B3640" text-anchor="start">kendali/API</text>
+<path d="M70.000,92.200 h9" fill="none" stroke="#B45309" stroke-width="0.6"/>
+<text x="80.500" y="92.900" font-family="IBM Plex Sans Condensed" font-size="1.90" font-weight="400" fill="#2B3640" text-anchor="start">subjek</text>
+<path d="M5.000,95.000 h132.000" stroke="#2B3640" stroke-width="0.5"/>
+<text x="6.300" y="98.200" font-family="IBM Plex Mono" font-size="1.60" font-weight="400" fill="#6B7783" text-anchor="start" letter-spacing="0.2">OWNER</text>
+<text x="6.300" y="103.000" font-family="IBM Plex Mono" font-size="2.00" font-weight="400" fill="#2B3640" text-anchor="start">PT GSP</text>
+<path d="M18.200,95.000 v11.000" stroke="#2B3640" stroke-width="0.25"/>
+<text x="19.500" y="98.200" font-family="IBM Plex Mono" font-size="1.60" font-weight="400" fill="#6B7783" text-anchor="start" letter-spacing="0.2">TITLE</text>
+<text x="19.500" y="101.400" font-family="IBM Plex Mono" font-size="1.90" font-weight="400" fill="#2B3640" text-anchor="start">Arsitektur VMS: rekaman di situs,</text>
+<text x="19.500" y="104.300" font-family="IBM Plex Mono" font-size="1.90" font-weight="400" fill="#2B3640" text-anchor="start">manajemen terpusat</text>
+<path d="M71.000,95.000 v11.000" stroke="#2B3640" stroke-width="0.25"/>
+<text x="72.300" y="98.200" font-family="IBM Plex Mono" font-size="1.60" font-weight="400" fill="#6B7783" text-anchor="start" letter-spacing="0.2">DWG NO.</text>
+<text x="72.300" y="103.000" font-family="IBM Plex Mono" font-size="2.00" font-weight="600" fill="#2B3640" text-anchor="start">GSP-UJI-VSS-110</text>
+<path d="M94.760,95.000 v11.000" stroke="#2B3640" stroke-width="0.25"/>
+<text x="96.060" y="98.200" font-family="IBM Plex Mono" font-size="1.60" font-weight="400" fill="#6B7783" text-anchor="start" letter-spacing="0.2">REV</text>
+<text x="96.060" y="103.000" font-family="IBM Plex Mono" font-size="2.00" font-weight="400" fill="#2B3640" text-anchor="start">A</text>
+<path d="M102.680,95.000 v11.000" stroke="#2B3640" stroke-width="0.25"/>
+<text x="103.980" y="98.200" font-family="IBM Plex Mono" font-size="1.60" font-weight="400" fill="#6B7783" text-anchor="start" letter-spacing="0.2">SHEET</text>
+<text x="103.980" y="103.000" font-family="IBM Plex Mono" font-size="2.00" font-weight="400" fill="#2B3640" text-anchor="start">1/6</text>
+<path d="M113.240,95.000 v11.000" stroke="#2B3640" stroke-width="0.25"/>
+<text x="114.540" y="98.200" font-family="IBM Plex Mono" font-size="1.60" font-weight="400" fill="#6B7783" text-anchor="start" letter-spacing="0.2">SCALE</text>
+<text x="114.540" y="103.000" font-family="IBM Plex Mono" font-size="2.00" font-weight="400" fill="#2B3640" text-anchor="start">NTS</text>
+<path d="M122.480,95.000 v11.000" stroke="#2B3640" stroke-width="0.25"/>
+<text x="123.780" y="98.200" font-family="IBM Plex Mono" font-size="1.60" font-weight="400" fill="#6B7783" text-anchor="start" letter-spacing="0.2">CLASS</text>
+<text x="123.780" y="103.000" font-family="IBM Plex Mono" font-size="2.00" font-weight="600" fill="#6E1420" text-anchor="start">BIASA</text>
+<text x="5.000" y="109.200" font-family="IBM Plex Mono" font-size="1.60" font-weight="400" fill="#6B7783" text-anchor="start">DRAFT · 2026-11-17 · IEC 62676-4:2025</text>
+</svg>

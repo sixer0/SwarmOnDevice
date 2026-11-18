@@ -11,6 +11,7 @@ import type { StudioSlotContentMode } from "@/lib/studio/contract"
 import type { TemplateSlotDef } from "@/lib/studio/contract/types/v2/template"
 import { getSectionType } from "@/lib/studio/registry/sections"
 import type { OutputFileRow } from "@/lib/studio/services/storage/files"
+import { legacyBlockRowsIn } from "@/lib/studio/services/structure/repository"
 import {
   documentOf,
   findDocumentById,
@@ -63,12 +64,15 @@ export interface LegacyBlockRow {
   textPlain: string
 }
 
-/** M06 `block` rows of one revision, ordinal order. */
+/**
+ * The addressed blocks of one revision in the M06 `block` shape, ordinal order.
+ * Row 80 (ST-11, C6): a revision written from 1.3.3 on stores each block once, in `doc_block`. The shared
+ * reader returns the stored `block` rows when the revision has them (older revisions, v1 documents) and
+ * otherwise the same rows derived from `doc_block` and the snapshot.
+ */
 export function legacyBlocks(revisionId: string): Promise<LegacyBlockRow[]> {
   return readWith(undefined, (q) =>
-    q
-      .all<R>("SELECT address, block_id, type, artifact_label, ordinal, text_plain FROM block WHERE revision_id = ? ORDER BY ordinal ASC", [revisionId])
-      .map((b) => ({ address: String(b.address), blockId: String(b.block_id), type: String(b.type), artifactLabel: (b.artifact_label ?? null) as string | null, ordinal: Number(b.ordinal), textPlain: String(b.text_plain) })),
+    legacyBlockRowsIn(q, revisionId, false).map((b) => ({ address: b.address, blockId: b.blockId, type: b.type, artifactLabel: b.artifactLabel, ordinal: b.ordinal, textPlain: b.textPlain })),
   )
 }
 

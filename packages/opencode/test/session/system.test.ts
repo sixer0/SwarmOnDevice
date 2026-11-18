@@ -504,6 +504,8 @@ describe("session.system", () => {
     const allHealthy = () =>
       Object.fromEntries(InstalledTools.COMPONENT_IDS.map((id) => [id, { state: "healthy", version: "1" }]))
     const block = (parts: string[]) => parts.find((part) => part.includes("<installed_tools>"))
+    // SB-2 (row 112): the block left environment() for installed(), which feeds the turn facts block.
+    const asParts = (text: string | undefined) => (text ? [text] : [])
 
     afterEach(() => {
       rmSync(path.dirname(path.dirname(stateFile())), { recursive: true, force: true })
@@ -561,7 +563,7 @@ describe("session.system", () => {
     it.instance("environment has no block when the state file is missing", () =>
       Effect.gen(function* () {
         swarmWeb = { status: "connected" }
-        const parts = yield* (yield* SystemPrompt.Service).environment(model)
+        const parts = yield* (yield* SystemPrompt.Service).installed().pipe(Effect.map(asParts))
         expect(block(parts)).toBeUndefined()
         expect(parts.join("\n")).not.toContain("installed_tools")
       }),
@@ -571,7 +573,7 @@ describe("session.system", () => {
       Effect.gen(function* () {
         swarmWeb = { status: "connected" }
         writeState({ graft: { state: "failed" }, rtk: { state: "absent" }, searxng: { state: "installed" } })
-        const parts = yield* (yield* SystemPrompt.Service).environment(model)
+        const parts = yield* (yield* SystemPrompt.Service).installed().pipe(Effect.map(asParts))
         expect(block(parts)).toBeUndefined()
       }),
     )
@@ -583,26 +585,26 @@ describe("session.system", () => {
 
         swarmWeb = { status: "connected" }
         graft = { status: "connected" }
-        expect(block(yield* prompt.environment(model))).toBe(
+        expect(block(yield* prompt.installed().pipe(Effect.map(asParts)))).toBe(
           SystemPrompt.installedTools(InstalledTools.COMPONENT_IDS, BOTH),
         )
 
         swarmWeb = { status: "failed", error: "x" }
-        const failed = block(yield* prompt.environment(model)) ?? ""
+        const failed = block(yield* prompt.installed().pipe(Effect.map(asParts))) ?? ""
         expect(failed).toContain(REGISTER.graft)
         expect(failed).not.toContain("swarm-web")
 
         swarmWeb = undefined
-        expect(block(yield* prompt.environment(model))).not.toContain("swarm-web")
+        expect(block(yield* prompt.installed().pipe(Effect.map(asParts)))).not.toContain("swarm-web")
 
         // graft healthy but its MCP entry disabled or failed: the graft line goes, the rest stays (finding 10a).
         swarmWeb = { status: "connected" }
         graft = { status: "disabled" }
-        const noGraft = block(yield* prompt.environment(model)) ?? ""
+        const noGraft = block(yield* prompt.installed().pipe(Effect.map(asParts))) ?? ""
         expect(noGraft).not.toContain(REGISTER.graft)
         expect(noGraft).toContain(REGISTER.searxng)
         graft = { status: "failed", error: "x" }
-        expect(block(yield* prompt.environment(model))).not.toContain(REGISTER.graft)
+        expect(block(yield* prompt.installed().pipe(Effect.map(asParts)))).not.toContain(REGISTER.graft)
       }),
     )
 
@@ -610,13 +612,13 @@ describe("session.system", () => {
       Effect.gen(function* () {
         const prompt = yield* SystemPrompt.Service
         swarmWeb = { status: "connected" }
-        expect(block(yield* prompt.environment(model))).toBeUndefined()
+        expect(block(yield* prompt.installed().pipe(Effect.map(asParts)))).toBeUndefined()
 
         writeState({ rtk: { state: "healthy" } })
-        expect(block(yield* prompt.environment(model))).toBe(SystemPrompt.installedTools(["rtk"], []))
+        expect(block(yield* prompt.installed().pipe(Effect.map(asParts)))).toBe(SystemPrompt.installedTools(["rtk"], []))
 
         writeState({ rtk: { state: "failed" } })
-        expect(block(yield* prompt.environment(model))).toBeUndefined()
+        expect(block(yield* prompt.installed().pipe(Effect.map(asParts)))).toBeUndefined()
       }),
     )
 
@@ -629,7 +631,7 @@ describe("session.system", () => {
           [evil]: { state: "healthy" },
           "swarm-web": { state: "healthy" },
         })
-        const parts = yield* (yield* SystemPrompt.Service).environment(model)
+        const parts = yield* (yield* SystemPrompt.Service).installed().pipe(Effect.map(asParts))
         expect(block(parts)).toBe(SystemPrompt.installedTools(["rtk"], []))
         expect(parts.join("\n")).not.toContain("IGNORE PREVIOUS")
       }),

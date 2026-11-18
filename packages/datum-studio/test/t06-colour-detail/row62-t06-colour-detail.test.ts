@@ -10,6 +10,17 @@ const PKG = path.resolve(import.meta.dir, "..", "..");
 const ENGINE = path.join(PKG, "vendor", "src", "lib", "studio", "engine");
 const build = await import(path.join(ENGINE, "diagram", "build", "index.ts"));
 const tokens = await import(path.join(ENGINE, "diagram", "core", "tokens.ts"));
+// 1.3.3 row 57 (ST-6): the colour budget and the token model, read directly (no engine spec reaches the refusal now).
+const colour = await import(path.join(ENGINE, "diagram", "core", "colour.ts"));
+const core = await import(path.join(ENGINE, "diagram", "core", "index.ts"));
+const dispatch = await import(path.join(PKG, "vendor", "src", "lib", "studio", "contract", "dispatch.ts"));
+/** The sheet `estimate` lays out for a spec (same calls), for the token model of colour sources. */
+const sheetOf = (s: any): any => {
+  const sheet = new core.Sheet(Number(s.width_mm), undefined, core.resolveDiagramGrid(undefined).latticeXMm);
+  const res = dispatch.DIAGRAM_LAYOUTS[s.family](s, sheet);
+  if (res) sheet.applyLayout(res, s);
+  return sheet;
+};
 
 const CASE04 = JSON.parse(readFileSync(path.join(PKG, "test", "engine-rev-a", "svg", "fixtures", "case04.studio.json"), "utf8"));
 const spec = (patch?: (s: any) => void): any => {
@@ -18,14 +29,6 @@ const spec = (patch?: (s: any) => void): any => {
   return s;
 };
 const hex = (token: string): string => String(tokens.colourOf(token)).toUpperCase();
-const refusal = (s: any): string => {
-  try {
-    build.buildDiagramSvg(s, { release: false });
-  } catch (e) {
-    return String((e as Error).message);
-  }
-  throw new Error("expected a DATUM-25 refusal");
-};
 
 /** The six-colour guard of row124-svg.test.ts: a verify edge (verd) plus an ASUMSI glyph (alert). */
 const SIX = (s: any) => {
@@ -35,22 +38,36 @@ const SIX = (s: any) => {
 };
 
 describe("T-06 DATUM-25 detail: counted values, sources, remainder", () => {
-  test("the refusal keeps its id, count and limit (limit unchanged)", () => {
-    const msg = refusal(spec(SIX));
-    expect(msg).toContain("DATUM-25: 6 nilai warna dalam satu gambar, maksimum 5");
+  // 1.3.3 row 57 (ST-6, B-16, INTENT): SIX printed 6 values (inks, signal, alert, verd) and was refused; the inks now
+  // count as one colour and the ASUMSI glyph (the only alert print) is a value-origin mark, so SIX builds. The limit
+  // and the printed values are unchanged.
+  test("SIX builds now: 6 printed values, budget 3 (tinta, verd, signal); limit unchanged (1.3.3 row 57)", () => {
+    const r = build.buildDiagramSvg(spec(SIX), { release: false });
+    expect(r.report.checksRun).toContain("DATUM-25");
+    expect(r.report.colourValues.length).toBe(6);
+    const b = colour.svgColourBudget(r.svg);
+    expect(b.counted).toEqual(["tinta", hex("verd"), hex("signal")]);
+    expect(b.marksOnly).toEqual([hex("alert")]);
+    expect(tokens.LIMITS.max_colour_values).toBe(5);
   });
 
-  test("the refusal lists every counted hex value with its source and the remainder", () => {
-    const msg = refusal(spec(SIX));
-    expect(msg).toContain("dihitung 6:");
+  // The detail of a refusal (row 62 intent) on the engine's own token model: every counted entry with its sources, the
+  // ink entry with its values, the remainder (negative against a lower limit), and the values left out.
+  test("the refusal detail lists every counted entry with its sources and the remainder", () => {
+    const s = spec(SIX);
+    const sheet = sheetOf(s);
+    const sources = colour.diagramColourSources(s, sheet);
+    const b = colour.diagramColourBudget(s, sheet);
+    const msg = colour.colourBudgetDetail(b, sources, 1);
+    expect(msg).toContain(`dihitung ${b.count}:`);
     const listed = [...msg.matchAll(/(#[0-9A-F]{6}) \(([^)]+)\)/g)].map((m) => ({ hex: m[1], src: m[2] }));
-    expect(listed.length).toBe(6);
-    expect(new Set(listed.map((l) => l.hex)).size).toBe(6);
+    expect(listed.length).toBe(b.count - 1); // plus the `tinta` entry
     for (const l of listed) expect(l.src.length).toBeGreaterThan(0);
+    expect(msg).toMatch(/tinta \(#101418[^)]*: [^)]*label simpul/);
     const by = new Map(listed.map((l) => [l.hex, l.src]));
     expect(by.get(hex("verd"))).toContain("edge.kind verify");
-    expect(by.get(hex("alert"))).toContain("mark ASUMSI");
-    expect(msg).toMatch(/sisa −1\b/);
+    expect(msg).toContain(`tidak dihitung: tanda asal ${hex("alert")}`);
+    expect(msg).toMatch(new RegExp(`sisa \u2212${b.count - 1}\\b`));
   });
 
   test("one value drawn by both a line kind and a glyph names both sources (rev 178/193 shape)", () => {
@@ -64,13 +81,15 @@ describe("T-06 DATUM-25 detail: counted values, sources, remainder", () => {
       x.edges[5].kind = "accent";
       x.legend.push("accent = jalur utama");
     });
-    const msg = refusal(s);
-    const by = new Map([...msg.matchAll(/(#[0-9A-F]{6}) \(([^)]+)\)/g)].map((m) => [m[1], m[2]]));
-    const signal = by.get(hex("signal")) ?? "";
+    // 1.3.3 row 57 (ST-6): this figure is within the budget now; the sources are read from the token model the
+    // refusal detail uses (the intent: one value, both sources), and the value counts once.
+    const sources = colour.diagramColourSources(s, sheetOf(s));
+    const signal = (sources.get(hex("signal")) ?? []).join(", ");
     expect(signal).toContain("edge.kind accent");
     expect(signal).toContain("mark DITURUNKAN");
-    expect(by.get(hex("verd"))).toContain("edge.kind verify");
-    expect(msg).toMatch(/sisa −\d+/);
+    expect((sources.get(hex("verd")) ?? []).join(", ")).toContain("edge.kind verify");
+    const b = colour.diagramColourBudget(s, sheetOf(s));
+    expect(b.counted.filter((v: string) => v === hex("signal")).length).toBe(1);
   });
 
   test("a figure within the limit builds unchanged", () => {

@@ -8,6 +8,7 @@
 import type { Caption, Inline, NormBlock, ProvenanceMark, RenderContext, RoleKey, RunProps, SourceLine } from "../../../contract";
 import { snapApparatusPara } from "../../docx/blocks/rhythm";
 import { apparatusLabelRunText, artifactLabelText, keyLineText, provenanceMarkLabelText, wrapperLangOf } from "../../front/texts";
+import { mapKeyRowText } from "../../diagram/core/sheet";
 import { escText } from "./escape";
 import { inlineHtml, inlinePlain, paraHtml } from "./inline";
 import { color, css, fontFamily, hexCss, labels, markColor, markGlyph, pBool, pNum, pStr, role, ruleCss, runCss } from "./style";
@@ -139,8 +140,11 @@ export function sourceParagraphHtml(src: SourceLine | undefined, ctx: RenderCont
 function idKeyLine<T extends Inline | undefined>(x: T, ctx: RenderContext): T {
   const lang = wrapperLangOf(ctx.snapshot?.doc?.meta);
   if (lang !== "ID" || !x) return x;
-  if ("text" in x) return { ...x, text: keyLineText(x.text, lang) } as T;
-  return { ...x, runs: x.runs.map((r) => ("t" in r ? { ...r, t: keyLineText(r.t, lang) } : r)) } as T;
+  // Swarm 1.3.3 row 45 (ST-3.6): worded row by row with the function the SVG key line uses
+  // (`diagramApparatusOptions().keyRowText`), so the page row and the SVG key read the same.
+  const word = (t: string): string => mapKeyRowText(t, (row) => keyLineText(row, lang));
+  if ("text" in x) return { ...x, text: word(x.text) } as T;
+  return { ...x, runs: x.runs.map((r) => ("t" in r ? { ...r, t: word(r.t) } : r)) } as T;
 }
 
 /** Baris KUNCI figur (peran `figure.keyRow`). */

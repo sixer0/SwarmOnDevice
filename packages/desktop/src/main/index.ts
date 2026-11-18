@@ -9,7 +9,6 @@ import type { Event, MessageBoxOptions } from "electron"
 import { app, BrowserWindow, dialog } from "electron"
 
 import { Deferred, Effect, Fiber } from "effect"
-import contextMenu from "electron-context-menu"
 
 import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
@@ -65,6 +64,10 @@ import { startRenderBridge } from "./datum-render"
 import { createRenderEnvGate } from "./sidecar-env"
 import { createToolHealth } from "./tool-health/startup"
 import { refreshStagedProxy } from "./proxy-refresh"
+import { crashSignalListenerReport, getStore } from "./store"
+import { createMemoryWatch } from "./memory-watch"
+import { OFFICE_ADDIN_ENABLED_KEY } from "./store-keys"
+import type { OfficeAddinController } from "./office-addin/controller"
 
 // Row 33: longest the sidecar spawn waits for the render bridge (normally a socket listen, milliseconds).
 const SIDECAR_RENDER_ENV_WAIT_MS = 5_000
@@ -109,11 +112,11 @@ function emitDeepLinks(urls: string[]) {
   if (win) sendDeepLinks(win, urls)
 }
 
-async function killSidecar() {
+async function killSidecar(options?: { resume?: boolean }) {
   if (!server) return
   const current = server
   server = null
-  await current.stop()
+  await current.stop(options)
 }
 
 function ensureLoopbackNoProxy() {
@@ -137,7 +140,8 @@ function ensureLoopbackNoProxy() {
 }
 
 const main = Effect.gen(function* () {
-  contextMenu({ showSaveImageAs: true, showLookUpSelection: false, showSearchWithGoogle: false })
+  // 1.3.4 (T-06): the context menu is attached per app window in windows.ts (wireContextMenu), not app-wide. The
+  // app-wide form registered every BrowserWindow, including each hidden render window, and kept them all.
 
   // on macOS apps run in `/` which can cause issues with ripgrep
   try {
@@ -175,17 +179,27 @@ const main = Effect.gen(function* () {
       },
     },
   )
-  const stopSidecars = async () => {
-    await killSidecar()
+  // M7-05: the Office add-in controller (loadOfficeAddin below); its bridge stop runs beside the sidecar stop (IM-09).
+  const officeAddin: { loading?: Promise<OfficeAddinController>; controller?: OfficeAddinController } = {}
+  const stopSidecars = async (options?: { resume?: boolean }) => {
+    await Promise.all([
+      killSidecar(options),
+      officeAddin.loading
+        ?.then((controller) => controller.shutdown())
+        .catch((error) => logger.error("office add-in shutdown failed", error)),
+    ])
     wslServers.stopAll()
   }
-  const relaunch = () => {
+  const relaunch = (options?: { resume?: boolean }) => {
     setAppQuitting()
-    void stopSidecars().finally(() => {
+    void stopSidecars(options).finally(() => {
       app.relaunch()
       app.quit()
     })
   }
+  // 1.3.4 (T-12): the person chose Restart in the menu or accepted the memory reopen. The running agent turns carry on
+  // after the relaunch (the sidecar hands its run leases over) instead of being stopped and left idle.
+  const relaunchAndResume = () => relaunch({ resume: true })
   // The app's normal quit, without app.relaunch (also H4 of the patch handoff: the wrapper relaunches after the applier).
   const quit = () => {
     setAppQuitting()
@@ -346,11 +360,40 @@ const main = Effect.gen(function* () {
   )
   const handoff = (applierArgv: readonly string[]) => launchHandoff([...applierArgv])
   const patchGuard = createPatchFlowGuard()
+  // Language of the memory-watch offer (row 19); follows the renderer's language like the menu does.
+  let memoryWatchLocale = "en"
   const patchWindow = () => getLastFocusedWindow() ?? null
   const patchMessageBox = (win: BrowserWindow | null, options: MessageBoxOptions) =>
     win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)
   const patchLog = (level: "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) =>
     writeLog("swarm-patch", message, extra, level)
+  // SB-1 (rows 18, 19). Row 18's seam: what the store's signal pass removed, logged once (its catch path only
+  // returns `error`). Then the memory watch: one "main memory" line per minute, one event per threshold, and the
+  // offer of a controlled reopen through the same message box and the same `relaunch` as the menu's Reload.
+  const crashSignals = crashSignalListenerReport()
+  writeLog(
+    "main",
+    "crash signal listeners",
+    { ...crashSignals },
+    crashSignals.error || crashSignals.remaining !== 0 ? "error" : "info",
+  )
+  const memoryWatch = createMemoryWatch({
+    clock: {
+      setInterval: (fn, ms) => {
+        const timer = setInterval(fn, ms)
+        timer.unref()
+        return timer
+      },
+      clearInterval: (timer) => clearInterval(timer as ReturnType<typeof setInterval>),
+    },
+    readMemory: () => process.memoryUsage(),
+    showMessageBox: (options) => patchMessageBox(patchWindow(), options),
+    relaunch: relaunchAndResume,
+    log: writeLog,
+    locale: () => memoryWatchLocale,
+  })
+  memoryWatch.start()
+  app.once("will-quit", () => memoryWatch.stop())
   const updateFromFile = createPatchUpdateFlow({
     window: patchWindow,
     showOpenDialog: (win, options) => (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options)),
@@ -400,12 +443,67 @@ const main = Effect.gen(function* () {
         binDir: join(homedir(), ".local", "bin"),
         pathEnv: () => shellEnv?.PATH ?? process.env.PATH,
       })().catch((error) => logger.error("install DATUM Studio for Claude failed", error)),
-    relaunch,
+    relaunch: relaunchAndResume,
     updateFromFile: () => void updateFromFile().catch((error) => logger.error("update from file failed", error)),
     undoLastUpdate: () => void undoLastUpdate().catch((error) => logger.error("undo last update failed", error)),
     // SEC-05 / C9: person trigger; may revive consent "manual" tools (an agent's recheck.json cannot).
     recheckTools: () => void toolHealth.recheck().catch((error) => logger.error("tool-health re-check failed", error)),
   }
+  // M7-05 (SD §5.3, §5.4; IM-07): the Office add-in controller is loaded by import() only on auto-start or a menu click,
+  // so with the setting off nothing is parsed, forked or written (no office-addin/ folder, SD-AC-2).
+  const loadOfficeAddin = () => {
+    officeAddin.loading ??= (async () => {
+      const { createOfficeAddinController } = await import("./office-addin/controller")
+      const { electronPairDialogDeps } = await import("./office-addin/pair-dialog")
+      const { safeStorage, shell, utilityProcess } = await import("electron")
+      officeAddin.controller = createOfficeAddinController({
+        userDataDir: app.getPath("userData"),
+        // C33: packaged pane and manifest under Resources/office-addin; dev reads packages/office-addin.
+        resources: {
+          packaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
+          devPackageDir: join(app.getAppPath(), "..", "office-addin"),
+        },
+        bridgeEntryPath: join(import.meta.dirname, "office-bridge.js"),
+        baseEnv: process.env,
+        server: async () => {
+          const ready = await Effect.runPromise(Deferred.await(serverReady))
+          return ready.username && ready.password
+            ? { url: ready.url, username: ready.username, password: ready.password }
+            : undefined
+        },
+        settings: {
+          enabled: () => getStore().get(OFFICE_ADDIN_ENABLED_KEY) === true,
+          setEnabled: (value) => getStore().set(OFFICE_ADDIN_ENABLED_KEY, value),
+        },
+        fork: (modulePath, args, options) => utilityProcess.fork(modulePath, args, options),
+        dialog: { showMessageBox: (options) => dialog.showMessageBox(options) },
+        shell: { showItemInFolder: (path) => shell.showItemInFolder(path), openPath: (path) => shell.openPath(path) },
+        pairDialog: electronPairDialogDeps({ dialog, app, window: () => getLastFocusedWindow() ?? null }),
+        safeStorage,
+        log: (level, source, message, context) => writeLog(source, message, context, level),
+        onStateChange: () => rebuildMenu(),
+      })
+      return officeAddin.controller
+    })().catch((error: unknown) => {
+      officeAddin.loading = undefined
+      throw error
+    })
+    return officeAddin.loading
+  }
+  const officeAddinAction = (name: "officeAddinToggle" | "officeAddinDisconnect" | "officeAddinClearCache") => () =>
+    void loadOfficeAddin()
+      .then((controller) => controller.menuHandlers()[name]())
+      .catch((error) => logger.error("office add-in menu action failed", error))
+  // IA-2: the one place the menu is built (locale change, window start, Office state change).
+  const rebuildMenu = () =>
+    createMenu({
+      ...menuDeps,
+      officeAddinState: () => officeAddin.controller?.state() ?? "off",
+      officeAddinToggle: SIDECAR_VERSION === "v2" ? undefined : officeAddinAction("officeAddinToggle"),
+      officeAddinDisconnect: officeAddinAction("officeAddinDisconnect"),
+      officeAddinClearCache: officeAddinAction("officeAddinClearCache"),
+    })
   const ipc = registerIpcHandlers({
     killSidecar: () => killSidecar(),
     relaunch,
@@ -434,8 +532,9 @@ const main = Effect.gen(function* () {
     exportDebugLogs: () => exportDebugLogs(),
     recordFatalRendererError: (error) => writeLog("renderer", "fatal renderer error", { ...error }, "error"),
     setNativeTranslations: (bundle) => {
+      memoryWatchLocale = bundle.locale
       if (setNativeTranslations(bundle)) {
-        createMenu(menuDeps)
+        rebuildMenu()
         setAboutPanel(bundle.locale)
       }
     },
@@ -549,6 +648,12 @@ const main = Effect.gen(function* () {
   }).pipe(forwardInitializationFailure(serverReady), Effect.forkChild)
 
   yield* Fiber.await(loadingTask)
+  // M7-05 (SD §5.3): auto-start the Office bridge only with the setting on, on macOS, and with the v1 sidecar.
+  if (process.platform === "darwin" && SIDECAR_VERSION !== "v2" && getStore().get(OFFICE_ADDIN_ENABLED_KEY) === true) {
+    void loadOfficeAddin()
+      .then((controller) => controller.launch())
+      .catch((error) => logger.error("office add-in launch failed", error))
+  }
 
   app.on("window-all-closed", () => {
     if (process.platform === "darwin") return
@@ -560,7 +665,7 @@ const main = Effect.gen(function* () {
   })
 
   const windows = restoreMainWindows()
-  if (windows.length) createMenu(menuDeps)
+  if (windows.length) rebuildMenu()
   // Result of a patch handoff (row 58), once per start after the first window is shown. `installedRelease` is the S-1
   // `status` of this bundle (row 56); it runs only when the result file claims success.
   if (process.platform === "darwin" && windows[0]) {

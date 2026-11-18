@@ -60,8 +60,10 @@ import {
 } from "../core";
 import { diagramFitActive, diagramFitNote, diagramFitRoute } from "../fit/state";
 import { footLines } from "./footwrap";
+import { measure, wrap } from "../../chart/core/textfit"; // row 54 (ST-5): note rows wrap to the sheet width
 import { routeSequenceMessages, type SequenceLayout } from "../layout-b";
 import { flowDirectionOf, flowSerialisedNote } from "../layout-a/flow";
+import { tierLabelSvgs, type TierLabelLayoutExtras } from "../layout-a/layered";
 import { autoFitDiagram, type DiagramGeometryIssue } from "./autofit";
 import type { EdgeLabelPlan } from "../fit/labels";
 import { fitEdgeLabels, noteRows, planBands, shiftPlan, zoneClearOn, zoneGeom } from "./fitlabels";
@@ -71,7 +73,7 @@ import { reorderPlaced } from "./order";
 import { capacityRetry, isCapacityReject, withAction } from "./capacity";
 import { crossingHops, routePlaced, routeStyleOfPath, type HoppedEdge } from "./route";
 import { canonicalSymbolId } from "../../symbols";
-import { colourCountDetail, diagramColourSources } from "../core/colour"; // row 62 (T-06)
+import { colourBudgetDetail, diagramColourSources, svgColourBudget } from "../core/colour"; // row 62 (T-06); 1.3.3 row 57 (ST-6)
 import { edgeArrowsOfPaths, edgeLineDash, nodeShadowSvg, type EdgeArrows } from "../core/svg"; // row 57 (VIS-7); row 57b: shared path-edge matching; row 57c: node shadow; 1.2.9 row 27: edgeLineDash
 import { labelAtBaseline, runOrder, spotClear } from "../fit/labels"; // row 57b (VIS-9); row 57c: runOrder, spotClear
 import type { HeadSize } from "../fit/lint"; // row 57c
@@ -108,7 +110,7 @@ export interface DiagramBuildReport {
    * KUNCI lines, SUMBER lines (after wrapping) and the furniture height in mm (caption, KUNCI, SUMBER).
    * Report only; the SVG bytes are unchanged.
    */
-  furniture?: { keyLines: number; sourceLines: number; heightMm: number };
+  furniture?: { keyLines: number; sourceLines: number; heightMm: number; noteLines?: number };
 }
 
 export interface DiagramSvgResult extends SvgResult {
@@ -149,6 +151,47 @@ export interface DiagramBuildOptions {
    * mark = SUMBER as before.
    */
   provenance?: { label: string; marks: ReadonlyArray<{ mark: keyof typeof MARKS; text: string }> };
+  /**
+   * Swarm 1.3.3 row 54 (ST-5): label word of the note rows printed from `spec.notes[]`. Default `CATATAN`
+   * (`DEFAULT_NOTE_LABEL`), written like KUNCI and SUMBER; an English document can pass `NOTE`.
+   */
+  noteLabel?: string;
+}
+
+/** Row 54 (ST-5): default label word of an author note row. */
+const DEFAULT_NOTE_LABEL = "CATATAN";
+/** Row 54: attribute on every line of an author note row; its value is the 1-based index of the entry in `notes[]`. */
+const NOTE_MARK_ATTR = "data-st-note";
+/** Row 54: a note is never cut; this only bounds the search of the wrap. Past it the last line holds the rest. */
+const NOTE_MAX_LINES = 40;
+
+/**
+ * Swarm 1.3.3 row 54 (ST-5, gap matrix section 5 #5): the lines of the author's `notes[]`, top to bottom. One entry =
+ * one row `LABEL  text` in role `source_line` (not capitalised: the author's letter case is printed), wrapped to the
+ * sheet width `W` when it is wider (continuation lines carry no label). Wrapping does not depend on the fit pass, so
+ * the first render and the fitted render print the same lines. A blank entry prints nothing. The text is never cut:
+ * when the wrap would lose or change a character, or a word has no place to break, the entry stays one line.
+ * These are the AUTHOR's notes; the numbered edge-label notes the engine makes itself are `noteRows` (fitlabels.ts).
+ */
+function specNoteLines(s: Pick<StudioDiagramV1, "notes">, W: number, label: string): Array<{ text: string; note: number }> {
+  const out: Array<{ text: string; note: number }> = [];
+  const pt = role("source_line").size;
+  const maxW = W - 0.5 - measure(" ", pt); // the label keeps its two spaces; the wrap counts one
+  (s.notes ?? []).forEach((entry, i) => {
+    if (typeof entry !== "string" || entry.trim() === "") return;
+    const one = `${label}  ${entry}`;
+    let lines = [one];
+    if (measure(one, pt) > W - 0.5) {
+      const r = wrap(`${label} ${entry}`, maxW, NOTE_MAX_LINES, { pt });
+      const squash = (t: string): string => t.replace(/\s+/g, "");
+      const head = `${label} `;
+      if (r.lines.length > 1 && r.lines[0].startsWith(head) && squash(r.lines.join("")) === squash(one)) {
+        lines = [`${label}  ${r.lines[0].slice(head.length)}`, ...r.lines.slice(1)];
+      }
+    }
+    for (const text of lines) out.push({ text, note: i + 1 });
+  });
+  return out;
 }
 
 /** Row 124 (CP-28/48): default caption label word (manual Rev A ID edition, DT-15). */
@@ -339,6 +382,56 @@ function graphFit(s: StudioDiagramV1, sheet: Sheet, paths: readonly RoutedEdge[]
     return { ...p, points, d: polylineD(points) };
   });
   return { paths: shifted, dy, contentBottom: snapCeil(maxY - dy - 1e-9, LATTICE_Y), pad };
+}
+
+/**
+ * Swarm 1.3.3 row 40 (ST-3.1): rise of a foot row above its baseline, in em of the largest foot text (the key row,
+ * role `table_header`): cap height 0.70 em plus a stroke margin. A foot row "starts" at baseline minus this rise.
+ */
+const FOOT_ROW_RISE_EM = 0.75;
+
+/**
+ * Row 40 (ST-3.1): how far the foot block (edge-label notes, KUNCI, SUMBER, caption) moves down so that its first row
+ * starts below every drawn element. The first foot baseline sits one lattice row below `contentBottom`, which the
+ * sheet derives from the nodes (graph: from nodes, routes, label bands and nominal zones). `bottoms` are the lower
+ * edges of everything else that is drawn: container frames, lifelines, lane and pool frames, connector points and
+ * edge-label bands. Whole lattice rows; 0 when the first row is already clear (a figure without containers or
+ * lifelines keeps its bytes).
+ */
+function footDropMm(contentBottom: number, bottoms: readonly number[]): number {
+  if (!bottoms.length) return 0;
+  const rise = FOOT_ROW_RISE_EM * pt2mm(role("table_header").size);
+  const over = Math.max(...bottoms) + rise - (contentBottom + LATTICE_Y);
+  return over > 1e-6 ? Math.ceil(over / LATTICE_Y - 1e-9) * LATTICE_Y : 0;
+}
+
+/** Row 40: lower edge of the swimlane frame and of its pool boxes (a pool spans y only on a horizontal frame). */
+function frameBottoms(s: StudioDiagramV1, place: Placement): number[] {
+  const frame = s.family === "swimlane" ? (place.layout as { frame?: SwimFrame }).frame : undefined;
+  if (!frame) return [];
+  return [frame.bottom, ...(frame.orientation === "horizontal" ? (frame.pools ?? []).map((p) => p.hi) : [])];
+}
+
+/**
+ * Row 40: lower edge of each edge-label band as it is drawn: the placed plan when the fit placement ran (`planBands`,
+ * leaders included), else the default position (`orig`) or the fixed `label_at` baseline; band = knockout of
+ * `labelKnockoutSvg` (baseline + 0.55 size). An edge without label text draws no band.
+ */
+function labelBottoms(
+  s: StudioDiagramV1,
+  paths: readonly HoppedEdge[],
+  plan: EdgeLabelPlan | undefined,
+  origOf: (ps: readonly RoutedEdge[]) => Array<[number, number]>,
+): number[] {
+  if (plan) return planBands(plan).flatMap(([, hi], i) => (String(paths[i]?.label ?? "") ? [hi] : []));
+  const rail = pt2mm(role("evidence_rail").size);
+  const fixedAt = edgeArrowsOfPaths(s.edges ?? [], paths).map((a) => a.labelAt);
+  const orig = origOf(paths);
+  return paths.flatMap((p, i) => {
+    if (!String(p.label ?? "")) return [];
+    const at = fixedAt[i];
+    return [(at ? labelAtBaseline(p.points, at)[1] : orig[i][1]) + rail * 0.55];
+  });
 }
 
 /**
@@ -569,6 +662,22 @@ export function routeFor(s: StudioDiagramV1, p: Placement): { paths: RoutedEdge[
   return { paths: routePlaced(s, p.sheet) };
 }
 
+/**
+ * Row 55 (ST-5): the engine prints the label "SUMBER" itself. When the author's first source text already starts with
+ * that word (SUMBER, Sumber, sumber, Source; "Sources" too), strip the word and its separator so the label prints once;
+ * the rest stays verbatim, in the author's case. With a colon or dash any case counts; without a separator only the
+ * all-capitals word does, so "Sumber daya listrik ..." is not mistaken for a label. A text that merely contains the word
+ * later is untouched.
+ */
+/** @internal test seam */
+export function stripSourceLead(text: string): string {
+  const m = /^\s*(?:(?:sumber|sources?)\s*[:\u2013\u2014-]+\s*|(?:SUMBER|SOURCES?)(?=\s|$)\s*)/i.exec(text);
+  if (!m) return text;
+  const bare = !/[:\u2013\u2014-]/.test(m[0]);
+  if (bare && !/^\s*(?:SUMBER|SOURCES?)/.test(m[0])) return text;
+  return text.slice(m[0].length);
+}
+
 function sourcesOf(s: StudioDiagramV1): string[] {
   if (Array.isArray(s.sources) && s.sources.length) return s.sources.map(String);
   const src: unknown = s.source;
@@ -741,7 +850,9 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   // Swarm row 165P (C205, CP-28/48): the figure's PROVENANS part after its SUMBER text (page apparatus form).
   const prov = (s.apparatus ?? "page") === "figure" && opts.provenance && opts.provenance.marks.length > 0 ? opts.provenance : undefined;
   const provText = prov ? `    ${prov.label}  ${prov.marks.map((m) => `${MARKS[m.mark]} ${m.text}`).join(" · ")}` : "";
-  const sourceText = "SUMBER  " + sourcesOf(s).join("; ") + provText;
+  const sourceList = sourcesOf(s);
+  if (sourceList.length) sourceList[0] = stripSourceLead(sourceList[0]);
+  const sourceText = "SUMBER  " + sourceList.join("; ") + provText;
   const capLines = (s.apparatus ?? "page") === "figure" ? footLines(captionText, "caption", W) : [captionText];
   const srcLines = (s.apparatus ?? "page") === "figure" ? footLines(sourceText, "source_line", W) : [sourceText];
   const footExtra = capLines.length - 1 + srcLines.length - 1;
@@ -749,7 +860,11 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     sheet.foot += footExtra * LATTICE_Y;
     diagramFitNote("CAPTION_WRAP", `caption ${capLines.length} baris, SUMBER ${srcLines.length} baris (dibungkus ke lebar ${W} mm)`, "persingkat judul gambar (maks ~100 karakter)");
   }
-  // Swarm 1.2.6 row 67 (T-12, N-019): apparatus furniture (caption, KUNCI, SUMBER lines), before edge-label notes.
+  // Swarm 1.3.3 row 54 (ST-5): the author's `notes[]` are foot rows, one lattice row per printed line, in both
+  // apparatus modes. Reserved here, before H (row 40's seam), so the clearance, DATUM-33 and the sheet height see them.
+  const noteLines = specNoteLines(s, W, opts.noteLabel ?? DEFAULT_NOTE_LABEL);
+  sheet.foot += noteLines.length * LATTICE_Y;
+  // Swarm 1.2.6 row 67 (T-12, N-019): apparatus furniture (caption, CATATAN, KUNCI, SUMBER lines), before edge-label notes.
   const furnitureMm = sheet.foot;
   let H = fit ? fit.contentBottom + sheet.foot + fit.pad : sheet.height();
   let notes: ReturnType<typeof noteRows> | undefined;
@@ -768,6 +883,28 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
       H = fit ? fit.contentBottom + sheet.foot + fit.pad : sheet.height();
     }
   }
+  // Swarm 1.3.3 row 40 (ST-3.1): the foot rows start below every drawn element, not only below the lowest node.
+  // `zoneGeoms` is measured once here (it can add a ZONE_LABEL_CLAMP note) and drawn from below.
+  const zoneGeoms = (s.zones ?? []).map((z) => {
+    const members = (z.members ?? []).map((m) => sheet.nodes.get(m)).filter((m): m is SheetNode => m !== undefined);
+    return members.length ? zoneGeom(z, members, sheet, fitOn, zoneClearOn(s)) : undefined;
+  });
+  const contentBottom = fit ? fit.contentBottom : H - LATTICE_Y * 2 - sheet.foot;
+  // A lifeline ends one lattice row below the content, where it ended on a sheet without foot rows.
+  const lifelineEnd = contentBottom + LATTICE_Y;
+  const footDrop =
+    sheet.foot > 0
+      ? footDropMm(contentBottom, [
+          ...zoneGeoms.flatMap((g) => (g ? [g.y + g.h] : [])),
+          ...(sheet.lifelines.length ? [lifelineEnd] : []),
+          ...sheet.lanes.map((lane) => lane.y + lane.h),
+          ...frameBottoms(s, place),
+          ...hopped.flatMap((p) => p.points.map(([, y]) => y)),
+          ...labelBottoms(s, hopped, plan, origOf),
+        ])
+      : 0;
+  H += footDrop;
+  notesY0 += footDrop;
   if (H > grid.maxHeightMm + 1e-6) {
     throw new DiagramDefect(`DATUM-33: tinggi gambar ${pyFixed(H, 2)} mm melewati blok teks ${pyFixed(grid.maxHeightMm, 1)} mm (kaki aparatus ${pyFixed(furnitureMm, 2)} mm) (P8)`, {
       checkId: "DATUM-33",
@@ -795,15 +932,19 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   // lajur akuntabilitas + pemisah rambut (P2 swimlane), urutan kemunculan lajur (row 57c: built before the labels)
   sheet.addAll(laneDecor);
   for (const ll of sheet.lifelines) {
-    sheet.add(lineSvg(ll.x, ll.top, ll.x, H - LATTICE_Y, "ink200", STROKE_HAIR, DASH_PATTERNS.dashed));
+    sheet.add(lineSvg(ll.x, ll.top, ll.x, lifelineEnd, "ink200", STROKE_HAIR, DASH_PATTERNS.dashed)); // row 40: ends above the foot rows
   }
 
   // zona kepercayaan: penutupan garis putus + tab label, tanpa isian (P5)
-  for (const z of s.zones ?? []) {
-    const members = (z.members ?? []).map((m) => sheet.nodes.get(m)).filter((m): m is SheetNode => m !== undefined);
-    if (!members.length) throw new DiagramDefect(`zona '${String(z.id)}' tanpa anggota dikenal (P5 trust zone)`, { checkId: "P5-zone" });
+  // Swarm 1.3.3 row 42 request (drawn by row 40): every zone frame first, then per zone the plain ground of its label
+  // and the label, so no frame runs through a label. A legacy flow has no ground and keeps its order (frame, label per
+  // zone; frozen at its 1.2.5 bytes, C10(a), C12).
+  const zoneLabels: string[] = [];
+  for (const [zi, z] of (s.zones ?? []).entries()) {
+    const geom = zoneGeoms[zi];
+    if (!geom) throw new DiagramDefect(`zona '${String(z.id)}' tanpa anggota dikenal (P5 trust zone)`, { checkId: "P5-zone" });
     // P2-16: label dijepit saat fit. 1.2.9 row 29 (AC-A06): pads keep ZONE_CLEAR_MM off non-members (not legacy flows).
-    const { x: zx, y: zy, w: zw, h: zh, lx, ly } = zoneGeom(z, members, sheet, fitOn, zoneClearOn(s));
+    const { x: zx, y: zy, w: zw, h: zh, lx, ly } = geom; // row 40: measured once above (`zoneGeoms`)
     // Swarm 1.2.8 row 55b (VIS-2b, 01f §1 Group, N8-252): style "group" = BPMN group, rounded (rx 1.6 mm) dashdot;
     // absent or "zone" = today's dashed rect, byte-identical.
     const group = (z as { style?: unknown }).style === "group";
@@ -820,8 +961,17 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
     );
     const label = z.label !== undefined ? z.label : z.id !== undefined ? z.id : "zona";
     // row 55b: a group label sits 0.8 mm lower so its capitals clear the rounded top edge (zones: unchanged)
-    sheet.add(svgText(lx, group ? ly + 0.8 : ly, label, { role: "table_header", colourToken: "ink400", anchor: "start" }));
+    const labelSvg = svgText(lx, group ? ly + 0.8 : ly, label, { role: "table_header", colourToken: "ink400", anchor: "start" });
+    if (!zoneClearOn(s)) {
+      sheet.add(labelSvg);
+      continue;
+    }
+    if (geom.ground) zoneLabels.push(geom.ground);
+    zoneLabels.push(labelSvg);
   }
+  sheet.addAll(zoneLabels);
+  // Swarm 1.3.3 row 56 (ST-5): tier labels in the band the layout reserved at the left edge (none without `tiers[]`).
+  sheet.addAll(tierLabelSvgs(s, (place.layout as TierLabelLayoutExtras).tierBand, nodes));
 
   // Row 57c (C123 item 1): shadows of `shadowed` nodes before the connectors (a connector and its label lie over them).
   const canvas = { widthMm: W, heightMm: H };
@@ -894,6 +1044,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
       .map((t, i) =>
         svgText(pyInt(0), y - (keyTexts.length - 1 - i) * LATTICE_Y, t, {
           role: "table_header",
+          upper: false, // Swarm 1.3.3 row 43 request (ST-3.4), applied by row 54: the key prints `legend[]` as written; the label arrives in capitals
           colourToken: "ink400",
           anchor: "start",
           track: TRACK.micro_label_wider,
@@ -901,8 +1052,23 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
       )
       .join("");
   // Baris kaki terbawah = tepi isi + cadangan kaki (= H - 2 kisi pada lembar Garis A).
+  // Row 40: `footDrop` (already in H and notesY0) moves the whole foot block down past containers and lifelines. The
+  // rows are drawn bottom-up from `foot`; a new kind of foot row adds its height to `sheet.foot` before H is computed
+  // (as CAPTION_WRAP does) and takes its place in this chain. The clearance needs no change: it places the first row.
   if (notes) sheet.addAll(notes.svg(notesY0)); // FIG-02b: catatan label tepi bernomor
-  let foot = fit ? fit.contentBottom + sheet.foot : H - LATTICE_Y * 2;
+  let foot = fit ? fit.contentBottom + footDrop + sheet.foot : H - LATTICE_Y * 2;
+  // Swarm 1.3.3 row 54 (ST-5): the author's note rows, above the key (gap matrix line 65: "a note line above the key
+  // row") and below the engine-made label notes. Order top to bottom: numbered label notes, CATATAN, KUNCI, SUMBER
+  // (then the caption, which `withCaptionAbove` moves above the drawing). They are added to the sheet before the rows
+  // below them, so the key lines stay the last texts of the document (readers take "the key line and what follows").
+  if (noteLines.length) {
+    const below = (apparatus === "figure" ? capLines.length + srcLines.length : 0) + (hasLegend ? keyTexts.length : 0);
+    const last = foot - below * LATTICE_Y; // baseline of the last note line
+    noteLines.forEach((line, i) => {
+      const el = svgText(pyInt(0), last - (noteLines.length - 1 - i) * LATTICE_Y, line.text, { role: "source_line", upper: false, colourToken: "ink400", anchor: "start" }); // as written
+      sheet.add(el.replace(/^<text /, `<text ${NOTE_MARK_ATTR}="${line.note}" `));
+    });
+  }
   if (apparatus === "figure") {
     for (let i = capLines.length - 1; i >= 0; i--) {
       const capOpts = { role: "caption", colourToken: "ink700", anchor: "start" } as const;
@@ -923,7 +1089,7 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   } else if (hasLegend) {
     sheet.add(keyLine(foot));
   }
-  if (fit) sheet.fixHeight(H); // akar SVG memakai tinggi lembar pas (D-290)
+  if (fit || footDrop > 0) sheet.fixHeight(H); // akar SVG memakai tinggi lembar pas (D-290); row 40: or the lowered foot
   const svg = sheet.toSvg();
   if (fit) assertInsideSheet(svg, H, furnitureMm);
 
@@ -931,11 +1097,14 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
   // <defs> + definisi yang dirujuk, kertas dibuang. DEVIASI SENGAJA dari Garis A,
   // yang menghitung dari model token tidak lengkap (label ink900 dan garis luar
   // shadowed ink200 tak terhitung) sehingga 6 warna bisa lulus batas 5.
-  const used = svgColourValues(svg);
-  if (used.length > LIMITS.max_colour_values) {
+  // Swarm 1.3.3 row 57 (ST-6): the count is the colour budget of the printed values: fill and accent colours once each,
+  // the neutral ink once (line patterns in ink are not colours), value-origin marks not counted.
+  const used = svgColourValues(svg); // printed values, reported as before (`colourValues`, `nColour`)
+  const budget = svgColourBudget(svg);
+  if (budget.count > LIMITS.max_colour_values) {
     throw new DiagramDefect(
       // Swarm 1.2.6 row 62 (T-06): name each counted value, its sources and the remainder.
-      `DATUM-25: ${used.length} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8); ${colourCountDetail(used, diagramColourSources(s, sheet), LIMITS.max_colour_values)}`,
+      `DATUM-25: ${budget.count} nilai warna dalam satu gambar, maksimum ${LIMITS.max_colour_values} (temuan E-16: plafon ini nyata) (P5/P8); ${colourBudgetDetail(budget, diagramColourSources(s, sheet), LIMITS.max_colour_values)}`,
       { checkId: "DATUM-25" },
     );
   }
@@ -968,7 +1137,10 @@ function buildOnce(s: StudioDiagramV1, opts: DiagramBuildOptions, deps: DiagramB
       apparatus,
       family: s.family,
       // Swarm 1.2.7 row 36b (T-12, N7-138): furniture counts for the stand-alone figure (feeds N7-068).
-      ...(apparatus === "figure" ? { furniture: { keyLines: keyTexts.length, sourceLines: srcLines.length, heightMm: furnitureMm } } : {}),
+      // Row 54: `noteLines` only when the spec has printed notes, so a report without notes is unchanged.
+      ...(apparatus === "figure"
+        ? { furniture: { keyLines: keyTexts.length, sourceLines: srcLines.length, heightMm: furnitureMm, ...(noteLines.length ? { noteLines: noteLines.length } : {}) } }
+        : {}),
     },
   };
 }

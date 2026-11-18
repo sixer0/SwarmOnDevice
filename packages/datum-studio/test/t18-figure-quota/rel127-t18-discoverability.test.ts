@@ -37,9 +37,10 @@ describe('row 41 T-18: D22 findable in the tool descriptions (N7-110)', () => {
     expect(fs.readFileSync(GUIDE, 'utf8')).toContain('Tidak ada kode kuota terpisah');
   });
 
-  it('CHAR: no new codes (registry 103, group D 26; D22 registered once)', () => {
-    expect(LINT_REGISTRY.length).toBe(103);
-    expect(LINT_REGISTRY.filter((r) => r.group === 'D').length).toBe(26);
+  it('CHAR: no new codes from this row (registry 109, group D 29; D22 registered once)', () => {
+    // Swarm 1.3.3: registry 103 -> 109 (C-35..C-37 row 27, PLACEHOLDER_UNFILLED row 52, D23 row 86, OFFPAGE_UNPAIRED row 137); group D 26 -> 29 (D23, PLACEHOLDER_UNFILLED, OFFPAGE_UNPAIRED). Counted from the registry.
+    expect(LINT_REGISTRY.length).toBe(109);
+    expect(LINT_REGISTRY.filter((r) => r.group === 'D').length).toBe(29);
     expect(LINT_REGISTRY.filter((r) => r.id === 'D22').length).toBe(1);
   });
 

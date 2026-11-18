@@ -14,7 +14,7 @@ import type { StudioChartV1 } from "../../../contract";
 import type { ChartPalette } from "./palette";
 import { fitActive, fitNote, fitState } from "./fit";
 import { keyLabelText } from "./lang";
-import { SvgDoc, escText, midBaseline, ptToMm, textWidthMm } from "./svg";
+import { SvgDoc, escText, midBaseline, num, ptToMm, textWidthMm } from "./svg";
 import { legendRows } from "./labelfit";
 import { lineHeightMm, measure, wrapEllipsize } from "./textfit";
 
@@ -107,6 +107,25 @@ export function noteLine(doc: SvgDoc, note: string, widthMm: number, yMm: number
 export interface KeyItem {
   label: string;
   color: string;
+  /**
+   * Contoh bentuk di kotak contoh (Swarm 1.3.3 row 133, W-07 jadwal); tanpa medan ini = kotak
+   * penuh (keluaran lama byte-identik). `tail` = garis putus-putus + penutup tegak (ekor float),
+   * `diamond` = belah ketupat (milestone).
+   */
+  sample?: "tail" | "diamond";
+}
+
+/** Contoh bentuk satu entri KUNCI di kotak `sw` x `sw` yang dasarnya di `y` (garis dasar teks). */
+function keySample(doc: SvgDoc, cx: number, y: number, sw: number, it: KeyItem): void {
+  const yc = y - sw / 2;
+  if (it.sample === "tail") {
+    doc.line(cx, yc, cx + sw, yc, it.color, 0.25, { dashMm: [0.5, 0.5], attrs: ' data-key-sample="tail"' });
+    doc.line(cx + sw, yc - sw * 0.3, cx + sw, yc + sw * 0.3, it.color, 0.25);
+  } else if (it.sample === "diamond") {
+    const d = sw / 2;
+    const xm = cx + d;
+    doc.path(`M${num(xm)} ${num(yc - d)} L${num(xm + d)} ${num(yc)} L${num(xm)} ${num(yc + d)} L${num(xm - d)} ${num(yc)} Z`, it.color, { attrs: ' data-key-sample="diamond"' });
+  } else doc.rect(cx, y - sw, sw, sw, it.color);
 }
 
 const KEY_TRACK_MM = 0.15;
@@ -149,7 +168,7 @@ export function keyRow(doc: SvgDoc, x: number, y: number, items: readonly KeyIte
     for (const p of L.items) {
       const yy = y + p.row * KEY_ROW_HEIGHT_MM;
       const cx = x + p.dx;
-      doc.rect(cx, yy - sw, sw, sw, items[p.i].color);
+      keySample(doc, cx, yy, sw, items[p.i]);
       doc.textLines(cx + sw + 1.0, yy, [p.label], { sizePt, fill: pal.ink700 }, 0, p.title);
       used = Math.max(used, p.dx + sw + 1.0 + measure(p.label, sizePt));
     }
@@ -160,7 +179,7 @@ export function keyRow(doc: SvgDoc, x: number, y: number, items: readonly KeyIte
   doc.text(x, y, keyLabelText(), { sizePt, fill: pal.ink400, bold: true, caps: true, trackMm: track });
   let cx = x + textWidthMm(keyLabelText(), sizePt, "struct", track) + 2.4;
   for (const it of items) {
-    doc.rect(cx, y - sw, sw, sw, it.color);
+    keySample(doc, cx, y, sw, it);
     cx += sw + 1.0;
     doc.text(cx, y, it.label, { sizePt, fill: pal.ink700 });
     cx += textWidthMm(it.label, sizePt) + 3.0;

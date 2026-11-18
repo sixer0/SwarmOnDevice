@@ -1,0 +1,225 @@
+{
+ "type": "diagram",
+ "caption": {
+  "text": "The container view opens the platform into eight separately running units, each with its technology."
+ },
+ "source": {
+  "text": "Contoh ilustrasi GSP, data rekaan untuk pengajaran"
+ },
+ "spec": {
+  "family": "layered",
+  "classification": "BIASA",
+  "labels_verified": false,
+  "sources": [
+   "GSP reference set, Gambar 13.2 Kontainer C4 Platform AI Berdaulat"
+  ],
+  "nodes": [
+   {
+    "id": "an",
+    "label": "Analis Intelijen",
+    "sub": "Person",
+    "shape": "box",
+    "class": {
+     "tier": 0,
+     "external": true
+    }
+   },
+   {
+    "id": "dir",
+    "label": "Direktori Instansi",
+    "sub": "Eksternal · LDAP",
+    "shape": "box",
+    "class": {
+     "tier": 0,
+     "external": true
+    }
+   },
+   {
+    "id": "k1",
+    "label": "Portal Web",
+    "sub": "React SPA",
+    "tag": "K1",
+    "shape": "box",
+    "class": {
+     "tier": 1
+    }
+   },
+   {
+    "id": "k2",
+    "label": "Gerbang API",
+    "sub": "Nginx · OIDC",
+    "tag": "K2",
+    "shape": "box",
+    "class": {
+     "tier": 1
+    }
+   },
+   {
+    "id": "k8",
+    "label": "Log Audit",
+    "sub": "PostgreSQL",
+    "tag": "K8",
+    "shape": "cylinder",
+    "class": {
+     "tier": 1
+    }
+   },
+   {
+    "id": "k4",
+    "label": "Server Inferensi",
+    "sub": "vLLM · 4 GPU",
+    "tag": "K4",
+    "shape": "box",
+    "class": {
+     "tier": 2
+    }
+   },
+   {
+    "id": "k3",
+    "label": "Layanan RAG",
+    "sub": "Python · FastAPI",
+    "tag": "K3",
+    "shape": "box",
+    "class": {
+     "tier": 2,
+     "accent": true
+    }
+   },
+   {
+    "id": "k6",
+    "label": "Dokumen",
+    "sub": "MinIO",
+    "tag": "K6",
+    "shape": "cylinder",
+    "class": {
+     "tier": 3
+    }
+   },
+   {
+    "id": "k5",
+    "label": "Pipeline Indeks",
+    "sub": "Python · OCR",
+    "tag": "K5",
+    "shape": "box",
+    "class": {
+     "tier": 3
+    }
+   },
+   {
+    "id": "k7",
+    "label": "Vector Store",
+    "sub": "Qdrant",
+    "tag": "K7",
+    "shape": "cylinder",
+    "class": {
+     "tier": 3
+    }
+   },
+   {
+    "id": "imp",
+    "label": "Stasiun Impor",
+    "sub": "Eksternal · dioda",
+    "shape": "box",
+    "class": {
+     "tier": 4,
+     "external": true
+    }
+   }
+  ],
+  "edges": [
+   {
+    "from": "an",
+    "to": "k1",
+    "kind": "data",
+    "label": "membuka [HTTPS]"
+   },
+   {
+    "from": "k1",
+    "to": "k2",
+    "kind": "data",
+    "label": "memanggil API [HTTPS]"
+   },
+   {
+    "from": "k2",
+    "to": "dir",
+    "kind": "control",
+    "label": "verifikasi [LDAPS]"
+   },
+   {
+    "from": "k2",
+    "to": "k3",
+    "kind": "data",
+    "label": "kueri [gRPC]"
+   },
+   {
+    "from": "k3",
+    "to": "k8",
+    "kind": "control",
+    "label": "jejak [SQL/TLS]"
+   },
+   {
+    "from": "k3",
+    "to": "k4",
+    "kind": "data",
+    "label": "prompt [HTTP]"
+   },
+   {
+    "from": "k3",
+    "to": "k7",
+    "kind": "data",
+    "label": "cari chunk [HTTP]"
+   },
+   {
+    "from": "k6",
+    "to": "k5",
+    "kind": "data",
+    "label": "berkas [S3]"
+   },
+   {
+    "from": "k5",
+    "to": "k7",
+    "kind": "sync",
+    "label": "embedding [HTTP]"
+   },
+   {
+    "from": "imp",
+    "to": "k6",
+    "kind": "data",
+    "label": "dokumen [satu arah]"
+   }
+  ],
+  "zones": [
+   {
+    "id": "z1",
+    "label": "BATAS SISTEM · PLATFORM AI BERDAULAT",
+    "members": [
+     "k1",
+     "k2",
+     "k8",
+     "k4",
+     "k3",
+     "k6",
+     "k5",
+     "k7"
+    ]
+   }
+  ],
+  "legend": [
+   {
+    "symbol": "data",
+    "label": "permintaan sinkron"
+   },
+   {
+    "symbol": "control",
+    "label": "kendali, identitas, audit"
+   },
+   {
+    "symbol": "sync",
+    "label": "batch terjadwal"
+   }
+  ],
+  "notes": [
+   "Sub text is the technology as printed (for example React SPA); the page does not print a [Container: ...] prefix, so none was added"
+  ]
+ }
+}

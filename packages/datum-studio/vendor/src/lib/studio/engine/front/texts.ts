@@ -71,6 +71,43 @@ export function classificationMarkText(classification: string): string {
   return classification.toUpperCase();
 }
 
+/**
+ * Swarm 1.3.3 row 87 (ST-12, register section 7 "Cover classification source"): fallback classification when the
+ * document field is empty = the registry default of P6-02 `classification.level` ("Terbatas"), the same value
+ * `services/compose/merge.ts` `defaultMeta` stores when a document is sent without a classification.
+ */
+/** @internal test seam */
+export const COVER_CLASSIFICATION_FALLBACK: string = registryDefault("classification.level", isString, "string");
+
+/**
+ * Row 87 (ST-12): the ONE classification the cover strip (seal band `{kelas}`), the colophon "klasifikasi" field, a
+ * classification named in a written colophon and the issue stamp letter print. Source = `meta.classification`;
+ * when it is empty: the template's `classification.level`, else `COVER_CLASSIFICATION_FALLBACK`. Same rule for all.
+ */
+/** @internal test seam */
+export function coverClassificationOf(meta: { readonly classification?: string }, params: ParamMap): string {
+  return meta.classification?.trim() || pStr(params, "classification.level")?.trim() || COVER_CLASSIFICATION_FALLBACK;
+}
+
+/** Row 87: level words a writer may put after "Klasifikasi"/"Classification" in a written colophon (longest first). */
+const COLOPHON_CLASSIFICATION_LEVELS = ["Sangat Rahasia", "Top Secret", "Unclassified", "Confidential", "Restricted", "Terbatas", "Rahasia", "Official", "Secret", "Biasa"];
+
+/**
+ * Row 87 (ST-12, replay R12: u3 rev 36 strip "KLASIFIKASI · TERBATAS", written colophon "Klasifikasi BIASA · Basis: ...").
+ * A classification named in a written colophon text (label "Klasifikasi"/"Classification", any case, then an optional
+ * ":" and a level word or the document's own value) is re-derived from `coverClassificationOf`; label, separator and
+ * the rest of the text are kept. Text without such a mention is returned unchanged.
+ */
+export function colophonClassificationText(text: string, meta: { readonly classification?: string }, params: ParamMap): string {
+  const labels = Object.values(FRONT_PAYLOAD_LABELS.classification);
+  const own = meta.classification?.trim();
+  const levels = [...new Set([...(own ? [own] : []), ...COLOPHON_CLASSIFICATION_LEVELS])].sort((a, b) => b.length - a.length);
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+  const re = new RegExp(`\\b(${labels.map(esc).join("|")})(\\s*:\\s*|\\s+)(${levels.map(esc).join("|")})(?![\\p{L}\\p{N}])`, "giu");
+  const level = classificationMarkText(coverClassificationOf(meta, params));
+  return text.replace(re, (_m, label: string, sep: string) => `${label}${sep}${level}`);
+}
+
 /** Bahasa pembungkus dari meta (EN atau ID; nilai lain = ID, sama dengan `WrapperBuilder.lang`). */
 export function wrapperLangOf(meta: { readonly language?: DocMeta["language"] } | undefined): WrapperLang {
   return meta?.language === "EN" ? "EN" : "ID";
@@ -161,6 +198,20 @@ export const CONTROL_SHEET_STATUS_TEXT = {
   current: { ID: "Berlaku", EN: "In force" },
   superseded: { ID: "Diganti", EN: "Superseded" },
 } as const satisfies Readonly<Record<string, Readonly<Record<WrapperLang, string>>>>;
+
+/** Swarm 1.3.3 row 63 (ST-9): STATUS cell of the latest revision while figure labels wait for a person (manual column form). */
+export const CONTROL_SHEET_DRAFT_STATUS_TEXT = { ID: "Draf", EN: "Draft" } as const satisfies Readonly<Record<WrapperLang, string>>;
+
+/**
+ * Swarm 1.3.3 row 63 (ST-9 item 2, owner decision U20): the remark a control sheet prints while `count` figures of the
+ * document have labels no person has checked. `marker` is the register's marker text in the document language
+ * (`LABELS_UNCHECKED_TEXT`, engine/lint/structure/checks-d.ts); the status word is the printed document status. Only
+ * the count is printed: figure numbers are assigned after the front page is composed.
+ */
+export function controlSheetDraftRemarkText(marker: string, count: number, lang: WrapperLang): string {
+  if (lang === "EN") return `Status: draft. ${marker} (${count} ${count === 1 ? "figure" : "figures"}).`;
+  return `Status: draf. ${marker} (${count} gambar).`;
+}
 
 /** Kicker bawaan halaman lembar kendali. */
 export function controlSheetKickerText(lang: WrapperLang): string {
@@ -567,6 +618,18 @@ export function defaultMethodStatementText(layers: ReadonlyArray<{ id: string; m
     : `Dokumen ini diperiksa melalui rantai verifikasi ${n} lapis: ${list}. Objek dan hasil setiap lapis tercatat pada tabel rantai verifikasi.`;
 }
 
+/**
+ * Swarm 1.3.3 row 150 (follow-up of row 63): the method statement the renderers print on a TERBIT/SERAH control sheet
+ * when the document gives none (R-81 `controlSheet.methodStatement.text`, else `defaultMethodStatementText` of the
+ * P4K-02 layers): the same rule as DOCX and HTML `withControlSheetTemplateData`. Compose uses it so the draft remark of
+ * row 63 follows that text instead of taking its place. undefined = other tiers, or no template text and no layers.
+ */
+export function templateMethodStatementText(params: ParamMap, meta: Pick<DocMeta, "tier"> | undefined, lang: WrapperLang): string | undefined {
+  if (!isFullWrapperTier(meta)) return undefined;
+  const t = controlSheetTemplateData(params);
+  return t.method ?? defaultMethodStatementText(t.layers, lang);
+}
+
 /** Nilai PENYUSUN sampul: unit templat (C27) bila diisi, selain itu `meta.author`. Tanda tangan dan riwayat revisi tetap `meta.author`. */
 function coverPreparerText(meta: DocMeta, params: ParamMap): string {
   return coverPreparerUnit(params) ?? meta.author;
@@ -755,7 +818,8 @@ export function issueStampTextOf(meta: DocMeta, params: ParamMap, lang: WrapperL
   return fmt
     .replace(/\{YYYYMMDD\}/g, ymd)
     .replace(/\{BAHASA\}/g, meta.language)
-    .replace(/\{KELAS\}/g, classificationMarkText(meta.classification.trim().charAt(0)))
+    // Row 87 (ST-12): the stamp letter comes from the same classification as the strip (fallback included).
+    .replace(/\{KELAS\}/g, classificationMarkText(coverClassificationOf(meta, params).charAt(0)))
     .replace(/\{n\}/g, String(n));
 }
 
@@ -785,7 +849,8 @@ export function sealBandTextsOf(meta: DocMeta, params: ParamMap, lang: WrapperLa
   const given = pStrList(params, "wrapper.header", SEAL_BAND_DEFAULT);
   const pair = sameList(given, SEAL_BAND_DEFAULT) ? SEAL_BAND_TEXT[lang] : given;
   // I39-1: fungsi pengganti = nilai disisipkan literal ("$&", "$$" dll. tidak diperluas).
-  const kelas = classificationMarkText(meta.classification);
+  // Row 87 (ST-12): one classification source for strip and colophon (`coverClassificationOf`).
+  const kelas = classificationMarkText(coverClassificationOf(meta, params));
   const fill = (s: string | undefined) => (s ?? "").replace(/\{kelas\}/g, () => kelas);
   return [fill(pair[0]), meta.copyControl ?? fill(pair[1])];
 }
@@ -805,8 +870,12 @@ export function registerWordsText(text: string, lang: WrapperLang): string {
   return words ? text.replace(/\b[A-Z]+\b/g, (w) => words[w] ?? w) : text;
 }
 
-/** Kolofon sampul auto P4V-13: kiri = entitas + "NIB …" (dipisah " · "), kanan = cap terbit. */
-export function colophonTexts(meta: DocMeta, params: ParamMap): { left: string; right: string } {
+/**
+ * Kolofon sampul auto P4V-13: kiri = entitas + "NIB …" + "Klasifikasi : <K>" (dipisah " · "), kanan = cap terbit.
+ * Row 87 (ST-12): the "klasifikasi" field (in the registry default list, before this row produced nothing) prints
+ * `classificationLineText` of `coverClassificationOf`, the source of the strip.
+ */
+export function colophonTexts(meta: DocMeta, params: ParamMap, lang: WrapperLang = wrapperLangOf(meta)): { left: string; right: string } {
   const fields = pStrList(params, "cover.colophon.fields", ["entitas", "NIB", "cap terbit", "klasifikasi"]);
   const left: string[] = [];
   if (fields.includes("entitas")) left.push(pStr(params, "org.entityName") ?? ORG_ENTITY_DEFAULT);
@@ -814,6 +883,7 @@ export function colophonTexts(meta: DocMeta, params: ParamMap): { left: string; 
     const nib = pStr(params, "org.nib");
     if (nib) left.push(`NIB ${nib}`);
   }
+  if (fields.includes("klasifikasi")) left.push(classificationLineText(coverClassificationOf(meta, params), lang));
   return { left: left.join(" · "), right: fields.includes("cap terbit") ? issueStampTextOf(meta, params) : "" };
 }
 

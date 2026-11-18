@@ -16,7 +16,7 @@ type SidecarMessage =
   | { type: "stopped" }
   | { type: "error"; error: { message: string; stack?: string } }
 
-export type SidecarListener = { stop: () => Promise<void> }
+export type SidecarListener = { stop: (options?: { resume?: boolean }) => Promise<void> }
 
 const SIDECAR_SERVICE_NAME = "opencode server"
 const SIDECAR_START_STALL_TIMEOUT = 60_000
@@ -174,10 +174,10 @@ export async function spawnLocalServer(
 
   return {
     listener: {
-      stop: () => {
+      stop: (options?: { resume?: boolean }) => {
         if (stopping) return stopping
         if (exited) return Promise.resolve()
-        child.postMessage({ type: "stop" })
+        child.postMessage(options?.resume ? { type: "stop", resume: true } : { type: "stop" })
         stopping = Promise.race([
           exit.promise.then(() => undefined),
           delay(SIDECAR_STOP_TIMEOUT).then(() => {

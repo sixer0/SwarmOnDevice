@@ -43,7 +43,9 @@ function nativeTools() {
 async function studioTools() {
   const table: S = await import(path.join(STUDIO, "src", "mcp-host", "tool-table.ts"))
   const schemas: S = await import(path.join(STUDIO, "src", "mcp-host", "mission", "schemas.ts"))
-  return [...table.HOST_KEPT_TOOLS, ...schemas.MISSION_TOOL_NAMES] as string[]
+  // 1.3.3 row 159: studio_library_read is a host tool registered by library-read.ts (row 100), not in the two lists above.
+  const library: S = await import(path.join(STUDIO, "src", "mcp-host", "library-read.ts"))
+  return [...table.HOST_KEPT_TOOLS, ...schemas.MISSION_TOOL_NAMES, library.LIBRARY_READ_TOOL] as string[]
 }
 
 const AGENT_SOURCES = [path.join(SRC, "agent", "agent.ts"), path.join(SRC, "session", "system.ts")].map((file) =>
@@ -108,9 +110,10 @@ describe("row 195: registry check, every name the texts use exists", () => {
   test("every studio_* name and studio_x_* prefix is a datum-studio tool", async () => {
     const tools = await studioTools()
     for (const text of Object.values(TEXTS))
-      for (const m of text.matchAll(/studio_[a-z]+(?:_[a-z]+)*(_\*)?/g)) {
-        const name = m[0]
-        const ok = m[1] ? tools.some((tool) => tool.startsWith(name.slice(0, -1))) : tools.includes(name)
+      // 1.3.3 row 14 (MC-3): callable names carry the server prefix `datum-studio_`; it is stripped before the lookup.
+      for (const m of text.matchAll(/(?:datum-studio_)?(studio_[a-z]+(?:_[a-z]+)*(_\*)?)/g)) {
+        const name = m[1]!
+        const ok = m[2] ? tools.some((tool) => tool.startsWith(name.slice(0, -1))) : tools.includes(name)
         expect(ok ? name : `unknown studio tool ${name}`).toBe(name)
       }
     expect(RULES).toContain("studio_* tools")

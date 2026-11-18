@@ -58,6 +58,7 @@ import {
 import { ANONYMOUS_INTERNAL_REQUESTER, type StudioCaller } from "../../contract/auth";
 import { StudioEngineError } from "../../contract/errors";
 import { byConstructionChecks } from "../../engine/lint/scan";
+import { legacyBlockRowsIn } from "../structure/repository";
 import {
   applyDocOverrides,
   BENCHMARK_MARKER_STRIPPED,
@@ -119,11 +120,17 @@ function blockRowOf(r: Record<string, unknown>): BlockRow {
   return { blockId: String(r.block_id), address: String(r.address), type: String(r.type), content: parseJson(r.content) };
 }
 
+// Swarm row 80 (ST-11, C6): a v2 revision written from 1.3.3 on has no `block` rows. The three readers
+// below keep their SQL for a revision that has them and otherwise read the same rows through
+// `legacyBlockRowsIn` (structure/repository), which derives them from `doc_block` and the snapshot.
+
 /** M06 `block` row by (revision, address) (was `studioBlock.findUnique({ revisionId_address })`). */
 async function findBlockRow(revisionId: string, address: string): Promise<BlockRow | null> {
   return readWith(undefined, (q) => {
     const r = q.get<Record<string, unknown>>(`SELECT ${BLOCK_COLS} FROM block WHERE revision_id = ? AND address = ?`, [revisionId, address]);
-    return r ? blockRowOf(r) : null;
+    if (r) return blockRowOf(r);
+    const d = legacyBlockRowsIn(q, revisionId).find((b) => b.address === address);
+    return d ? { blockId: d.blockId, address: d.address, type: d.type, content: d.content } : null;
   });
 }
 
@@ -156,7 +163,9 @@ async function findBlockRowByLabel(revisionId: string, label: string): Promise<B
       `SELECT ${BLOCK_COLS} FROM block WHERE revision_id = ? AND (artifact_label = ? OR address = ?) ORDER BY ordinal ASC LIMIT 1`,
       [revisionId, label, label],
     );
-    return r ? blockRowOf(r) : null;
+    if (r) return blockRowOf(r);
+    const d = legacyBlockRowsIn(q, revisionId).find((b) => b.artifactLabel === label || b.address === label);
+    return d ? { blockId: d.blockId, address: d.address, type: d.type, content: d.content } : null;
   });
 }
 
@@ -652,7 +661,7 @@ export async function openRevision(
 ): Promise<{ revision: RevisionSummary; snapshot: NormDocSnapshot; blocks: BlockDto[] }> {
   const doc = await findDocument(docId);
   const rev = await findRevision(doc.id, revNo ?? doc.currentRevisionNo);
-  const rows = await readWith(undefined, (q) => q.all<Record<string, unknown>>(`SELECT ${BLOCK_COLS} FROM block WHERE revision_id = ? ORDER BY ordinal ASC`, [rev.id]).map(blockRowOf));
+  const rows = await readWith(undefined, (q) => legacyBlockRowsIn(q, rev.id));
   return {
     revision: revisionSummary(rev),
     snapshot: asSnapshot(rev),

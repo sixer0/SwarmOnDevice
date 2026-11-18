@@ -13,6 +13,8 @@ export const STORE_ERROR_CODES = [
   "STORE_ROOT_INVALID",
   "STORE_SCHEMA_NEWER",
   "STORE_MIGRATION_FAILED",
+  // 1.3.3 row 81 (ST-11): revertMigration refuses (no reverse step, not the newest, data loss not accepted).
+  "STORE_MIGRATION_IRREVERSIBLE",
   "TEMPLATE_READ_ONLY",
   "TEMPLATE_VERSION_CONFLICT",
   "REVISION_IMMUTABLE",
@@ -87,6 +89,11 @@ export const STORE_ERROR_CODES = [
   "PLACE_DECISION_UNANSWERED",
   // 1.2.9 row 50 (AC-C01, S9-06, N9-001): insertDecision refuses a by: user decision without an attested request.
   "SESSION_NOT_ATTESTED",
+  // 1.3.3 row 6 (register section 2): raisers are rows 70, 102, 68, 61/62.
+  "DELIVERABLE_NOT_IN_PROJECT",
+  "KNOWLEDGE_NOT_CONSULTED",
+  "PROJECT_UNWRITABLE",
+  "LABELS_VERIFIED_PERSON_ONLY",
 ] as const
 
 export type StoreErrorCode = (typeof STORE_ERROR_CODES)[number]

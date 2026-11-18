@@ -359,7 +359,15 @@ describe("AC-A03.64", () => {
   // 1.2.9 export can never be parked in the baseline. Raising BASELINE_MAX needs a C-decision.
   // Row 74a (C104, review F1): browser harnesses (test-browser/, *.render.*, *.fixture.*) now read as tests, which
   // admits 21 older names exported at BASE and drops 2 stale fixture entries: 4433 - 2 + 21 = 4452.
-  const BASELINE_MAX = 4452
+  // Office add-in M9-03 (C75): --prune-stale drops 2 (PreviewRequest, PatchRunResult) and C75 drops 5 entries held only
+  // by same-named branch identifiers (RequestContext, setReadOnly, REQUEST_ID_RE, ThemeSource, ReadOnly): 4452 - 7 = 4445.
+  // M9-03b (C79): after ee39c962da --prune-stale drops check-datum-stage.ts checkStage (now bound by import name from
+  // the office-addin stage scripts), and on the C75 rule drops check-datum-stage.ts checkResources, held only by the
+  // same-named function in check-office-addin-stage.ts: 4445 - 2 = 4443.
+  // Swarm 1.3.3 (C43): row 168 --prune-stale drops 14; row 169 on the C75 rule drops 10 entries held only by
+  // same-named identifiers that 1.3.3 commits added in unrelated files (MAX_SESSIONS, LegacyBlockRow, ROW_STATUSES,
+  // MAX_ARG_ISSUES, propsOf, rowText, PREVIEW_FORMATS, MAX_FOLDERS, Listed, RevertResult): 4443 - 14 - 10 = 4419.
+  const BASELINE_MAX = 4419
   const BASE = "d4282fcfd8"
   // Row 25 split route.ts (C31): names exported by the two new files were exported by route.ts at BASE.
   const route = "packages/datum-studio/vendor/src/lib/studio/engine/diagram/build"

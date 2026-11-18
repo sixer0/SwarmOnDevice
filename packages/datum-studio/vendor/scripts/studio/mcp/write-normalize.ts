@@ -7,6 +7,7 @@
  */
 import { McpToolError } from "./safety";
 import { isRecord, tok, type Args, type ToolWarning } from "./tool-kit";
+import { CHART_INTERVALS_INPUT_KEYS, FIGURE_WIDTH_KEY, liftIntervalsData } from "./write-figure-input";
 
 type Rec = Record<string, unknown>;
 
@@ -28,7 +29,8 @@ class Notes {
   done(): ToolWarning[] {
     if (this.coalesced.length > 0) this.list.push({ code: "ROWS_COALESCED_TO_TABLE", message: `larik datar berurutan selebar sama digabung menjadi tabel (baris pertama = judul kolom): ${this.coalesced.slice(0, 12).join("; ")}. Bentuk kanonik tabel = satu blok [[judul...], [baris...]]` });
     if (this.mapped.size > 0) this.list.push({ code: "ARG_MAPPED", message: `bentuk varian dipetakan: ${[...this.mapped].slice(0, 12).join("; ")}` });
-    if (this.ignored.size > 0) this.list.push({ code: "ARG_IGNORED", message: `properti tak dikenal diabaikan (tidak ditolak): ${[...this.ignored].slice(0, 12).join(", ")}` });
+    // Row 77 (ST-10): every left-out property is named with its path; past 12 the rest is counted, never hidden.
+    if (this.ignored.size > 0) this.list.push({ code: "ARG_IGNORED", message: `properti tak dikenal diabaikan (tidak ditolak): ${[...this.ignored].slice(0, 12).join(", ")}${this.ignored.size > 12 ? ` (+${this.ignored.size - 12} lain)` : ""}` });
     return this.list;
   }
 }
@@ -58,7 +60,20 @@ function prune(o: Rec, allowed: readonly string[], n: Notes, where: string): voi
 
 const cell = (c: unknown): unknown => (typeof c === "string" || typeof c === "number" ? c : c === null || c === undefined ? "" : typeof c === "boolean" ? String(c) : JSON.stringify(c));
 const isRowsLike = (v: unknown): v is unknown[][] => Array.isArray(v) && v.length > 0 && v.every((r) => Array.isArray(r));
-const rows = (v: unknown[][]): unknown[][] => v.map((r) => r.map(cell));
+/**
+ * Swarm 1.3.3 row 77 (ST-10): table rows -> cells. One bracket level too many (`[[[h...],[r...]]]`, every cell of the
+ * single row is itself a row) is opened; a cell that is an object or a list is written as its JSON text. Both used to
+ * happen without a word (the table was stored as one row of JSON text); both are now reported (ARG_MAPPED).
+ */
+function rows(v: unknown[][], n?: Notes, where = "tabel"): unknown[][] {
+  let body = v;
+  if (body.length === 1 && body[0].length > 0 && body[0].every((r) => Array.isArray(r))) {
+    body = body[0] as unknown[][];
+    n?.map(`${where}[[[...]]]`, "tabel [[judul...], [baris...]] (satu tingkat kurung dibuka)");
+  }
+  if (n !== undefined && body.some((r) => r.some((c) => c !== null && typeof c === "object"))) n.map(`${where} sel berupa objek/larik`, "teks JSON di sel (sel tabel = teks atau angka)");
+  return body.map((r) => r.map(cell));
+}
 const textOf = (v: unknown): string | null => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null);
 
 /**
@@ -94,14 +109,38 @@ function coalesceRows(blocks: readonly unknown[], n: Notes, where: string): Arra
 }
 
 const TABLE_KEYS = ["table", "caption", "source", "unit"];
-const CHART_KEYS = ["type", "categories", "series", "caption", "source", "unit", "stacked"];
+// Swarm 1.3.3 row 39 (ST-2): the W-07 intervals keys and `width` come from the figure contract (write-figure-input.ts).
+// Row 77 (ST-10): the list is exported for the parity test; it is no longer a prune list (see normalizeChart).
+/** @internal test seam */
+export const CHART_KEYS = ["type", "categories", "series", "caption", "source", "unit", "stacked", FIGURE_WIDTH_KEY, ...CHART_INTERVALS_INPUT_KEYS];
+
+/**
+ * Swarm 1.3.3 row 77 (ST-10): the chart of a `{chart}` block (studio_write, studio_edit append) and of a
+ * `{figure, chart}` edit, one normaliser for both. Variant names are mapped (ARG_MAPPED). A key that is not a chart
+ * field, in the chart or in a series, is NOT removed any more: it stays, and the tool schema refuses the call with
+ * its path (`.../chart/todayAt`), so a figure field is either stored or refused, never left out.
+ */
+function normalizeChart(c: Rec, n: Notes, where: string): Rec {
+  alias(c, ["labels", "x", "kategori"], "categories", n, where);
+  // Row 39: chart.data {shape:"intervals", items, ...} (the contract's data shape) -> chart.intervals, before `data` is read as series.
+  if (liftIntervalsData(c)) n.map(`${where}.data{shape:intervals}`, "chart.intervals");
+  alias(c, ["data", "datasets", "seri"], "series", n, where);
+  alias(c, ["title", "judul", "keterangan"], "caption", n, where);
+  alias(c, ["sumber"], "source", n, where);
+  alias(c, ["satuan"], "unit", n, where);
+  if (Array.isArray(c.series)) c.series = c.series.map((s) => (isRecord(s) ? (() => { const x: Rec = { ...s }; alias(x, ["label", "nama"], "name", n, `${where}.series`); alias(x, ["data", "nilai"], "values", n, `${where}.series`); return x; })() : s));
+  // A label that is not text or a number is left as given: the schema refuses it with its path (it used to become "[object Object]").
+  if (Array.isArray(c.categories)) c.categories = c.categories.map((x) => (typeof x === "boolean" ? String(x) : x));
+  if (c.type === "chart") delete c.type;
+  return c;
+}
 
 /** Satu blok -> bentuk kanonik (string | rows | {table} | {chart} | {list} | {subheading} | {ref}). */
 export function normalizeBlock(b: unknown, n: Notes, where: string): unknown {
   if (typeof b === "number") return String(b);
   if (typeof b === "string") return b;
   if (Array.isArray(b)) {
-    if (isRowsLike(b)) return rows(b);
+    if (isRowsLike(b)) return rows(b, n, where);
     if (b.every((x) => typeof x === "string" || typeof x === "number")) {
       n.map(`${where}[teks...]`, "{list}");
       return { list: b.map(String) };
@@ -116,6 +155,8 @@ export function normalizeBlock(b: unknown, n: Notes, where: string): unknown {
     const t = textOf(o[k]);
     if (t !== null && (type === null || type === "paragraph" || type === "text" || type === "p") && o.table === undefined && o.rows === undefined && o.list === undefined && o.items === undefined) {
       n.map(`${where}.${k}`, "paragraf");
+      // Row 77 (ST-10): the other keys of a paragraph object are left out; they are now named (they were dropped silently).
+      for (const x of Object.keys(o)) if (x !== k && x !== "type") n.ignore(where, x);
       return t;
     }
   }
@@ -123,20 +164,23 @@ export function normalizeBlock(b: unknown, n: Notes, where: string): unknown {
   const sub = textOf(o.subheading) ?? ((type === "heading" || type === "subheading" || Object.keys(o).every((k) => ["heading", "title", "type", "level"].includes(k))) ? (textOf(o.heading) ?? textOf(o.title) ?? textOf(o.text)) : null);
   if (sub !== null && o.table === undefined && o.rows === undefined && o.chart === undefined && o.list === undefined && o.items === undefined) {
     if (o.subheading === undefined) n.map(`${where}.heading`, "{subheading}");
+    // Row 77 (ST-10): keys left out of a sub-heading object are named (`level` included: the machine numbers sub-sections).
+    const used = o.subheading !== undefined ? "subheading" : textOf(o.heading) !== null ? "heading" : textOf(o.title) !== null ? "title" : "text";
+    for (const x of Object.keys(o)) if (x !== used && x !== "type") n.ignore(where, x);
     return { subheading: sub };
   }
   if (o.chart !== undefined || type === "chart") {
-    const c: Rec = isRecord(o.chart) ? { ...o.chart } : { ...o };
-    alias(c, ["labels", "x", "kategori"], "categories", n, `${where}.chart`);
-    alias(c, ["data", "datasets", "seri"], "series", n, `${where}.chart`);
-    for (const k of ["caption", "source", "unit", "stacked"]) if (o[k] !== undefined && c[k] === undefined && o.chart !== undefined) {
-      c[k] = o[k];
-      n.map(`${where}.${k}`, `chart.${k}`);
+    const c: Rec = normalizeChart(isRecord(o.chart) ? { ...o.chart } : { ...o }, n, `${where}.chart`);
+    if (o.chart !== undefined) {
+      for (const k of Object.keys(o)) {
+        if (k === "chart" || k === "type") continue;
+        // caption/source/unit/stacked/width beside `chart` are moved into it; any other sibling key is named (ARG_IGNORED).
+        if (["caption", "source", "unit", "stacked", FIGURE_WIDTH_KEY].includes(k) && c[k] === undefined) {
+          c[k] = o[k];
+          n.map(`${where}.${k}`, `chart.${k}`);
+        } else n.ignore(where, k);
+      }
     }
-    if (Array.isArray(c.series)) c.series = c.series.map((s) => (isRecord(s) ? (() => { const x: Rec = { ...s }; alias(x, ["label", "nama"], "name", n, `${where}.series`); alias(x, ["data", "nilai"], "values", n, `${where}.series`); prune(x, ["name", "values"], n, `${where}.series`); return x; })() : s));
-    if (Array.isArray(c.categories)) c.categories = c.categories.map((x) => (typeof x === "string" || typeof x === "number" ? x : String(x)));
-    if (c.type === "chart") delete c.type;
-    prune(c, CHART_KEYS, n, `${where}.chart`);
     return { chart: c };
   }
   if (o.ref !== undefined) {
@@ -155,7 +199,7 @@ export function normalizeBlock(b: unknown, n: Notes, where: string): unknown {
     if (body !== null && header !== null) body = [header as unknown[], ...body];
     if (body === null) return b;
     if (!isRowsLike(o.table)) n.map(`${where}.${isRecord(o.table) ? "table{rows}" : "rows"}`, "{table}");
-    const out: Rec = { table: rows(body) };
+    const out: Rec = { table: rows(body, n, `${where}.table`) };
     for (const k of ["caption", "source", "unit"]) if (textOf(src[k]) !== null) out[k] = textOf(src[k]);
     for (const k of Object.keys(src)) if (![...TABLE_KEYS, "rows", "data", "header", "headers", "columns", "type"].includes(k)) n.ignore(`${where}.table`, k);
     return out;
@@ -164,8 +208,13 @@ export function normalizeBlock(b: unknown, n: Notes, where: string): unknown {
   if (o.list !== undefined || o.items !== undefined || o.bullets !== undefined || type === "list") {
     alias(o, ["items", "bullets"], "list", n, where);
     alias(o, ["numbered"], "ordered", n, where);
-    if (Array.isArray(o.list)) o.list = o.list.map((x) => (typeof x === "string" ? x : isRecord(x) && typeof x.text === "string" ? x.text : String(x)));
-    if (typeof o.ordered !== "boolean") delete o.ordered;
+    // Row 77 (ST-10): an item that is not text, a number or { text } is left as given so the schema refuses it with its
+    // path (it used to be stored as "[object Object]"); an `ordered` that is not true/false is named when left out.
+    if (Array.isArray(o.list)) o.list = o.list.map((x) => (typeof x === "string" ? x : isRecord(x) && typeof x.text === "string" ? x.text : typeof x === "number" || typeof x === "boolean" ? String(x) : x));
+    if (o.ordered !== undefined && typeof o.ordered !== "boolean") {
+      delete o.ordered;
+      n.ignore(where, "ordered");
+    }
     prune(o, ["list", "ordered"], n, where);
     return o;
   }
@@ -202,12 +251,42 @@ function normalizeSection(s: unknown, i: number, n: Notes): unknown {
 
 const META_MAX = 2000;
 
+const jsonOnce = (text: string): { ok: true; value: unknown } | { ok: false } => {
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false };
+  }
+};
+
+/**
+ * Swarm 1.3.3 row 77 (ST-10; test rounds p3, p5: "/edits must be array", "/sections must be array" for a payload the
+ * agent wrote as an array): some clients send a large list argument as JSON TEXT. The text is read ONCE; a list (or,
+ * for `edits`, one object) replaces it with the notice ARGS_PARSED. Text that is not JSON, or JSON of another kind, is
+ * refused here with what is actually wrong (the list arrived as text; cut-off or wrongly quoted JSON), instead of the
+ * bare schema line "must be array". Nothing is written.
+ */
+function parseJsonList(a: Args, key: string, n: Notes, objectToo: boolean): void {
+  const v = a[key];
+  if (typeof v !== "string") return;
+  const parsed = jsonOnce(v);
+  if (parsed.ok && (Array.isArray(parsed.value) || (objectToo && isRecord(parsed.value)))) {
+    a[key] = parsed.value;
+    n.list.push({ code: "ARGS_PARSED", message: `${key} berupa teks JSON diurai satu kali; kirim ${key} sebagai larik` });
+    return;
+  }
+  const why = parsed.ok ? "teks itu JSON yang sah tetapi bukan larik" : "teks itu bukan JSON yang sah (terpotong, atau tanda kutip/kurung tidak seimbang)";
+  const message = `must be array, got string (${v.length} karakter): ${why}`;
+  throw new McpToolError("INVALID_ARGUMENT", `/${key} dikirim sebagai teks, bukan larik: ${why}. Kirim ${key} sebagai larik JSON; bila panggilan besar, pecah menjadi beberapa panggilan. Tidak ada yang ditulis`, { pointer: `/${key}`, details: [{ pointer: `/${key}`, keyword: "type", message }] });
+}
+
 /** Prapemrosesan `studio_write`. Mengubah `a` di tempat; mengembalikan peringatan. */
 export function normalizeWriteArgs(a: Args): ToolWarning[] {
   const n = new Notes();
   alias(a, ["doc_key", "key", "documentKey"], "docKey", n, "args");
   alias(a, ["missionFolder", "mission_folder", "folder"], "mission", n, "args");
   alias(a, ["chapters", "content", "bab"], "sections", n, "args");
+  parseJsonList(a, "sections", n, false);
   alias(a, ["templateSlug", "template_slug"], "template", n, "args");
   normalizeMetaArg(a, n);
   if (typeof a.title === "string" && a.title.trim() === "") delete a.title;
@@ -222,7 +301,11 @@ function normalizeMetaArg(a: Args, n: Notes): void {
   if (isRecord(a.meta)) {
     const meta: Rec = {};
     for (const [k, v] of Object.entries(a.meta)) {
-      if (typeof v === "string") meta[k] = v.length > META_MAX ? v.slice(0, META_MAX) : v;
+      if (typeof v === "string") {
+        meta[k] = v.length > META_MAX ? v.slice(0, META_MAX) : v;
+        // Row 77 (ST-10): a cut value is reported (it used to be cut without a word).
+        if (v.length > META_MAX) n.map(`meta.${tok(k, "?")} (${v.length} karakter)`, `dipotong ${META_MAX} karakter`);
+      }
       else if (typeof v === "number" || typeof v === "boolean") {
         meta[k] = String(v);
         n.map(`meta.${tok(k, "?")}`, "teks");
@@ -269,7 +352,18 @@ export function normalizeEditArgs(a: Args): ToolWarning[] {
   const n = new Notes();
   alias(a, ["changes", "patches", "patch", "edit"], "edits", n, "args");
   alias(a, ["doc_key", "key"], "docKey", n, "args");
+  parseJsonList(a, "edits", n, true);
   if (isRecord(a.edits)) a.edits = [a.edits];
+  // Row 77: an item sent as JSON text of one edit object is read once; any other text item stays and is refused at /edits/<i>.
+  if (Array.isArray(a.edits)) {
+    a.edits = a.edits.map((e, i) => {
+      if (typeof e !== "string") return e;
+      const parsed = jsonOnce(e);
+      if (!parsed.ok || !isRecord(parsed.value)) return e;
+      n.list.push({ code: "ARGS_PARSED", message: `edits[${i}] berupa teks JSON diurai satu kali; kirim setiap butir edits sebagai objek` });
+      return parsed.value;
+    });
+  }
   liftMetaItems(a, n);
   // IMPL-W4 butir 2: saluran meta (status/verdict/... laporan kerja; title/number/rev/date/... dokumen klien).
   normalizeMetaArg(a, n);
@@ -279,7 +373,10 @@ export function normalizeEditArgs(a: Args): ToolWarning[] {
       const o: Rec = { ...e };
       const where = `edits[${i}]`;
       if (o.figure !== undefined) {
-        prune(o, ["figure", "chart"], n, where);
+        // Row 77 (ST-10): { figure, chart } and { figure, diagram } take the studio_write figure blocks; the chart goes
+        // through the same normaliser as a written chart block, the diagram is passed as given (v2 validator decides).
+        if (isRecord(o.chart)) o.chart = normalizeChart({ ...o.chart }, n, `${where}.chart`);
+        prune(o, ["figure", "chart", "diagram"], n, where);
         return o;
       }
       // IMPL-W5 E1: { section, append } (blok/larik blok; bentuk varian blok dipetakan seperti studio_write).

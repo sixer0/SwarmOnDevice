@@ -105,7 +105,9 @@ describe("mode state", () => {
 
   test("survives a restart", async () => {
     await run((service) => service.setMode({ scope: "session", root, on: true }))
-    expect(await run((service) => service.isOn(at))).toBe(true)
+    // 1.3.3 row 109 (MC-7): the mode survives in the file, but a reopened root acts on nothing until the person answers.
+    expect(await run((service) => Effect.all([service.isOn(at), service.needsReconsent(at)]))).toEqual([false, true])
+    expect(JSON.parse(readFileSync(modeFile, "utf8")).sessions[root]).toBe(true)
   })
 
   test.each([
@@ -208,7 +210,9 @@ describe("1.1.1: the consented bypass and its run", () => {
     expect(readFileSync(modeFile, "utf8")).not.toContain("bypass")
     await run((service) =>
       Effect.gen(function* () {
-        expect(yield* service.isOn(at)).toBe(true)
+        // 1.3.3 row 109 (MC-7): mode on, consent absent; nothing acts until the person consents again.
+        expect(yield* service.isOn(at)).toBe(false)
+        expect(yield* service.needsReconsent(at)).toBe(true)
         expect(yield* service.bypassOf(at)).toBeUndefined()
         // Marking the mode in the new process starts no run either.
         yield* service.markMode(at)

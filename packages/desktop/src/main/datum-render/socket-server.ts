@@ -8,6 +8,14 @@
 // user; a stale socket file is unlinked (any other file type is refused, never deleted). Close removes only this
 // server's own socket file (same inode) and the folder when empty, so a late close of an old server never removes the
 // socket of the server that replaced it.
+//
+// 1.3.3 row 131 (SB-1, F1 and F5 of the row 21 diagnosis):
+// - Receive path: incoming chunks are kept in a list and joined once when the newline arrives (`createLineReader`).
+//   Before, every chunk was concatenated onto the accumulated buffer, which copied the whole partial line per chunk:
+//   1,030 MB allocated for one 4 MiB request, 14,453 MB for 15 MiB. Framing, the line cap and the replies are unchanged;
+//   the cap acts on the running byte count, before any join.
+// - One "render job memory" log line per job (every op but `hello`), with `process.memoryUsage()` before and after in
+//   the field names of the main memory line (register section 10), through the logger the caller already passes in.
 
 import { createHash, timingSafeEqual } from "node:crypto"
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, rmdirSync, statSync, unlinkSync } from "node:fs"
@@ -27,6 +35,8 @@ export type SocketServerOptions = {
   socketPath?: string
   maxConnections?: number
   maxLineBytes?: number
+  /** Row 131: the one join per request line. Tests inject a counting version; the default is `Buffer.concat`. */
+  concat?: (list: Buffer[], totalBytes: number) => Buffer
 }
 
 export type SocketServerHandle = { socketPath: string; dir: string; close(): Promise<void> }
@@ -77,6 +87,78 @@ export function prepareSocketPath(socketPath: string) {
   return dir
 }
 
+type LineReaderOptions = {
+  maxLine: number
+  /** A complete, non-blank line without its newline (and without a trailing CR); `bytes` is its size on the wire. */
+  onLine: (line: string, bytes: number) => void
+  /** The unfinished line grew past `maxLine`; `bytes` is its size. The reader has already dropped it. */
+  onTooLong: (bytes: number) => void
+  concat?: (list: Buffer[], totalBytes: number) => Buffer
+}
+
+/**
+ * Row 131: newline framing over a chunk list. The unfinished line is held as the chunks that arrived (no copy); it is
+ * joined once, when its newline arrives, and not at all when the whole line sits in one chunk. Same lines, same order
+ * and the same cap rule as the per-chunk concat it replaces: after the complete lines of a chunk are handed out, an
+ * unfinished rest larger than `maxLine` is refused and dropped.
+ */
+/** @internal test seam */
+export function createLineReader(opts: LineReaderOptions) {
+  // Looked up per call, so a wrapped `Buffer.concat` (growth-harness.ts) still counts this join.
+  const concat = opts.concat ?? ((list: Buffer[], totalBytes: number) => Buffer.concat(list, totalBytes))
+  let parts: Buffer[] = []
+  let partBytes = 0
+  return {
+    push(chunk: Buffer) {
+      let start = 0
+      for (let nl = chunk.indexOf(10, start); nl >= 0; nl = chunk.indexOf(10, start)) {
+        const tail = chunk.subarray(start, nl)
+        start = nl + 1
+        let whole = tail
+        if (parts.length > 0) {
+          parts.push(tail)
+          whole = concat(parts, partBytes + tail.length)
+          parts = []
+          partBytes = 0
+        }
+        const line = whole.toString("utf8").replace(/\r$/, "")
+        if (line.trim() === "") continue
+        opts.onLine(line, whole.length)
+      }
+      if (start < chunk.length) {
+        const rest = start === 0 ? chunk : chunk.subarray(start)
+        parts.push(rest)
+        partBytes += rest.length
+      }
+      if (partBytes > opts.maxLine) {
+        const bytes = partBytes
+        parts = []
+        partBytes = 0
+        opts.onTooLong(bytes)
+      }
+    },
+  }
+}
+
+const MB = 1024 * 1024
+
+/** Row 131: the four figures of the main memory line (register section 10), integers in MB. */
+function memoryMb() {
+  const m = process.memoryUsage()
+  return {
+    rssMb: Math.round(m.rss / MB),
+    heapUsedMb: Math.round(m.heapUsed / MB),
+    heapTotalMb: Math.round(m.heapTotal / MB),
+    externalMb: Math.round(m.external / MB),
+  }
+}
+
+/** The op name for the log: a short plain word, or "unknown". Request content never reaches the log. */
+function opName(body: unknown) {
+  const op = (body as { op?: unknown } | null | undefined)?.op
+  return typeof op === "string" && /^[A-Za-z]{1,24}$/.test(op) ? op : "unknown"
+}
+
 export async function startSocketServer(opts: SocketServerOptions): Promise<SocketServerHandle> {
   let dir: string
   if (opts.socketPath) dir = prepareSocketPath(opts.socketPath)
@@ -93,21 +175,39 @@ export async function startSocketServer(opts: SocketServerOptions): Promise<Sock
     const conn = ++seq
     open.add(sock)
     sock.on("close", () => open.delete(sock))
-    let buf = Buffer.alloc(0)
     let pending = Promise.resolve()
     const reply = (obj: unknown) => {
       if (!sock.destroyed) sock.write(JSON.stringify(obj) + "\n")
     }
 
-    const handle = async (line: string) => {
+    const handle = async (line: string, lineBytes: number) => {
       let id: string | number | undefined
+      // Row 131 (F5): set once the request is authorised and handed to dispatch; `hello` is a handshake, not a job.
+      let job: { op: string; started: number; before: ReturnType<typeof memoryMb> } | undefined
+      const jobDone = (ok: boolean) => {
+        if (!job) return
+        opts.log("info", "datum-render.job", "render job memory", {
+          conn,
+          id,
+          op: job.op,
+          ok,
+          lineBytes,
+          ms: Date.now() - job.started,
+          before: job.before,
+          after: memoryMb(),
+        })
+      }
       try {
         const env = parseLine(line)
         id = env.id
         if (!tokenMatches(env.token, opts.token)) throw new BridgeError("UNAUTHORIZED", "missing or wrong token")
+        const op = opName(env.body)
+        if (op !== "hello") job = { op, started: Date.now(), before: memoryMb() }
         const result = await opts.dispatch(env.body)
+        jobDone(true)
         reply({ id, ok: true, ...result })
       } catch (error) {
+        jobDone(false)
         const res = errorResponse(id, error)
         opts.log(res.code === "RENDER_FAILED" || res.code === "RENDER_TIMEOUT" ? "error" : "warn", "datum-render.request", res.message, {
           conn,
@@ -121,21 +221,19 @@ export async function startSocketServer(opts: SocketServerOptions): Promise<Sock
       }
     }
 
-    sock.on("data", (chunk: Buffer) => {
-      buf = Buffer.concat([buf, chunk])
-      for (let nl = buf.indexOf(10); nl >= 0; nl = buf.indexOf(10)) {
-        const line = buf.subarray(0, nl).toString("utf8").replace(/\r$/, "")
-        buf = buf.subarray(nl + 1)
-        if (line.trim() === "") continue
-        pending = pending.then(() => handle(line))
-      }
-      if (buf.length > maxLine) {
-        opts.log("warn", "datum-render.socket", "request line too long", { conn, bytes: buf.length })
+    const reader = createLineReader({
+      maxLine,
+      concat: opts.concat,
+      onLine: (line, bytes) => {
+        pending = pending.then(() => handle(line, bytes))
+      },
+      onTooLong: (bytes) => {
+        opts.log("warn", "datum-render.socket", "request line too long", { conn, bytes })
         reply(errorResponse(undefined, new BridgeError("LINE_TOO_LONG", "request line is larger than the line cap")))
-        buf = Buffer.alloc(0)
         sock.end()
-      }
+      },
     })
+    sock.on("data", (chunk: Buffer) => reader.push(chunk))
     sock.on("error", (error) => opts.log("warn", "datum-render.socket", "connection error", { conn, cause: error.message }))
   })
   server.maxConnections = opts.maxConnections ?? 16

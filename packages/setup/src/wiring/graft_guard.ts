@@ -79,7 +79,7 @@ export function graftLaunchGuard(opts: GraftLaunchGuardOptions = {}): GraftLaunc
   const argvCheck = assertGraftArgvSanctioned(res.entry.command)
   if (!argvCheck.ok) return { ok: false, reason: argvCheck.violations.join("; ") }
 
-  const envCheck = assertGraftChildEnv({ ...graftEnvView(res.entry.env) })
+  const envCheck = assertGraftChildEnv({ ...graftEnvView(res.entry.environment) })
   if (!envCheck.ok) return { ok: false, reason: envCheck.violations.join("; ") }
 
   const auditLine = appendChainEvent(
@@ -90,7 +90,7 @@ export function graftLaunchGuard(opts: GraftLaunchGuardOptions = {}): GraftLaunc
       decision: "launched",
       tool: "graft",
       argv: res.entry.command,
-      telemetryOff: res.entry.env?.DO_NOT_TRACK === "1",
+      telemetryOff: res.entry.environment?.DO_NOT_TRACK === "1",
       mustBeUnsetOk: true,
       ...(opts.correlationId !== undefined ? { correlationId: opts.correlationId } : {}),
     },

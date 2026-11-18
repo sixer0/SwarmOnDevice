@@ -19,6 +19,7 @@ import type {
   DecisionAnswer,
   DecisionRequest,
   FindingSeverity,
+  KnowledgeMark,
   MissionDecision,
   MissionDerived,
   MissionDoc,
@@ -31,6 +32,7 @@ import type {
   MissionLockRecord,
   MissionMessage,
   MissionRow,
+  MissionRowContract,
   MissionRowInput,
   MissionSearchHit,
   MissionStatus,
@@ -42,13 +44,19 @@ import type {
   NewMissionMessage,
   ReportRef,
   ReportStatus,
+  RowAwaitingHumanCheck,
   RowCheckpoint,
+  RowDeliverable,
   RowFieldChange,
+  RowHumanCheck,
+  RowKnowledge,
   RowPatch,
   RowStatus,
   SessionLink,
 } from "./types.ts"
-import { ROW_DELIVERABLE_KEY, rowDeliverablesNotFinal } from "./output-gate.ts"
+import { ROW_HUMAN_CHECKS } from "./types.ts"
+import { ROW_DELIVERABLE_KEY, rowCloseGate, type RowCloseNote } from "./output-gate.ts"
+import { deliverableRefusal, deliverablesNotInProject, missionDeliverables, namedDocuments, requestDocumentIds, rowDocuments, type GateDocument } from "./deliverable-gate.ts"
 import { assertActor, assertCheckpoint, assertDecisionAnswer, assertDecisionRequest, assertMessage, assertMissionSchema, groupNameOk } from "./validate.ts"
 
 export interface MissionReader {
@@ -64,6 +72,12 @@ export interface MissionStoreHost {
    * `() => this.missionGuard` (the same switch as the 119a-d MISSION_REQUIRED guards). Absent = off.
    */
   outputGate?(): boolean
+  /**
+   * 1.3.3 row 66 (MC-5): the store root (absolute), so the done gate can see whether an output's file is on disk and
+   * read the witness list a render left (`<root>/verify/<htmlOutputId>/witness.json`). Absent or null = files are not
+   * looked at; the gate then judges from the database alone.
+   */
+  storeRoot?(): string | null
 }
 
 /** §2.2 mission transitions. `approved` is reached only through approve(). */
@@ -130,7 +144,37 @@ function rowFieldChanges(cur: MissionRow, next: MissionRowInput, set: Record<str
   return out
 }
 const MISSION_HOST_FIELDS = ["createdAt", "updatedAt", "approvedAt", "approvalDecision", "closedAt", "locks"] as const
-const ROW_HOST_FIELDS = ["createdAt", "updatedAt", "startedAt", "finishedAt", "reports"] as const
+// 1.3.3 row 5 (register section 1): deliverables, knowledge and awaitingHumanCheck are written by the host setters only.
+const ROW_HOST_FIELDS = ["createdAt", "updatedAt", "startedAt", "finishedAt", "reports", "deliverables", "knowledge", "awaitingHumanCheck"] as const
+/** 1.3.3 row 5: the column of each row contract field (migration 0009), JSON text. */
+const ROW_CONTRACT_COLUMNS = { deliverables: "deliverables", knowledge: "knowledge", awaitingHumanCheck: "awaiting_human_check" } as const
+/** 1.3.3 row 5 (register section 1): files kept per domain in `knowledge.domains[].consulted`; later reads are not stored. */
+const KNOWLEDGE_CONSULTED_MAX = 20
+/** 1.3.3 row 101 (register section 1): `knowledge.domains` holds 1-25 items. */
+const KNOWLEDGE_DOMAINS_MAX = 25
+
+/**
+ * 1.3.3 row 101 (spec KL-2 item 1): matches a row's text against the library trigger index. Set by the mission tools
+ * (`setKnowledgeMatcher`); absent = rows are not matched at start. `reason` set = the library could not be read.
+ */
+type RowKnowledgeMatcher = (text: string) => { domains: ReadonlyArray<{ domain: string; firstFile: string }>; reason?: string }
+
+/**
+ * 1.3.3 row 101: the row's knowledge after a new match. Domains in match order (at most 25); a domain that stays
+ * keeps its `consulted` marks, a new one starts empty, a lost one goes with its marks; `reason` is kept while any
+ * domain remains. Nothing matched = undefined (store nothing).
+ */
+export function mergeRowKnowledge(cur: RowKnowledge | undefined, hits: ReadonlyArray<{ domain: string; firstFile: string }>): RowKnowledge | undefined {
+  if (hits.length === 0) return undefined
+  const domains = hits.slice(0, KNOWLEDGE_DOMAINS_MAX).map((h) => ({ domain: h.domain, firstFile: h.firstFile, consulted: cur?.domains.find((d) => d.domain === h.domain)?.consulted ?? [] }))
+  return { domains, ...(cur?.reason !== undefined ? { reason: cur.reason } : {}) }
+}
+
+/** Same domains with the same first files (order aside): a new match that changes nothing is not written. */
+function sameKnowledge(a: RowKnowledge | undefined, b: RowKnowledge | undefined): boolean {
+  const key = (k: RowKnowledge | undefined) => (k?.domains ?? []).map((d) => `${d.domain}\u0000${d.firstFile}`).sort().join("\u0001")
+  return key(a) === key(b)
+}
 const OPEN_STATUSES: readonly MissionStatus[] = ["draft", "approved", "running", "paused"]
 const RESOURCE_RE = /^[a-z0-9][a-z0-9._/-]{0,79}$/
 const DEFAULT_ACTOR = "swarm"
@@ -184,6 +228,9 @@ interface RowDbRow {
   time_updated: number
   time_started: number | null
   time_finished: number | null
+  deliverables: string
+  knowledge: string | null
+  awaiting_human_check: string | null
 }
 
 function err(code: ConstructorParameters<typeof StoreError>[0], message: string, details?: Record<string, unknown>): StoreError {
@@ -198,6 +245,20 @@ export interface RowPatchResult {
   message?: string
   /** Row 82b (MC-04): true when the patch was refused for DEP_NOT_DONE but its note was stored. */
   noteSaved?: boolean
+  /**
+   * 1.3.3 row 66 (MC-5, U20): the row went `done` while a person's check is still open. `checks` and `since` are the
+   * row field (register section 1); `figures` are the block addresses of the figures concerned (cap 20, the rest in
+   * `moreFigures`). `message` then says it in one sentence. Only the person clears it (row 62).
+   */
+  awaitingHumanCheck?: { checks: string[]; since: string; figures: string[]; moreFigures?: number }
+  /** 1.3.3 row 66: deliverables that closed without a layout file or with figure pages lacking a witness image (information). */
+  closed?: RowCloseNote[]
+}
+
+/** 1.3.3 row 66: what the done gate found for a row that may close (nothing to say = `{}`). */
+interface RowClose {
+  awaitingHumanCheck?: { checks: RowHumanCheck[]; figures: string[]; moreFigures: number }
+  closed?: RowCloseNote[]
 }
 
 /** What updateRows returns: applied rows, the per-patch results, and the derived waves / ready rows after the job. */
@@ -271,9 +332,19 @@ export function assertMissionType(t: MissionTypeDoc): void {
 
 export class MissionStore {
   private readonly host: MissionStoreHost
+  /** 1.3.3 row 101: the library matcher used when a row goes `running` (see setKnowledgeMatcher). */
+  private knowledgeMatcher: RowKnowledgeMatcher | undefined
   /** No parameter property: the host runs this file under Node type stripping (erasable syntax only). */
   constructor(host: MissionStoreHost) {
     this.host = host
+  }
+
+  /**
+   * 1.3.3 row 101 (KL-2 item 1): set (or with undefined remove) the matcher a row's title is matched with each time it
+   * goes `running`, by update_row and by a work report alike. The mission tools set it when they are built.
+   */
+  setKnowledgeMatcher(fn: RowKnowledgeMatcher | undefined): void {
+    this.knowledgeMatcher = fn
   }
 
   private r(tx?: MissionReader): MissionReader {
@@ -598,8 +669,9 @@ export class MissionStore {
     let notesKept = 0
     for (const p of patches) {
       tx.run(`SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
+      let closeResult: Partial<RowPatchResult> = {}
       try {
-        this.applyRowPatch(tx, m, type, p, args.decision, actor)
+        closeResult = this.applyRowPatch(tx, m, type, p, args.decision, actor)
         tx.run(`RELEASE SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
       } catch (e) {
         tx.run(`ROLLBACK TO SAVEPOINT ${ROW_PATCH_SAVEPOINT}`)
@@ -619,7 +691,7 @@ export class MissionStore {
         continue
       }
       changed.push(p.id)
-      results.push({ id: p.id, ok: true })
+      results.push({ id: p.id, ok: true, ...closeResult })
     }
     if (changed.length === 0 && notesKept === 0 && firstRefusal) throw firstRefusal
     this.afterWrite(tx, mission, opts)
@@ -643,9 +715,12 @@ export class MissionStore {
   }
 
   /** One row patch (row 85 split it out of updateRows so each patch can run under its own savepoint). */
-  private applyRowPatch(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, callDecision: string | undefined, actor: string): void {
-    const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire", "decision"].includes(k))
+  private applyRowPatch(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, callDecision: string | undefined, actor: string): Partial<RowPatchResult> {
+    let closeResult: Partial<RowPatchResult> = {}
+    const keys = Object.keys(p ?? {}).filter((k) => !["id", "add", "set", "status", "note", "acquire", "release", "retire", "decision", "knowledgeReason"].includes(k))
     if (keys.length > 0) throw err("SCHEMA_INVALID", "unknown patch fields", { row: p?.id, fields: keys })
+    // 1.3.3 row 102 (C13): stored before the status move so the done gate sees it; a refused patch rolls it back.
+    if (p.knowledgeReason !== undefined) this.setKnowledgeReason(tx, m, p.id, p.knowledgeReason)
     // Row 81 (1.2.6, MC-03): a patch-level decision overrides the call-level one for this patch only.
     if (p.decision !== undefined && typeof p.decision !== "string") throw err("SCHEMA_INVALID", "patch decision must be a decision id", { row: p.id, fields: ["decision"] })
     const decision = p.decision ?? callDecision
@@ -653,10 +728,11 @@ export class MissionStore {
     if (p.set) this.setRow(tx, m, type, p.id, p.set, decision, actor)
     // Row 174 (C218 F146b-3): retire before the status move, so `{retire, status: "done"}` is judged without the draft.
     if (p.retire !== undefined) this.retireDeliverables(tx, m, p.id, p.retire, p.note, actor)
-    if (p.status) this.transitionRow(tx, m, p.id, p.status, { note: p.note, decision, actor, cause: "update_row" })
+    if (p.status) closeResult = this.transitionRow(tx, m, p.id, p.status, { note: p.note, decision, actor, cause: "update_row" })
     else if (p.note !== undefined && !p.add) this.setNote(tx, m, p.id, p.note, actor)
     for (const res of p.acquire ?? []) this.acquireLock(tx, m, p.id, res, actor)
     for (const res of p.release ?? []) this.releaseLock(tx, m, p.id, res, actor)
+    return closeResult
   }
 
   private addRow(tx: StoreTx, m: MissionDbRow, type: MissionTypeDoc, p: RowPatch, decision: string | undefined, actor: string): void {
@@ -765,8 +841,231 @@ export class MissionStore {
     this.event(tx, { mission: m.id, verb: "row-change", actor, row: rowId, detail: { fields: ["note"] } })
   }
 
-  /** §4.2 row status transition, shared by update_row and reports. */
-  private transitionRow(tx: StoreTx, m: MissionDbRow, rowId: string, to: RowStatus, a: { note?: string; decision?: string; actor: string; cause: string }): void {
+  // ── row contract fields (1.3.3 row 5, register section 1) ────────────────────
+  // Host callers only: no MCP tool exposes these four setters, and a caller that sends one of the three fields in a
+  // row gets FIELD_READ_ONLY. They store the value after the row schema check; gates and defaults live elsewhere.
+
+  /** The three contract fields of one row. */
+  rowContract(mission: string, rowId: string, tx?: MissionReader): MissionRowContract {
+    return contractOf(this.rowDb(this.r(tx), this.missionRow(this.r(tx), mission).id, rowId))
+  }
+
+  /** Replace the row's deliverables list (at most 100; `[]` clears it). Every path starts with `deliverables/<mission-id>/`. */
+  setRowDeliverables(tx: StoreTx, mission: string, rowId: string, value: readonly RowDeliverable[]): void {
+    if (!Array.isArray(value)) throw err("SCHEMA_INVALID", "deliverables must be a list", { mission, row: rowId, field: "deliverables" })
+    const outside = value.flatMap((d, i) => (typeof d?.path === "string" && !d.path.startsWith(`deliverables/${mission}/`) ? [`deliverables/${i}/path`] : []))
+    if (outside.length > 0) throw err("SCHEMA_INVALID", `a deliverable path starts with deliverables/${mission}/`, { mission, row: rowId, fields: outside })
+    this.writeRowContract(tx, mission, rowId, "deliverables", value)
+  }
+
+  /** Replace the row's knowledge field; `undefined` clears it (no domain matched). A domain without `consulted` gets `[]`. */
+  setRowKnowledge(tx: StoreTx, mission: string, rowId: string, value: RowKnowledge | undefined): void {
+    if (value === undefined || !Array.isArray(value?.domains)) return this.writeRowContract(tx, mission, rowId, "knowledge", value)
+    const names = value.domains.map((d) => d?.domain)
+    const twice = names.filter((n, i) => names.indexOf(n) !== i)
+    if (twice.length > 0) throw err("SCHEMA_INVALID", "a knowledge domain is listed once", { mission, row: rowId, field: "knowledge", domains: [...new Set(twice)] })
+    this.writeRowContract(tx, mission, rowId, "knowledge", { ...value, domains: value.domains.map((d) => (d && typeof d === "object" ? { ...d, consulted: d.consulted ?? [] } : d)) })
+  }
+
+  /**
+   * Mark one served library file as read for a row. Stored only while the row is `running`. With `domain` the file is
+   * added to that domain of the row; without it, to every domain whose `firstFile` is the path (the store holds no
+   * index, so another file needs its domain named). At most KNOWLEDGE_CONSULTED_MAX files per domain; a file is listed
+   * once. Nothing stored = `marked: false` with the reason, never an error (a bad path is SCHEMA_INVALID).
+   */
+  markKnowledgeConsulted(tx: StoreTx, mission: string, rowId: string, value: { path: string; domain?: string }): KnowledgeMark {
+    const m = this.openMission(tx, mission)
+    const row = this.rowDb(tx, m.id, rowId)
+    if (row.status !== "running") return { marked: false, domains: [], reason: "row-not-running" }
+    const knowledge = parseJson<RowKnowledge>(row.knowledge)
+    if (!knowledge) return { marked: false, domains: [], reason: "no-knowledge" }
+    const targets = knowledge.domains.filter((d) => (value.domain === undefined ? d.firstFile === value.path : d.domain === value.domain))
+    if (targets.length === 0) return { marked: false, domains: [], reason: "no-domain" }
+    const fresh = targets.filter((d) => !d.consulted.includes(value.path))
+    if (fresh.length === 0) {
+      // 1.3.3 row 102: a file listed in an earlier running period is recorded again (event only, list unchanged), so
+      // the done gate, which counts reads since the latest start, sees it.
+      if (this.consultedSinceStart(tx, m.id, rowId, [value.path])) return { marked: false, domains: [], reason: "already-marked" }
+      const again = targets.map((d) => d.domain)
+      this.event(tx, { mission: m.id, verb: "row-change", row: rowId, detail: { fields: ["knowledge"], consulted: value.path, domains: again, again: true } })
+      this.touch(tx, m.id)
+      return { marked: true, domains: again }
+    }
+    const domains = fresh.filter((d) => d.consulted.length < KNOWLEDGE_CONSULTED_MAX).map((d) => d.domain)
+    if (domains.length === 0) return { marked: false, domains: [], reason: "cap" }
+    this.writeRowContract(tx, mission, rowId, "knowledge", { ...knowledge, domains: knowledge.domains.map((d) => (domains.includes(d.domain) ? { ...d, consulted: [...d.consulted, value.path] } : d)) }, { consulted: value.path, domains })
+    return { marked: true, domains }
+  }
+
+  /** Replace the row's awaitingHumanCheck field; `undefined` removes it. "Awaiting" = present and `clearedBy` absent. */
+  setAwaitingHumanCheck(tx: StoreTx, mission: string, rowId: string, value: RowAwaitingHumanCheck | undefined): void {
+    this.writeRowContract(tx, mission, rowId, "awaitingHumanCheck", value)
+  }
+
+  /** Schema check of the row with the new value, then the one column, a `row-change` event and the mission's time. */
+  private writeRowContract(tx: StoreTx, mission: string, rowId: string, field: keyof MissionRowContract, value: unknown, detail: Record<string, unknown> = {}): void {
+    const m = this.openMission(tx, mission)
+    const cur = this.readRow(tx, m.id, this.rowDb(tx, m.id, rowId))
+    if (value !== undefined) assertMissionSchema("Row", { ...stripHost(cur), [field]: value }, `row ${rowId}`)
+    tx.run(`UPDATE mission_row SET ${ROW_CONTRACT_COLUMNS[field]} = ?, time_updated = ? WHERE mission_id = ? AND row_id = ?`, [value === undefined ? null : JSON.stringify(value), tx.now, m.id, rowId])
+    this.event(tx, { mission: m.id, verb: "row-change", row: rowId, detail: { fields: [field], ...detail } })
+    this.touch(tx, m.id)
+  }
+
+  /**
+   * The done gate: every check a row passes before `done`, in order; each check throws its own refusal and may add to
+   * the `RowClose` it is handed (what the close reply says). No decision lifts a check (D-6): this runs before any
+   * decision is read.
+   *
+   * SEAM (rows 70 and 102): add ONE call per new check below, after the output check, e.g.
+   *   this.checkDeliverablesInProject(tx, m, rowId, close)   // row 70, DELIVERABLE_NOT_IN_PROJECT
+   *   this.checkKnowledgeConsulted(tx, m, rowId, close)      // row 102, KNOWLEDGE_NOT_CONSULTED
+   * A check that must run whether or not the output gate is on goes outside the `outputGate` condition. Row 70 also
+   * gates `needs-review`: call the same private check from `transitionRow` for that status; this method is for `done`.
+   */
+  private closeChecks(tx: StoreTx, m: MissionDbRow, rowId: string): RowClose {
+    const close: RowClose = {}
+    if (this.host.outputGate?.() === true) this.checkOutputsVerified(tx, m, rowId, close)
+    // Row 70 after row 66: OUTPUT_UNVERIFIED wins when both apply (a copy is made only by a verified render).
+    this.checkDeliverablesInProject(tx, m, rowId, "done")
+    // Row 102 last, and whether or not the output gate is on: real output problems are fixed before the agent is asked
+    // about reading.
+    this.checkKnowledgeConsulted(tx, m, rowId)
+    return close
+  }
+
+  /**
+   * 1.3.3 row 147 (senior review S9/S6): the done gate's verdict for a row WITHOUT a status change: the same
+   * `closeChecks` sequence (output, project copy, knowledge), read-only. null = `done` would pass now (a label check
+   * of a person closes with its marker, so it is not a refusal); otherwise the refusal code `done` would give.
+   * The checks only read (they throw before any write), so `q` may be a read-only reader.
+   */
+  closeRefusal(mission: string, rowId: string, q?: MissionReader): string | null {
+    const tx = this.r(q) as StoreTx
+    try {
+      this.closeChecks(tx, this.missionRow(tx, mission), rowId)
+      return null
+    } catch (e) {
+      if (e instanceof StoreError) return e.code
+      throw e
+    }
+  }
+
+  /**
+   * 1.3.3 row 102 (KL-2 item 2, U19): a row with `knowledge` goes `done` only when one of its domain files was read
+   * since the row's latest move to `running`, or with `knowledge.reason`. "Since" compares event order, not clock
+   * time: a read counts when its `row-change` event (detail.consulted, written by markKnowledgeConsulted) has a larger
+   * `seq` than the row's latest `row-status` event to `running` (two writes in the same millisecond stay ordered).
+   */
+  private checkKnowledgeConsulted(tx: StoreTx, m: MissionDbRow, rowId: string): void {
+    const k = contractOf(this.rowDb(tx, m.id, rowId)).knowledge
+    if (!k || k.domains.length === 0 || k.reason !== undefined) return
+    if (this.consultedSinceStart(tx, m.id, rowId, k.domains.flatMap((d) => d.consulted))) return
+    const domains = k.domains.map((d) => ({ domain: d.domain, firstFile: d.firstFile }))
+    const q = JSON.stringify
+    throw err(
+      "KNOWLEDGE_NOT_CONSULTED",
+      `row ${rowId} matched the GSP technical knowledge library (${domains.map((d) => `${d.domain} -> ${d.firstFile}`).join("; ")}) and no file of it was read while the row was running. ` +
+        // row 151 (S2): the name the agent calls the tool by (Swarm lists host tools as datum-studio_<tool>), as in the
+        // create/start replies; said in words, never as `tool_name {json}` (models copy that as a text-form call, MC-1/MC-3)
+        `Read one: call the tool datum-studio_studio_library_read with path ${q(domains[0]!.firstFile)}, mission ${q(m.id)}, row ${q(rowId)}, then retry done. ` +
+        `Or close with a reason: call the tool datum-studio_studio_mission_update_row with mission ${q(m.id)} and one row patch: id ${q(rowId)}, status "done", note (your check and its result), knowledgeReason (one line: why the library does not apply).`,
+      { mission: m.id, row: rowId, domains },
+    )
+  }
+
+  /** True when one of `paths` has a read event (detail.consulted) recorded after the row's latest move to `running`. */
+  private consultedSinceStart(tx: StoreTx, mission: string, rowId: string, paths: readonly string[]): boolean {
+    if (paths.length === 0) return false
+    const start = tx.get<{ seq: number | null }>("SELECT max(seq) AS seq FROM mission_event WHERE mission_id = ? AND row_id = ? AND verb = 'row-status' AND to_status = 'running'", [mission, rowId])?.seq ?? 0
+    return tx
+      .all<{ path: string }>("SELECT json_extract(detail, '$.consulted') AS path FROM mission_event WHERE mission_id = ? AND row_id = ? AND verb = 'row-change' AND seq > ? AND json_extract(detail, '$.consulted') IS NOT NULL", [mission, rowId, start])
+      .some((e) => paths.includes(e.path))
+  }
+
+  /**
+   * 1.3.3 row 102 (C13, register section 1): the row patch field `knowledgeReason` becomes `knowledge.reason` (one
+   * line, 1-300 characters, not only white space). A row without `knowledge` stores nothing: nothing there to waive.
+   */
+  private setKnowledgeReason(tx: StoreTx, m: MissionDbRow, rowId: string, reason: unknown): void {
+    if (typeof reason !== "string" || reason.trim().length === 0 || reason.length > 300 || /[\u0000-\u001f]/.test(reason)) {
+      throw err("SCHEMA_INVALID", "knowledgeReason must be one line of 1-300 characters, not only white space", { row: rowId, field: "knowledgeReason" })
+    }
+    const cur = contractOf(this.rowDb(tx, m.id, rowId)).knowledge
+    if (!cur) return
+    this.setRowKnowledge(tx, m.id, rowId, { ...cur, reason })
+  }
+
+  /**
+   * 1.3.3 row 70 (MC-8 item 3, U16): a row whose outputs are Studio documents goes `needs-review` or `done` only with
+   * the project copy of each document's current revision in its `deliverables`, on disk, sha256 equal
+   * (deliverable-gate.ts). On with the output gate (missionGuard). No decision lifts it.
+   */
+  private checkDeliverablesInProject(tx: StoreTx, m: MissionDbRow, rowId: string, to: "done" | "needs-review"): void {
+    if (this.host.outputGate?.() !== true) return
+    const docs = rowDocuments(tx, m.id, rowId, WORK_REPORT_CONTRACT_KIND)
+    if (docs.length === 0) return
+    this.refuseNotInProject(tx, m, docs, contractOf(this.rowDb(tx, m.id, rowId)).deliverables, `row ${rowId} cannot go ${to}`, { row: rowId, to })
+  }
+
+  private refuseNotInProject(tx: StoreTx, m: MissionDbRow, docs: readonly GateDocument[], items: readonly RowDeliverable[], subject: string, where: Record<string, unknown>): void {
+    const gate = deliverablesNotInProject(tx, m.id, nativeProjectDir(m.project_dir), docs, items)
+    if (gate.cause === null) return
+    const r = deliverableRefusal(subject, gate)
+    throw err("DELIVERABLE_NOT_IN_PROJECT", r.message, {
+      mission: m.id,
+      ...where,
+      cause: gate.cause,
+      expected: gate.expected,
+      ...(gate.more > 0 ? { more: gate.more } : {}),
+      ...(gate.unwritable ? { unwritable: gate.unwritable } : {}),
+      fix: r.fix,
+    })
+  }
+
+  /**
+   * Row 155 (spec output verification §7.3; C129, C130) as restated by 1.3.3 row 66 (MC-5, U20; output-gate.ts
+   * `rowCloseGate`): done only when every deliverable bound to the row (docKey row-<R>-<name>) has its outputs
+   * verified. A pending label check of a person and a missing layout witness do not refuse: they are handed back in
+   * `close` (the marker is written by `transitionRow` together with the status).
+   */
+  private checkOutputsVerified(tx: StoreTx, m: MissionDbRow, rowId: string, close: RowClose): void {
+    const gate = rowCloseGate(tx, m.id, rowId, WORK_REPORT_CONTRACT_KIND, { storeRoot: this.host.storeRoot?.() ?? null })
+    if (gate.total > 0) {
+      throw err("OUTPUT_UNVERIFIED", `row ${rowId} has deliverables that are not verified`, {
+        mission: m.id,
+        row: rowId,
+        deliverables: gate.deliverables,
+        ...(gate.total > gate.deliverables.length ? { more: gate.total - gate.deliverables.length } : {}),
+      })
+    }
+    const checks = gate.awaitingHumanCheck.filter((c): c is RowHumanCheck => (ROW_HUMAN_CHECKS as readonly string[]).includes(c))
+    if (checks.length > 0) close.awaitingHumanCheck = { checks, figures: gate.figures, moreFigures: gate.moreFigures }
+    if (gate.notes.length > 0) close.closed = gate.notes
+  }
+
+  /**
+   * 1.3.3 row 66: writes the row's `awaitingHumanCheck` for a row that just went `done` with a person's check open,
+   * and returns what the reply carries. An open marker with the same checks is kept as it is (its `since` is the
+   * first time the row waited); a cleared one is replaced only because the documents still report the check. Nothing
+   * here ever removes a marker or sets `clearedBy`: that is the person's path (row 62).
+   */
+  private markAwaitingHumanCheck(tx: StoreTx, m: MissionDbRow, rowId: string, close: RowClose): Partial<RowPatchResult> {
+    const out: Partial<RowPatchResult> = close.closed ? { closed: close.closed } : {}
+    const wait = close.awaitingHumanCheck
+    if (!wait) return out
+    const cur = contractOf(this.rowDb(tx, m.id, rowId)).awaitingHumanCheck
+    const open = cur && cur.clearedBy === undefined && cur.checks.length === wait.checks.length && wait.checks.every((c) => cur.checks.includes(c))
+    const since = open ? cur.since : iso(tx.now)!
+    if (!open) this.setAwaitingHumanCheck(tx, m.id, rowId, { checks: wait.checks, since })
+    const n = wait.figures.length + wait.moreFigures
+    out.awaitingHumanCheck = { checks: wait.checks, since, figures: wait.figures, ...(wait.moreFigures > 0 ? { moreFigures: wait.moreFigures } : {}) }
+    out.message = `row ${rowId} is done, awaiting human check: a person has not yet checked the figure labels (${wait.checks.join(", ")})${n > 0 ? ` of ${n} figure${n === 1 ? "" : "s"}` : ""}; only the person clears this, in Mission Control`
+    return out
+  }
+
+  /** §4.2 row status transition, shared by update_row and reports. Returns what a close adds to the patch result. */
+  private transitionRow(tx: StoreTx, m: MissionDbRow, rowId: string, to: RowStatus, a: { note?: string; decision?: string; actor: string; cause: string }): Partial<RowPatchResult> {
     const row = this.rowDb(tx, m.id, rowId)
     const from = row.status
     const allowed = ROW_TRANSITIONS[from]
@@ -775,19 +1074,10 @@ export class MissionStore {
     if (from === "running" && to === "done" && !noteOk(a.note)) throw err("SCHEMA_INVALID", ROW_RUNNING_DONE_RULE, { row: rowId, field: "note", from, to })
     if ((to === "blocked" || to === "dropped") && !noteOk(a.note)) throw err("SCHEMA_INVALID", `${to} needs a note (the ${to === "blocked" ? "blocker" : "reason"})`, { row: rowId, field: "note" })
     if (a.note !== undefined && !noteOk(a.note)) throw err("SCHEMA_INVALID", "note must be a cell: 1-4000 characters, no control characters", { row: rowId })
-    // Row 155 (spec output verification §7.3; C129, C130): done only when every deliverable bound to the row
-    // (docKey row-<R>-<name>) is Final. Checked before any decision is read: no decision lifts it (D-6).
-    if (to === "done" && this.host.outputGate?.() === true) {
-      const gate = rowDeliverablesNotFinal(tx, m.id, rowId, WORK_REPORT_CONTRACT_KIND)
-      if (gate.total > 0) {
-        throw err("OUTPUT_UNVERIFIED", `row ${rowId} has deliverables that are not verified`, {
-          mission: m.id,
-          row: rowId,
-          deliverables: gate.deliverables,
-          ...(gate.total > gate.deliverables.length ? { more: gate.total - gate.deliverables.length } : {}),
-        })
-      }
-    }
+    // The done gate (rows 155, 66; seam for rows 70 and 102 in `closeChecks`). Checked before any decision is read.
+    const close: RowClose | null = to === "done" ? this.closeChecks(tx, m, rowId) : null
+    // Row 70: the review stage needs the project copy too (update_row and a work report's needs-review alike).
+    if (to === "needs-review") this.checkDeliverablesInProject(tx, m, rowId, "needs-review")
     let decision: string | null = null
     if (to === "running") {
       if (m.status === "draft") throw err("MISSION_NOT_APPROVED", "rows start only after approval", { mission: m.id, row: rowId })
@@ -821,8 +1111,32 @@ export class MissionStore {
       m.id,
       rowId,
     ])
-    this.event(tx, { mission: m.id, verb: "row-status", actor: a.actor, row: rowId, from, to, decision, detail: { cause: a.cause } })
+    this.event(tx, { mission: m.id, verb: "row-status", actor: a.actor, row: rowId, from, to, decision, detail: { cause: a.cause, ...(close?.awaitingHumanCheck ? { awaitingHumanCheck: close.awaitingHumanCheck.checks } : {}) } })
+    if (to === "running") this.rematchKnowledge(tx, m, rowId, row.title)
     if (to === "running") this.autoRun(tx, m, a.actor, `row ${rowId} running`)
+    return close ? this.markAwaitingHumanCheck(tx, m, rowId, close) : {}
+  }
+
+  /**
+   * 1.3.3 row 101 (KL-2 item 1): at each start the row's title (it may have changed since create) is matched again and
+   * `knowledge` is replaced only when the domains or first files differ, keeping the marks of domains that remain.
+   * The library never stops a start: no matcher, an unreadable index (`reason`) or a matcher that throws leaves the
+   * field as it is (the tool reply says the library is unavailable; a throw is logged here).
+   */
+  private rematchKnowledge(tx: StoreTx, m: MissionDbRow, rowId: string, title: string): void {
+    if (!this.knowledgeMatcher) return
+    let match: ReturnType<RowKnowledgeMatcher>
+    try {
+      match = this.knowledgeMatcher(title)
+    } catch (e) {
+      this.host.log("warn", "mission.knowledge-match", e, { mission: m.id, row: rowId })
+      return
+    }
+    if (match.reason !== undefined) return
+    const cur = contractOf(this.rowDb(tx, m.id, rowId)).knowledge
+    const next = mergeRowKnowledge(cur, match.domains)
+    if (sameKnowledge(cur, next)) return
+    this.setRowKnowledge(tx, m.id, rowId, next)
   }
 
   // ── locks (§5.4) ──────────────────────────────────────────────────────────
@@ -1050,9 +1364,15 @@ export class MissionStore {
   requestDecision(tx: StoreTx, mission: string, req: NewDecisionRequest, opts?: MissionWriteOptions): DecisionRequest {
     const actor = this.actorOf(opts)
     assertDecisionRequest(req)
-    this.openMission(tx, mission)
+    const m = this.openMission(tx, mission)
     for (const r of req.blockingRows ?? []) this.rowDb(tx, mission, r)
     if (tx.get("SELECT 1 FROM mission_decision_request WHERE mission_id = ? AND request_id = ?", [mission, req.id])) throw err("DECISION_REQUEST_ID_TAKEN", "decision request id exists", { mission, request: req.id })
+    // Row 70 (MC-8 item 3): a request that names a document of this mission (document=<id> in its context, e.g. row
+    // 62's labels-check line) is a review of that document: its current revision must be in the project folder.
+    if (this.host.outputGate?.() === true) {
+      const docs = namedDocuments(tx, m.id, requestDocumentIds(req.context), WORK_REPORT_CONTRACT_KIND)
+      if (docs.length > 0) this.refuseNotInProject(tx, m, docs, missionDeliverables(tx, m.id), `decision request ${req.id} cannot be opened`, { request: req.id })
+    }
     tx.run(
       "INSERT INTO mission_decision_request (mission_id, request_id, question, context, options, recommended, blocking_rows, status, requested_by, time_created, topic, proposal) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)",
       [mission, req.id, req.question, req.context ?? null, JSON.stringify(req.options), req.recommended ?? null, JSON.stringify(req.blockingRows ?? []), actor, tx.now, req.topic ?? null, req.proposal ? JSON.stringify(req.proposal) : null],
@@ -1335,6 +1655,7 @@ export class MissionStore {
       ...(r.time_started !== null ? { startedAt: iso(r.time_started)! } : {}),
       ...(r.time_finished !== null ? { finishedAt: iso(r.time_finished)! } : {}),
       ...(reports && reports.length > 0 ? { reports } : {}),
+      ...contractOf(r),
     }
   }
 
@@ -1535,8 +1856,15 @@ export class MissionStore {
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 function stripHost(r: MissionRow): MissionRowInput {
-  const { createdAt: _c, updatedAt: _u, startedAt: _s, finishedAt: _f, reports: _r, ...rest } = r
+  const { createdAt: _c, updatedAt: _u, startedAt: _s, finishedAt: _f, reports: _r, deliverables: _d, knowledge: _k, awaitingHumanCheck: _a, ...rest } = r
   return rest
+}
+
+/** 1.3.3 row 5: the three contract fields of a stored row; `deliverables` is always a list, the other two only when set. */
+function contractOf(r: Pick<RowDbRow, "deliverables" | "knowledge" | "awaiting_human_check">): MissionRowContract {
+  const knowledge = parseJson<RowKnowledge>(r.knowledge)
+  const awaitingHumanCheck = parseJson<RowAwaitingHumanCheck>(r.awaiting_human_check)
+  return { deliverables: parseJson<RowDeliverable[]>(r.deliverables) ?? [], ...(knowledge ? { knowledge } : {}), ...(awaitingHumanCheck ? { awaitingHumanCheck } : {}) }
 }
 
 function isReportStatus(s: unknown): s is ReportStatus {

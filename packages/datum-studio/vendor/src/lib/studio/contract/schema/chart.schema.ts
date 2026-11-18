@@ -166,10 +166,16 @@ export const chartSchema = {
                   end: { type: ["number", "string"], maxLength: 200 },
                   group: str,
                   milestone: bool,
+                  // Swarm 1.3.3 row 25 (ST-2, W-07; register 03 §6): same two fields as ChartDataV2.
+                  float: { type: "number", minimum: 0 },
+                  critical: bool,
                 },
                 ["label", "start", "end"],
               ),
             },
+            // Swarm 1.3.3 row 25 (ST-2): status line position and printed axis unit, same as ChartDataV2.
+            statusAt: { type: ["number", "string"], minLength: 1, maxLength: 200 },
+            timeUnit: { type: "string", minLength: 1, maxLength: 40 },
           },
           ["items"],
         ),

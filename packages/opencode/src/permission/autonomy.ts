@@ -16,6 +16,7 @@ import {
 } from "node:fs"
 import { createHash } from "node:crypto"
 import path from "node:path"
+import { ConsentCarry } from "./consent-carry"
 import { Cause, Clock, Context, Deferred, Effect, Layer, Option, Schema, Scope } from "effect"
 import { and, desc, eq, gt, inArray, lte, sql } from "drizzle-orm"
 import { Database } from "@opencode-ai/core/database/database"
@@ -134,6 +135,11 @@ export interface Check {
   readonly on: boolean
   /** Files seen to differ since the last confirmation. Holds until a person confirms, even if the bytes go back. */
   readonly externalChange: readonly StateFile[]
+  /**
+   * 1.3.3 row 109 (MC-7): the mode is on in the file from before the app was reopened and the person has not answered
+   * in this run of it. `on` is false then: every call is held as with the mode off until they consent again or decline.
+   */
+  readonly needsReconsent?: boolean
 }
 
 export class WriteError extends Schema.TaggedErrorClass<WriteError>()("AutonomyWriteError", {
@@ -189,6 +195,8 @@ const DecisionCategory = Schema.Literals([
   "check",
   "file-op",
   "git-local",
+  // 1.3.3 row 108 (MC-7): a script Swarm ships inside a built-in skill (`autonomy-parts/skill-script.ts`).
+  "skill-script",
   "edit-not-ordinary",
   // 1.2.8 row 28 (H-U10, N8-386): the table's own read of Swarm's own server under consent (`OwnApiReadCategory`).
   "own_api_read",
@@ -374,7 +382,15 @@ export interface EndedRun {
 }
 
 export interface Interface {
+  /** Whether calls under this root run autonomously now: false while the root waits on a re-consent (row 109). */
   readonly isOn: (input: Where) => Effect.Effect<boolean>
+  /**
+   * 1.3.3 row 109 (MC-7, register `needsReconsent`): "mode on, consent absent". True when the scope that decides this root
+   * was on in the mode file this process started from and the person has not set that scope since. The mode survives a
+   * reopen and the consent (`Bypass`) does not, so the app asks once: `setMode` on with `bypassConsent` restores the mode,
+   * off declines it. Nothing clears it by itself.
+   */
+  readonly needsReconsent: (input: Where) => Effect.Effect<boolean>
   readonly setMode: (input: ModeChange) => Effect.Effect<void, WriteError>
   /** What the gate calls per request. On a root that is off it touches no file, so that path stays what it was. */
   readonly check: (input: Where) => Effect.Effect<Check>
@@ -840,6 +856,12 @@ export const layer = Layer.effect(
     const firstMode = yield* Effect.sync(() => readState(MODE_FILE))
     const firstTrust = yield* Effect.sync(() => readState(TRUST_FILE))
     let mode = parseMode(firstMode.text)
+    // 1.3.3 row 109: every scope on in the file this process started from, keyed as `bypass` is. Its consent was in the
+    // memory of the run that ended, so each waits on the person until they set that scope again (on with consent, or off).
+    const reopened = new Set<string>([
+      ...[...mode.sessions].flatMap(([id, on]) => (on ? [`session:${id}`] : [])),
+      ...[...mode.directories].map((item) => `directory:${item}`),
+    ])
     const trusted = parseTrust(firstTrust.text)
     const seen: Record<StateFile, string> = { [MODE_FILE]: firstMode.hash, [TRUST_FILE]: firstTrust.hash }
     const changed = new Set<StateFile>()
@@ -870,11 +892,20 @@ export const layer = Layer.effect(
     let lastIdle = 0
     // 1.1.1 (S1.2, S1.40): the consent per scope, keyed `session:<root>` or `directory:<folder>`, and the consented runs
     // per root. Memory only, never written and never read back from a file (AU-23): a restart starts with neither.
-    const bypass = new Map<string, Bypass>()
+    // 1.3.4 (T-12): mirrored so a hand-over restart the person started can carry it once (ConsentCarry, owner U4).
+    const bypass = new ConsentCarry.MirroredConsentMap<Bypass>()
     const runs = new Map<string, { root: SessionID; directory: string; since: number; language: ReportLanguage }>()
     let runEnded: ((run: EndedRun) => Effect.Effect<void>) | undefined
 
     const started = yield* Clock.currentTimeMillis
+    // 1.3.4 (T-12, owner U4): a restart the person started themselves (menu Restart, memory Reopen) carries the consent
+    // they had given, once. Only scopes still on in the mode file and waiting on a re-consent are restored.
+    const carried = ConsentCarry.take(started).filter((scope) => reopened.has(scope.key))
+    for (const scope of carried) {
+      bypass.set(scope.key, { at: started, language: scope.language })
+      reopened.delete(scope.key)
+    }
+    if (carried.length) yield* Effect.logInfo("autonomous consent carried over a person-started restart", { scopes: carried.length })
     yield* Effect.try({ try: () => sweepAudit(started), catch: String }).pipe(
       // A folder that is not there yet has nothing old in it.
       Effect.catch((error) =>
@@ -891,6 +922,13 @@ export const layer = Layer.effect(
         ? bypass.get(`session:${input.root}`)
         : bypass.get(`directory:${input.directory}`)
     }
+
+    // Row 109: the stored mode is on, but from before the reopen and not answered since. The same precedence again.
+    const awaitingNow = (input: Where) =>
+      isOnNow(input) &&
+      reopened.has(mode.sessions.has(input.root) ? `session:${input.root}` : `directory:${input.directory}`)
+    // What every call is judged by: on, and not waiting on a re-consent.
+    const actsNow = (input: Where) => isOnNow(input) && !awaitingNow(input)
 
     // The run is gone from memory before the hook runs, so a hook that is slow or fails cannot end it twice.
     const endRun = Effect.fnUntraced(function* (root: string) {
@@ -1609,6 +1647,8 @@ export const layer = Layer.effect(
         Effect.tap(() =>
           Effect.sync(() => consented && bypass.set(key, { at: now, language: input.reportLanguage ?? "en" })),
         ),
+        // Row 109: the person set this scope in this run, so it no longer waits on them.
+        Effect.tap(() => Effect.sync(() => reopened.delete(key))),
         Effect.tapError((error) => Effect.logError("could not save the autonomous mode", { input, error })),
         Effect.mapError(() => new WriteError({ message: "Could not save the autonomous mode" })),
         Effect.ensuring(endStaleRuns()),
@@ -1618,6 +1658,8 @@ export const layer = Layer.effect(
     })
 
     const check = Effect.fn("Autonomy.check")(function* (input: Where) {
+      // Row 109: a root waiting on a re-consent is judged as one with the mode off, and says why.
+      if (awaitingNow(input)) return { on: false, externalChange: [...changed], needsReconsent: true }
       const on = isOnNow(input)
       if (!on) return { on, externalChange: [...changed] }
       yield* Effect.sync(observe)
@@ -1681,7 +1723,8 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      isOn: (input) => Effect.sync(() => isOnNow(input)),
+      isOn: (input) => Effect.sync(() => actsNow(input)),
+      needsReconsent: (input) => Effect.sync(() => awaitingNow(input)),
       setMode,
       check,
       externalChange: () => Effect.sync(() => [...changed]),

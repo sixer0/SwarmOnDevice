@@ -54,6 +54,26 @@ export interface DiagramNode {
   class: DiagramNodeClass;
   /** Swarm 1.2.8 row 52 (VIS-0a, N8-236): BPMN event trigger on event_start/_intermediate/_end; absent = "none". */
   event_type?: DiagramEventType;
+  /**
+   * Swarm 1.3.3 row 26 (ST-4): where an off-page connector continues; only on `shape: "offpage"` (engine, row 50).
+   * The node in the named figure carries the mirror `ref` (this figure's block id, the same key).
+   */
+  ref?: DiagramOffpageRef;
+}
+
+/** Swarm 1.3.3 row 26 (ST-4; register 03 §6): target of an off-page connector. */
+interface DiagramOffpageRef {
+  /** Block id (pid) of the diagram block that holds the other end; the engine prints its real figure number. */
+  figure: string;
+  /** Pair key, `^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$`, equal on both ends. */
+  key: string;
+}
+
+/** Swarm 1.3.3 row 26 (ST-5; register 03 §6): printed label of one tier (families layered and topology). */
+export interface DiagramTierLabel {
+  /** A `class.tier` value in use. */
+  tier: number;
+  label: string;
 }
 
 export interface DiagramEdge {
@@ -135,6 +155,8 @@ export interface StudioDiagramV1 {
   zones?: DiagramZone[];
   legend?: string[];
   notes?: string[];
+  /** Swarm 1.3.3 row 26 (ST-5): tier labels, layered and topology only (engine, row 56). */
+  tiers?: DiagramTierLabel[];
   per_row?: number;
   /** Swarm 1.2.6 row 45 (T-11, N-109): ranked flow direction, family flow only; absent = legacy list layout. */
   direction?: "TB" | "LR";

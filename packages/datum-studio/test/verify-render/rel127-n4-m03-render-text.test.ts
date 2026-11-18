@@ -23,6 +23,11 @@ const flat = (t: string) => String(t ?? "").replace(/\s+/g, " ")
 const WORK = realpathSync(mkdtempSync(path.join(tmpdir(), "r127-35-")))
 const s = new AccSession(WORK, { mission: "2026-11-13_row35" })
 
+/** A deep copy without any `labels_verified` key (row 61: only the person sets it). */
+function withoutLabelsVerified<T>(x: T): T {
+  return JSON.parse(JSON.stringify(x), function (this: unknown, k: string, v: unknown) { return k === "labels_verified" ? undefined : v })
+}
+
 /** Creates the fixture document through the MCP tools (fixture $comment recipe) and returns its id. */
 async function docFrom(name: string): Promise<string> {
   const f = fixture(name)
@@ -34,7 +39,9 @@ async function docFrom(name: string): Promise<string> {
     if (!okCall(r)) throw new Error(`slot ${slot}: ${errCode(r)} ${flat(r._text).slice(0, 300)}`)
   }
   for (const ch of f.chapters as S[]) {
-    const r = await s.call("studio_chapter_submit", { submission: { ...ch, target: { documentId: id } }, detail: true })
+    // Swarm 1.3.3 row 61 (C17): an agent never sends `labels_verified: true` (LABELS_VERIFIED_PERSON_ONLY); the fixture was
+    // written before that rule, so the flag is dropped from the submitted copy and the figure stays unchecked (a draft).
+    const r = await s.call("studio_chapter_submit", { submission: { ...withoutLabelsVerified(ch), target: { documentId: id } }, detail: true })
     if (!okCall(r)) throw new Error(`chapter submit: ${errCode(r)} ${flat(r._text).slice(0, 300)}`)
   }
   return id

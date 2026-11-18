@@ -4,6 +4,7 @@
  * `StudioHostModule` (row 111). The runner has already called `openHostStore` (which installs the store with
  * setStudioStore) and `configureTemplateSource`; this function only checks that, then serves.
  *
+ * 1.3.3 row 100: also STUDIO_LIBRARY_ROOT and STUDIO_SKILL_ROOTS (optional; what studio_library_read serves).
  * Environment read (never required beyond what row 111 sets): STUDIO_WORKSPACE_ROOT (= store root; used for
  * the file-root rule and the API log), HOME, process.resourcesPath. NOT read: STUDIO_MCP_FILE_ROOTS and
  * INTERNAL_API_SECRET (per-session root from the bridge header; per-process secret generated here).
@@ -22,12 +23,14 @@ import { setTemplatesLogSink, type TemplatesLogEntry } from "../../vendor/src/li
 import { configureTemplateGuard, installedTemplateGuard } from "../../vendor/src/lib/studio/services/templates/service"
 import { getStudioStore } from "../store/index.ts"
 import { createStoreFileLogger } from "../store-bridge/log.ts"
+import { downloadProjectDirOf, type DownloadProjectStore } from "./download-project-dir.ts"
 import { FileRootError, resolveSessionRoot } from "./file-root.ts"
 import { SessionRefused, startEndpoint } from "./http-server.ts"
 import { createLocalStudioApi } from "./local-api/router.ts"
 import { LOCAL_ROUTES } from "./local-api/routes.ts"
 import { createHostMcpServer } from "./mcp-server.ts"
 import { missionHostExtension } from "./mission/index.ts"
+import { libraryRootOf } from "./mission/knowledge-match.ts"
 import { templateHostExtension } from "./templates/index.ts"
 import { assertExtensions, callerSessionOf, type HostToolExtension } from "./tool-table.ts"
 
@@ -124,7 +127,15 @@ export async function startStudioHostServer(opts: StudioHostServerOptions): Prom
   const taken = new Set(given.filter((e) => e.wraps !== true).map((e) => e.name))
   const unlessGiven = (group: HostToolExtension[]) => (group.some((e) => e.wraps !== true && taken.has(e.name)) ? [] : group)
   // Order: the template tools, then the caller's, then the mission tools (row 68 unshift, row 119b append).
-  const extensions = [...unlessGiven(templateHostExtension({ log: write })), ...given, ...unlessGiven(missionHostExtension(opts.store, { log: write }))]
+  // 1.3.3 row 100 (C7 item 6): the bundled technical library for studio_library_read; optional, absent = "not available".
+  // Row 151 (S8): the ONE read of STUDIO_LIBRARY_ROOT, resolved once (real path, folder check); the matcher and
+  // studio_library_read both get this value and read no environment themselves.
+  const libraryRootEnv = process.env.STUDIO_LIBRARY_ROOT?.trim() || null
+  const libraryRoot = libraryRootOf(libraryRootEnv)
+  if (libraryRootEnv && !libraryRoot) write("warn", "datum-studio-host.library-read", "STUDIO_LIBRARY_ROOT is not an absolute folder; the technical library is not available", {})
+  // C33: STUDIO_SKILL_ROOTS = JSON {name: absolute root} of bundled on-disk skills; unreadable = none (logged).
+  const skillRoots = parseSkillRoots(process.env.STUDIO_SKILL_ROOTS, write)
+  const extensions = [...unlessGiven(templateHostExtension({ log: write })), ...given, ...unlessGiven(missionHostExtension(opts.store, { log: write, libraryRoot, skillRoots }))]
   assertExtensions(extensions)
 
   // Row 67: install the Rev A template guard before serving, so the row 66 service can save user templates
@@ -161,7 +172,7 @@ export async function startStudioHostServer(opts: StudioHostServerOptions): Prom
         root,
       )
       const api = createLocalStudioApi({ baseUrl: config.baseUrl, secret, agentId, routes: LOCAL_ROUTES, fileRoot: root })
-      const server = createHostMcpServer({ config, fetchImpl: api.fetch, session: { sessionId, agentId, fileRoot: root, ...(callerSessionOf(callerSession) ? { callerSession: callerSessionOf(callerSession) } : {}), ...(attested === true ? { attested: true as const } : {}) }, extensions, repoRoot: REPO_ROOT, log: lineLog })
+      const server = createHostMcpServer({ config, fetchImpl: api.fetch, session: { sessionId, agentId, fileRoot: root, ...(callerSessionOf(callerSession) ? { callerSession: callerSessionOf(callerSession) } : {}), ...(attested === true ? { attested: true as const } : {}) }, extensions, repoRoot: REPO_ROOT, log: lineLog, projectDirOf: downloadProjectDirOf(opts.store as unknown as DownloadProjectStore) })
       let closed = false
       return {
         server,
@@ -210,6 +221,20 @@ function assertSameStoreRoot(store: object): string {
   const openedReal = real(opened)
   if (openedReal !== real(envRoot)) throw new HostConfigError("the store was opened at another root than the cached STUDIO_WORKSPACE_ROOT")
   return openedReal
+}
+
+/** 1.3.3 row 100 / C33: `STUDIO_SKILL_ROOTS` -> {name: absolute path}; anything else in it is dropped. */
+function parseSkillRoots(raw: string | undefined, log?: (level: HostLogLevel, source: string, message: string, context?: Record<string, unknown>) => void): Record<string, string> | null {
+  if (!raw?.trim()) return null
+  try {
+    const doc: unknown = JSON.parse(raw)
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) throw new Error("not an object")
+    const out = Object.fromEntries(Object.entries(doc).filter((e): e is [string, string] => /^[a-z0-9][a-z0-9-]{0,63}$/.test(e[0]) && typeof e[1] === "string" && path.isAbsolute(e[1])))
+    return Object.keys(out).length > 0 ? out : null
+  } catch (e) {
+    log?.("warn", "datum-studio-host", "STUDIO_SKILL_ROOTS ignored", { message: e instanceof Error ? e.message : String(e) })
+    return null
+  }
 }
 
 function templatesFileSink(file: string) {

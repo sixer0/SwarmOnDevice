@@ -206,12 +206,12 @@ describe('runLint: laporan jujur, status rilis per tier', () => {
     expect(rep.banner).toMatch(/cek modul render ditambahkan pemanggil/);
   });
 
-  it('NOTA: hanya 4 cek struktur v2 berlaku (D-178); FAIL scan tier lain tidak menahan; slot berisi -> rilis PASS (D-180)', () => {
+  it('NOTA: hanya 6 cek struktur v2 berlaku (D-178; 1.3.3: + OFFPAGE_UNPAIRED, PLACEHOLDER_UNFILLED); FAIL scan tier lain tidak menahan; slot berisi -> rilis PASS (D-180)', () => {
     // SR-42: sebelum SR-18 tidak ada cek bertier NOTA (rilis NOT_RUN + banner
     // "lint tidak diwajibkan"). D-178 menjadikan LD-01..LD-04 bertier semua;
     // D-180: NOTA dengan bab berisi -> SLOT_CONTENT_MISSING PASS -> rilis PASS.
     const rep = runLint({ snapshot: snapshotOf(makeDoc({ tier: 'NOTA', sectionTitle: QUESTION })), tpl: KAN, tier: 'NOTA', stage: 'ingest' });
-    expect(LINT_REGISTRY.filter((d) => appliesToTier(d.id, 'NOTA')).map((d) => d.id).sort()).toEqual(['CONTENT_CHAPTER_GAP', 'INLINE_FORMAT_STRIPPED', 'SCHEMA_V1_ADAPTED', 'SLOT_CONTENT_MISSING']);
+    expect(LINT_REGISTRY.filter((d) => appliesToTier(d.id, 'NOTA')).map((d) => d.id).sort()).toEqual(['CONTENT_CHAPTER_GAP', 'INLINE_FORMAT_STRIPPED', 'OFFPAGE_UNPAIRED', 'PLACEHOLDER_UNFILLED', 'SCHEMA_V1_ADAPTED', 'SLOT_CONTENT_MISSING']);
     expect(statuses(rep.checks, 'SLOT_CONTENT_MISSING')).toEqual(['PASS']);
     expect(rep.releaseStatus).toBe('PASS');
     expect(rep.banner).not.toContain('lint tidak diwajibkan pada tier NOTA');

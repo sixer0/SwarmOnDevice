@@ -1,3 +1,4 @@
+import contextMenu from "electron-context-menu"
 import windowState from "electron-window-state"
 import { resolveThemeVariant } from "@opencode-ai/ui/theme/resolve"
 import type { DesktopTheme } from "@opencode-ai/ui/theme/types"
@@ -202,6 +203,7 @@ export function createMainWindow(id: string = randomUUID()) {
   })
 
   allowRendererPermissions(win)
+  wireContextMenu(win)
   wireWindowRecovery(win, id)
   wireNavigationPolicy(win)
 
@@ -565,4 +567,17 @@ function upsertKeyValue(obj: Record<string, any>, keyToChange: string, value: an
   }
   // Insert at end instead
   obj[keyToChange] = value
+}
+
+// 1.3.4 (T-06, heap snapshot 2026-11-18): electron-context-menu 4.1.2 called without `window` listens to
+// `browser-window-created` and pushes one disposer per window into an array it never shrinks; each disposer holds the
+// window's WebContents. Every hidden DATUM render window (one per render job) was kept with its listeners and the page
+// HTML they close over (9-18 MB per job), until the main process ran out of heap. The menu is now attached to each app
+// window only, and released when that window closes.
+/** @internal test seam */
+export const CONTEXT_MENU_OPTIONS = { showSaveImageAs: true, showLookUpSelection: false, showSearchWithGoogle: false } as const
+
+function wireContextMenu(win: BrowserWindow) {
+  const dispose = contextMenu({ ...CONTEXT_MENU_OPTIONS, window: win })
+  win.once("closed", () => dispose())
 }

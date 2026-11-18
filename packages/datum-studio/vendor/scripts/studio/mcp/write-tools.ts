@@ -31,6 +31,9 @@ import { requireOwnParts } from "./write-parts";
 import { normalizeEditArgs, normalizeWriteArgs } from "./write-normalize";
 import { isPositionEdit, paragraphsOf, positionToFind } from "./write-position";
 import { applyEdits, SUB_MARK, type AppendedShape, type EditOp, type EditPart, type EditPlan } from "./write-edit";
+import { argIssues } from "./arg-issues";
+import { chartCodeOf, type ClientChart } from "./write-client";
+import { CHART_INTERVALS_INPUT, CHART_INTERVALS_KEY, FIGURE_WIDTH_INPUT, isIntervalsChart, negativeChartValues, negativeValueMessage } from "./write-figure-input";
 import { editClient, writeClient } from "./write-client-run";
 import { titlesOf, withVerify } from "./write-verify";
 
@@ -40,30 +43,53 @@ const CELL = { anyOf: [{ type: "string", maxLength: 4000 }, { type: "number" }] 
 /** I-4 (review 13): label kategori grafik dibatasi batas figur kontrak (FIGURE_BOUNDS.chartDataChars), ditegakkan saat masukan. */
 const CHART_LABEL = { anyOf: [{ type: "string", maxLength: FIGURE_BOUNDS.chartDataChars }, { type: "number" }] } as const;
 const ROWS = { type: "array", minItems: 1, maxItems: 500, items: { type: "array", minItems: 1, maxItems: 40, items: CELL } } as const;
+/**
+ * Swarm 1.3.3 row 39 (ST-2; register 03 §6): the chart block is categories x series OR the W-07 intervals shape
+ * (`intervals` + `statusAt` / `timeUnit`), with the per-figure `width`. The intervals and width fragments are derived
+ * from the figure contract (`write-figure-input.ts`); the contract check of the intervals runs when the block is built.
+ */
+const CHART_BLOCK = {
+  ...obj({
+    type: { type: "string", maxLength: 40 },
+    categories: { type: "array", minItems: 1, maxItems: FIGURE_BOUNDS.items, items: CHART_LABEL },
+    series: { type: "array", minItems: 1, maxItems: 12, items: obj({ name: { type: "string", minLength: 1, maxLength: 120 }, values: { type: "array", maxItems: 200, items: { anyOf: [{ type: "number" }, { type: "null" }] } } }, ["name", "values"]) },
+    ...CHART_INTERVALS_INPUT,
+    caption: { type: "string", maxLength: 500 },
+    source: { type: "string", maxLength: 500 },
+    unit: { type: "string", maxLength: 40 },
+    stacked: { type: "boolean" },
+    ...FIGURE_WIDTH_INPUT,
+  }),
+  // `properties: true` beside `required`: Ajv strictRequired wants the names defined in the same subschema (as the contract does).
+  anyOf: [
+    { properties: { categories: true, series: true }, required: ["categories", "series"] },
+    { properties: { [CHART_INTERVALS_KEY]: true }, required: [CHART_INTERVALS_KEY] },
+  ],
+} as const;
+/** Swarm 1.2.8 row 33 (H-NA, N8-206): isi DiagramV2; divalidasi validator v2 saat dijalankan (skema penuh tidak diulang di tools/list). */
+const DIAGRAM_BLOCK = { type: "object" } as const;
+/**
+ * Swarm 1.3.3 row 77 (ST-10): ONE shape for a figure in both tools. `studio_edit { figure, chart }` takes the fields
+ * of the `studio_write` chart block (same names, same limits; every field optional because it is a patch of the stored
+ * chart, and a caption or source given must not be empty), `{ figure, diagram }` and `append` take the write blocks
+ * unchanged. Derived here from the write constants; test/st10-write-edit-parity fails when the two drift apart.
+ */
+/** @internal test seam */
+export const WRITE_FIGURE_BLOCKS = { chart: CHART_BLOCK, diagram: DIAGRAM_BLOCK } as const;
+const { anyOf: _chartForms, ...CHART_FIELDS } = CHART_BLOCK;
+const CHART_PROPS = (CHART_BLOCK as unknown as { properties: Record<string, Record<string, unknown>> }).properties;
+/** @internal test seam */
+export const EDIT_FIGURE_PATCHES = {
+  chart: { ...CHART_FIELDS, properties: { ...CHART_PROPS, caption: { ...CHART_PROPS.caption, minLength: 1 }, source: { ...CHART_PROPS.source, minLength: 1 } } },
+  diagram: DIAGRAM_BLOCK,
+} as const;
 const BLOCK = {
   anyOf: [
     { type: "string", maxLength: 40000 },
     ROWS,
     obj({ table: ROWS, caption: { type: "string", maxLength: 500 }, source: { type: "string", maxLength: 500 }, unit: { type: "string", maxLength: 40 } }, ["table"]),
-    obj(
-      {
-        chart: obj(
-          {
-            type: { type: "string", maxLength: 40 },
-            categories: { type: "array", minItems: 1, maxItems: FIGURE_BOUNDS.items, items: CHART_LABEL },
-            series: { type: "array", minItems: 1, maxItems: 12, items: obj({ name: { type: "string", minLength: 1, maxLength: 120 }, values: { type: "array", maxItems: 200, items: { anyOf: [{ type: "number" }, { type: "null" }] } } }, ["name", "values"]) },
-            caption: { type: "string", maxLength: 500 },
-            source: { type: "string", maxLength: 500 },
-            unit: { type: "string", maxLength: 40 },
-            stacked: { type: "boolean" },
-          },
-          ["categories", "series"],
-        ),
-      },
-      ["chart"],
-    ),
-    // Swarm 1.2.8 row 33 (H-NA, N8-206): isi DiagramV2; divalidasi validator v2 saat dijalankan (skema penuh tidak diulang di tools/list).
-    obj({ diagram: { type: "object" } }, ["diagram"]),
+    obj({ chart: CHART_BLOCK }, ["chart"]),
+    obj({ diagram: DIAGRAM_BLOCK }, ["diagram"]),
     obj({ list: { type: "array", minItems: 1, maxItems: 200, items: { type: "string", maxLength: 4000 } }, ordered: { type: "boolean" } }, ["list"]),
     obj({ subheading: { type: "string", minLength: 1, maxLength: 200 } }, ["subheading"]),
     // IMPL-W3 butir 7: rujukan terstruktur (laporan kerja) -> tabel Rujukan disusun mesin.
@@ -215,7 +241,11 @@ const writeTool: ToolDef = {
     const bytes = Buffer.byteLength(JSON.stringify(a), "utf8");
     if (bytes > MAX_INPUT_BYTES) throw new McpToolError("PAYLOAD_TOO_LARGE", `masukan ${bytes} B melebihi batas ${MAX_INPUT_BYTES} B`);
     const agentId = plainAgentId(a, ctx);
-    if (str(a, "template") !== null) return writeClient(a, ctx, agentId);
+    if (str(a, "template") !== null) {
+      // Row 77 (ST-10): negative values a chart code cannot draw are refused before the first network call.
+      refuseNegativeCharts(chartsOfSections(a.sections));
+      return writeClient(a, ctx, agentId);
+    }
     const meta = isRecord(a.meta) ? (a.meta as Record<string, string>) : {};
     const input = { mission: str(a, "mission") as string, docKey: str(a, "docKey") as string, title: str(a, "title"), meta, sections: a.sections as SectionInput[], agentId, now: ctx.now() };
     const built = buildWorkReport(input);
@@ -464,19 +494,6 @@ async function targetDoc(a: Args, ctx: ToolContext, agentId: string | null): Pro
   return doc;
 }
 
-const CHART_EDIT = obj(
-  {
-    categories: { type: "array", minItems: 1, maxItems: FIGURE_BOUNDS.items, items: CHART_LABEL },
-    series: { type: "array", minItems: 1, maxItems: 12, items: obj({ name: { type: "string", minLength: 1, maxLength: 120 }, values: { type: "array", maxItems: 200, items: { anyOf: [{ type: "number" }, { type: "null" }] } } }, ["name", "values"]) },
-    type: { type: "string", maxLength: 40 },
-    stacked: { type: "boolean" },
-    caption: { type: "string", minLength: 1, maxLength: 500 },
-    source: { type: "string", minLength: 1, maxLength: 500 },
-    unit: { type: "string", maxLength: 40 },
-  },
-  [],
-);
-
 const TARGET_TEXT = { type: "string", minLength: 1, maxLength: 500 } as const;
 
 const EDITS = {
@@ -489,7 +506,9 @@ const EDITS = {
       obj({ after: { type: "string", minLength: 1, maxLength: 4000 }, insert: { type: "string", minLength: 1, maxLength: 40000 }, section: TARGET_TEXT }, ["after", "insert"]),
       obj({ cell: obj({ section: TARGET_TEXT, row: TARGET_TEXT, column: TARGET_TEXT }, ["row", "column"]), value: { type: "string", maxLength: 4000 } }, ["cell", "value"]),
       obj({ pid: { type: "string", pattern: "^[a-z0-9][a-z0-9-]{2,63}$" }, at: { type: "integer", minimum: 0, maximum: 1000000 }, length: { type: "integer", minimum: 0, maximum: 100000 }, replace: { type: "string", maxLength: 40000 }, expect: { type: "string", maxLength: 4000 } }, ["pid", "at", "replace"]),
-      obj({ figure: { type: "string", minLength: 1, maxLength: 500 }, chart: CHART_EDIT }, ["figure", "chart"]),
+      // Row 77 (ST-10): figure patches = the studio_write figure blocks (EDIT_FIGURE_PATCHES), checked when run like `append`.
+      obj({ figure: { type: "string", minLength: 1, maxLength: 500 }, chart: { type: "object" } }, ["figure", "chart"]),
+      obj({ figure: { type: "string", minLength: 1, maxLength: 500 }, diagram: DIAGRAM_BLOCK }, ["figure", "diagram"]),
       // IMPL-W5 E1/E2: blok divalidasi skema blok studio_write saat dijalankan (skema penuh tidak diulang di tools/list).
       obj({ section: TARGET_TEXT, append: { anyOf: [{ type: "string", maxLength: 40000 }, { type: "array", minItems: 1, maxItems: 400 }, { type: "object" }] } }, ["section", "append"]),
       obj({ section: TARGET_TEXT, addRow: { type: "array", minItems: 1, maxItems: 500, items: { anyOf: [CELL, { type: "array", minItems: 1, maxItems: 40, items: CELL }] } }, table: { anyOf: [{ type: "integer", minimum: 1, maximum: 200 }, { type: "string", minLength: 1, maxLength: 500 }] } }, ["section", "addRow"]),
@@ -740,6 +759,53 @@ async function editWorkReport(a: Args, ctx: ToolContext, doc: ExistingDoc, agent
 // ── IMPL-W5: append/addRow (bentuk kanonik + validasi blok sebelum jaringan) dan notApplied ──
 
 const blockValid = new Ajv({ allErrors: true, strict: true }).compile(BLOCK);
+/** A pointer may end in a key the caller wrote: only a plain token path is printed in the head line (full pointer in details). */
+const shownPointer = (p: string): string => (/^[/A-Za-z0-9_.-]{1,200}$/.test(p) ? p : "(medan di rincian)");
+const chartPatchValid = new Ajv({ allErrors: true, strict: true }).compile(EDIT_FIGURE_PATCHES.chart);
+
+/**
+ * Swarm 1.3.3 row 77 (ST-10; register 03: negative chart value at write): a value the engine refuses at render
+ * (rule CH-01) is refused here with its field path, before anything is stored. Only chart codes that cannot draw a
+ * negative value are refused (NON_NEGATIVE_CHART_CODES mirrors the engine); a line, a waterfall or a diverging bar
+ * keeps its negative values. The code is the one the builder will choose (`chartCodeOf`).
+ */
+/** @internal test seam */
+export function refuseNegativeCharts(charts: ReadonlyArray<{ chart: unknown; pointer: string }>): void {
+  const details: Array<{ pointer: string; keyword: string; message: string }> = [];
+  for (const { chart, pointer } of charts) {
+    if (!isRecord(chart) || isIntervalsChart(chart) || !Array.isArray(chart.categories) || !Array.isArray(chart.series)) continue;
+    let code: string;
+    try {
+      code = chartCodeOf(chart as unknown as ClientChart, () => undefined, pointer);
+    } catch {
+      continue; // too many series: the builder reports it with its own code
+    }
+    for (const n of negativeChartValues(code, chart.series)) details.push({ pointer: `${pointer}/series/${n.series}/values/${n.index}`, keyword: "minimum", message: negativeValueMessage(code, n) });
+  }
+  if (details.length === 0) return;
+  throw new McpToolError("INVALID_ARGUMENT", `${details[0].pointer}: ${details[0].message}${details.length > 1 ? ` (+${details.length - 1} nilai negatif lain di rincian)` : ""}. Tidak ada yang ditulis`, { pointer: details[0].pointer, details: details.slice(0, 20) });
+}
+
+/** The chart blocks of a `studio_write` call with their input pointers. */
+function chartsOfSections(sections: unknown): Array<{ chart: unknown; pointer: string }> {
+  const out: Array<{ chart: unknown; pointer: string }> = [];
+  (Array.isArray(sections) ? sections : []).forEach((sec, i) => {
+    (isRecord(sec) && Array.isArray(sec.blocks) ? sec.blocks : []).forEach((b, k) => {
+      if (isRecord(b) && isRecord(b.chart)) out.push({ chart: b.chart, pointer: `/sections/${i}/blocks/${k}/chart` });
+    });
+  });
+  return out;
+}
+
+/** Row 77: the builder's CH-01 refusal of a studio_edit (label "edit N" / "edit N blok K") gets the same pointer shape. */
+/** @internal test seam */
+export function withNegativePointer(e: unknown): unknown {
+  if (!(e instanceof McpToolError) || e.code !== "INVALID_ARGUMENT" || e.extra.details !== undefined) return e;
+  const m = /^edit (\d+)(?: blok (\d+))?: (CH-01: series\/(\d+)\/values\/(\d+) = [^;]+;.*?)(?:\. Tidak ada yang dikirim)?$/.exec(e.message);
+  if (!m) return e;
+  const pointer = `/edits/${Number(m[1]) - 1}${m[2] !== undefined ? `/append/${Number(m[2]) - 1}` : ""}/chart/series/${m[4]}/values/${m[5]}`;
+  return new McpToolError("INVALID_ARGUMENT", `${pointer}: ${m[3]}. Tidak ada yang ditulis`, { pointer, details: [{ pointer, keyword: "minimum", message: m[3] }] });
+}
 const isCells = (v: unknown): v is Array<string | number> => Array.isArray(v) && v.every((c) => typeof c === "string" || typeof c === "number");
 
 /** append -> Block[] (string/objek = satu blok; larik baris sel = satu tabel; larik lain = daftar blok); addRow -> baris[]. */
@@ -754,11 +820,19 @@ export function prepareStructEdits(edits: Args[]): void {
       blocks.forEach((b, k) => {
         const ref = isRecord(b) && b.ref !== undefined && !toRefs;
         if (ref || !blockValid(b)) {
-          const err = blockValid.errors?.[0];
-          throw new McpToolError("INVALID_ARGUMENT", `edit ${i + 1}: append blok ${k + 1} ${ref ? "{ref} hanya untuk append ke section Rujukan" : `tidak sah (${tok(err?.instancePath || "/", "/")} ${String(err?.message ?? "").slice(0, 120)})`}; blok: string, [[baris]], {table}, {chart}, {diagram}, {list}, {subheading}. Tidak ada yang ditulis`, { pointer: `/edits/${i}/append` });
+          // Row 77 (ST-10): the issue of the closest block form, at its own field (not the first form of the union).
+          const at = `/edits/${i}/append/${k}`;
+          const issues = ref ? [] : argIssues(blockValid.errors, b).map((x) => ({ ...x, pointer: `${at}${x.pointer === "/" ? "" : x.pointer}` }));
+          const err = issues[0];
+          throw new McpToolError("INVALID_ARGUMENT", `edit ${i + 1}: append blok ${k + 1} ${ref ? "{ref} hanya untuk append ke section Rujukan" : `tidak sah (${shownPointer(err?.pointer.slice(at.length) || "/")} ${String(err?.message ?? "").slice(0, 120)})`}; blok: string, [[baris]], {table}, {chart}, {diagram}, {list}, {subheading}. Tidak ada yang ditulis`, { pointer: ref ? `/edits/${i}/append` : (err?.pointer ?? at), ...(issues.length > 0 ? { details: issues } : {}) });
         }
       });
       e.append = blocks;
+    }
+    // Row 77 (ST-10): { figure, chart } is checked against the studio_write chart fields before the network.
+    if ("figure" in e && "chart" in e && !chartPatchValid(e.chart)) {
+      const issues = argIssues(chartPatchValid.errors, e.chart).map((x) => ({ ...x, pointer: `/edits/${i}/chart${x.pointer === "/" ? "" : x.pointer}` }));
+      throw new McpToolError("INVALID_ARGUMENT", `edit ${i + 1}: chart tidak sah (${shownPointer(issues[0]?.pointer ?? "/")} ${String(issues[0]?.message ?? "").slice(0, 120)}); medan chart sama dengan blok {chart} studio_write. Tidak ada yang ditulis`, { pointer: issues[0]?.pointer ?? `/edits/${i}/chart`, details: issues });
     }
     if ("addRow" in e && Array.isArray(e.addRow)) {
       const rows = e.addRow as unknown[];
@@ -804,14 +878,18 @@ const editTool: ToolDef = {
     const content = body.content;
     const sections = isRecord(content.sections) ? content.sections : {};
     if (isRecord(sections.record) && sections.record.type === "contractRecord") {
-      if (edits.some((e) => "figure" in e)) throw new McpToolError("INVALID_ARGUMENT", "laporan kerja tidak memuat figur; {figure, chart} hanya untuk dokumen klien. Tidak ada yang ditulis");
+      if (edits.some((e) => "figure" in e)) throw new McpToolError("INVALID_ARGUMENT", "laporan kerja tidak memuat figur; {figure, chart} dan {figure, diagram} hanya untuk dokumen klien. Tidak ada yang ditulis");
       const warns: ToolWarning[] = [];
       const fields = recordMetaFields(meta, agentId, ctx.now(), (w) => warns.push(w));
       const out = await editWorkReport(a, ctx, doc, agentId, body.revisionNo, content, fields);
       const merged = warns.length > 0 ? { ...out, warnings: [...warns, ...(out.warnings ?? [])] } : out;
       return withNotApplied(Array.isArray(out.data.edited) && out.data.edited.length > 0 ? await withVerify(ctx, merged, "report", bool(a, "detail"), titlesOf(content)) : merged);
     }
-    return withNotApplied(await editClient(a, ctx, doc.id, doc.docNumber, agentId, body.revisionNo, content));
+    try {
+      return withNotApplied(await editClient(a, ctx, doc.id, doc.docNumber, agentId, body.revisionNo, content));
+    } catch (e) {
+      throw withNegativePointer(e);
+    }
   },
 };
 

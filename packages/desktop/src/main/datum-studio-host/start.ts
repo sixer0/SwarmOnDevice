@@ -4,6 +4,7 @@
 // index.ts:  const datumStudio = createDatumStudio({...}); void datumStudio.start()
 //            app.on("before-quit", (e) => datumStudio.holdQuit(e, () => app.quit()))
 
+import { lstatSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -126,6 +127,8 @@ export function createDatumStudio(deps: DatumStudioDeps) {
         resourcesPath: deps.resourcesPath,
         baseEnv: deps.env,
         renderEnv: bridge?.env,
+        libraryRoot: studioLibraryRoot(deps),
+        skillRoots: studioSkillRoots(deps),
         log: deps.log,
         signal: abort.signal,
         onUnexpectedExit: (code) => {
@@ -201,6 +204,38 @@ export function createDatumStudio(deps: DatumStudioDeps) {
       void this.stop().finally(quitAgain)
     },
   }
+}
+
+/**
+ * 1.3.3 row 100 (KL-2, C7 item 6): the bundled technical library the Studio host serves with studio_library_read
+ * (STUDIO_LIBRARY_ROOT). Packaged: `<Resources>/knowledge-library` (electron-builder maps `.library-stage` there);
+ * dev: the staged copy `<appPath>/.library-stage` (scripts/stage-library.ts). A missing folder, a file or a symlink in
+ * its place gives none: the host then answers "not available".
+ */
+/** @internal test seam */
+export function studioLibraryRoot(input: { isPackaged: boolean; resourcesPath?: string; appPath: string }): string | undefined {
+  const dir = input.isPackaged ? (input.resourcesPath ? join(input.resourcesPath, "knowledge-library") : undefined) : join(input.appPath, ".library-stage")
+  if (!dir) return undefined
+  const st = lstatSync(dir, { throwIfNoEntry: false })
+  return st?.isDirectory() && !st.isSymbolicLink() ? dir : undefined
+}
+
+/** C33: the bundled on-disk skills whose files studio_library_read serves as `skill:<name>/...`. */
+const STUDIO_SKILL_ROOT_NAMES = ["gsp-diagram-standard"] as const
+
+/**
+ * 1.3.3 row 100 / C33: STUDIO_SKILL_ROOTS. Packaged: `<Resources>/<name>` (electron-builder.config.ts maps
+ * datum/<name> there); dev: `<appPath>/datum/<name>`. A missing folder, a file or a symlink in its place is left out.
+ */
+/** @internal test seam */
+export function studioSkillRoots(input: { isPackaged: boolean; resourcesPath?: string; appPath: string }): Record<string, string> | undefined {
+  const base = input.isPackaged ? input.resourcesPath : join(input.appPath, "datum")
+  if (!base) return undefined
+  const found = STUDIO_SKILL_ROOT_NAMES.flatMap((name) => {
+    const st = lstatSync(join(base, name), { throwIfNoEntry: false })
+    return st?.isDirectory() && !st.isSymbolicLink() ? [[name, join(base, name)] as const] : []
+  })
+  return found.length > 0 ? Object.fromEntries(found) : undefined
 }
 
 function codeOf(error: unknown) {

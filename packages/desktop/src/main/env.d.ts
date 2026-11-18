@@ -17,6 +17,12 @@ declare module "virtual:opencode-server" {
   }
   export namespace RunLease {
     export const host: typeof import("../../../opencode/dist/types/src/node").RunLease.host
+    // 1.3.4 (T-12): restart with hand-over. Declared here, not taken from the built types, so a stale dist cannot hide it.
+    export const handOver: () => number
+  }
+  // 1.3.4 (T-12, owner U4): the consent a person-started restart carries once (opencode permission/consent-carry.ts).
+  export namespace ConsentCarry {
+    export const write: () => number
   }
   export namespace Config {
     export const get: typeof import("../../../opencode/dist/types/src/node").Config.get

@@ -74,7 +74,7 @@ describe("F56-3: stand-alone render of a document diagram block", () => {
     expect(t).toContain("GAMBAR 4.1  Arsitektur sistem pemantauan iklim ruang simpan arsip.");
     // Row 165P consequence edit (C205, CP-28/48): SUMBER ends with the PROVENANS part of the block's marks.
     expect(t).toContain("SUMBER  Kajian Teknis 012/GSP/KT/XI/2026 §4.1 · register ruang Rev A    PROVENANS  ■\u00a0TERUKUR · ◇\u00a0PEMASOK");
-    expect(t.some((x) => x.startsWith("KUNCI  PENUH = ALIRAN DATA SENSOR"))).toBe(true);
+    expect(t.some((x) => x.startsWith("KUNCI  PENUH = aliran data sensor"))).toBe(true); // Swarm 1.3.3 row 43 (ST-3.4): the key prints legend rows as written
     expect(r.standalone).toEqual({
       id: "4.1",
       title: "Arsitektur sistem pemantauan iklim ruang simpan arsip.",

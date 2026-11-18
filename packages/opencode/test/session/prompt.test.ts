@@ -1632,7 +1632,14 @@ it.instance("prompt submitted during an active run is included in the next LLM i
     expect(inputs).toHaveLength(2)
     const messages = inputs.at(-1)?.messages
     if (!Array.isArray(messages)) throw new Error("expected LLM messages")
-    expect(messages.at(-1)).toEqual({ role: "user", content: "second" })
+    // SB-2 + MC-6 (rows 112, 105): the person's text first, then the saved turn facts block (fact line) of that turn.
+    expect(messages.at(-1)).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "second" },
+        { type: "text", text: expect.stringMatching(/^<turn_facts>\n[\s\S]*Context: \d+ of \d+ tokens used/) },
+      ],
+    })
   }),
 )
 
@@ -2870,7 +2877,8 @@ it.instance("a late answer to a subagent reaches the root session as the person'
     const texts = (yield* sessions.messages({ sessionID: root.id })).flatMap((message) =>
       message.info.role !== "user"
         ? []
-        : message.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])),
+        : // The turn facts block (rows 112, 105) is the loop's own part, not the person's message.
+          message.parts.flatMap((part) => (part.type === "text" && !part.metadata?.turnFacts ? [part.text] : [])),
     )
     expect(texts.at(-1)).toContain("`git push`")
     // The one-shot grant is on the root, and lets exactly this call through once with no second prompt.

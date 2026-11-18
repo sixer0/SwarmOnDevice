@@ -14,7 +14,7 @@ import { buildSessionMap, relativePath, type MapStep, type SessionMapModel } fro
 // reduces that tree to what a person needs to oversee it: one row per agent on a shared clock, what each one costs, and
 // where two agents touched the same file. Pure, so it can be rebuilt once a second while agents run.
 
-export type SwarmLaneStatus = "needs" | "running" | "waiting" | "retry" | "failed" | "stopped" | "done" | "unread"
+export type SwarmLaneStatus = "needs" | "running" | "waiting" | "retry" | "failed" | "stopped" | "done" | "unread" | "textCall" | "noTools" | "emptyStep"
 
 export type SwarmSegmentKind = "problem" | "blocked" | "edit" | "command" | "agent" | "explore" | "other"
 
@@ -147,6 +147,18 @@ const childSessionOf = (step: MapStep) => {
   return typeof id === "string" ? id : undefined
 }
 
+const TOOLS_UNAVAILABLE = "tools-unavailable"
+
+// The three reasons a turn ends without work, as stored in the assistant message's `finish`.
+function turnEnd(finish: string | undefined): Pick<SwarmLane, "status" | "detail"> | undefined {
+  if (finish === "text-tool-call") return { status: "textCall" }
+  if (finish === "empty-step") return { status: "emptyStep" }
+  if (finish === TOOLS_UNAVAILABLE) return { status: "noTools", detail: "" }
+  if (finish?.startsWith(`${TOOLS_UNAVAILABLE}:`))
+    return { status: "noTools", detail: finish.slice(TOOLS_UNAVAILABLE.length + 1) }
+  return undefined
+}
+
 function laneStatus(input: {
   session: Session
   status: SessionStatus | undefined
@@ -164,6 +176,9 @@ function laneStatus(input: {
   if (request) return { status: "needs" }
   if (!input.messages) return { status: "unread" }
   const last = input.messages.findLast((message): message is AssistantMessage => message.role === "assistant")
+  // A turn the server ended without work carries its reason in `finish`; read it before `error`.
+  const ended = turnEnd(last?.finish)
+  if (ended) return ended
   const failure = last?.error
   if (failure?.name === "MessageAbortedError") return { status: "stopped" }
   if (failure) {

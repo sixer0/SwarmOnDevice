@@ -12,7 +12,7 @@ import { isStoreError } from "../../store/index.ts"
 import { neutralizeDeep, tok, untrustedFields } from "../../../vendor/scripts/studio/mcp/tool-kit"
 import { outputGateFindings } from "../verify/client-findings.ts"
 import { MISSION_GUIDE_URI } from "./mission-guide.ts"
-import { MISSION_SKILL, nextCall } from "./next-call.ts"
+import { correctionFor, MISSION_SKILL, nextCall } from "./next-call.ts"
 
 export type MissionLog = (level: "info" | "warn" | "error", source: string, message: string, context?: Record<string, unknown>) => void
 
@@ -61,7 +61,16 @@ function safeBrief(v: unknown): unknown {
   return v
 }
 
-export function refusal(tool: string, code: string, message: string, rawDetails: Record<string, unknown> = {}): CallToolResult {
+/**
+ * 1.3.3 row 17 (MC-4, register section 2): `args` are the arguments as the agent sent them. With them a SCHEMA_INVALID
+ * or STATUS_TRANSITION refusal carries `error.corrected` {arguments, changed} when the correction is certain, else
+ * `error.fields` [{field, allowed}] (at most 10); without them only `fields`, from the details. Nothing is applied
+ * here: the agent sends the corrected arguments itself. Text: one line `corrected: <json>` or `fields: <json>`
+ * between `rincian:` and `next:`.
+ */
+export function refusal(tool: string, code: string, rawMessage: string, rawDetails: Record<string, unknown> = {}, args?: Record<string, unknown>): CallToolResult {
+  const fix = correctionFor(tool, code, rawMessage, rawDetails, args)
+  const message = fix.message ?? rawMessage
   let details = compactDetails(tool, code, rawDetails)
   // Row 206 (1.2.3): OUTPUT_UNVERIFIED names, per unverified output, the checks that failed or could not be measured
   // ({check, verdict, page, address, measured, expected, rule, message}) in the text, fenced as untrusted document text.
@@ -80,19 +89,21 @@ export function refusal(tool: string, code: string, message: string, rawDetails:
   // Row 188 (L47): every refusal ends with the next correct call and the skill that holds the sequence.
   // 1.2.9 row 50 (N9-003): the hint is tool-aware. 1.2.10 row 74 (N10-009): keyed by the real tool (create and update_row
   // have their own SESSION_NOT_ATTESTED entries in NEXT_BY_TOOL; no remap to studio_mission_record_decision).
-  const next = nextCall(code, tool)
-  const error = { code, message, details, next, skill: MISSION_SKILL }
+  const next = fix.next !== undefined ? `${fix.next} (skill: ${MISSION_SKILL})` : nextCall(code, tool)
+  const error = { code, message, details, ...(fix.corrected ? { corrected: fix.corrected } : {}), ...(fix.fields ? { fields: fix.fields } : {}), next, skill: MISSION_SKILL }
+  const fixLine = fix.corrected ? `\ncorrected: ${JSON.stringify(fix.corrected)}` : fix.fields ? `\nfields: ${JSON.stringify(fix.fields)}` : ""
   return {
-    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(brief).slice(0, 4000)}${block ? `\nperiksa (per keluaran RENDER_UNVERIFIED(U24)):\n${block}` : ""}\nnext: ${next}` }],
+    content: [{ type: "text", text: `ditolak ${code}: ${message}\nrincian: ${JSON.stringify(brief).slice(0, 4000)}${block ? `\nperiksa (per keluaran RENDER_UNVERIFIED(U24)):\n${block}` : ""}${fixLine}\nnext: ${next}` }],
     structuredContent: { ok: false, tool, code, error, next, ...untrusted },
     isError: true,
   }
 }
 
 /** Store and tool refusals -> refusal; anything else is logged with its stack and returned as INTERNAL_ERROR. */
-export function errorResult(tool: string, e: unknown, log: MissionLog, context: Record<string, unknown> = {}): CallToolResult {
-  if (e instanceof MissionToolError) return refusal(tool, e.code, e.message, e.details)
-  if (isStoreError(e) && CODE_RE.test(e.code)) return refusal(tool, e.code, bareMessage(e.code, e.message), e.details ?? {})
+export function errorResult(tool: string, e: unknown, log: MissionLog, context: Record<string, unknown> = {}, args?: Record<string, unknown>): CallToolResult {
+  // 1.3.3 row 17: `args` (the arguments as sent) reach only the refusal shaping; they are never logged.
+  if (e instanceof MissionToolError) return refusal(tool, e.code, e.message, e.details, args)
+  if (isStoreError(e) && CODE_RE.test(e.code)) return refusal(tool, e.code, bareMessage(e.code, e.message), e.details ?? {}, args)
   const err = e instanceof Error ? e : new Error(String(e))
   log("error", `datum-studio-host.mission.${tool}`, err.message, { ...context, stack_trace: err.stack })
   return refusal(tool, "INTERNAL_ERROR", "galat internal; rincian ada di log host", {})

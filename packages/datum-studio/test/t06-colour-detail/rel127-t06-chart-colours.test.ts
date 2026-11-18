@@ -13,6 +13,8 @@ const ENGINE = path.join(PKG, "vendor", "src", "lib", "studio", "engine");
 const FIX = path.join(PKG, "test", "fixtures", "syn127");
 const chart = await import(path.join(ENGINE, "chart", "core", "render.ts"));
 const build = await import(path.join(ENGINE, "diagram", "build", "index.ts"));
+const tokens = await import(path.join(ENGINE, "diagram", "core", "tokens.ts")); // row 157
+const colour = await import(path.join(ENGINE, "diagram", "core", "colour.ts")); // row 157
 
 const fixture = (name: string): any => JSON.parse(readFileSync(path.join(FIX, name), "utf8")).spec;
 
@@ -98,11 +100,47 @@ describe("T-06 chart: line-count refusal names the counted series colours", () =
     for (const [i, l] of listed.entries()) if (i !== 1) expect(hexOf(l.src)).not.toBe(hexOf(listed[1].src));
   });
 
+  // Swarm 1.3.3 row 157 (ST-6, row 57): `t06_diagram_six_colours` prints six values, but three are ink greys (one
+  // counted entry, `tinta`) and the alert value is printed only by the ASUMSI mark (not counted): DATUM-25 counts 3 and
+  // the build passes. No diagram spec can count more than 4 with today's tokens (`tinta`, signal, alert, verd), so the
+  // refusal is a guard for new fill colours. The fixture keeps the spec, turns one data edge into an alert edge (alert
+  // now counts: an edge source besides the mark), and gives the data and control kinds two fill colours that no token
+  // has today, for the duration of the build only: tinta, the two new fills, verd, signal, alert = 6 > 5.
   test("CHAR: diagram six-colour refusal keeps `dihitung 6:` and `sisa −1`", () => {
     const spec = fixture("t06_diagram_six_colours.json");
-    const r = refusal(() => build.buildDiagramSvg(spec, { release: false }));
-    expect(r.message).toContain("DATUM-25");
+    const alertEdge = spec.edges.findIndex((e: any) => e.kind === "data");
+    spec.edges[alertEdge].kind = "alert";
+    const fills = { data: ["test_fill_a", "#5A3E8C"], control: ["test_fill_b", "#1F6FB2"] } as const;
+    const interior = tokens.INTERIOR as Record<string, string>;
+    const kinds = tokens.EDGE_KINDS as Record<string, { colour: string }>;
+    const saved = Object.keys(fills).map((k) => [k, kinds[k].colour] as const);
+    let r: { message: string; checkId?: string };
+    try {
+      for (const [kind, [tok, value]] of Object.entries(fills)) {
+        interior[tok] = value;
+        kinds[kind].colour = tok;
+      }
+      r = refusal(() => build.buildDiagramSvg(spec, { release: false }));
+    } finally {
+      for (const [k, c] of saved) kinds[k].colour = c;
+      for (const [tok] of Object.values(fills)) delete interior[tok];
+    }
+    expect(r.message).toContain("DATUM-25: 6 nilai warna dalam satu gambar, maksimum 5");
     expect(r.message).toContain("dihitung 6:");
     expect(r.message).toMatch(/sisa −1\b/);
+    expect(r.message).toContain("#5A3E8C (edge.kind data");
+    expect(r.message).toContain("#1F6FB2 (edge.kind control");
+    expect(kinds.data.colour).toBe("ink900");
+    expect(interior.test_fill_a).toBeUndefined();
+  });
+
+  test("row 157: the former six-colour diagram builds (DATUM-25 counts tinta, verd, signal; the ASUMSI value only by its mark)", () => {
+    const spec = fixture("t06_diagram_six_colours.json");
+    const out = build.buildDiagramSvg(spec, { release: false });
+    const svg: string = typeof out === "string" ? out : out.svg;
+    const b = colour.svgColourBudget(svg);
+    expect(colour.svgColourValues(svg).length).toBe(6);
+    expect(b.count).toBe(3);
+    expect(b.marksOnly).toEqual([String(tokens.colourOf("alert")).toUpperCase()]);
   });
 });

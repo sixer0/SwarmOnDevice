@@ -19,6 +19,7 @@ import { OVERLAP_SCRIPT, OVERLAP_SCRIPT_NAME } from "../../src/mcp-host/verify/o
 import { choosePages, outputState, verifyBudgetMs } from "../../src/mcp-host/verify/verify-outputs"
 import { addMeasuredSources, renderVerifyWrapper, RENDER_VERIFY_DESCRIPTION_SUFFIX, type RenderVerifyStore } from "../../src/mcp-host/verify/render-wrapper"
 import type { VerifyCheck } from "../../src/mcp-host/verify/types"
+import { giveProjectCopy } from "../mc8-deliverable-gate/_project-copy.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -385,6 +386,7 @@ describe("row 154: broken renders (spec §9 B-cases)", () => {
       const rec = await store.getOutputVerification(o.outputId)
       expect(rec!.state).toBe(o.state)
     }
+    await giveProjectCopy(store, docBroken) // 1.3.3 row 70 (MC-8): needs-review needs the project copy; this test is about B1
     await toReview("2")
     const refused = await setRow("2", "done")
     quote("row 2 done, B1", { code: code(refused), outputs: refused.error?.details?.deliverables?.[0]?.outputs })

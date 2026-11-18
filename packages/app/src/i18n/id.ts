@@ -127,6 +127,37 @@ export const dict = {
   "desktop.datumStudio.done.pathHint":
     "{{path}}\n\n{{dir}} belum ada di PATH. Tambahkan baris ini ke profil shell Anda:\nexport PATH=\"{{dir}}:$PATH\"\n\nUntuk menambahkannya ke Claude Code, jalankan baris ini di Terminal:\n{{claude}}",
   "desktop.datumStudio.failed.message": "DATUM Studio tidak dapat dipasang untuk Claude",
+  "desktop.menu.officeAddin": "Add-in Office",
+  "desktop.menu.officeAddin.enable": "Aktif",
+  "desktop.menu.officeAddin.disconnect": "Putuskan semua panel",
+  "desktop.menu.officeAddin.clearCache": "Bersihkan tembolok add-in Office...",
+  "desktop.officeAddin.pair.title": "Hubungkan add-in Office?",
+  "desktop.officeAddin.pair.message":
+    "{{host}} ingin terhubung ke Swarm. Lanjutkan hanya jika Anda baru saja mengeklik Hubungkan di panel {{host}}, lalu klik kode yang tampil di sana. Jika tidak, klik Tolak.",
+  "desktop.officeAddin.pair.deny": "Tolak",
+  "desktop.officeAddin.installed":
+    "Add-in Office sudah aktif. Tutup lalu buka kembali Word dan Excel, kemudian buka add-in dari Home > Add-ins > Developer Add-ins.",
+  "desktop.officeAddin.error.portInUse":
+    "Aplikasi lain sedang memakai porta yang dibutuhkan add-in Office. Tutup aplikasi itu, lalu aktifkan kembali add-in Office.",
+  "desktop.officeAddin.error.certUntrusted":
+    "Sertifikat add-in Office tidak dipercaya, sehingga Word dan Excel tidak dapat membuka panel. Nonaktifkan lalu aktifkan kembali add-in Office agar sertifikatnya dipercaya lagi.",
+  "desktop.officeAddin.error.startFailed":
+    "Add-in Office tidak dapat dimulai. Nonaktifkan lalu aktifkan kembali, atau luncurkan ulang Swarm.",
+  "desktop.officeAddin.error.installFailed":
+    "macOS tidak mengizinkan Swarm menyalin add-in ke {{path}}. Finder kini menampilkan berkas add-in dan foldernya: seret swarm-office-addin.xml ke folder tersebut, lalu tutup dan buka kembali Word dan Excel.",
+  "desktop.officeAddin.clearCache.confirm":
+    "Bersihkan tembolok add-in Office? Tutup Word dan Excel terlebih dahulu. Panel yang terhubung akan diputuskan dan harus dihubungkan lagi.",
+  "desktop.officeAddin.clearCache.confirmButton": "Bersihkan tembolok",
+  "desktop.officeAddin.disable.confirm":
+    "Nonaktifkan add-in Office? Word dan Excel tidak akan memuatnya lagi, dan semua panel yang terhubung akan diputuskan.",
+  "desktop.officeAddin.disable.removeCertificate": "Hapus juga sertifikat Swarm dari rantai kunci",
+  "desktop.officeAddin.disable.confirmButton": "Nonaktifkan",
+  "desktop.officeAddin.error.uninstallFailed":
+    "macOS tidak mengizinkan Swarm menghapus add-in dari {{path}}. Finder kini menampilkan foldernya: pindahkan swarm-office-addin.xml ke Tempat Sampah, lalu tutup dan buka kembali Word dan Excel.",
+  "desktop.officeAddin.error.notInstalled":
+    "Word dan Excel tidak ditemukan di Mac ini. Buka Word atau Excel sekali, lalu aktifkan kembali add-in Office. Folder yang diharapkan: {{path}}",
+  "desktop.officeAddin.error.certRemovalFailed":
+    "Swarm tidak dapat menghapus sertifikatnya dari rantai kunci. Swarm akan mencoba lagi saat Anda mengaktifkan add-in Office berikutnya.",
 
   "desktop.server.local": "Server lokal",
 
@@ -1037,6 +1068,13 @@ export const dict = {
   "session.swarm.lane.retry": "Mencoba ulang: {{detail}}",
   "session.swarm.lane.failed": "Gagal: {{detail}}",
   "session.swarm.lane.stopped": "Dihentikan",
+  "session.autonomy.reconsent.title": "Otonomi aktif sebelum dimulai ulang",
+  "session.autonomy.reconsent.intro": "Mode otonom aktif untuk sesi ini sebelum Swarm dimulai ulang. Mode ini perlu persetujuan Anda lagi sebelum agen utama memutuskan sendiri.",
+  "session.autonomy.reconsent.allow": "Setuju lagi",
+  "session.autonomy.reconsent.decline": "Tetap nonaktif",
+  "session.swarm.lane.textCall": "Berhenti: panggilan alat tertulis sebagai teks",
+  "session.swarm.lane.noTools": "Berhenti: alat server {{detail}} tidak tersedia",
+  "session.swarm.lane.emptyStep": "Berhenti: langkah kosong",
   "session.swarm.lane.done": "Selesai, langkah: {{count}}",
   "session.swarm.lane.reading": "Membaca riwayatnya",
   "session.swarm.lane.unreadable": "Agen ini tidak dapat dibaca",
@@ -1118,7 +1156,15 @@ export const dict = {
   "session.mission.deliverable.final": "Final",
   "session.mission.deliverable.verified": "Terverifikasi",
   "session.mission.deliverable.unverified": "Belum terverifikasi",
-  "session.mission.deliverable.notInProject": "Belum ada di proyek ini. Agen menyimpannya ke docs/{{mission}}/11_deliverables.",
+  "session.mission.deliverable.notInProject": "Belum ada di proyek ini. Swarm menyimpannya ke deliverables/{{mission}}.",
+  "session.mission.deliverable.openSystem": "Buka",
+  "session.mission.deliverable.preview": "Pratinjau",
+  "session.mission.deliverable.latest": "Terbaru",
+  "session.mission.deliverable.olderRevisions": "Revisi lama ({{count}})",
+  "session.mission.row.awaitingCheck": "menunggu pemeriksa label ({{count}} gambar)",
+  "session.mission.row.awaitingCheckOne": "menunggu pemeriksa label (1 gambar)",
+  "session.mission.row.awaitingCheckNoCount": "menunggu pemeriksa label",
+  "session.mission.row.awaitingCheckFigures": "Gambar yang diperiksa: {{figures}}",
   "session.mission.deliverable.revealOnly": "Swarm tidak pernah menjalankan skrip atau aplikasi dari sini.",
   "session.mission.deliverable.open": "Buka {{name}}",
   "session.mission.prompt.answer": "Kendali misi: {{request}} dijawab dengan opsi {{option}} (dicatat sebagai {{decision}}) di misi {{mission}}. Baca dengan studio_mission_get lalu lanjutkan.",

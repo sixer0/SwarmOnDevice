@@ -57,7 +57,7 @@ import { mapBlock, type BlockCtx } from "./blocks";
 import { composeContextOf, type ComposedSnapshotV2 } from "./context";
 import { projectContractRecord, resolveContractKind } from "./contract-record";
 import { composeFail } from "./errors";
-import { coverFront, controlSheetFront, signatureBlock, tocSpec } from "./front";
+import { coverFront, controlSheetFront, signatureBlock, tocSpec, uncheckedFigureCount } from "./front";
 import { sha256Hex, stableStringify } from "./hash";
 import { glyphSet, mapInline, type InlineCtx } from "./inline";
 import { attachInternal, computeStructureSha256, rowsFromSource } from "../structure/rows";
@@ -306,7 +306,7 @@ export function composeV2(input: ComposeInput): ComposeResult {
     const key = c.key;
     const cpid = requirePid(c.id, `Bab ${key}`);
     claimPid(cpid, `chapter:${key}`);
-    const bctx: BlockCtx = { glyphs, params: paramsOf(slotKey), classification, assetKey };
+    const bctx: BlockCtx = { glyphs, params: paramsOf(slotKey), classification, assetKey, warn: (w) => e.warnings.push(w) }; // row 56: block warnings
     addUnit(kind, key, slot);
     const head: Chapter = { key, blockId: cpid, title: mapInline(c.title, inlineCtx), sections: [] };
     if (c.partId !== undefined) head.partId = c.partId;
@@ -430,7 +430,7 @@ export function composeV2(input: ComposeInput): ComposeResult {
       }
       case "controlSheet": {
         if (payload === undefined && slot.contentMode === "INPUT") return placeholder();
-        const fp = controlSheetFront(payload as ControlSheetPayloadV2 | undefined, slot, { glyphs, params: paramsOf(k), classification }, src.meta.language);
+        const fp = controlSheetFront(payload as ControlSheetPayloadV2 | undefined, slot, { glyphs, params: paramsOf(k), classification }, src.meta.language, uncheckedFigureCount(src.sections), src.meta.tier);
         docV1.front = { ...docV1.front, controlSheet: fp };
         addUnit("controlSheet", fKey, slot);
         const pid = structPid(k, fKey);

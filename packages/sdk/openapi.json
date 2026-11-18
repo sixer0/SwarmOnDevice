@@ -26030,6 +26030,9 @@
           "bypass": {
             "type": "boolean",
             "description": "True only while a consented activation is live for this scope; a restart turns it off"
+          },
+          "needsReconsent": {
+            "type": "boolean"
           }
         },
         "required": ["on", "externalChange", "bypass"],
@@ -26144,6 +26147,7 @@
                   "check",
                   "file-op",
                   "git-local",
+                  "skill-script",
                   "edit-not-ordinary",
                   "own_api_read",
                   "outside_folder",
@@ -26197,6 +26201,7 @@
                   "check",
                   "file-op",
                   "git-local",
+                  "skill-script",
                   "edit-not-ordinary",
                   "own_api_read",
                   "outside_folder",
@@ -26537,6 +26542,9 @@
           "bypass": {
             "type": "boolean",
             "description": "True only while a consented activation is live for the session's root; a restart turns it off"
+          },
+          "needsReconsent": {
+            "type": "boolean"
           },
           "open": {
             "type": "integer"

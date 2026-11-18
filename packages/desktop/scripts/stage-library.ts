@@ -21,6 +21,9 @@ export type StageToken =
   | "LIB_STAGE_TREE"
   | "LIB_CATALOG"
   | "LIB_SEAL"
+  | "LIB_INDEX_PYTHON"
+  | "LIB_INDEX_BUILD"
+  | "LIB_INDEX_DOMAIN"
 
 export class StageError extends Error {
   constructor(
@@ -65,6 +68,32 @@ const FLEET_SIDE = "3 Skills/registry-fleet/"
 const SALVAGE = /(^|\/)_salvage[^/]*\//
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
+
+// Row 96 (KL-1 items 1 and 3, decisions C7 and C27). The index builder is the repo's own script, never a file of the
+// edition. It reads the staged knowledge bank and writes its five files at the root of the stage, which becomes
+// Resources/knowledge-library. Build host requirement: python3 3.7 or later on PATH (standard library only; 3.7 for
+// dict order, which fixes the order of the output). It runs as `python3 -I`, so no user site, PYTHON* variable or
+// current folder reaches it. The builder has no strict flag, so the strict check (every domain has `terms` and
+// `read_order`) is enforced here, on the JSON it wrote, by checkIndex.
+/** @internal test seam */
+export const SCRIPT_SOURCE = path.join(import.meta.dir, "..", "datum", "knowledge-library", "scripts")
+const BUILDER = path.join(SCRIPT_SOURCE, "build_kl_index.py")
+const BANK = "4 Knowledge Bank/ekas-lapis-teks"
+const TRIGGER_INDEX = "indeks_pemicu.json"
+// Register section 9 (Index files): the builder's own names, kept as they are.
+export const INDEX_FILES = [
+  "indeks_pemicu.json",
+  "indeks_pemicu.md",
+  "indeks_pemicu_ringkas.md",
+  "indeks_struktur.json",
+  "indeks_struktur.md",
+]
+// electron-builder maps datum/knowledge-library into Resources/knowledge-library beside the staged library, so a
+// packaged copy also holds these, byte for byte as in the repo. Test files, testdata and the repo snapshot of the
+// indexes are filtered out of that mapping (electron-builder.config.ts), so they are refused here.
+/** @internal test seam */
+export const SHIPPED_SCRIPTS = ["scripts/README.md", "scripts/build_kl_index.py"]
+const PYTHON_NEEDED = "python3 (3.7 or later, standard library only) is needed on PATH to build the library indexes"
 
 function parseCsv(text: string) {
   const fail = () => new StageError("LIB_UNSAFE_PATH", "manifest is not well formed csv")
@@ -302,7 +331,7 @@ async function assertIgnored(stage: string) {
 
 // The source comes first: without the edition the build stops with the same token where git does not exist.
 // So an old staging folder survives a missing source, which is safe because the build has already stopped.
-export async function stageLibrary(source: string, stage: string, pin: Pin) {
+export async function stageLibrary(source: string, stage: string, pin: Pin, options: { searchPath?: string } = {}) {
   await assertSource(source)
   await assertIgnored(stage)
   const previous = await fs.lstat(stage).catch(() => undefined)
@@ -311,16 +340,86 @@ export async function stageLibrary(source: string, stage: string, pin: Pin) {
 
   const files = await readPinned(source, pin)
   const catalog = checkCatalog(files)
+  generatedNameClash(files)
+  const python = Bun.which("python3", { PATH: options.searchPath ?? process.env.PATH ?? "" })
+  if (!python) throw new StageError("LIB_INDEX_PYTHON", PYTHON_NEEDED)
   for (const [relative, bytes] of files) {
     const target = path.join(stage, relative)
     await fs.mkdir(path.dirname(target), { recursive: true })
     await fs.writeFile(target, bytes, { flag: "wx" })
     await fs.chmod(target, 0o644)
   }
+  // A failed index leaves no half-built staging folder behind.
+  await buildIndexes(python, stage).catch(async (error) => {
+    await fs.rm(stage, { recursive: true, force: true })
+    throw error
+  })
   return { ...(await verifyCopy(stage, pin)), catalog }
 }
 
-type CopyOptions = { finderFiles?: boolean }
+// Runs the builder on the staged bank and writes into the stage root. Only the last line of its error output is kept,
+// with the stage folder made relative and any other absolute path masked, so the message stays free of local paths.
+async function buildIndexes(python: string, stage: string) {
+  const run = Bun.spawn([python, "-I", BUILDER, "--root", path.join(stage, BANK), "--out", stage], {
+    cwd: SCRIPT_SOURCE,
+    env: { PATH: path.dirname(python) },
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "pipe",
+  })
+  const [code, errors] = await Promise.all([run.exited, new Response(run.stderr).text()])
+  const last = errors
+    .trim()
+    .split("\n")
+    .at(-1)
+    ?.replaceAll(`${stage}${path.sep}`, "")
+    .replace(/(^|[\s'"(:=])\/[^\s'")]*/g, "$1<path>")
+    .slice(0, 200)
+  if (code !== 0) throw new StageError("LIB_INDEX_BUILD", `index builder exit ${code}${last ? `: ${last}` : ""}`)
+  for (const file of INDEX_FILES) await fs.chmod(path.join(stage, file), 0o644)
+  checkIndex(await readEntry(stage, TRIGGER_INDEX))
+}
+
+// The strict check of KL-1 item 3: every domain names trigger words (`terms`) and a reading order (`read_order`).
+// A domain name is printed only when it has the form of one; otherwise its position stands in.
+/** @internal test seam */
+export function checkIndex(bytes: Uint8Array) {
+  const fail = (detail: string) => new StageError("LIB_INDEX_DOMAIN", detail)
+  const index = (() => {
+    try {
+      return JSON.parse(Buffer.from(bytes).toString("utf8")) as unknown
+    } catch {
+      throw fail(`${TRIGGER_INDEX} is not json`)
+    }
+  })()
+  const domains =
+    typeof index === "object" && index !== null && !Array.isArray(index)
+      ? (index as Record<string, unknown>).domains
+      : undefined
+  if (typeof domains !== "object" || domains === null || Array.isArray(domains) || Object.keys(domains).length === 0)
+    throw fail("no domains")
+  const filled = (value: unknown) =>
+    Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && item.trim() !== "")
+  Object.entries(domains as Record<string, unknown>).forEach(([name, value], position) => {
+    const label = `domain ${/^[A-Z0-9][A-Z0-9-]{0,63}$/.test(name) ? name : position + 1}`
+    const domain = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {}
+    if (!filled(domain.terms)) throw fail(`${label} has no trigger words`)
+    if (!filled(domain.read_order)) throw fail(`${label} has no reading order`)
+  })
+  return { domains: Object.keys(domains).length }
+}
+
+// The builder opens its outputs for writing, so a listed file of the same name would be overwritten unseen.
+function generatedNameClash(files: Map<string, Uint8Array>) {
+  const generated = new Set([...INDEX_FILES, ...SHIPPED_SCRIPTS].map((file) => file.toLowerCase()))
+  const clash = [...files.keys()].find(
+    (file) => generated.has(file.toLowerCase()) || file.toLowerCase().startsWith("scripts/"),
+  )
+  if (clash) throw new StageError("LIB_STAGE_TREE", `listed file has a generated name: ${clash}`)
+}
+
+// scripts: the copy is a packaged one, so the shipped knowledge-library scripts sit beside the library (row 96).
+type CopyOptions = { finderFiles?: boolean; scripts?: boolean }
 
 // Seam for the integrity checker: every mode that inspects an existing copy goes through here and writes nothing.
 // INT-1 to INT-7. There is no skip: an absent folder fails, and git is never called on a copy.
@@ -331,7 +430,20 @@ export async function verifyCopy(copy: string, pin: Pin, options: CopyOptions = 
 async function inspectCopy(copy: string, pin: Pin, options: CopyOptions) {
   const info = await fs.lstat(copy).catch(() => undefined)
   if (!info?.isDirectory()) throw new StageError("LIB_STAGE_TREE", "copy folder")
-  const files = await readPinned(copy, pin)
+  const pinned = await readPinned(copy, pin)
+  generatedNameClash(pinned)
+  const indexes = new Map<string, Uint8Array>()
+  for (const file of INDEX_FILES) indexes.set(file, await readEntry(copy, file))
+  const index = checkIndex(indexes.get(TRIGGER_INDEX) as Uint8Array)
+  const scripts = new Map<string, Uint8Array>()
+  for (const file of options.scripts ? SHIPPED_SCRIPTS : []) {
+    const bytes = await readEntry(copy, file)
+    const expected = new Uint8Array(await fs.readFile(path.join(SCRIPT_SOURCE, path.posix.basename(file))))
+    if (sha256(bytes) !== sha256(expected)) throw new StageError("LIB_HASH", file)
+    scripts.set(file, bytes)
+  }
+  // Everything the copy may hold, for the tree walk and the seal: the pinned files, the indexes, the shipped scripts.
+  const files = new Map([...pinned, ...indexes, ...scripts])
   await Promise.all(
     [...files.keys()].map(async (relative) => {
       if ((await fs.lstat(path.join(copy, relative))).mode & 0o111)
@@ -340,11 +452,14 @@ async function inspectCopy(copy: string, pin: Pin, options: CopyOptions) {
   )
   const tree = await assertTree(copy, files.keys(), options.finderFiles)
   const report = {
-    files: files.size,
-    rows: files.size - 1,
-    bytes: [...files.values()].reduce((sum, bytes) => sum + bytes.byteLength, 0),
+    files: pinned.size,
+    rows: pinned.size - 1,
+    bytes: [...pinned.values()].reduce((sum, bytes) => sum + bytes.byteLength, 0),
     folders: tree.folders,
     finderFiles: tree.finderFiles,
+    indexes: indexes.size,
+    domains: index.domains,
+    scripts: scripts.size,
   }
   return { files, report }
 }
@@ -353,7 +468,10 @@ async function inspectCopy(copy: string, pin: Pin, options: CopyOptions) {
 // then codesign judges everything else in the bundle. Its own output is dropped because it carries absolute paths.
 export async function verifyApp(app: string, pin: Pin, options: CopyOptions = {}) {
   const fail = (detail: string) => new StageError("LIB_SEAL", detail)
-  const inspected = await inspectCopy(path.join(app, "Contents", "Resources", LIBRARY_FOLDER), pin, options)
+  const inspected = await inspectCopy(path.join(app, "Contents", "Resources", LIBRARY_FOLDER), pin, {
+    ...options,
+    scripts: true,
+  })
   const plist =
     await $`/usr/bin/plutil -convert xml1 -o - ${path.join(app, "Contents", "_CodeSignature", "CodeResources")}`
       .nothrow()
@@ -420,6 +538,8 @@ export function reportLines(report: Report, pin: Pin) {
     ...(report.catalog
       ? [`catalog: ${report.catalog.rows} rows, ${report.catalog.skillFiles} SKILL.md, all consistent`]
       : []),
+    `index: ${report.indexes} files at the root, ${report.domains} domains, each with trigger words and a reading order`,
+    ...(report.scripts ? [`scripts: ${report.scripts} shipped scripts match the repo`] : []),
     `Integrity against the manifest of edition ${pin.editionId} (source commit ${pin.sourceCommit.slice(0, 8)}) passed: ${report.files} files. This is not proof of freshness against the source and not proof of clean content.`,
   ]
 }
@@ -433,7 +553,7 @@ if (import.meta.main) {
   const run = async () => {
     if (mode === "stage" && rest.length === 0) return stageLibrary(await editionSource(), STAGE, PIN)
     if (mode === "verify" && rest.length === 1 && !rest[0].startsWith("--"))
-      return verifyCopy(path.join(rest[0], LIBRARY_FOLDER), PIN)
+      return verifyCopy(path.join(rest[0], LIBRARY_FOLDER), PIN, { scripts: true })
     if (mode === "verify" && rest.length === 2 && rest[0] === "--app") return verifyApp(rest[1], PIN)
     if (mode === "verify" && rest.length === 2 && rest[0] === "--installed")
       return verifyApp(rest[1], PIN, { finderFiles: true })

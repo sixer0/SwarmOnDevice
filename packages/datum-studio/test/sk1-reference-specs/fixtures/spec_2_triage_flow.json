@@ -1,0 +1,157 @@
+{
+ "type": "diagram",
+ "caption": {
+  "text": "The ISO 5807 incident triage flowchart keeps the main path in one column and pushes two closure branches aside."
+ },
+ "source": {
+  "text": "Contoh ilustrasi GSP, data rekaan untuk pengajaran · simbol ISO 5807:1985"
+ },
+ "spec": {
+  "family": "flow",
+  "direction": "TB",
+  "classification": "BIASA",
+  "labels_verified": false,
+  "sources": [
+   "GSP reference set, Gambar 14.2 Flowchart Triase Insiden"
+  ],
+  "nodes": [
+   {
+    "id": "s0",
+    "label": "Alarm masuk",
+    "shape": "stadium",
+    "class": {}
+   },
+   {
+    "id": "io1",
+    "label": "Baca data alarm",
+    "tag": "01",
+    "shape": "parallelogram",
+    "class": {}
+   },
+   {
+    "id": "p2",
+    "label": "Cocokkan dengan register aset",
+    "tag": "02",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "d1",
+    "label": "Aset kritis?",
+    "shape": "diamond",
+    "class": {}
+   },
+   {
+    "id": "p3",
+    "label": "Buka tiket P1 dan panggil analis",
+    "tag": "03",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "e1",
+    "label": "Selesai sebagai tiket P3",
+    "shape": "stadium",
+    "class": {}
+   },
+   {
+    "id": "d2",
+    "label": "Ancaman nyata?",
+    "shape": "diamond",
+    "class": {}
+   },
+   {
+    "id": "p4",
+    "label": "Isolasi host dan amankan bukti",
+    "tag": "04",
+    "shape": "box",
+    "class": {}
+   },
+   {
+    "id": "e2",
+    "label": "Selesai sebagai positif palsu",
+    "shape": "stadium",
+    "class": {}
+   },
+   {
+    "id": "e3",
+    "label": "Serah ke forensik",
+    "shape": "stadium",
+    "class": {}
+   }
+  ],
+  "edges": [
+   {
+    "from": "s0",
+    "to": "io1",
+    "kind": "data",
+    "label": "ID alarm"
+   },
+   {
+    "from": "io1",
+    "to": "p2",
+    "kind": "data",
+    "label": "IP · waktu"
+   },
+   {
+    "from": "p2",
+    "to": "d1",
+    "kind": "data",
+    "label": "kelas aset"
+   },
+   {
+    "from": "d1",
+    "to": "p3",
+    "kind": "data",
+    "label": "ya"
+   },
+   {
+    "from": "d1",
+    "to": "e1",
+    "kind": "control",
+    "label": "tidak"
+   },
+   {
+    "from": "p3",
+    "to": "d2",
+    "kind": "data",
+    "label": "temuan awal"
+   },
+   {
+    "from": "d2",
+    "to": "p4",
+    "kind": "accent",
+    "label": "ya"
+   },
+   {
+    "from": "d2",
+    "to": "e2",
+    "kind": "control",
+    "label": "tidak"
+   },
+   {
+    "from": "p4",
+    "to": "e3",
+    "kind": "data",
+    "label": "berita acara"
+   }
+  ],
+  "legend": [
+   {
+    "symbol": "data",
+    "label": "jalur utama"
+   },
+   {
+    "symbol": "control",
+    "label": "cabang penutupan"
+   },
+   {
+    "symbol": "accent",
+    "label": "keputusan eskalasi"
+   }
+  ],
+  "notes": [
+   "Data rekaan untuk pengajaran"
+  ]
+ }
+}

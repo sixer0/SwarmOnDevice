@@ -24,19 +24,25 @@ export function contiguousCols(cols: readonly number[]): boolean {
   return cols.every((c, i) => i === 0 || c === cols[i - 1] + 1);
 }
 
+/**
+ * Lebar simpul terpadatkan untuk `k` kolom bersambung (3 kisi, lalu 2 kisi; celah 1 kisi), atau 0
+ * bila `k` kolom tidak muat walau dipadatkan. Swarm 1.3.3 row 33 (ST-1): dipakai `layoutGraphDetail`
+ * untuk memutuskan jalur kapasitas SEBELUM penempatan polos, tanpa melempar.
+ */
+export function graphCapacityNodeWidth(k: number, L: Pick<Lattice, "x" | "W">): number {
+  for (const cand of [L.x * 3, L.x * 2]) {
+    // Row 59 (T-02): the compacted block must leave the 2 mm edge inset on both sides.
+    if ((k - 1) * (cand + L.x) + cand <= L.W - 2 * GRAPH_EDGE_INSET_MM + 1e-6) return cand;
+  }
+  return 0;
+}
+
 export function layoutGraphCapacity(s: StudioDiagramV1, L: Lattice, padUnits: number, rowGapBaselines: number): LayoutResult {
   const colOf = (n: DiagramNode) => pyInt(classGet(n, "col", 0), `simpul ${n.id}: class.col`);
   const rowOf = (n: DiagramNode) => pyInt(classGet(n, "row", 0), `simpul ${n.id}: class.row`);
   const cols = [...new Set(s.nodes.map(colOf))].sort((a, b) => a - b);
   const k = cols.length;
-  let w = 0;
-  for (const cand of [L.x * 3, L.x * 2]) {
-    // Row 59 (T-02): the compacted block must leave the 2 mm edge inset on both sides.
-    if ((k - 1) * (cand + L.x) + cand <= L.W - 2 * GRAPH_EDGE_INSET_MM + 1e-6) {
-      w = cand;
-      break;
-    }
-  }
+  const w = graphCapacityNodeWidth(k, L);
   if (!w) {
     throw diagramDefect(
       `DATUM-37-sheet: ${k} kolom graph tidak muat di ${L.W.toFixed(1)} mm walau pitch dipadatkan; ` +

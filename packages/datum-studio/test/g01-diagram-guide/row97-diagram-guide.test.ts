@@ -17,16 +17,16 @@ const K = { cap: 100, inset: 2, fan: 4, tb128: 4, tb166: 5, lrPar: 6, lr128: 3, 
 describe("row 97: diagram resource norms (G-01)", () => {
   const NORMS: Array<[string, string]> = [
     ["W-02 dual gate (FX-10, C19a)", "Figure gate: machine gate = the inline preview (the standalone preview is not the gate)"],
-    ["W-01 caption", `Studio prints the label; the caption never starts with it; at most ${K.cap} characters`],
-    ["labels ~20/~40 + sub (FX-10, C19b: the engine hints)", "edge label at most ~20 characters, node label at most ~40; a second detail goes in `sub`"],
+    ["W-01 caption", `Studio prints the label, so never start with it; at most ${K.cap} characters`],
+    ["labels ~20/~40 + sub (FX-10, C19b: the engine hints)", "edge fits its line (LABEL_* say how long), node ~40; more in `sub`"],
     ["one accent", "One accent per drawing"],
-    // 1.2.8 row 35c (AT-HT06, INTENT): the line names the spec check DATUM-25L that now enforces it.
-    ["line kinds with glyphs", "Edge kinds max 4, 3 if a node has a mark (DATUM-25L)"],
-    ["col 0 + inset", `\`col: 0\` is valid; Studio keeps a ${K.inset} mm inset from the sheet edge`],
-    ["fan-out + split", `Fan-out of ${K.fan} or more edges is sub-ranked by Studio`],
+    // 1.2.8 row 35c (AT-HT06, INTENT): the line names the spec check DATUM-25L that now enforces it. 1.3.3 row 37: max 6, by pattern; DATUM-25 counts fill and accent colours only.
+    ["line kinds with glyphs", "Edge kinds max 6, by pattern; DATUM-25 counts fill and accent colours only (DATUM-25L)"],
+    ["col 0 + inset", `\`col: 0\` is valid; Studio keeps a ${K.inset} mm sheet-edge inset`],
+    ["fan-out + split", `Fan-out of ${K.fan}+ edges is sub-ranked; over a rank max, split it`],
     ["measure first (W-04)", "Preview a shape before promising it"],
-    ["randomise (W-12)", "randomise which side each version is on before a judge sees them"],
-    ["graph delta (W-05)", "After every revision read FIGURE_GRAPH_DELTA"],
+    ["randomise (W-12)", "randomise sides before a judge sees them"],
+    ["graph delta (W-05)", "Read FIGURE_GRAPH_DELTA after each revision"],
   ]
   for (const [name, pin] of NORMS) test(`${name} appears exactly once`, () => expect(count(pin)).toBe(1))
 
@@ -43,7 +43,7 @@ describe("row 97: diagram resource norms (G-01)", () => {
 
   test("T-11 guide line: direction, capacities from the flow constants, legacy flow and FLOW_SERIALISED", () => {
     const { tb128, tb166, lr128, lr166, lrPar } = K
-    expect(count('- direction (flow only): "TB" or "LR"; ranks nodes by the edges, parallel branches side by side')).toBe(1)
+    expect(count('- direction (flow only): "TB" or "LR"; ranks by edges, parallel branches side by side')).toBe(1)
     expect(t).toContain(`Rank max: TB ${tb128} @128 mm, ${tb166} @166 mm; LR ${lrPar}. LR max ${lr128} ranks @128 mm, ${lr166} @166 mm.`)
     expect(t).toContain("Without it: list order (per_row), FLOW_SERIALISED if branches serialise.")
   })

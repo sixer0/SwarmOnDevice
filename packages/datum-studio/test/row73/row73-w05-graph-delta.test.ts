@@ -126,8 +126,8 @@ describe("W-03 preview splits notices and defects", () => {
   })
 
   test("the class table follows register N-020", () => {
-    for (const c of ["EDGE_LANES", "LABEL_MOVED", "AUTO_FIT", "VALUE_LABEL_MOVED", "ELK_LAYOUT"]) expect(fig.previewIssueClass(c, "REPORT")).toBe("notice")
-    for (const c of ["CAPTION_WRAP", "LABEL_LEADER", "TEXT_OUTSIDE", "GEOM_TEXT_OVERLAP", "GEOM_STUB_SEGMENT", "FLOW_SERIALISED"]) expect(fig.previewIssueClass(c, "REPORT")).toBe("defect")
+    for (const c of ["EDGE_LANES", "LABEL_MOVED", "AUTO_FIT", "VALUE_LABEL_MOVED", "ELK_LAYOUT", "LABEL_LEADER"]) expect(fig.previewIssueClass(c, "REPORT")).toBe("notice")
+    for (const c of ["CAPTION_WRAP", "TEXT_OUTSIDE", "GEOM_TEXT_OVERLAP", "GEOM_STUB_SEGMENT", "FLOW_SERIALISED"]) expect(fig.previewIssueClass(c, "REPORT")).toBe("defect")
     expect(fig.previewIssueClass("EDGE_LANES", "FAIL")).toBe("defect")
     expect(fig.PREVIEW_ISSUE_CLASS.EDGE_LANES).toBe("notice")
   })

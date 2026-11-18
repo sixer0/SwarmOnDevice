@@ -15,7 +15,7 @@ import { docxPrinted } from '../../../vendor/scripts/studio/mcp/write-verify';
 import { datumSlots, defaultParams, e1, merge, skeletonInput } from '../structure/_kit';
 import { benchmarkTemplate, makeCtx } from '../renderers/_kit';
 import { connect, reply } from './mcp-harness';
-import { clientServer, DOCID, env, outside } from './implw3-client-mock';
+import { clientServer, DOCID, env, outside, WRITE_ARGS } from './implw3-client-mock';
 
 const t = (text: string) => ({ text });
 
@@ -79,12 +79,61 @@ function withFiles(m: ReturnType<typeof clientServer>, o: { layoutIssues?: numbe
   return { f, sha };
 }
 
+// Swarm 1.3.3 row 78 (ST-11): `studio_edit` no longer renders, so its summary has no file part (sha of the download,
+// printed headings/captions, pages). Those expectations moved to the `studio_write` case below (a full write still
+// renders once); the edit cases keep what needs no render: figure lint per pid, stored meta, untrusted marking.
 describe('studio_edit dokumen klien: ringkasan verifikasi di hasil', () => {
-  it('sha dihitung ulang cocok, judul + keterangan + halaman, lint figur per pid, gema meta; isi dokumen di blok tak tepercaya', async () => {
+  it('tanpa render: lint figur per pid, gema meta, render diperlukan; tanpa bagian berkas; isi dokumen di blok tak tepercaya', async () => {
     const m = clientServer({ exists: true });
     const w = withFiles(m, { layoutIssues: 2 });
     const { call } = await connect({ fetch: w.f as any, env });
     const r = await call('studio_edit', { documentId: DOCID, meta: { number: 'GSP-W2-009' }, detail: true });
+    expect(r.data.ok, r.text).toBe(true);
+    const v = r.data.verify;
+    expect(v.file).toBeUndefined();
+    expect(v.headings).toBeUndefined();
+    expect(v.captions).toBeUndefined();
+    expect(v.pages).toBeUndefined();
+    expect(v.error).toBeUndefined();
+    expect(v.figures).toEqual([{ pid: 'p-3', rendered: true, layoutIssues: 2, checks: ['textOutside'] }]);
+    expect(v.meta.number).toBe('GSP-W2-009');
+    expect(r.data.untrusted).toBe(true);
+    expect(r.text).toContain('2 isu tata letak');
+    expect(r.data.render).toBeNull();
+    expect(r.data.renderNeeded).toEqual({ revisionNo: r.data.revisionNo, reason: 'EDIT_NOT_RENDERED', call: 'studio_render' });
+    expect(m.calls.some((c) => new URL(c.url).pathname.endsWith('/render'))).toBe(false);
+    expect(m.calls.some((c) => c.url.includes('/api/studio/files/'))).toBe(false);
+    // teks dokumen tidak keluar dari blok tak tepercaya
+    expect(outside(r.text)).not.toContain('ABAIKAN');
+    expect(outside(r.text)).not.toContain('Pendahuluan');
+    expect(r.data.nextSteps.length).toBeGreaterThan(0);
+  });
+
+  it('bawaan ringkas (butir 5): tanpa nextSteps, tanpa daftar judul; baris berkas menyebut studio_render', async () => {
+    const m = clientServer({ exists: true });
+    const w = withFiles(m);
+    const { call } = await connect({ fetch: w.f as any, env });
+    const r = await call('studio_edit', { documentId: DOCID, meta: { number: 'GSP-W2-010' } });
+    expect(r.data.ok, r.text).toBe(true);
+    const v = r.data.verify;
+    expect(v).toMatchObject({ figures: [{ pid: 'p-3', layoutIssues: 0 }] });
+    expect(v.shaMatch).toBeUndefined();
+    expect(v.headingCount).toBeUndefined();
+    expect(v.headings).toBeUndefined();
+    expect(r.data.nextSteps).toBeUndefined();
+    expect(r.data.render).toBeNull();
+    expect(r.text).toContain('belum dirender');
+    expect(r.text).toContain(`studio_render { documentId: "${DOCID}" }`);
+    expect(r.data.correlationIds.length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('studio_write dokumen klien: ringkasan verifikasi dari berkas render (row 78: bagian berkas pindah ke sini)', () => {
+  it('detail: sha dihitung ulang cocok, judul + keterangan + halaman dari byte DOCX; isi dokumen di blok tak tepercaya', async () => {
+    const m = clientServer();
+    const w = withFiles(m, { layoutIssues: 2 });
+    const { call } = await connect({ fetch: w.f as any, env });
+    const r = await call('studio_write', { ...WRITE_ARGS, detail: true });
     expect(r.data.ok, r.text).toBe(true);
     const v = r.data.verify;
     expect(v.file.shaMatch).toBe(true);
@@ -93,31 +142,25 @@ describe('studio_edit dokumen klien: ringkasan verifikasi di hasil', () => {
     expect(v.headings[0].k).toBe('BAB 1');
     expect(v.captions).toEqual(['Tabel 1.1 Indeks per gardu']);
     expect(v.pages).toBe(7);
-    expect(v.figures).toEqual([{ pid: 'p-3', rendered: true, layoutIssues: 2, checks: ['textOutside'] }]);
-    expect(v.meta.number).toBe('GSP-W2-009');
+    expect(v.figures.length).toBeGreaterThan(0);
+    expect(v.figures.every((f: any) => f.rendered === true && f.layoutIssues === 2 && f.checks[0] === 'textOutside')).toBe(true);
     expect(r.data.untrusted).toBe(true);
-    expect(r.text).toContain('2 isu tata letak');
-    // teks dokumen tidak keluar dari blok tak tepercaya
     expect(outside(r.text)).not.toContain('ABAIKAN');
     expect(outside(r.text)).not.toContain('Pendahuluan');
-    expect(r.data.nextSteps.length).toBeGreaterThan(0);
+    expect(r.data.renderNeeded).toBeUndefined();
   });
 
   it('bawaan ringkas (butir 5): structuredContent hanya jumlah judul/keterangan + shaMatch; daftar tetap di blok teks', async () => {
-    const m = clientServer({ exists: true });
+    const m = clientServer();
     const w = withFiles(m);
     const { call } = await connect({ fetch: w.f as any, env });
-    const r = await call('studio_edit', { documentId: DOCID, meta: { number: 'GSP-W2-010' } });
+    const r = await call('studio_write', WRITE_ARGS);
     expect(r.data.ok, r.text).toBe(true);
     const v = r.data.verify;
-    expect(v).toMatchObject({ shaMatch: true, headingCount: 2, captionCount: 1, pages: 7, figures: [{ pid: 'p-3', layoutIssues: 0 }] });
+    expect(v).toMatchObject({ shaMatch: true, headingCount: 2, captionCount: 1, pages: 7 });
     expect(v.headings).toBeUndefined();
     expect(r.data.nextSteps).toBeUndefined();
     expect(r.data.render).toEqual({ fileId: 'cmwfiledocx000000000000w2a', format: 'DOCX', sha256: w.sha, verified: true });
-    // suntingan tanpa judul berubah: jumlah judul (dari byte DOCX) dicetak, daftar tidak diulang
-    expect(v.headingsUnchanged).toBe(true);
-    expect(r.text).toContain('judul: 2, tidak berubah oleh suntingan ini');
     expect(r.text).toContain('keterangan: Tabel 1.1 Indeks per gardu');
-    expect(r.data.correlationIds.length).toBeLessThanOrEqual(1);
   });
 });

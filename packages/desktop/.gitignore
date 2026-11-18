@@ -27,6 +27,7 @@ out/
 .datum-runtime-stage/
 .datum-runtime-stage.tmp-*/
 .datum-studio-stage/
+.office-addin-stage/
 
 resources/opencode-cli*
 resources/rg

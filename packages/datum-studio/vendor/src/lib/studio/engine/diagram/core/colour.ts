@@ -21,7 +21,7 @@ import type { Sheet } from "./sheet";
 import { drawsSvgKeyRow, nodeStrokeToken, nodeSymbolId } from "./sheet";
 import { MARK_COLOUR_TOKENS } from "./svg";
 import { symbolBody } from "../../symbols";
-import { EDGE_KINDS, INK_TEXT, PAPER, colourOf, role } from "./tokens";
+import { EDGE_KINDS, INK_TEXT, MARKS, NEUTRAL_INK_TOKENS, PAPER, colourOf, role } from "./tokens";
 
 const HEX = /^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/;
 const PAINT_PROPS = new Set(["fill", "stroke", "stop-color", "flood-color", "lighting-color", "color"]);
@@ -177,6 +177,70 @@ export function diagramColourSources(spec: StudioDiagramV1, sheet: Sheet): Map<s
   }
   out.delete(PAPER.toUpperCase());
   return out;
+}
+
+/**
+ * Swarm 1.3.3 row 57 (ST-6, B-16): what DATUM-25 counts. `values` are the printed values (`svgColourValues` or the
+ * token model). Counted: every fill or accent colour once (signal, alert, verd, symbol colours, ...); the neutral ink
+ * ramp (`NEUTRAL_INK_TOKENS`) once in all, as the ink, whatever greys the line patterns and texts use. Not counted:
+ * a value printed only by value-origin marks (`markOnly`). `count` is compared with `LIMITS.max_colour_values`.
+ */
+export interface ColourBudget {
+  count: number;
+  /** Counted entries: `tinta` stands for the ink ramp, every other entry is a hex value. */
+  counted: string[];
+  /** Ink values that the `tinta` entry stands for. */
+  ink: string[];
+  /** Printed values left out because only value-origin marks print them. */
+  marksOnly: string[];
+}
+
+const INK_VALUES = new Set(NEUTRAL_INK_TOKENS.map((t) => colourOf(t).toUpperCase()));
+export const INK_ENTRY = "tinta";
+
+export function colourBudget(values: readonly string[], markOnly: ReadonlySet<string> = new Set()): ColourBudget {
+  const up = [...new Set(values.map((v) => v.toUpperCase()))].sort();
+  const marksOnly = up.filter((v) => markOnly.has(v));
+  const kept = up.filter((v) => !markOnly.has(v));
+  const ink = kept.filter((v) => INK_VALUES.has(v));
+  const counted = [...(ink.length ? [INK_ENTRY] : []), ...kept.filter((v) => !INK_VALUES.has(v))];
+  return { count: counted.length, counted, ink, marksOnly };
+}
+
+/** Row 57: printed values of a figure SVG that only value-origin mark glyphs print (node glyphs, PROVENANS tspans). */
+export function svgMarkOnlyColours(svg: string): Set<string> {
+  const glyphs = Object.values(MARKS).map((g) => g.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const stripped = svg
+    .replace(new RegExp(`<text\\b[^>]*>(?:${glyphs})</text>`, "g"), "")
+    .replace(new RegExp(`<tspan\\b[^>]*>(?:${glyphs})</tspan>`, "g"), "");
+  const rest = new Set(svgColourValues(stripped));
+  return new Set(svgColourValues(svg).filter((v) => !rest.has(v)));
+}
+
+/** Row 57: the DATUM-25 budget of a built figure SVG. */
+export function svgColourBudget(svg: string): ColourBudget {
+  return colourBudget(svgColourValues(svg), svgMarkOnlyColours(svg));
+}
+
+/** Row 57: the DATUM-25 budget of the token model (estimate); a value whose every source is a mark is not counted. */
+export function diagramColourBudget(spec: StudioDiagramV1, sheet: Sheet): ColourBudget {
+  const sources = diagramColourSources(spec, sheet);
+  const markOnly = new Set([...sources].filter(([, src]) => src.every((x) => x.startsWith("mark "))).map(([v]) => v));
+  return colourBudget([...sources.keys()], markOnly);
+}
+
+/**
+ * Row 57: the DATUM-25 detail of a budget, e.g. `dihitung 6: tinta (#101418, #2B3640: label simpul, ...), #B45309
+ * (edge.kind accent), ... — sisa −1; tidak dihitung: pola garis tinta, tanda asal #9B1C1C`.
+ */
+export function colourBudgetDetail(b: ColourBudget, sources: ReadonlyMap<string, readonly string[]>, limit: number): string {
+  const src = (v: string): string => (sources.get(v) ?? []).join(", ") || "lain di SVG";
+  const items = b.counted.map((v) =>
+    v === INK_ENTRY ? `${INK_ENTRY} (${b.ink.join(", ")}: ${[...new Set(b.ink.flatMap((x) => sources.get(x) ?? []))].join(", ") || "lain di SVG"})` : `${v} (${src(v)})`,
+  );
+  const rest = limit - b.count;
+  const left = b.marksOnly.length ? `; tidak dihitung: tanda asal ${b.marksOnly.join(", ")}` : "";
+  return `dihitung ${b.count}: ${items.join(", ")} — sisa ${rest < 0 ? `−${-rest}` : String(rest)}${left}`;
 }
 
 /**

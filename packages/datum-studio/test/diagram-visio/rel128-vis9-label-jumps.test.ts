@@ -29,9 +29,9 @@ const linkPts = (svg: string): Array<Array<[number, number]>> =>
     [...m[1].matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((p) => [Number(p[1]), Number(p[2])] as [number, number]),
   )
 const hops = (svg: string) => [...svg.matchAll(/<path d="M [\d.]+ [\d.]+ A [^"]+"[^>]*\/>/g)].map((m) => m[0])
-/** Centre of the knock-out band drawn right before the label text `text` (evidence_rail labels are set in capitals). */
+/** Centre of the knock-out band drawn right before the label text `text` (Swarm 1.3.3 row 43: printed as written). */
 function bandCentre(svg: string, text: string): [number, number] {
-  const re = new RegExp(`<rect x="([\\d.]+)" y="([\\d.]+)" width="([\\d.]+)" height="([\\d.]+)" fill="${PAPER}"/><text [^>]*>${text.toUpperCase()}</text>`)
+  const re = new RegExp(`<rect x="([\\d.]+)" y="([\\d.]+)" width="([\\d.]+)" height="([\\d.]+)" fill="${PAPER}"/><text [^>]*>${text}</text>`)
   const m = re.exec(svg.replace(/\n/g, ""))
   expect(m, `knock-out band + label ${text}`).not.toBeNull()
   return [Number(m![1]) + Number(m![3]) / 2, Number(m![2]) + Number(m![4]) / 2]

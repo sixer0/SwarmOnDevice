@@ -64,6 +64,8 @@ const rowPatch: Schema = {
     set: { type: "object", description: "Row fields to change. Structural fields after approval need `decision` (§4.4)." },
     status: { type: "string", enum: ["pending", "running", "needs-review", "blocked", "done", "dropped"] },
     note: { type: "string", maxLength: 4000 },
+    // 1.3.3 row 5 (register section 1, C7 item 5): contract only; row 102 gives it its effect (knowledge.reason).
+    knowledgeReason: { type: "string", minLength: 1, maxLength: 300, pattern: "^[^\\u0000-\\u001f]+$", description: "One line (1-300 characters): why this row closes without reading the matched library file; stored as the row's knowledge.reason." },
     acquire: { type: "array", maxItems: 16, items: { type: "string", maxLength: 80 }, description: "Shared-resource locks to take (one holder across all missions, §5.4)." },
     release: { type: "array", maxItems: 16, items: { type: "string", maxLength: 80 } },
     retire: {

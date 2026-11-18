@@ -180,7 +180,7 @@ describe("graft launch guard (task b)", () => {
       expect(res.ok).toBe(true)
       if (!res.ok) return
       expect(res.entry.command[2]).toBe("mcp")
-      expect(res.entry.env?.DO_NOT_TRACK).toBe("1")
+      expect(res.entry.environment?.DO_NOT_TRACK).toBe("1")
       expect(res.auditLine).toContain('"kind":"tool_launch"')
       expect(res.auditLine).toContain('"telemetryOff":true')
     } finally {

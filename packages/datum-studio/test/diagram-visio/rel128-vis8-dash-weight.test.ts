@@ -121,19 +121,32 @@ describe("VIS-8 explicit default = absent (01f §3.2.2)", () => {
 })
 
 describe("VIS-8 DATUM-25L key = (kind, dash, weight) (N8-212, 01f §3.5)", () => {
-  test("4 styles of one kind with a node mark: refused, the message gives the count, the styles and the limit 3", () => {
-    const r = refusals(FX.refused_mark)
+  // 1.3.3 row 57 (ST-6, C23, INTENT): a mark no longer lowers the budget (limit 6 with or without a mark), so the four
+  // distinct styles of `refused_mark` pass. The naming of styles in the count message is kept on a 7-style variant.
+  test("4 styles of one kind with a node mark: pass (1.3.3 row 57; was refused, limit 3)", () => {
+    expect(refusals(FX.refused_mark)).toEqual([])
+  })
+  test("7 styles of one kind with a node mark: refused, the message gives the count, the styles and the limit 6", () => {
+    const s = clone(FX.refused_mark)
+    const e0 = s.edges[0]
+    s.edges.push(
+      { from: e0.from, to: e0.to, kind: "data", label: "e", dash: "longdash" },
+      { from: e0.from, to: e0.to, kind: "data", label: "f", dash: "dashdot" },
+      { from: e0.from, to: e0.to, kind: "data", label: "g", dash: "dotted" },
+    )
+    const r = refusals(s)
     expect(r.map((i) => i.checkId)).toEqual(["DATUM-25L"])
-    expect(r[0].detail).toContain("DATUM-25L: 4 gaya garis")
+    expect(r[0].detail).toContain("DATUM-25L: 7 gaya garis")
     expect(r[0].detail).toContain("data/dashed/normal")
     expect(r[0].detail).toContain("data/solid/thick")
-    expect(r[0].detail).toContain("maksimum 3")
+    expect(r[0].detail).toContain("maksimum 6")
   })
-  test("5 styles without a mark: refused with the count 5 and the limit 4; the same 4 styles without the fifth pass", () => {
+  // 1.3.3 row 57 (C23, INTENT): 5 styles are within the new limit; this figure is still refused because two of its
+  // styles print alike (data/dashed and control: dashed, ink, normal), the legibility rule above the former budget 4.
+  test("5 styles without a mark: refused, two styles cannot be told apart; the same 4 styles without the fifth pass", () => {
     const r = refusals(FX.refused_five)
     expect(r.map((i) => i.checkId)).toEqual(["DATUM-25L"])
-    expect(r[0].detail).toContain("DATUM-25L: 5 gaya garis")
-    expect(r[0].detail).toContain("maksimum 4")
+    expect(r[0].detail).toContain("DATUM-25L: gaya garis control dan data/dashed/normal tidak terbedakan")
     expect(refusals(FX.four_ok)).toEqual([])
   })
   test("the engine refuses the 5-style figure at build (no SVG)", () => {

@@ -38,7 +38,14 @@ const sha = (s: string) => createHash("sha256").update(s, "utf8").digest("hex")
  */
 // Swarm 1.2.8 row 57c (C71, INTENT): the edge labels of this figure move off the arrowheads and node outlines (beside
 // their vertical runs). Before: 55cefcc94e4abc2c...
-const PAGE_SVG_SHA_BASE = "ce532a45ee5b2516c035d633e7db8c84f5c2ac71932c4c007a09adbde379b8b0"
+// Swarm 1.3.3 row 45 (ST-3.6, one key row form, INTENT): the fixture block has `legend[]` and no `keyRow`. Before, its
+// page SVG drew the key itself ("KUNCI  PENUH = ALIRAN BARANG  ·  PUTUS-PUTUS = PERINTAH PERIKSA"); now compose gives the
+// block the key row ("KUNCI  " + "data = aliran barang  ·  control = perintah periksa") for the page to print, and the
+// page SVG draws none (that one <text> is the only text removed; the stand-alone SVG below still draws it).
+// Before: ce532a45ee5b2516...
+// Swarm 1.3.3 row 43 (ST-3.4, letter case, INTENT): the two edge labels print as the fixture writes them ("ISI" ->
+// "isi", "LOLOS" -> "lolos"); those two <text> contents are the only bytes changed. Before: b0590e2eb34e8224...
+const PAGE_SVG_SHA_BASE = "abe50c11d7a18430702a60d9ab81b03eb71f55102179ccedcb4581c0be1d1eed"
 
 describe("T-12 route: standalone.furniture from DiagramBuildReport.furniture (N7-068, N7-138)", () => {
   test("standalone:true reports keyLines >= 1, sourceLines 2, heightMm > 0, matching the SVG", async () => {

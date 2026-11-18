@@ -95,7 +95,8 @@ describe("row 169 (1): refusals say what is expected", () => {
 
     const req = await call("studio_mission_create", { dryRun: true, mission: { id: "2026-11-08_row169-req", title: "x", type: "feature-release", rows: [{ id: "1" }] } })
     const msgs = (req.error.details.issues as Array<{ message: string }>).map((i) => i.message).join("\n")
-    expect(msgs).toContain("'owner'")
+    expect(msgs).toContain("'title'") // 1.3.3 row 16 (MC-4): the one row field with no default is still named
+    expect(msgs).not.toContain("'owner'") // 1.3.3 row 16: a missing owner (and every other row field) is filled by the host
     expect(msgs).not.toContain("'project'") // row 181 (L32): a missing project.dir is filled with the session directory
     const extra = await call("studio_mission_create", { dryRun: true, mission: mission("2026-11-08_row169-x", [row("1", { model: { tier: "thinker", name: "opus" } })]) })
     expect(JSON.stringify(extra.error.details.issues)).toContain('additional properties: \\"name\\"')

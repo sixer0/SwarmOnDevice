@@ -18,6 +18,7 @@ import { breakableSegments, cellTexts, COLUMN_GAP_MM, TABLE_NUMERALS_PT_DEFAULT,
 import type { ParamMap, TableBlock } from "../../../src/lib/studio/contract";
 import { McpToolError } from "./safety";
 import type { ToolWarning } from "./tool-kit";
+import { intervalsChart, intervalsRows, isIntervalsChart } from "./write-figure-input";
 
 // ── Bentuk masukan ──────────────────────────────────────────────────────
 
@@ -30,6 +31,12 @@ export interface ChartInput {
   caption?: string;
   source?: string;
   unit?: string;
+  /** Swarm 1.3.3 row 39 (ST-2): W-07 intervals instead of categories x series (shape: contract ChartDataV2 intervals). */
+  intervals?: Array<Record<string, unknown>>;
+  statusAt?: number | string;
+  timeUnit?: string;
+  /** Row 39 (ST-1): per-figure width, `text` | `full` (contract FIGURE_WIDTH_VALUES). */
+  width?: string;
 }
 export interface RefInput {
   rel: string;
@@ -413,6 +420,8 @@ export function repairItemTable(rows: Rows, warn: (w: ToolWarning) => void, wher
 
 /** Grafik di laporan kerja (tanpa figur) -> tabel data kategori x seri, keterangan sebagai paragraf. */
 export function chartRows(c: ChartInput): Rows {
+  // Row 39: an intervals (W-07) chart has no categories x series; its items are the rows.
+  if (isIntervalsChart(c)) return intervalsRows(c as unknown as Record<string, unknown>);
   return [["kategori", ...c.series.map((s) => s.name)], ...c.categories.map((cat, i) => [cat, ...c.series.map((s) => (s.values[i] === null || s.values[i] === undefined ? "" : s.values[i] as number))])];
 }
 
@@ -679,6 +688,9 @@ export function blockLines(b: Block, warn: (w: ToolWarning) => void, where: stri
   }
   if (isObj(o) && isObj(o.chart)) {
     const c = o.chart as unknown as ChartInput;
+    // Row 39: the same contract check as the client path, before anything is written.
+    const bad = isIntervalsChart(c) ? intervalsChart(o.chart).issues : [];
+    if (bad.length > 0) throw new McpToolError("INVALID_ARGUMENT", `${where}: grafik interval tidak sah: ${bad.join("; ")}. Tidak ada yang ditulis`);
     warn({ code: "CHART_AS_TABLE", message: `${where}: laporan kerja tidak memuat figur; data grafik ditulis sebagai tabel` });
     const cap = [c.caption, c.source !== undefined ? `Sumber: ${c.source}` : undefined].filter((x): x is string => typeof x === "string" && x.trim() !== "");
     return [...tableLines(chartRows(c), warn, where), ...(cap.length > 0 ? ["", ...paragraphLines(cap.join(". "), warn, where)] : [])];

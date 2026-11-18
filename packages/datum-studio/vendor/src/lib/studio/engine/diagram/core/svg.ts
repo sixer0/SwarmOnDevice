@@ -61,6 +61,7 @@ import {
   faceOf,
   pt2mm,
   role,
+  roleUpper,
   snap,
 } from "./tokens";
 
@@ -107,6 +108,10 @@ export interface SvgTextOptions {
   fill?: string;
   /** Default `middle` (Python). */
   anchor?: "start" | "middle" | "end";
+  /**
+   * `true` = capitals; `false` = the text as written, even for a role that prints capitals (row 43: the key row,
+   * whose rows are the author's words); absent = the role decides (`roleUpper`).
+   */
   upper?: boolean;
   /** Tracking em; `null`/tidak ada = tracking peran. */
   track?: number | null;
@@ -125,6 +130,15 @@ const FACE_ROLE_KEY: Readonly<Record<FaceRole, string>> = {
   symbolGlyph: "mono",
 };
 
+/**
+ * Swarm 1.3.3 row 43 (ST-3 item 4): the one place that decides whether a diagram text is printed in capitals.
+ * An explicit `opts.upper` wins; otherwise `roleUpper(role)`: edge labels (`evidence_rail`) print as the author wrote
+ * them, titles and tags (`table_header`) keep the house capitals.
+ */
+function printsUpper(roleName: string, opts: Pick<SvgTextOptions, "upper"> = {}): boolean {
+  return opts.upper ?? roleUpper(roleName);
+}
+
 /** Teks SVG nyata berfon Plex (`_svg_text`). */
 export function svgText(x: PyNumber, y: PyNumber, text: unknown, opts: SvgTextOptions = {}): string {
   const roleName = opts.role ?? "caption";
@@ -134,7 +148,7 @@ export function svgText(x: PyNumber, y: PyNumber, text: unknown, opts: SvgTextOp
   const face = opts.faceRole ? FACES[FACE_ROLE_KEY[opts.faceRole]] : faceOf(roleName);
   const col = opts.fill ?? colourOf(opts.colourToken || r.colour || INK_TEXT);
   let txt = pyStr(text);
-  if (opts.upper || r.upper) txt = txt.toUpperCase();
+  if (printsUpper(roleName, opts)) txt = txt.toUpperCase();
   let ls = "";
   const tr = opts.track !== undefined && opts.track !== null ? opts.track : r.track_em;
   if (tr) ls = ` letter-spacing="${pyNum(pt2mm(sizePt) * tr, 3)}"`;
@@ -153,7 +167,7 @@ export function svgTextLines(b: TextBlockLayout, opts: SvgTextOptions = {}): str
   if (b.lines.length <= 1) return svgText(b.x, b.y, b.lines[0] ?? "", opts);
   const shell = svgText(b.x, b.y, "", opts);
   const x = Number(pyNum(b.x, 2));
-  const lines = opts.upper || role(opts.role ?? "caption").upper ? b.lines.map((l) => l.toUpperCase()) : b.lines;
+  const lines = printsUpper(opts.role ?? "caption", opts) ? b.lines.map((l) => l.toUpperCase()) : b.lines;
   return `${shell.slice(0, -"</text>".length)}${tspanLines(lines, x, Number(b.lineMm.toFixed(3)))}</text>`;
 }
 
@@ -762,9 +776,14 @@ const SYMBOL_INSET_Y_MM = 0.4;
  * `data-symbol-of` the node (not `data-node`: the badge is not a second node shape).
  * Empty string when the node names no symbol.
  */
-export function nodeSymbolSvg(nd: SheetNode): string {
+/**
+ * Swarm 1.3.3 row 41 (ST-3 item 2): place of a node's symbol badge, shared by `nodeSymbolSvg` (the drawing) and
+ * `nodeSymbolGroundRect` (the paper ground under it on a hatched node). null = the node asks for no symbol. Throws
+ * CP-45 when the symbol does not fit readably, as `nodeSymbolSvg` always did.
+ */
+function nodeSymbolBadge(nd: SheetNode): { body: ReturnType<typeof symbolBody>; x: number; y: number; size: number; sc: number } | null {
   const sid = nodeSymbolId(nd.spec);
-  if (!sid) return "";
+  if (!sid) return null;
   const body = symbolBody(sid);
   const avail = Math.min(nd.h - 2 * SYMBOL_INSET_Y_MM, nd.w * 0.4);
   const want = Math.min(SYMBOL_BADGE_MAX_MM, Math.max(SYMBOL_BADGE_MIN_MM, nd.h * 0.5));
@@ -779,13 +798,18 @@ export function nodeSymbolSvg(nd: SheetNode): string {
       { checkId: "CP-45" },
     );
   }
-  const sc = size / body.cellMm;
-  const markup = body.markup.replace(/stroke-width="([\d.]+)"/g, (_, w: string) => `stroke-width="${pyNum(Number(w) / sc, 4)}"`);
   const x = nd.x + SYMBOL_INSET_X_MM;
   const y = nd.spec.tag ? nd.y + nd.h - size - SYMBOL_INSET_Y_MM : nd.y + SYMBOL_INSET_Y_MM;
+  return { body, x, y, size, sc: size / body.cellMm };
+}
+
+export function nodeSymbolSvg(nd: SheetNode): string {
+  const b = nodeSymbolBadge(nd);
+  if (!b) return "";
+  const markup = b.body.markup.replace(/stroke-width="([\d.]+)"/g, (_, w: string) => `stroke-width="${pyNum(Number(w) / b.sc, 4)}"`);
   return (
-    `<g data-symbol="${escAttr(body.id)}" data-symbol-of="${escAttr(nd.id)}" ` +
-    `transform="translate(${r2(x)} ${r2(y)}) scale(${pyNum(sc, 4)})">${markup}</g>`
+    `<g data-symbol="${escAttr(b.body.id)}" data-symbol-of="${escAttr(nd.id)}" ` +
+    `transform="translate(${r2(b.x)} ${r2(b.y)}) scale(${pyNum(b.sc, 4)})">${markup}</g>`
   );
 }
 
@@ -983,6 +1007,26 @@ export const TEXT_GROUND_PAD_Y_MM = 0.3;
 const GROUND_ASCENT_EM = 0.78;
 const GROUND_DESCENT_EM = 0.24;
 
+/**
+ * Swarm 1.3.3 row 41 (ST-3 item 2; round-2 replay u2-listrik-urutan/5, node fa1): the symbol badge of a hatched node
+ * was drawn straight on the hatch, so the hatch ran through the symbol's strokes and through the letters some symbols
+ * carry ("UPS", "M", "G"). The badge gets the same paper ground as the text lines: its cell (rounded outward to the
+ * printed 0.01 mm) plus `TEXT_GROUND_PAD_Y_MM`, cut to the inside of the drawn outline `g` (half a stroke of
+ * `strokeMm` in). Returns "" when the node has no symbol or nothing of the badge lies inside the outline.
+ */
+function nodeSymbolGroundRect(nd: SheetNode, g: Pick<SheetNode, "x" | "y" | "w" | "h">, strokeMm: number): string {
+  const b = nodeSymbolBadge(nd);
+  if (!b) return "";
+  const half = strokeMm / 2;
+  const pad = TEXT_GROUND_PAD_Y_MM + 0.005;
+  const x0 = Math.max(g.x + half, b.x - pad);
+  const y0 = Math.max(g.y + half, b.y - pad);
+  const x1 = Math.min(g.x + g.w - half, b.x + b.size + pad);
+  const y1 = Math.min(g.y + g.h - half, b.y + b.size + pad);
+  if (x1 - x0 < 0.05 || y1 - y0 < 0.05) return "";
+  return `<rect x="${r2(x0)}" y="${r2(y0)}" width="${r2(x1 - x0)}" height="${r2(y1 - y0)}" fill="${PAPER}"/>`;
+}
+
 interface GroundLine {
   x: number;
   y: number;
@@ -1045,7 +1089,7 @@ export function nodeTextGroundSvg(
     const r = role(ln.role);
     const pt = ln.sizePt ?? r.size;
     const sizeMm = pt2mm(pt);
-    const upper = !!r.upper;
+    const upper = roleUpper(ln.role); // row 43: measured in the case `svgText` prints
     const trackMm = r.track_em ? sizeMm * r.track_em : 0;
     const w = measure(ln.s, pt, ln.face ?? "struct", { bold: (r.weight ?? 400) >= 600, trackMm, caps: upper });
     const lx = ln.anchor === "middle" ? ln.x - w / 2 : ln.anchor === "end" ? ln.x - w : ln.x;
@@ -1056,6 +1100,9 @@ export function nodeTextGroundSvg(
     if (x1 - x0 < 0.05 || y1 - y0 < 0.05) continue;
     rects.push(`<rect x="${r2(x0)}" y="${r2(y0)}" width="${r2(x1 - x0)}" height="${r2(y1 - y0)}" fill="${PAPER}"/>`);
   }
+  // Row 41 (1.3.3): the symbol badge lies on the hatch as the texts do; its ground comes last (no symbol = no rect).
+  const symGround = nodeSymbolGroundRect(nd, g, STROKE_PRIMARY);
+  if (symGround) rects.push(symGround);
   if (!rects.length) return "";
   const clip = clipId !== null ? ` clip-path="url(#${escAttr(clipId)})"` : "";
   return `<g data-text-ground="1"${clip}>${rects.join("")}</g>`;
@@ -1142,7 +1189,7 @@ export function nodeSvg(nd: SheetNode, opts: NodeSvgOptions = {}): string[] {
  * Swarm 1.2.8 row 54 (VIS-3a, C12 OP-18-4, 01_specs.md §5.3, register N8-477..N8-480): a BPMN event or gateway. The
  * outline (the element with `data-node`, G-1) is drawn at its fixed size at the top centre of the layout cell; the hatch
  * fills only the outline; the label block (tag, label, sub) is one `<g data-label-pos="below">` under it, inside the cell.
- * Texts never lie on the hatch, so no paper ground is drawn. The mark glyph sits beside the outline (`markGlyphAnchor`).
+ * Texts never lie on the hatch, so no paper ground is drawn for them (row 41: a symbol badge can, and gets one). The mark glyph sits beside the outline (`markGlyphAnchor`).
  */
 function labelBelowNodeSvg(nd: SheetNode, opts: NodeSvgOptions): string[] {
   const n = nd.spec;
@@ -1157,7 +1204,14 @@ function labelBelowNodeSvg(nd: SheetNode, opts: NodeSvgOptions): string[] {
     const clipId = `datum-hatch-clip-${opts.index ?? escAttr(nd.id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
     const clipShape = clipShapeSvg(shape, g.x, g.y, g.w, g.h);
     const hatch = hatchLinesSvg(g.x, g.y, g.w, g.h, angle, clipShape !== null ? { id: clipId, shape: clipShape } : undefined);
-    if (hatch) out.push(hatch);
+    if (hatch) {
+      out.push(hatch);
+      // Row 41 (1.3.3): the texts of a label-below shape lie under the outline, off the hatch; a symbol badge does not
+      // (it sits at the cell's corner and can reach over the hatched outline), so it alone gets a ground here.
+      // The outline clip cuts the rect to the shape, so it runs to the box of the hatch (no half-stroke inset).
+      const symGround = nodeSymbolGroundRect(nd, g, clipShape !== null ? 0 : sw);
+      if (symGround) out.push(`<g data-text-ground="1"${clipShape !== null ? ` clip-path="url(#${escAttr(clipId)})"` : ""}>${symGround}</g>`);
+    }
   }
   out.push(shapeSvg(g, nodeStrokeToken(nd), "none", { ...markOpts, strokeW: sw }));
   const sym = nodeSymbolSvg(nd);

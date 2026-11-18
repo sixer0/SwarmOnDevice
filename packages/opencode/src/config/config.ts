@@ -52,9 +52,30 @@ function mergeConfigConcatArrays(target: Info, source: Info): Info {
   return merged
 }
 
+/**
+ * ECO-1 F-8: the Swarm setup writer (setup/src/mcpproxy/wiring.ts) wrote local MCP entries with `env`, but the schema
+ * only knows `environment`, and excess keys are ignored, so the block was dropped silently: graft ran without
+ * DO_NOT_TRACK=1 in every install. A local entry's `env` record is read as `environment`; keys in `environment` win.
+ */
+function normalizeMcpEnv(mcp: unknown) {
+  if (!isRecord(mcp)) return mcp
+  let changed = false
+  const next: Record<string, unknown> = {}
+  for (const [name, entry] of Object.entries(mcp)) {
+    if (isRecord(entry) && entry.type === "local" && isRecord(entry.env)) {
+      const strings = Object.fromEntries(Object.entries(entry.env).filter(([, v]) => typeof v === "string"))
+      const { env: _env, ...rest } = entry
+      next[name] = { ...rest, environment: { ...strings, ...(isRecord(entry.environment) ? entry.environment : {}) } }
+      changed = true
+    } else next[name] = entry
+  }
+  return changed ? next : mcp
+}
+
 function normalizeLoadedConfig(data: unknown) {
   if (!isRecord(data)) return data
   const copy = { ...data }
+  if ("mcp" in copy) copy.mcp = normalizeMcpEnv(copy.mcp)
   const hadLegacy = "theme" in copy || "keybinds" in copy || "tui" in copy
   if (!hadLegacy) return copy
   delete copy.theme

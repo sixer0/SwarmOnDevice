@@ -9,6 +9,7 @@
 import type { DiagramBox, DiagramSheet, LayoutResult, RoutedEdge, StudioDiagramV1 } from "../../../contract";
 import { StudioEngineError } from "../../../contract/errors";
 import { baselineStepMm, latticeOf, nodeSize, sheetHeight, snap, type Lattice } from "./geometry";
+import { snapFloor } from "../core/geometry";
 
 export interface Lifeline {
   /** Id aktor (simpul) pemilik garis kehidupan. */
@@ -71,17 +72,37 @@ export function layoutSequence(s: StudioDiagramV1, sheet: DiagramSheet): Sequenc
     throw new StudioEngineError("BY_CONSTRUCTION_FAILED", "DIAGRAM DEFECT: sequence tanpa aktor (P1 nodes[])");
   }
   const m = Math.max(1, actors.length);
-  const colw = snap(L.W / m, L.x);
   const headH = Math.max(...actors.map((n) => nodeSize(n, L)[1]));
 
-  const nodes: Record<string, DiagramBox> = {};
-  const lifelines: Lifeline[] = [];
-  actors.forEach((n, i) => {
-    let [nw] = nodeSize(n, L);
-    nw = Math.min(nw, colw - L.x);
-    nodes[n.id] = { x: snap(i * colw + (colw - nw) / 2.0, L.x), y: L.top, w: nw, h: headH };
-    lifelines.push({ id: n.id, x: snap(i * colw + colw / 2.0, L.x), top: L.top + headH });
-  });
+  // HS: column pitch = sheet width / actors, rounded to the lattice. Swarm 1.3.3 row 142 (E2): rounding UP can push
+  // the last actor past the sheet edge (6 actors on 166 mm: 27.67 -> 32 mm, actor p5 at 170.67 mm, refused
+  // DATUM-37-sheet while 7 and 8 actors, whose pitch rounds down, pass). Only when the rounded pitch starts an actor
+  // box less than one lattice column before the sheet edge (the sheet's clamp, `Sheet.snapToLattice`, then has no
+  // width left for it) or puts a lifeline outside the sheet, the pitch is rounded DOWN instead; m * pitch <= W then
+  // holds, and every box (at most pitch - one lattice wide, centred and snapped) ends inside its own column. Layouts
+  // that the sheet accepted with the rounded pitch are unchanged (4 actors on 166 mm keep their clamped last box), and
+  // so is the refusal when the rounded-down pitch leaves no width for a box (7 on 128 mm, 9 on 166 mm).
+  const place = (colw: number) => {
+    const nodes: Record<string, DiagramBox> = {};
+    const lifelines: Lifeline[] = [];
+    let inside = true;
+    actors.forEach((n, i) => {
+      let [nw] = nodeSize(n, L);
+      nw = Math.min(nw, colw - L.x);
+      const box = { x: snap(i * colw + (colw - nw) / 2.0, L.x), y: L.top, w: nw, h: headH };
+      const lx = snap(i * colw + colw / 2.0, L.x);
+      if (box.x + L.x > L.W + 1e-6 || lx > L.W + 1e-6) inside = false;
+      nodes[n.id] = box;
+      lifelines.push({ id: n.id, x: lx, top: L.top + headH });
+    });
+    return { nodes, lifelines, inside };
+  };
+  let placed = place(snap(L.W / m, L.x));
+  if (!placed.inside) {
+    const down = snapFloor(L.W / m, L.x);
+    if (down - L.x > 1e-6) placed = place(down);
+  }
+  const { nodes, lifelines } = placed;
   // D-242: dua dan tiga baseline (Python: BASELINE_PT * k dibaca mm).
   const msgY = L.top + headH + baselineStepMm(2, L);
   const msgStep = baselineStepMm(3, L);

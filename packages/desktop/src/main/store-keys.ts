@@ -8,3 +8,5 @@ export const WINDOW_IDS_KEY = "windowIds"
 // Holds the Swarm release in which the tools install dialog was last offered. It is separate
 // from FIRST_LAUNCH_ONBOARDING_COMPLETE_KEY so users who finished onboarding still see the offer once.
 export const SETUP_TOOLS_OFFERED_RELEASE = "setupToolsOfferedRelease"
+// Office add-in (plan row M7-05, server-delta spec §5.3): true only after a successful Enable; absent means off (U-DT-04).
+export const OFFICE_ADDIN_ENABLED_KEY = "officeAddinEnabled"

@@ -108,6 +108,10 @@ export const STRUCTURED_CONTENT_TEXT_MAX_BYTES = 16384
 // (prose, labels, page detail, payloads) stays in structuredContent only.
 const GATE_KEY =
   /^(id|outputId|documentId|fileId|jobId|code|format|role|scope|status|state|overall|verified|valid|partial|truncated|revisionNo|sha|sha256|fileName|finalFileName|savedTo|path|correlationIds?)$|Status$|Sha256$|Count$|Verified$|^fail/
+// Swarm 1.3.3 row 156 (S12, ST-7): `reason` and `cause` of a `notRun` entry (a check the server did not run, e.g. the
+// figure preview's "belum diperiksa" list) are gate fields too: without them the model sees only ids. Only under a
+// `notRun` array; the per-string cap (MAX_STRING) and the text cap (STRUCTURED_CONTENT_TEXT_MAX_BYTES) still apply.
+const NOT_RUN_FIELD = /(^|\.)notRun\[\]\.(reason|cause)$/
 // A value under a path the server lists in `untrustedFields` is shown only when it is a plain token (no prose).
 const SAFE_TOKEN = /^[\w.\-:/@+=#]{1,200}$/
 const UNTRUSTED_OMITTED = "(untrusted, omitted)"
@@ -132,7 +136,7 @@ function projectGate(value: unknown, key: string, path: string, untrusted: strin
     })
     return entries.length > 0 ? Object.fromEntries(entries) : undefined
   }
-  if (!GATE_KEY.test(key)) return undefined
+  if (!GATE_KEY.test(key) && !NOT_RUN_FIELD.test(path)) return undefined
   if (typeof value !== "string") return typeof value === "function" || value === undefined ? undefined : value
   if (untrusted.some((u) => path === u || path.startsWith(`${u}.`) || path.startsWith(`${u}[`)))
     return SAFE_TOKEN.test(value) ? value : UNTRUSTED_OMITTED

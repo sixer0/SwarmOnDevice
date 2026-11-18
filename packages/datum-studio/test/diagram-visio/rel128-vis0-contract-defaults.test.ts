@@ -197,7 +197,8 @@ describe("schema", () => {
   })
 
   test("LIMITS carry the register values (N8-213, N8-217, N8-255 = 32, N8-264, N8-470, N8-471)", () => {
-    expect([L.max_line_styles, L.max_line_styles_with_mark, L.curve_samples, L.shape_glyph_mm]).toEqual([4, 3, 32, 2.4])
+    // 1.3.3 row 57 (ST-6, C23, INTENT): line styles 4 / 3 with a mark became 6 / 6 (six manual kinds, pattern first).
+    expect([L.max_line_styles, L.max_line_styles_with_mark, L.curve_samples, L.shape_glyph_mm]).toEqual([6, 6, 32, 2.4])
     expect(L.arrow_sizes_mm).toEqual({ s: 2.5, m: 3.2, l: 4.0 })
     expect(L.weight_mm).toEqual({ thin: 0.3, normal: 0.45, thick: 0.7 })
     expect(L.label_at_fraction).toEqual({ start: 0.2, middle: 0.5, end: 0.8 })
@@ -676,6 +677,37 @@ const CHAR_A02_INTENT: Record<string, [string, string, string]> = {
   "fixtures/syn128/r18g_lr_166.json#/spec": ["AC-A02", "e7c979dc83dc3cd4", "e7c979dc83dc3cd4"],
 }
 /**
+ * Swarm 1.3.3 row 43 (ST-3.4, INTENT; controller routing): edge labels and the key row print in the letter case of the
+ * spec ("Mb/s", "kW", message names). Key -> [reason, HEAD sync hash, HEAD auto hash]; replaces the BASE, 56c, 57c, 56d,
+ * A02 and A04 values of these keys. Only the character data of edge-label texts (and of the key line) changes: same
+ * elements, same attributes, capitals of the new text equal the old text; markers and verdicts unchanged. Checked
+ * key by key on a frozen copy of the worktree, switches off against on. Keys whose bytes had already moved for another
+ * reason before row 43 (case04, case04_v2, case05, row162_*, f6 spec 6) are not listed here.
+ */
+const CASE_43 = "edge labels and key row in the letter case of the spec (1.3.3 row 43, ST-3.4)"
+const CHAR_CASE_INTENT: Record<string, [string, string, string]> = {
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/0/spec": [CASE_43, "8f03a252996f0ff8", "8f03a252996f0ff8"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/1/spec": [CASE_43, "2299c48157aed971", "2299c48157aed971"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/2/spec": [CASE_43, "5821635445e252d3", "5821635445e252d3"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/3/spec": [CASE_43, "8fb80fa1c7b3ed6c", "8fb80fa1c7b3ed6c"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/4/spec": [CASE_43, "52721f27306cc096", "52721f27306cc096"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/5/spec": [CASE_43, "6b26819e7a55f1eb", "6b26819e7a55f1eb"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/7/spec": [CASE_43, "2e4b9a890d7bfebb", "2e4b9a890d7bfebb"],
+  "fixtures/syn127/m03_render_fail_doc.json#/chapters/0/chapter/sections/0/blocks/1/spec": [CASE_43, "1de5e6d8ef5d59e4", "1de5e6d8ef5d59e4"],
+  "fixtures/syn127/n7_autofit_t03_rest.json#/spec": [CASE_43, "2e27d8aa154d8668", "2e27d8aa154d8668"],
+  "fixtures/syn127/t11_flow_inline_v2.json#/block/spec": [CASE_43, "cb51b09e781f42ed", "cb51b09e781f42ed"],
+  "fixtures/syn127/t12_standalone_key_source.json#/block/spec": [CASE_43, "b130f5ce50d5c567", "b130f5ce50d5c567"],
+  "fixtures/syn128/hn13_import.md#/fence0": [CASE_43, "9f44a54546dd3d21", "9f44a54546dd3d21"],
+  "fixtures/syn128/hn13_import.md#/fence1/spec": [CASE_43, "0bb8302244c41f91", "0bb8302244c41f91"],
+  "fixtures/syn128/hn6_engine_entry_collision.json#/spec": [CASE_43, "292e65a9e12d484c", "292e65a9e12d484c"],
+  "fixtures/syn128/hna_flow_v2.json#/block/spec": [CASE_43, "fdac7e1f42127635", "fdac7e1f42127635"],
+  "fixtures/syn128/hna_flow_v2.json#/writeBlock/diagram/spec": [CASE_43, "fdac7e1f42127635", "fdac7e1f42127635"],
+  "fixtures/syn128/hna_flow_v2.json#/chapter/chapter/sections/0/blocks/1/spec": [CASE_43, "fdac7e1f42127635", "fdac7e1f42127635"],
+  "fixtures/syn128/hnb2_capacity_adapt.json#/spec": [CASE_43, "08e8d4ae5d10a635", "08e8d4ae5d10a635"],
+  "fixtures/syn128/hnb_fit_to_zero.json#/spec": [CASE_43, "3ae4057e204761cb", "3ae4057e204761cb"],
+  "fixtures/syn128/r18g_lr_166.json#/spec": [CASE_43, "d4d694ec63cfb8b6", "d4d694ec63cfb8b6"],
+}
+/**
  * Swarm 1.2.9 row 27 (AC-A04, INTENT): the first render places a label on a dashed connector with the drawn dash
  * pattern, so its knockout band leaves no dash fragment; one label per key moves along its own run (case04/v2/05
  * "230 V · 492,6 W" 2.38 mm down; row162 "KENDALI" 0.25 mm left / 2.13 mm up). Markers and verdicts unchanged; legacy
@@ -688,6 +720,47 @@ const CHAR_A04_INTENT: Record<string, [string, string, string]> = {
   "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec": ["AC-A04", "31c7431a15105086", "31c7431a15105086"],
   "engine-rev-a/svg/fixtures/row162_elk_not_better.json#": ["AC-A04", "d28c780630c5ebf5", "d28c780630c5ebf5"],
   "engine-rev-a/svg/fixtures/row162_large_layered.json#": ["AC-A04", "f6f41d1b018b6e74", "d68c762bbc8a354e"],
+}
+/**
+ * Swarm 1.3.3 row 129 (integration; requests of rows 43, 136 and 54): the six keys row 43 listed as "not moved by case
+ * alone". Each was rendered on the current engine and on a frozen copy of HEAD d463b707b9 (same v1 spec, sync path and
+ * ELK auto path) and compared text by text: every text equals the old one up to letter case and spacing, except the
+ * one added CATATAN note row of row 54 (jumlah titik, keandalan) and the key line that wraps differently once it prints
+ * as written (row 43); the lone hub of case04, case04_v2 and case05 is 32 mm wide with its links fanning from the
+ * bottom (row 136: 24 hatch lines instead of 40); the marker block is unchanged. Key -> [reason, sync hash, auto hash];
+ * replaces the BASE, 56c, 57c, 56d, A02 and A04 values of these keys. Printed with REL128_VIS0_CHAR_PRINT=1.
+ */
+const R129 = "letter case as written (row 43), CATATAN note row (row 54), lone hub width (row 136); texts verified against HEAD"
+const CHAR_129_INTENT: Record<string, [string, string, string]> = {
+  "engine-rev-a/svg/fixtures/case04.studio.json#": [R129, "c0b082a310de9039", "c0b082a310de9039"],
+  "engine-rev-a/svg/fixtures/case04_v2.studio.json#": [R129, "40ea503b11dbf82f", "40ea503b11dbf82f"],
+  "engine-rev-a/svg/fixtures/case05_diagram_block.json#/spec": [R129, "b5928073ccd57ce3", "b5928073ccd57ce3"],
+  "engine-rev-a/svg/fixtures/row162_elk_not_better.json#": [R129, "eca3b09ffd281a49", "eca3b09ffd281a49"],
+  "engine-rev-a/svg/fixtures/row162_large_layered.json#": [R129, "c6d341cead3bf57b", "bf77b0b876306b1c"],
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/6/spec": [R129, "1dd5bcf02fc69829", "1dd5bcf02fc69829"],
+}
+/**
+ * Swarm 1.3.3 row 136 (lone hub routing, INTENT): the f6 spec 6 hub is 32 mm wide and its links fan from its bottom, so the two
+ * pinned defects (GEOM_EDGE_ALONG, GEOM_EDGE_DOUBLE_BACK) are gone; the engine reports EDGE_LANES (REPORT) instead. Key ->
+ * [AC lines, full HEAD line]; replaces CHAR_INTENT's line for this key.
+ */
+const CHAR_136_VERDICT: Record<string, [string, string]> = {
+  "fixtures/syn127/f6_fan_in_specs.json#/specs/6/spec": [
+    "AC-A09, AC-A10b; 1.3.3 row 136 (lone hub)",
+    "1dd5bcf02fc69829 d88b640769644364 1dd5bcf02fc69829 d88b640769644364 | V[] I[] G[EDGE_LANES:REPORT] E[] | V[] I[] G[EDGE_LANES:REPORT] E[R2]",
+  ],
+}
+/**
+ * Swarm 1.3.3 row 57 (ST-6, B-16, INTENT): DATUM-25 counts fill and accent colours once each and the neutral ink once;
+ * line patterns and value-origin marks are not colours. The T-06 spec printed 6 values (four inks, signal, alert) and
+ * was refused (`X[DATUM-25]`); its budget is now 3, so it renders. Key -> [reason, full HEAD line] (bytes, markers and
+ * verdicts all replace BASE's for this key). Printed with REL128_VIS0_CHAR_PRINT=1.
+ */
+const CHAR_ST6_INTENT: Record<string, [string, string]> = {
+  "fixtures/syn127/t06_diagram_six_colours.json#/spec": [
+    "DATUM-25 colour budget (1.3.3 row 57, ST-6)",
+    "8bebdd3b3ed4a547 040d8eecc5f22fb1 8bebdd3b3ed4a547 040d8eecc5f22fb1 | V[] I[] G[] E[] | V[] I[] G[] E[R2]",
+  ],
 }
 describe("char", () => {
   let corpus: CharEntry[] = []
@@ -709,7 +782,12 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      const route = CHAR_A04_INTENT[c.key] ?? CHAR_A02_INTENT[c.key] ?? CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d / 1.2.9 rows 26, 27 INTENT: listed HEAD hashes replace BASE's
+      const st6 = CHAR_ST6_INTENT[c.key] ? parts(CHAR_ST6_INTENT[c.key][1]) : undefined // 1.3.3 row 57 INTENT
+      if (st6) {
+        expect([n.so, n.ao], c.key).toEqual([st6.so, st6.ao])
+        continue
+      }
+      const route = CHAR_129_INTENT[c.key] ?? CHAR_CASE_INTENT[c.key] ?? CHAR_A04_INTENT[c.key] ?? CHAR_A02_INTENT[c.key] ?? CHAR_JOG_INTENT[c.key] ?? CHAR_LABEL_INTENT[c.key] ?? CHAR_ROUTE_INTENT[c.key] // row 56c / 57c / 56d / 1.2.9 rows 26, 27 INTENT: listed HEAD hashes replace BASE's
       expect([n.so, n.ao], c.key).toEqual(route ? [route[1], route[2]] : [b.so, b.ao])
     }
   })
@@ -718,7 +796,8 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      expect([n.sm, n.am], c.key).toEqual([CHAR_HARW_MK[b.sm], CHAR_HARW_MK[b.am]])
+      const st6 = CHAR_ST6_INTENT[c.key] ? parts(CHAR_ST6_INTENT[c.key][1]) : undefined // 1.3.3 row 57 INTENT
+      expect([n.sm, n.am], c.key).toEqual(st6 ? [st6.sm, st6.am] : [CHAR_HARW_MK[b.sm], CHAR_HARW_MK[b.am]])
     }
   })
 
@@ -726,7 +805,7 @@ describe("char", () => {
     for (const c of corpus) {
       const b = parts(CHAR_BASE[c.key]!)
       const n = parts(now[c.key]!)
-      const intent = CHAR_LABEL_VERDICT[c.key] ?? CHAR_INTENT[c.key] // row 57c verdicts replace earlier ones for their keys
+      const intent = CHAR_ST6_INTENT[c.key] ?? CHAR_136_VERDICT[c.key] ?? CHAR_LABEL_VERDICT[c.key] ?? CHAR_INTENT[c.key] // row 57c verdicts replace earlier ones for their keys; 1.3.3 row 57 (ST-6) first
       const ok = (n.vs === b.vs && n.va === b.va) || (!!intent && n.vs === parts(intent[1]).vs && n.va === parts(intent[1]).va)
       expect(ok ? "ok" : { base: [b.vs, b.va], now: [n.vs, n.va], intent }, c.key).toBe("ok")
     }
@@ -763,7 +842,13 @@ describe("char", () => {
 // new fields (SCHEMA_INVALID / INVALID_ARGUMENT), so nothing is stored.
 type HnaHost = typeof import("../diagram-persist/hna-host")
 const CARRY_FIXTURES = ["vis0_carry_a", "vis0_carry_b"] as const
-const carryFixture = (name: string): { spec: J; caption: string; source: string } => JSON.parse(readFileSync(path.join(TEST_ROOT, "fixtures", "syn128", `${name}.json`), "utf8"))
+// Swarm 1.3.3 row 61 (U20): an agent tool call that carries labels_verified: true is refused (LABELS_VERIFIED_PERSON_ONLY),
+// so the copy sent through the host has the flag false; the fixture file on disk is unchanged.
+const carryFixture = (name: string): { spec: J; caption: string; source: string } => {
+  const fx = JSON.parse(readFileSync(path.join(TEST_ROOT, "fixtures", "syn128", `${name}.json`), "utf8")) as { spec: J; caption: string; source: string }
+  fx.spec.labels_verified = false
+  return fx
+}
 /** Every 1.2.8 field name a spec uses, as "<at>.<field>" (at = spec, node, class, edge, zone). */
 function carryFieldsOf(spec: J): Set<string> {
   const out = new Set<string>()

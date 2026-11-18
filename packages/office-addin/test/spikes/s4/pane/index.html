@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Swarm S4 spike</title>
+    <!-- Office.js (register §6.2). Optional outside Office: main.ts only calls Office.onReady when present. -->
+    <script src="https://officeapis.public.onecdn.static.microsoft/1/office.js"></script>
+    <style>
+      body { font: 13px/1.4 -apple-system, system-ui, sans-serif; margin: 12px; color: #111; background: #fff; }
+      button { margin: 0 6px 6px 0; }
+      #reply { white-space: pre-wrap; border: 1px solid #bbb; min-height: 4em; padding: 6px; }
+      #log { white-space: pre; font: 11px/1.3 ui-monospace, Menlo, monospace; max-height: 50vh; overflow: auto; background: #f4f4f4; padding: 6px; }
+      #status { color: #555; }
+    </style>
+  </head>
+  <body>
+    <h3>Swarm S4 streaming spike</h3>
+    <div>
+      <button id="connect">Connect stream</button>
+      <button id="send" disabled>Send synthetic prompt</button>
+      <button id="abort" disabled>Abort</button>
+      <button id="copy">Copy capture</button>
+    </div>
+    <p id="status">idle</p>
+    <h4>Reply (plain text)</h4>
+    <div id="reply"></div>
+    <h4>Event capture (types and timestamps only)</h4>
+    <div id="log"></div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

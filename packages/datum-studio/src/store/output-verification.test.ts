@@ -43,6 +43,9 @@ const ID_0004 = "20261107120000_datum_output_verification"
 const ID_0006 = "20261108120000_datum_mission_autonomous_decision" // row 188: autonomous decision mark
 const ID_0007 = "20261112000000_datum_mission_document_link" // 1.2.6 row 86: mission_document link
 const ID_0008 = "20261114000000_datum_decision_provenance" // 1.2.8 row 45b: decision answer provenance
+const ID_0009 = "20261117000000_datum_mission_row_contract" // 1.3.3 row 5: mission row contract columns
+const ID_0010 = "20261117120000_datum_revision_retention" // 1.3.3 row 82: revision retention
+const ID_0011 = "20261117180000_datum_purge_fk_indexes" // 1.3.3 row 144: purge foreign-key indexes
 const ID_0005 = "20261108000000_datum_mission_gsp_tiers" // row 166
 const logs: StoreLogEntry[] = []
 const opened: SqliteStudioStore[] = []
@@ -201,8 +204,8 @@ describe("migration 0004", () => {
   test("0004 is the spec §5 DDL byte for byte, listed after 0003; table, CHECKs and 2 indexes exist, no trigger", () => {
     expect(sha256Hex(MIGRATION_0004_SQL)).toBe(MIGRATION_0004_SPEC_SHA256)
     expect(MIGRATION_0004_ID).toBe(ID_0004)
-    expect(MIGRATIONS.map((m) => `${m.seq}:${m.id}`)).toEqual([`1:${ID_0001}`, `2:${ID_0002}`, `3:${ID_0003}`, `4:${ID_0004}`, `5:${ID_0005}`, `6:${ID_0006}`, `7:${ID_0007}`, `8:${ID_0008}`])
-    expect(latestSchemaId()).toBe(ID_0008)
+    expect(MIGRATIONS.map((m) => `${m.seq}:${m.id}`)).toEqual([`1:${ID_0001}`, `2:${ID_0002}`, `3:${ID_0003}`, `4:${ID_0004}`, `5:${ID_0005}`, `6:${ID_0006}`, `7:${ID_0007}`, `8:${ID_0008}`, `9:${ID_0009}`, `10:${ID_0010}`, `11:${ID_0011}`]) // 1.3.3 row 144: + 0011
+    expect(latestSchemaId()).toBe(ID_0011) // 1.3.3 row 144: + 0011
     for (const c of ["VERIFY_SHA_MISMATCH", "VERIFY_STATE_INVALID", "VERIFY_REPORT_TOO_LARGE", "OUTPUT_UNVERIFIED"] as const) expect(STORE_ERROR_CODES as readonly string[]).toContain(c)
     expect(OUTPUT_VERIFICATION_REPORT_MAX_BYTES).toBe(262_144)
     const db = openSqlite(join(RUN, "main", "datum-studio.sqlite"), { readonly: true })
@@ -214,7 +217,7 @@ describe("migration 0004", () => {
       const idx = db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'output_verification' AND name NOT LIKE 'sqlite_%' ORDER BY name").map((r) => r.name)
       expect(idx).toEqual(["output_verification_revision_idx", "output_verification_state_idx"])
       expect(db.all("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'output_verification'")).toEqual([])
-      expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0008)
+      expect(db.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0011) // 1.3.3 row 144: + 0011
       console.log(`[row149] runtime=${RUNTIME} driver=${db.driver} sqlite=${db.get<{ v: string }>("select sqlite_version() v")!.v} migration0004 sha=${MIGRATION_0004_SPEC_SHA256}`)
     } finally {
       db.close()
@@ -257,12 +260,12 @@ describe("migration 0004", () => {
     console.log(`[row149] 0003 -> 0004 counts after  ${JSON.stringify(after)}`)
     // the only delta outside the mission tables pinned at open: journal rows 0004 and 0005 (row 166)
     const strip = (c: Record<string, number>) => Object.fromEntries(Object.entries(c).filter(([k]) => !k.startsWith("mission")))
-    expect({ ...strip(after), migration: after.migration! - 5 }).toEqual(strip(before)) // row 188: + 0006, 1.2.6 row 86: + 0007, 1.2.8 row 45b: + 0008
+    expect({ ...strip(after), migration: after.migration! - 8 }).toEqual({ ...strip(before), revision_prune: 0 }) // 1.3.3 row 144: + 0011 (indexes only), 1.3.3 row 82: + 0010 and its empty mark table, row 188: + 0006, 1.2.6 row 86: + 0007, 1.2.8 row 45b: + 0008, 1.3.3 row 5: + 0009
     expect(contentSha(file)).toBe(shaBefore)
     const r = openSqlite(file, { readonly: true })
     try {
-      expect(r.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((x) => x.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005, ID_0006, ID_0007, ID_0008])
-      expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0008)
+      expect(r.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((x) => x.id)).toEqual([ID_0001, ID_0002, ID_0003, ID_0004, ID_0005, ID_0006, ID_0007, ID_0008, ID_0009, ID_0010, ID_0011]) // 1.3.3 row 144: + 0011
+      expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'schema_version'")!.value).toBe(ID_0011)
       expect(r.get<{ value: string }>("SELECT value FROM store_meta WHERE key = 'created_by_release'")!.value).toBe("1.2.1-pre149")
       expect(Number(r.get<{ n: number }>("SELECT count(*) AS n FROM output_verification")!.n)).toBe(0)
       expect(r.get<{ integrity_check: string }>("PRAGMA integrity_check")!.integrity_check).toBe("ok")
@@ -276,7 +279,7 @@ describe("migration 0004", () => {
     expect(row.state).toBe("verified")
     await again.close()
     const j = openSqlite(file, { readonly: true })
-    expect(Number(j.get<{ n: number }>("SELECT count(*) AS n FROM migration")!.n)).toBe(8)
+    expect(Number(j.get<{ n: number }>("SELECT count(*) AS n FROM migration")!.n)).toBe(11) // 1.3.3 row 144: + 0011, 1.3.3 row 82: + 0010, 1.3.3 row 5: + 0009
     j.close()
   })
 })

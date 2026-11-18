@@ -42,11 +42,52 @@ function jsonExamples(): unknown[] {
   return out
 }
 
-/** The inline `tool {json}` examples outside the blocks, e.g. studio_mission_set_status {"mission":...,"to":"running"}. */
-function inlineExamples(): Array<{ tool: string; args: S }> {
-  const out: Array<{ tool: string; args: S }> = []
-  for (const m of TEXT.matchAll(/(studio_[a-z_]+) (\{[^\n]*?\})(?=[.\s;]|$)/g)) out.push({ tool: m[1], args: JSON.parse(m[2]) })
+/**
+ * 1.3.3 row 14 (MC-3): every example is a json block under a heading that is the prefixed tool name (the `tool {json}`
+ * line form is gone). One entry per value in the block, in document order; `section` is the nearest `## ` heading.
+ */
+const PREFIX = "datum-studio_"
+function inlineExamples(): Array<{ tool: string; args: S; section: string }> {
+  const out: Array<{ tool: string; args: S; section: string }> = []
+  const lines = TEXT.split("\n")
+  let heading = ""
+  let section = ""
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    if (line.startsWith("## ")) section = line.slice(3)
+    if (line.startsWith("#")) heading = line.replace(/^#+\s*/, "")
+    if (line !== "```json") continue
+    const end = lines.indexOf("```", i + 1)
+    const body = lines.slice(i + 1, end).join("\n")
+    let values: S[]
+    try {
+      values = [JSON.parse(body)]
+    } catch {
+      values = body.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l))
+    }
+    expect(heading.startsWith(`${PREFIX}studio_`) ? "" : `block without a tool heading: ${heading}`).toBe("")
+    for (const args of values) out.push({ tool: heading.slice(PREFIX.length), args, section })
+    i = end
+  }
   return out
+}
+
+/**
+ * The create example sends partial rows. The server fills the rest (row 16, register 1.1): the test runs the real
+ * normaliser (`fillMissionDefaults`, the one the tool wrapper calls) on a copy, so the example is proven valid against
+ * the shipped defaults and not against values of this test.
+ */
+async function withRowDefaults(mission: S, _type?: S): Promise<S> {
+  const at = (rel: string) => path.join(STUDIO, rel)
+  const defaults: S = await import(at("mcp-host/mission/row-defaults.ts"))
+  const types: S = await import(at("store/mission/builtin-types.ts"))
+  const copy: S = structuredClone(mission)
+  defaults.fillMissionDefaults(
+    "studio_mission_create",
+    { mission: copy },
+    { type: (id: string) => types.BUILTIN_MISSION_TYPES.find((t: S) => t.id === id) ?? null, typeOfMission: () => null },
+  )
+  return copy
 }
 
 /** Top-level argument check: no unknown key (additionalProperties false), every required key present. */
@@ -92,7 +133,9 @@ describe("mission-control built-in skill", () => {
   )
 
   test("the text passes the built-in guards and stays concise", () => {
-    expect(TEXT.split("\n").length).toBeLessThanOrEqual(120)
+    // 1.3.3 row 14: register section 9 cap (was 120 lines)
+    expect(TEXT.replace(/\n$/, "").split("\n").length).toBeLessThanOrEqual(180)
+    expect(Buffer.byteLength(TEXT)).toBeLessThanOrEqual(24_000)
     expect(TEXT.includes("!`")).toBe(false)
     expect(/\$(?:\d|ARGUMENTS)/.test(TEXT)).toBe(false)
     expect(ConfigMarkdown.files(TEXT)).toHaveLength(0)
@@ -108,7 +151,16 @@ describe("mission-control built-in skill", () => {
     const vendorTools = await Bun.file(path.join(STUDIO, "..", "vendor", "scripts", "studio", "mcp", "tools.ts")).text()
     expect(vendorTools).toContain('"studio_file_verify"')
     known.add("studio_file_verify")
-    const named = new Set([...TEXT.matchAll(/\bstudio_[a-z_]*[a-z]\b/g)].map((m) => m[0]))
+    // 1.3.3 row 14: callable names carry the server prefix; the other tools the skill names are vendored or host tools.
+    const table: S = await import(path.join(STUDIO, "mcp-host/tool-table.ts"))
+    for (const t of table.HOST_KEPT_TOOLS) known.add(t)
+    // 1.3.3 row 100 landed: the library tool's name comes from the host module that registers it (no temporary allowance).
+    const library: S = await import(path.join(STUDIO, "mcp-host/library-read.ts"))
+    known.add(library.LIBRARY_READ_TOOL)
+    const body = TEXT.replaceAll(`${PREFIX}studio_mission_*`, "")
+    const found = [...body.matchAll(/(datum-studio_)?(studio_[a-z_]*[a-z])\b/g)]
+    for (const m of found) expect(m[1] ? "prefixed" : `no server prefix on ${m[2]}`).toBe("prefixed")
+    const named = new Set(found.map((m) => m[2]!))
     for (const name of named) expect(known.has(name) ? name : `unknown tool ${name}`).toBe(name)
     for (const name of [
       "studio_mission_create",
@@ -135,29 +187,45 @@ describe("mission-control built-in skill", () => {
     expect(create.mission.project).toBeUndefined()
     expect(create.mission.sessions).toBeUndefined()
     expect(create.session).toBeUndefined()
-    const doc = { $schema: "studio.mission/v1", typeVersion: 1, status: "draft", ...create.mission, project: { dir: "/abs/project" } }
+    const type = guide.missionGuideFacts().types.find((t: S) => t.id === create.mission.type)
+    const doc: S = { $schema: "studio.mission/v1", typeVersion: 1, status: "draft", ...(await withRowDefaults(create.mission, type)), project: { dir: "/abs/project" } }
     expect(validate.checkMissionSchema("MissionDoc", doc)).toEqual([])
     // Kinds belong to their phase in the mission type (the store's own table, via the guide facts).
-    const type = guide.missionGuideFacts().types.find((t: S) => t.id === create.mission.type)
-    for (const row of create.mission.rows) {
+    for (const row of doc.rows) {
       const phase = type.phases.find((p: S) => p.id === row.phase)
       expect(phase?.kinds ?? []).toContain(row.kind)
     }
+    // 1.3.3 row 14: the example is the short form: title only on row 1, which the server defaults.
+    expect(create.mission.rows[0]).toEqual({ title: "Write the spec" })
   })
 
-  // SW-13 (row 192, spec 191 §3.1): the example uses Swarm agent names and the shipped tier map, a row below thinker
-  // carries a reason, and the owner is swarm-workflow.
-  test("SW-13 the create example uses Swarm agents, shipped tiers with reasons, and owner swarm-workflow", async () => {
-    const { validate } = await studio()
+  // SW-13 (row 192, spec 191 §3.1), moved to the 1.3.3 form: the example names only Swarm agents, each in the shipped tier
+  // table the skill prints, the table keeps researcher on the session model, and other workflows' role names are accepted.
+  // INTENT NO LONGER COVERED: `owner` "swarm-workflow" and the per-row reason "Swarm tier map: coder runs on worker" are no
+  // longer in the example (the owner is a server default of row 16; the reason is no longer printed).
+  test("SW-13 the create example uses Swarm agents from the printed tier table; role names of other workflows are accepted", async () => {
+    const { validate, guide } = await studio()
     const [create] = jsonExamples() as S[]
-    expect(create.mission.owner).toBe("swarm-workflow")
-    const tiers: Record<string, string> = { planner: "thinker", verifier: "thinker", coder: "worker", "document-writer": "worker", "data-collector": "worker-fast", explore: "worker-fast" }
-    expect(create.mission.rows.map((row: S) => row.agent)).toEqual(["planner", "coder", "verifier"])
-    for (const row of create.mission.rows) {
-      expect(row.model.tier).toBe(tiers[row.agent])
-      if (row.model.tier !== "thinker") expect(row.model.reason).toBe("Swarm tier map: coder runs on worker")
-      expect(validate.checkMissionSchema("Row", row)).toEqual([])
+    const tiers: Record<string, string> = { planner: "thinker", verifier: "thinker", coder: "worker", "document-writer": "worker", "data-collector": "worker-fast", explore: "worker-fast", researcher: "inherit" }
+    const sent = create.mission.rows.map((row: S) => row.agent).filter(Boolean)
+    expect(sent).toEqual(["coder", "verifier"])
+    const type = guide.missionGuideFacts().types.find((t: S) => t.id === create.mission.type)
+    const rows = (await withRowDefaults(create.mission, type)).rows
+    for (const row of rows) {
+      const agent = row.agent as string
+      // A row that sends no agent gets the server default (row 16: "general", model inherit); every agent the example sends is in the table.
+      if (agent === "general") {
+        expect(row.model).toEqual({ tier: "inherit" })
+        continue
+      }
+      expect(tiers[agent] ? "" : `agent ${agent} is not in the tier table`).toBe("")
+      const tier = tiers[agent]!
+      const model = tier === "thinker" ? { tier } : { tier, reason: "tier map" }
+      expect(validate.checkMissionSchema("Row", { ...row, model })).toEqual([])
     }
+    expect(TEXT).toContain("| planner, verifier | thinker |")
+    expect(TEXT).toContain("| coder, document-writer | worker |")
+    expect(TEXT).toContain("| data-collector, explore | worker-fast |")
     expect(TEXT).not.toMatch(/master-controller|task-architect|coder-execution|test-expert/)
     expect(TEXT).toContain("after swarm-workflow's plan")
     expect(flat).toContain("Role names from other workflows are accepted and run as their Swarm agent.")
@@ -175,7 +243,10 @@ describe("mission-control built-in skill", () => {
       output: "research/01_web.md", verification: "sources cited",
     }
     expect(validate.checkMissionSchema("Row", researcher)).toEqual([])
-    const doc = { $schema: "studio.mission/v1", typeVersion: 1, status: "draft", ...create.mission, project: { dir: "/abs/project" }, rows: [...create.mission.rows, researcher] }
+    const { guide } = await studio()
+    const type = guide.missionGuideFacts().types.find((t: S) => t.id === create.mission.type)
+    const filled = await withRowDefaults(create.mission, type)
+    const doc = { $schema: "studio.mission/v1", typeVersion: 1, status: "draft", ...filled, project: { dir: "/abs/project" }, rows: [...filled.rows, researcher] }
     expect(validate.checkMissionSchema("MissionDoc", doc)).toEqual([])
     expect(validate.checkMissionSchema("Row", { ...researcher, model: { tier: "inherit" } })).toEqual([])
     // A worker row without its reason is refused (the rule the skill's "a row below thinker gives a reason" follows).
@@ -211,15 +282,18 @@ describe("mission-control built-in skill", () => {
         if (p.add) expect(validate.checkMissionSchema("Row", p.add)).toEqual([])
       }
     }
-    expect(updates.flatMap((u) => u.rows.map((p: S) => p.status)).filter(Boolean)).toEqual(["running", "done", "blocked", "dropped"])
-    expect(examples.some((e) => e.dryRun)).toBe(false)
+    // 1.3.3 row 14: the close example of step 6 adds a second done (the retire call carries no status).
+    expect(updates.flatMap((u) => u.rows.map((p: S) => p.status)).filter(Boolean)).toEqual(["running", "done", "blocked", "dropped", "done"])
+    expect(inline.filter((i) => i.tool !== "studio_mission_create").some((i) => i.args.dryRun)).toBe(false)
+    expect(examples.length).toBeGreaterThan(0)
   })
 
   test("the inline examples name valid arguments", async () => {
     const { schemas } = await studio()
     const inline = inlineExamples()
     expect(inline.map((i) => i.tool)).toEqual(
-      expect.arrayContaining(["studio_mission_get", "studio_mission_approve", "studio_mission_set_status"]),
+      // INTENT NO LONGER COVERED: studio_mission_get had a one-line example; it is prose now (arguments: mission, include).
+      expect.arrayContaining(["studio_mission_approve", "studio_mission_set_status"]),
     )
     for (const { tool, args } of inline) {
       expect(topLevel(schemas.MISSION_TOOL_SCHEMAS[tool], args)).toEqual({ unknown: [], missing: [] })
@@ -240,12 +314,12 @@ describe("mission-control built-in skill", () => {
   })
 
   test("it keeps the approval honest: the person answers, autonomy is marked", () => {
-    expect(flat).toContain("Never call studio_mission_answer_decision: it is the person's answer, given in Mission Control, never yours.")
+    expect(flat).toContain("Never call datum-studio_studio_mission_answer_decision: it is the person's answer, given in Mission Control, never yours.")
     // Row 197 (S194-01): the condition is Swarm's setting, not what anyone said; the host refusal is named.
     expect(flat).toContain("only when Swarm's autonomous mode setting (the person turns it on) is on for this session")
     expect(flat).not.toContain("the person said this session runs autonomously")
     expect(flat).toMatch(/- AUTONOMOUS_MODE_OFF: [^\n]{40,}/)
-    expect(flat).toContain("Ask the person in Mission Control with studio_mission_request_decision and wait.")
+    expect(flat).toContain("Ask the person in Mission Control with datum-studio_studio_mission_request_decision and wait.")
     // 1.2.6 row 100 (MC-02, INTENT): autonomous is shown at the top level of record_decision.
     expect(flat).toContain('"by":"controller","date":"2026-11-08","text":"Self-approved (autonomous): plan of 3 rows."},"autonomous":true}')
     expect(flat).toContain("Leave out project.dir and session: Swarm fills both from your session. Never invent a session id.")

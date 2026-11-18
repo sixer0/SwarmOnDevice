@@ -21,6 +21,7 @@ import {
   DIAGRAM_ZONE_STYLES,
   PROVENANCE_MARKS,
 } from "../enums";
+import { PID_PATTERN } from "../env";
 import { JSON_SCHEMA_DIALECT, STUDIO_SCHEMA_URL_BASE } from "./common.schema";
 import { FIGURE_BOUNDS as B } from "./figure-bounds";
 
@@ -48,6 +49,12 @@ const side = { enum: [...DIAGRAM_EDGE_SIDES] } as const;
 const slot = { type: "number", exclusiveMinimum: 0, exclusiveMaximum: 1 } as const;
 const arrow = { enum: [...DIAGRAM_ARROW_TYPES] } as const;
 const arrowSize = { enum: [...DIAGRAM_ARROW_SIZES] } as const;
+/**
+ * Swarm 1.3.3 row 26 (ST-4; register 03 §6): the pair key of an off-page connector, equal on both ends of the pair.
+ * Anchored and bounded (1..32 characters), so it needs no `maxLength`.
+ */
+/** @internal test seam */
+export const DIAGRAM_REF_KEY_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$";
 
 export const diagramSchema = {
   $schema: JSON_SCHEMA_DIALECT,
@@ -103,6 +110,19 @@ export const diagramSchema = {
           // Swarm 1.2.8 row 52 (VIS-0a, N8-236): BPMN event trigger, only on event_start/_intermediate/_end
           // (engine, P1-event_type). Absent = "none".
           event_type: { enum: [...DIAGRAM_EVENT_TYPES] },
+          // Swarm 1.3.3 row 26 (ST-4; register 03 §6): where an off-page connector continues. `figure` = the block id
+          // (`id`, a pid) of the diagram block that holds the other end, never a printed number: the engine prints
+          // the label from the real figure number at document render. `key` = the pair key, equal on both ends.
+          // Shape only here; "only on shape offpage" and the pair rule (OFFPAGE_UNPAIRED) are the engine's (row 50).
+          ref: {
+            type: "object",
+            properties: {
+              figure: { type: "string", pattern: PID_PATTERN },
+              key: { type: "string", pattern: DIAGRAM_REF_KEY_PATTERN },
+            },
+            required: ["figure", "key"],
+            additionalProperties: false,
+          },
         },
         required: ["id", "label", "class"],
         additionalProperties: false,
@@ -167,6 +187,19 @@ export const diagramSchema = {
     },
     legend: strList(B.diagramLegend),
     notes: strList(B.diagramNotes),
+    // Swarm 1.3.3 row 26 (ST-5; register 03 §6): printed label of a tier, `tier` = a `class.tier` value in use.
+    // At most one entry per node (a tier holds at least one node). Shape only here; "layered and topology only" and
+    // "tier in use" are the engine's (row 56).
+    tiers: {
+      type: "array",
+      maxItems: B.diagramNodes,
+      items: {
+        type: "object",
+        properties: { tier: { type: "integer", minimum: 0 }, label: str },
+        required: ["tier", "label"],
+        additionalProperties: false,
+      },
+    },
     per_row: { type: "integer", minimum: 1, maximum: 20 },
     // Swarm 1.2.6 row 45 (T-11, N-109, SEC-23): ranked flow direction, flow only (`P1-direction` in validateSpec and the
     // by-construction gate). Absent = legacy list layout. Enum only: any other value (RL, BT, "RL; x") is SCHEMA_INVALID

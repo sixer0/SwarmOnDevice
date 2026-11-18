@@ -1,0 +1,77 @@
+{
+ "type": "diagram",
+ "caption": {
+  "text": "Every zone has its own VRF and subnet, and traffic between zones only crosses the internal firewall."
+ },
+ "source": {
+  "text": "Kajian Teknis 000/GSP/KT/XI/2026 §5.2 Table 5.4"
+ },
+ "spec": {
+  "family": "layered",
+  "classification": "BIASA",
+  "labels_verified": false,
+  "sources": [
+   "Kajian Teknis 000/GSP/KT/XI/2026 §5.2 Table 5.4"
+  ],
+  "nodes": [
+   {
+    "id": "v10",
+    "label": "VLAN 10 Staff",
+    "sub": "TBC · net.v10.prefix · gw .1",
+    "tag": "REQ-NET-03",
+    "shape": "box",
+    "class": {
+     "tier": 0
+    }
+   },
+   {
+    "id": "fwi",
+    "label": "Internal firewall",
+    "sub": "zone policy · IPS",
+    "shape": "box",
+    "mark": "PEMASOK",
+    "class": {
+     "tier": 1,
+     "accent": true
+    }
+   },
+   {
+    "id": "v100",
+    "label": "VLAN 100 Apps",
+    "sub": "TBC · net.v100.prefix",
+    "shape": "box",
+    "class": {
+     "tier": 2
+    }
+   }
+  ],
+  "edges": [
+   {
+    "from": "v10",
+    "to": "fwi",
+    "kind": "data",
+    "label": "HTTPS 443"
+   },
+   {
+    "from": "fwi",
+    "to": "v100",
+    "kind": "data",
+    "label": "allowed apps"
+   }
+  ],
+  "legend": [
+   {
+    "symbol": "data",
+    "label": "permitted flow"
+   },
+   {
+    "symbol": "PEMASOK",
+    "label": "value from the vendor (house legend, not a standard)"
+   }
+  ],
+  "notes": [
+   "Guest VLAN denial shown on sheet 8.3",
+   "Unresolved register references: net.v10.prefix, net.v100.prefix"
+  ]
+ }
+}

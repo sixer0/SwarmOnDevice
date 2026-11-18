@@ -115,8 +115,70 @@ export interface RowCheckpoint {
   at: string
 }
 
+/** 1.3.3 row 5 (register section 1): the formats a row deliverable may have; Studio outputs first, then support files. */
+const ROW_DELIVERABLE_FORMATS = ["DOCX", "PDF", "HTML", "XLSX", "PPTX", "MD", "TXT"] as const
+type RowDeliverableFormat = (typeof ROW_DELIVERABLE_FORMATS)[number]
+
+/** 1.3.3 row 5: one file of a row in the project folder `deliverables/<mission-id>/` (MC-8). */
+export interface RowDeliverable {
+  /** Project-relative, `/` separators, starts with `deliverables/<mission-id>/`. */
+  path: string
+  format: RowDeliverableFormat
+  /** Revision letter; required with `documentId`. */
+  docRev?: string
+  /** Studio revision number; required with `documentId`. */
+  revisionNo?: number
+  sha256: string
+  /** True on the items of the revision the row refers to; older items stay listed with false. */
+  latest: boolean
+  /** Absent on support files. */
+  documentId?: string
+}
+
+interface RowKnowledgeDomain {
+  /** A key of `domains` in the library trigger index, e.g. `COMPUTER-VISION`. */
+  domain: string
+  /** Library-root-relative path of the first file to read for the domain. */
+  firstFile: string
+  /** Library-relative paths served to the row while it was running; at most 20. */
+  consulted: string[]
+}
+
+/** 1.3.3 row 5: the library domains matched for a row (KL-2). Absent on the row = no domain matched. */
+export interface RowKnowledge {
+  domains: RowKnowledgeDomain[]
+  /** One line: why the row closes without reading (set from the row patch field `knowledgeReason`). */
+  reason?: string
+}
+
+export const ROW_HUMAN_CHECKS = ["labels_verified"] as const
+export type RowHumanCheck = (typeof ROW_HUMAN_CHECKS)[number]
+
+/** 1.3.3 row 5: checks a person still owes (MC-5, ST-9). "Awaiting" = present and `clearedBy` absent. */
+export interface RowAwaitingHumanCheck {
+  checks: RowHumanCheck[]
+  since: string
+  /** Id of a decision by: user. */
+  clearedBy?: string
+  clearedAt?: string
+}
+
+/** 1.3.3 row 5: the three host fields of the row contract, written only through the MissionStore setters. */
+export interface MissionRowContract {
+  deliverables: RowDeliverable[]
+  knowledge?: RowKnowledge
+  awaitingHumanCheck?: RowAwaitingHumanCheck
+}
+
+/** What markKnowledgeConsulted reports: `marked` false carries the reason nothing was stored. */
+export interface KnowledgeMark {
+  marked: boolean
+  domains: string[]
+  reason?: "row-not-running" | "no-knowledge" | "no-domain" | "already-marked" | "cap"
+}
+
 /** A row as read back: input fields plus host fields. */
-export interface MissionRow extends MissionRowInput {
+export interface MissionRow extends MissionRowInput, MissionRowContract {
   createdAt: string
   updatedAt: string
   startedAt?: string
@@ -409,6 +471,8 @@ export interface RowPatch {
   release?: string[]
   /** Row 174 (C218 F146b-3): ids of documents linked to this row (docKey row-<R>-<name>) to retire (archive); needs `note`. */
   retire?: string[]
+  /** 1.3.3 row 102 (KL-2, U19): one line, why the row closes without reading its library files; stored as `knowledge.reason`. */
+  knowledgeReason?: string
   /** Row 81 (1.2.6, MC-03): this patch's decision; overrides the call-level decision of updateRows for this patch only. */
   decision?: string
 }

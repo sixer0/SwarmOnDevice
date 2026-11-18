@@ -1,7 +1,7 @@
 /**
  * Repositori struktur (SR-10, I47): tulis/baca baris M14-M17 per revisi
  * (salinan penuh, R6), identitas pid per dokumen M18 (buat/pensiun), dan tulis
- * ganda `StudioBlock` (M06, register §10).
+ * ganda `StudioBlock` (M06, register §10; Swarm row 80: off by default, derived on read).
  *
  * Semua penulisan berjalan di klien transaksi milik pemanggil (submit/revisi/
  * backfill) yang sudah memegang kunci advisory dokumen (§9.1); modul ini tidak
@@ -33,7 +33,10 @@ export interface WriteRevisionRowsOptions {
    * `revive` (khusus backfill SR-37) -> identitas diaktifkan ulang.
    */
   onRetiredPid?: "reject" | "revive";
-  /** Tulis ganda M06 `StudioBlock` (bawaan true). */
+  /**
+   * Tulis ganda M06 `StudioBlock`. Swarm row 80 (ST-11, decision C6): OFF by default, so a revision
+   * stores each block once (`doc_block`). Absent = the module default (`setLegacyBlockDualWrite`).
+   */
   dualWriteLegacy?: boolean;
   correlationId?: string;
 }
@@ -43,6 +46,20 @@ export interface WriteRevisionRowsResult {
   revisionNo: number;
   counts: { sections: number; chapters: number; subsections: number; blocks: number; legacyBlocks: number };
   identities: { created: number; retired: number; revived: number };
+}
+
+/**
+ * Swarm row 80 (ST-11, C6): whether `writeRevisionRows` also writes the legacy `block` row of each
+ * block when the caller does not say. Off: the row is derived on read (`legacyBlockRowsIn`). Turning
+ * it on is the reverse step of the single write (design 04, section 3, F1) and how the row 80 test
+ * builds a store of the shape written before 1.3.3. Returns the previous value.
+ */
+let legacyDualWriteDefault = false;
+/** @internal test seam */
+export function setLegacyBlockDualWrite(on: boolean): boolean {
+  const before = legacyDualWriteDefault;
+  legacyDualWriteDefault = on;
+  return before;
 }
 
 interface NeededIdentity {
@@ -293,7 +310,7 @@ export async function writeRevisionRows(
     }
 
     let legacyBlocks = 0;
-    if (opts.dualWriteLegacy !== false && rows.blocks.length > 0) {
+    if ((opts.dualWriteLegacy ?? legacyDualWriteDefault) && rows.blocks.length > 0) {
       let fallback = 0;
       const legacy = rows.blocks.map((b) => {
         if (!b.internal) fallback++;
@@ -348,6 +365,75 @@ export async function writeRevisionRows(
     logStructureError(correlationId, "writeRevisionRows failed", err, { revisionId });
     throw err;
   }
+}
+
+/** One block of a revision in the shape of a legacy M06 `block` row (the columns its readers use). */
+export interface LegacyBlockRow {
+  blockId: string;
+  address: string;
+  artifactLabel: string | null;
+  ordinal: number;
+  type: string;
+  /** Absent when read with `withContent: false`. */
+  content?: unknown;
+  textPlain: string;
+  contentSha256: string;
+}
+
+/**
+ * Swarm row 80 (ST-11, C6): the legacy-shape rows of a revision, ordinal order, for every reader that
+ * used the `block` table. Rule: a revision that HAS `block` rows (written before 1.3.3, or a v1 document,
+ * whose only block table it is) is read from them, unchanged; a revision without them is derived by
+ * `derivedLegacyBlockRowsIn`.
+ */
+export function legacyBlockRowsIn(db: StructureDb, revisionId: string, withContent = true): LegacyBlockRow[] {
+  const stored = db.all<Record<string, unknown>>(
+    `SELECT block_id, address, artifact_label, ordinal, type, text_plain, content_sha256${withContent ? ", content" : ""} FROM block WHERE revision_id = ? ORDER BY ordinal ASC`,
+    [revisionId],
+  );
+  if (stored.length === 0) return derivedLegacyBlockRowsIn(db, revisionId, withContent);
+  return stored.map((r) => ({
+    blockId: String(r.block_id),
+    address: String(r.address),
+    artifactLabel: (r.artifact_label ?? null) as string | null,
+    ordinal: Number(r.ordinal),
+    type: String(r.type),
+    ...(withContent ? { content: parseJson<unknown>(r.content) } : {}),
+    textPlain: String(r.text_plain),
+    contentSha256: String(r.content_sha256),
+  }));
+}
+
+/**
+ * What the second write stored, rebuilt from the single copy: the `doc_block` row, with type, content,
+ * text and sha taken from the block of the same pid in `revision.snapshot.blocks` when there is one
+ * (the "internal" form `attachInternal` took from that same list), else the v2 values of the row.
+ */
+/** @internal test seam */
+export function derivedLegacyBlockRowsIn(db: StructureDb, revisionId: string, withContent = true): LegacyBlockRow[] {
+  const rows = db.all<Record<string, unknown>>(
+    `SELECT pid, address, artifact_label, ordinal, type, text_plain, content_sha256${withContent ? ", content" : ""} FROM doc_block WHERE revision_id = ? ORDER BY ordinal ASC`,
+    [revisionId],
+  );
+  if (rows.length === 0) return [];
+  const snapshot = parseJson<{ blocks?: unknown } | null>(db.get<{ snapshot: unknown }>("SELECT snapshot FROM revision WHERE id = ?", [revisionId])?.snapshot ?? null);
+  const internal = new Map<string, { type: string; content?: unknown; textPlain?: string; contentSha256: string }>();
+  for (const b of Array.isArray(snapshot?.blocks) ? (snapshot.blocks as Array<Record<string, unknown>>) : []) {
+    internal.set(String(b.pid ?? b.blockId), { type: b.type as string, content: b.content, textPlain: b.textPlain as string | undefined, contentSha256: b.contentSha256 as string });
+  }
+  return rows.map((r) => {
+    const inn = internal.get(String(r.pid));
+    return {
+      blockId: String(r.pid),
+      address: String(r.address ?? ""),
+      artifactLabel: (r.artifact_label ?? null) as string | null,
+      ordinal: Number(r.ordinal),
+      type: inn?.type ?? String(r.type),
+      ...(withContent ? { content: inn ? (inn.content ?? null) : parseJson<unknown>(r.content) } : {}),
+      textPlain: inn?.textPlain ?? String(r.text_plain),
+      contentSha256: inn ? inn.contentSha256 : String(r.content_sha256),
+    };
+  });
 }
 
 /** I47 — baca baris M14-M17 revisi (urut deterministik) + isi internal M06. */

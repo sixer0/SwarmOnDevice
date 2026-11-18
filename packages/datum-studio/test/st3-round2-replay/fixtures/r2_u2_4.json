@@ -1,0 +1,26 @@
+{
+  "caption": {"text": "Chiller, CRAH plus CDU, dan lampu masuk dari rel MDP lewat pemutus sendiri."},
+  "source": {"text": "hal 88 Gambar 12.2; IEC 60617 DB; IEC 81346 designations; nilai contoh"},
+  "spec": {
+    "family": "layered",
+    "labels_verified": false,
+    "legend": ["subject: pemutus beban", "outgoing feeder", "arus pengaman", "IEC 60617 DB · IEC 81346"],
+    "nodes": [
+      {"class": {"tier": 1}, "id": "mdp2", "label": "dari WD1", "shape": "circle"},
+      {"class": {"tier": 2}, "id": "qa13", "label": "QA13", "shape": "box", "sub": "400 A", "symbol": "iec:breaker"},
+      {"class": {"tier": 2}, "id": "qa14", "label": "QA14", "shape": "box", "sub": "160 A", "symbol": "iec:breaker"},
+      {"class": {"tier": 2}, "id": "qa15", "label": "QA15", "shape": "box", "sub": "100 A", "symbol": "iec:breaker"},
+      {"class": {"tier": 3}, "id": "m10", "label": "=M10 chillers", "shape": "box", "sub": "2 × 160 A"},
+      {"class": {"tier": 3}, "id": "dbm2", "label": "DB-M2 CRAH+CDU", "shape": "box", "sub": "tanpa rating"},
+      {"class": {"tier": 3}, "id": "p10", "label": "=P10 lights", "shape": "box", "sub": "sm. pwr"}
+    ],
+    "edges": [
+      {"from": "mdp2", "kind": "data", "label": "400 A", "to": "qa13"},
+      {"from": "mdp2", "kind": "data", "label": "160 A", "to": "qa14"},
+      {"from": "mdp2", "kind": "data", "label": "100 A", "to": "qa15"},
+      {"from": "qa13", "kind": "data", "label": "2 × 160 A", "to": "m10"},
+      {"from": "qa14", "kind": "data", "label": "160 A", "to": "dbm2"},
+      {"from": "qa15", "kind": "data", "label": "100 A", "to": "p10"}
+    ]
+  }
+}

@@ -16,6 +16,8 @@ if (checks.setup) await $`bun ./scripts/check-setup-stage.ts`
 if (checks.cli) await $`bun ./scripts/check-cli-stage.ts`
 // Row 45 (packaging spec §3.1): the same gate for the three DATUM folders (skill copy, runtime and Studio stages).
 if (checks.datum) await $`bun ./scripts/check-datum-stage.ts stage`
+// M9-01 (SD §12.1, F-6): the Office add-in stage (bun ./scripts/stage-office-addin.ts), darwin-arm64 only (U5).
+if (checks.officeAddin) await $`bun ./scripts/check-office-addin-stage.ts stage`
 
 await $`cd ../opencode && bun script/build-node.ts`
 if (channel === "dev") await downloadCliToResources()

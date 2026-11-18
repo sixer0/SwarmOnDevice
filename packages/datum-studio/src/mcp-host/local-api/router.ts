@@ -15,6 +15,8 @@ import type { HttpFetch, HttpResponseLike } from "../../../vendor/scripts/studio
 import { localStudioCaller, secretEquals } from "../../../vendor/src/lib/studio/contract/auth"
 import { apiLog } from "../../../vendor/src/lib/studio/http/log"
 import type { LocalMethod, RouteDef, RouteHandler } from "./types.ts"
+import { runAsAgentWrite, LABELS_VERIFIED_PERSON_ONLY, type LabelsVerifiedRefusal } from "../../store-bridge/labels-verified.ts"
+import { nextCall } from "../mission/next-call.ts"
 
 export const LOCAL_API_SOURCE = "datum-studio.local-api"
 const METHODS: ReadonlySet<string> = new Set(["GET", "POST", "HEAD", "PATCH"])
@@ -61,6 +63,21 @@ export interface LocalStudioApi {
 
 function jsonResponse(status: number, body: unknown, cid: string): Response {
   return Response.json(body, { status, headers: { "x-correlation-id": cid, "cache-control": "no-store" } })
+}
+
+/**
+ * 1.3.3 row 61 (ST-9 item 2, U20): the answer to an agent request whose write raised `labels_verified`. The store
+ * refused the revision (nothing is stored); route bodies map that unknown error to a generic 500, so the router
+ * answers from the refusal recorded on the agent write scope. Code and details follow register section 2; the hint is
+ * the register hint (mission/next-call.ts) and never names a way to write as the person.
+ */
+function labelsVerifiedRefused(r: LabelsVerifiedRefusal, cid: string): Response {
+  const lead =
+    r.cause === "figure-changed-after-check"
+      ? "the figure changed after the person checked its labels: send labels_verified: false with this change"
+      : "labels_verified: true is not accepted from an agent; nothing was stored"
+  const { documentId: _doc, ...details } = r
+  return jsonResponse(422, { error: `${lead}. ${nextCall(LABELS_VERIFIED_PERSON_ONLY)}`, code: LABELS_VERIFIED_PERSON_ONLY, details }, cid)
 }
 
 function toLike(res: Response): HttpResponseLike {
@@ -130,10 +147,30 @@ export function createLocalStudioApi(opts: LocalStudioApiOptions): LocalStudioAp
     headers.set("x-correlation-id", cid)
     headers.set("x-studio-agent", opts.agentId)
     const req = new Request(target.toString(), { method, headers, ...(init.body !== undefined && method !== "GET" && method !== "HEAD" ? { body: init.body } : {}) })
-    const run = (async () => {
+    // Row 61: every handler runs inside the agent write scope; this router is the only door from an MCP session's
+    // document tools to the store, so "inside the scope" means "an agent tool call".
+    const run = runAsAgentWrite(opts.agentId, async (scope) => {
+      const refused = (): Response | null => {
+        if (!scope.refusal) return null
+        apiLog({
+          correlationId: cid,
+          route: hit.route.def.pattern,
+          method,
+          source: LOCAL_API_SOURCE,
+          level: "warn",
+          message: "labels_verified: true from an agent refused",
+          code: LABELS_VERIFIED_PERSON_ONLY,
+          status: 422,
+          context: { routeId: hit.route.def.id, requester: caller.requester, documentId: scope.refusal.documentId, pointer: scope.refusal.pointer, cause: scope.refusal.cause },
+        })
+        return labelsVerifiedRefused(scope.refusal, cid)
+      }
       try {
-        return await handler(req, { params: hit.params, agentId: opts.agentId, caller, ...(opts.fileRoot ? { fileRoot: opts.fileRoot } : {}) })
+        const res = await handler(req, { params: hit.params, agentId: opts.agentId, caller, ...(opts.fileRoot ? { fileRoot: opts.fileRoot } : {}) })
+        return refused() ?? res
       } catch (e) {
+        const answer = refused()
+        if (answer) return answer
         const err = e instanceof Error ? e : new Error(String(e))
         apiLog({
           correlationId: cid,
@@ -149,7 +186,7 @@ export function createLocalStudioApi(opts: LocalStudioApiOptions): LocalStudioAp
         })
         return jsonResponse(500, { error: "Internal error", correlationId: cid }, cid)
       }
-    })()
+    })
     const signal = init.signal
     if (!signal) return toLike(await run)
     if (signal.aborted) throw abortError(signal)

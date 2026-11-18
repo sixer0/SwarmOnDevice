@@ -74,14 +74,14 @@ console.log("HEALTHFAIL=" + (r.ok && !r.changed && !r.wrote.graft && !r.wrote.sw
 b = join(B, "b"); mkdirSync(b, { recursive: true });
 r = writeConfigEntries(O(b, st(["graft"])));
 const cfgB = JSON.parse(readFileSync(configFilePath({ base: b }), "utf8"));
-console.log("GRAFT_ONLY=" + (r.ok && r.wrote.graft && !r.wrote.swarmWeb && cfgB.mcp.graft.command[2] === "mcp" && cfgB.mcp.graft.env.DO_NOT_TRACK === "1" ? "ok" : "bad"));
+console.log("GRAFT_ONLY=" + (r.ok && r.wrote.graft && !r.wrote.swarmWeb && cfgB.mcp.graft.command[2] === "mcp" && cfgB.mcp.graft.environment.DO_NOT_TRACK === "1" ? "ok" : "bad"));
 
 // (c) searxng healthy + binary staged -> swarm-web entry, NO token
 b = join(B, "c"); mkdirSync(join(b, ".swarm", "setup", "bin"), { recursive: true });
 writeFileSync(join(b, ".swarm", "setup", "bin", "swarm-web-proxy"), "#!/bin/sh");
 r = writeConfigEntries(O(b, st(["searxng"]), { searxngUrl: "http://127.0.0.1:9021" }));
 const sw = JSON.parse(readFileSync(configFilePath({ base: b }), "utf8")).mcp["swarm-web"];
-console.log("SWARMWEB=" + (r.ok && sw.timeout === 30000 && sw.env.SWARM_SEARXNG_URL === "http://127.0.0.1:9021" && sw.env.SWARM_FIRECRAWL_TOKEN === undefined ? "ok" : "bad"));
+console.log("SWARMWEB=" + (r.ok && sw.timeout === 30000 && sw.environment.SWARM_SEARXNG_URL === "http://127.0.0.1:9021" && sw.environment.SWARM_FIRECRAWL_TOKEN === undefined ? "ok" : "bad"));
 
 // (d) backup-on-modify + idempotence
 b = join(B, "d"); mkdirSync(join(b, ".config", "swarm"), { recursive: true });

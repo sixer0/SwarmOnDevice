@@ -5,6 +5,7 @@ import {
   DESKTOP_MENU,
   desktopMenuVisible,
   type DesktopMenuEntry,
+  type DesktopMenuItem,
   type DesktopMenuRole,
 } from "@opencode-ai/app/desktop-menu"
 
@@ -25,6 +26,12 @@ type Deps = {
   relaunch: () => void
   updateFromFile: () => void
   undoLastUpdate: () => void
+  // Office add-in submenu (M7-01, IM-05/IM-10). All optional so older test deps keep their shape; the Office
+  // controller (M7-03) supplies them. The state is internal to main (SD §5.2) and is read on each menu build.
+  officeAddinState?: () => "off" | "starting" | "running" | "failed" | "stopping"
+  officeAddinToggle?: () => void
+  officeAddinDisconnect?: () => void
+  officeAddinClearCache?: () => void
 }
 
 export function createMenu(deps: Deps) {
@@ -50,11 +57,28 @@ export function createMenu(deps: Deps) {
 function nativeItem(entry: DesktopMenuEntry, deps: Deps, patchEnabled: boolean): MenuItemConstructorOptions {
   if (entry.type === "separator") return { type: "separator" }
   if (entry.role) return { role: nativeRole(entry.role), label: entry.labelKey ? nativeT(entry.labelKey) : undefined }
+  if (entry.items)
+    return {
+      label: entry.labelKey ? nativeT(entry.labelKey) : undefined,
+      submenu: entry.items
+        .filter((child) => desktopMenuVisible(child, "macos"))
+        .map((child) => nativeItem(child, deps, patchEnabled)),
+    }
 
+  const officeState = deps.officeAddinState?.() ?? "off"
   const item: MenuItemConstructorOptions = {
     label: entry.labelKey ? nativeT(entry.labelKey) : undefined,
     accelerator: entry.accelerator?.macos,
-    enabled: entry.enabled === "updater" ? UPDATER_ENABLED : entry.enabled === "patch" ? patchEnabled : undefined,
+    enabled: itemEnabled(entry.enabled, patchEnabled, officeState),
+  }
+  // SD §5.2: the Enable checkbox is checked in every state except off; disabled while starting or stopping so a
+  // second click cannot race the transition in progress.
+  if (entry.checked === "officeAddin") {
+    item.type = "checkbox"
+    item.checked = officeState !== "off"
+    if (officeState === "starting" || officeState === "stopping") item.enabled = false
+    // M7-05a (C65): no toggle handler (index.ts omits it with the v2 sidecar, SD §5.3) greys the checkbox out.
+    if (!deps.officeAddinToggle) item.enabled = false
   }
 
   if (entry.command) {
@@ -72,6 +96,9 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps, patchEnabled: boolean):
         relaunch: deps.relaunch,
         updateFromFile: deps.updateFromFile,
         undoLastUpdate: deps.undoLastUpdate,
+        officeAddinToggle: deps.officeAddinToggle,
+        officeAddinDisconnect: deps.officeAddinDisconnect,
+        officeAddinClearCache: deps.officeAddinClearCache,
       })
   }
   if (entry.href) {
@@ -80,6 +107,13 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps, patchEnabled: boolean):
   }
 
   return item
+}
+
+function itemEnabled(gate: DesktopMenuItem["enabled"], patchEnabled: boolean, officeState: string) {
+  if (gate === "updater") return UPDATER_ENABLED
+  if (gate === "patch") return patchEnabled
+  if (gate === "officeAddinRunning") return officeState === "running"
+  return undefined
 }
 
 function nativeRole(role: DesktopMenuRole) {

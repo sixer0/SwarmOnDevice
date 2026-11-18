@@ -315,7 +315,8 @@ describe("SW-08, SW-09: the built-in swarm-workflow skill", () => {
     // 1.2.7 row 28 (U-6, C9, R-3, INTENT): +447 B to 11604, numbered docs/ folders in sections 2, 3, 5, 7 and the folder block.
     // 1.2.8 row 28d (C38): +37 B to 11641, verifier wording in section 0 (pin moved here by row 47, C57).
     // 1.2.8 row 47 (MEM-f, N8-023, INTENT): +311 B to 11952, close order report -> index entry -> done in section 7.
-    expect(Buffer.byteLength(WORKFLOW)).toBe(11952)
+    // 1.3.3 row 153 (S5): prefix rename (datum-studio_), context-line bullet and one deliverable folder, tightened back to -14 B: 11938.
+    expect(Buffer.byteLength(WORKFLOW)).toBe(11938)
   })
 })
 

@@ -11,8 +11,9 @@ const ui = async (locale: string): Promise<Record<string, string>> =>
 // INTENT (1.2.10 row 41, N10-098, AC-B1017w): `toast.project.folderMissing.recreateFailed` has new en and id values (key unchanged).
 const APP: Record<string, { en: string; id: string }> = {
   "session.mission.deliverable.notInProject": {
-    en: "Not in this project yet. The agent saves it to docs/{{mission}}/11_deliverables.",
-    id: "Belum ada di proyek ini. Agen menyimpannya ke docs/{{mission}}/11_deliverables.",
+    // 1.3.3 row 72 (register section 5, MC-8): the text now names the project folder deliverables/<mission>.
+    en: "Not in this project yet. Swarm saves it to deliverables/{{mission}}.",
+    id: "Belum ada di proyek ini. Swarm menyimpannya ke deliverables/{{mission}}.",
   },
   "session.mission.emptySession": {
     en: "No missions in this session. A mission started in another session shows in that session's window.",
@@ -58,8 +59,8 @@ describe("1.2.7 i18n contract (N7-081)", () => {
     }
   })
 
-  test("N7-020 changed text points to 11_deliverables and no other locale carries the key", async () => {
-    expect((await app("en"))["session.mission.deliverable.notInProject"]).toContain("docs/{{mission}}/11_deliverables.")
+  test("N7-020 text (1.3.3 row 72: now points to deliverables/<mission>) and no other locale carries the key", async () => {
+    expect((await app("en"))["session.mission.deliverable.notInProject"]).toContain("deliverables/{{mission}}.")
     expect((await app("fr"))["session.mission.deliverable.notInProject"]).toBeUndefined()
   })
 

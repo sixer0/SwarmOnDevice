@@ -22,6 +22,27 @@ const docx05 = await K.renderDocx(K.compose(K.loadCase("case05.json")))
 const doc01 = K.docXml(docx01)
 const doc05 = K.docXml(docx05)
 
+// Swarm 1.3.3 row 150 (resolution of the new failure attributed to row 63): case 01 and case 05 each hold one inline
+// diagram whose spec has no `labels_verified` (absent counts as unchecked, register section 7), so row 63's draft
+// remark "Status: draf. label belum diperiksa manusia (1 gambar)." is correct for the material as it is. Row 150
+// follow-up: the remark is added AFTER the default method text (it no longer replaces it). The F113-4 pin holds for the
+// same material with its figure checked by a person (`checked`: no remark), and the material as it is pins the method
+// text followed by the remark at the same place.
+function checked(c: Record<string, any>): Record<string, any> {
+  const walk = (x: any): void => {
+    if (Array.isArray(x)) return x.forEach(walk)
+    if (!x || typeof x !== "object") return
+    if (x.type === "diagram" && x.spec && typeof x.spec === "object") x.spec.labels_verified = true
+    Object.values(x).forEach(walk)
+  }
+  walk(c)
+  return c
+}
+const html01c = await K.renderHtml(K.compose(checked(K.loadCase("case01.json"))))
+const html05c = await K.renderHtml(K.compose(checked(K.loadCase("case05.json"))))
+const doc01c = K.docXml(await K.renderDocx(K.compose(checked(K.loadCase("case01.json")))))
+const doc05c = K.docXml(await K.renderDocx(K.compose(checked(K.loadCase("case05.json")))))
+
 /** Rows of the cover control table (HTML) as arrays of cell texts. */
 function controlRowsHtml(html: string): string[][] {
   const cover = K.unitHtml(html, "cover")
@@ -143,13 +164,34 @@ describe("F113-4 signature block and method statement", () => {
     expect(html01).toContain(".st-signature-holder::before{content:\"\";display:block;border-top:0.22mm solid var(--st-sign-rule")
   })
   test("method statement paragraph between the verification chain and the signatures (HTML and DOCX)", () => {
-    for (const [html, xml] of [[html01, doc01], [html05, doc05]] as const) {
+    // row 150: figures checked by a person (see `checked` above)
+    for (const [html, xml] of [[html01c, doc01c], [html05c, doc05c]] as const) {
       const cs = K.text(K.unitHtml(html, "controlSheet"))
       expect(cs).toMatch(/C · Pernyataan metode|Pernyataan metode/)
       expect(cs).toContain("Dokumen ini diperiksa melalui rantai verifikasi tiga lapis: V1")
       expect(cs.indexOf("Rantai verifikasi")).toBeLessThan(cs.indexOf("Dokumen ini diperiksa"))
       expect(cs.indexOf("Dokumen ini diperiksa")).toBeLessThan(cs.indexOf("Penyusun Diperiksa Disetujui"))
       expect(xml).toContain("Dokumen ini diperiksa melalui rantai verifikasi tiga lapis: V1")
+    }
+  })
+  test("row 150: the material as it is (one unchecked figure) prints the method text, then row 63's draft remark (HTML and DOCX)", () => {
+    const method = "Dokumen ini diperiksa melalui rantai verifikasi tiga lapis: V1"
+    const remark = "Status: draf. label belum diperiksa manusia (1 gambar)."
+    for (const [html, xml] of [[html01, doc01], [html05, doc05]] as const) {
+      const cs = K.text(K.unitHtml(html, "controlSheet"))
+      expect(cs).toMatch(/C · Pernyataan metode|Pernyataan metode/)
+      expect(cs).toContain(method)
+      expect(cs).toContain(remark)
+      expect(cs.indexOf("Rantai verifikasi")).toBeLessThan(cs.indexOf(method))
+      expect(cs.indexOf(method)).toBeLessThan(cs.indexOf(remark))
+      expect(cs.indexOf(remark)).toBeLessThan(cs.indexOf("Penyusun Diperiksa Disetujui"))
+      expect(xml).toContain(method)
+      expect(xml).toContain(remark)
+      expect(xml.indexOf(method)).toBeLessThan(xml.indexOf(remark))
+    }
+    for (const [html, xml] of [[html01c, doc01c], [html05c, doc05c]] as const) {
+      expect(K.text(K.unitHtml(html, "controlSheet"))).not.toContain("label belum diperiksa manusia")
+      expect(xml).not.toContain("label belum diperiksa manusia")
     }
   })
 })

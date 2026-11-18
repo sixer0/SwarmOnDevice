@@ -18,6 +18,8 @@ import {
   type Translate,
 } from "./mission-command-model"
 import { FEED_VISIBLE_ROWS, type MissionVM } from "./mission-model"
+import { decisionDocumentIds } from "./mission-deliverables-model"
+import { MissionDeliverableLinksFor } from "./mission-deliverables"
 
 // 1.2.7 U-4 (C6, R-5): about FEED_VISIBLE_ROWS feed entries show, the rest scroll. An entry is two text lines (who,
 // text) plus the 0.25rem gap; `lh` is the line height of the list.
@@ -52,6 +54,8 @@ export function MissionCommand(props: {
   sessionBusy?: (sessions: string[]) => boolean
   /** 1.2.8 row 46: the placement success toast (N8-168); default the app toast. 1.2.8 row 46b: tidy done / stopped */
   toast?: (text: string, variant?: "success" | "error") => void
+  /** 1.3.3 row 73: the mission's project folder when it is not the session's (mission-control `deliverablesFolder`) */
+  directory?: string
 }) {
   const language = useLanguage()
   const t = language.t as Translate
@@ -128,6 +132,12 @@ export function MissionCommand(props: {
               <Show when={decision().context}>
                 {(context) => <p data-mission-context class="min-w-0 [overflow-wrap:anywhere] text-v2-text-text-muted">{context()}</p>}
               </Show>
+              {/* 1.3.3 row 73 (MC-8): the revision under review of the documents this request blocks; nothing without a copy. */}
+              <For each={decisionDocumentIds(props.model)}>
+                {(documentId) => (
+                  <MissionDeliverableLinksFor mission={props.model} documentId={documentId} directory={props.directory} latestOnly />
+                )}
+              </For>
               {/* 1.2.8 row 46b: the tidy description (N8-160) and one line per listed mission (N8-161 / N8-162). */}
               <Show when={tidy()}>
                 <p data-mission-tidy-description class="text-v2-text-text-muted">{t("session.mission.tidy.description")}</p>
@@ -297,6 +307,43 @@ export function MissionCommand(props: {
                   .filter(Boolean)
                   .join(" · ")}
               </span>
+              {/* 1.3.3 row 155 (S7): a closed row whose figure labels still need a person's check. */}
+              <Show when={item().awaitingCheck}>
+                {(check) => {
+                  const n = () => check().figures.length
+                  const text = () =>
+                    n() === 0
+                      ? t("session.mission.row.awaitingCheckNoCount")
+                      : n() === 1
+                        ? t("session.mission.row.awaitingCheckOne")
+                        : t("session.mission.row.awaitingCheck", { count: n() })
+                  return (
+                    <>
+                      <Show
+                        when={check().requestId}
+                        fallback={<span data-mission-awaiting-check class="text-v2-state-fg-warning">{text()}</span>}
+                      >
+                        <button
+                          type="button"
+                          data-mission-awaiting-check
+                          data-mission-awaiting-check-link={check().requestId}
+                          class="w-fit text-left text-v2-state-fg-warning underline"
+                          onClick={() =>
+                            document.querySelector("[data-mission-decision]")?.scrollIntoView?.({ block: "nearest" })
+                          }
+                        >
+                          {text()}
+                        </button>
+                      </Show>
+                      <Show when={n() > 0}>
+                        <span data-mission-awaiting-check-figures class="break-words text-v2-text-text-faint">
+                          {t("session.mission.row.awaitingCheckFigures", { figures: check().figures.join(", ") })}
+                        </span>
+                      </Show>
+                    </>
+                  )
+                }}
+              </Show>
               <Show when={deliverable()}>
                 {(doc) => (
                   <span class="text-v2-text-text-faint">
@@ -308,6 +355,8 @@ export function MissionCommand(props: {
                   </span>
                 )}
               </Show>
+              {/* 1.3.3 row 73 (MC-8): the links of this row's deliverables (latest, older revisions folded). */}
+              <MissionDeliverableLinksFor mission={props.model} rowId={item().rowId} directory={props.directory} />
             </div>
           )}
         </Show>

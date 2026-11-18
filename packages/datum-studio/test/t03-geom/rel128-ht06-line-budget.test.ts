@@ -41,18 +41,30 @@ const fails = (s: J): J[] => run(s).filter((i) => i.status === "FAIL")
 const budget = (s: J): J[] => fails(s).filter((i) => i.checkId === "DATUM-25L")
 
 describe("AT-HT06 (N8-342): DATUM-25L line-style budget at spec level", () => {
-  test("limits are the register values (N8-213)", () => {
-    expect((tokens as J).LINE_STYLE_MAX).toBe(4)
-    expect((tokens as J).LINE_STYLE_MAX_WITH_MARK).toBe(3)
+  // 1.3.3 row 57 (ST-6, C23, INTENT): the register values 4 / 3 became 6 / 6 (the manual's six kinds, pattern first; a
+  // mark is no longer a colour, so it no longer lowers the budget).
+  test("limits are the register values (N8-213; 1.3.3 row 57: 6 and 6)", () => {
+    expect((tokens as J).LINE_STYLE_MAX).toBe(6)
+    expect((tokens as J).LINE_STYLE_MAX_WITH_MARK).toBe(6)
   })
 
-  test("4 kinds and one node mark: refused with DATUM-25L, count and limit 3 in the message", () => {
-    const f = budget(spec(4, true))
+  // 1.3.3 row 57 (INTENT): 4 kinds with a mark were refused only because the mark lowered the limit to 3; now they pass.
+  test("4 kinds and one node mark: pass, DATUM-25L listed as PASS (1.3.3 row 57)", () => {
+    expect(fails(spec(4, true))).toEqual([])
+    expect(run(spec(4, true)).some((i) => i.checkId === "DATUM-25L" && i.status === "PASS")).toBe(true)
+  })
+
+  // The refusal itself is kept: one style over the limit, with a mark, is refused with count, limit and pointer.
+  test("7 styles and one node mark: refused with DATUM-25L, count and limit 6 in the message (1.3.3 row 57)", () => {
+    const s = spec(5, true)
+    s.nodes.push({ id: "n6", label: "Simpul 6", class: { col: 1, row: 5 } }, { id: "n7", label: "Simpul 7", class: { col: 1, row: 6 } })
+    s.edges.push({ from: "n0", to: "n6", kind: "data", weight: "thick", label: "e6" }, { from: "n0", to: "n7", kind: "control", weight: "thin", label: "e7" })
+    const f = budget(s)
     expect(f.length).toBe(1)
-    expect(f[0].detail).toContain("4 gaya garis")
-    expect(f[0].detail).toContain("maksimum 3")
+    expect(f[0].detail).toContain("7 gaya garis")
+    expect(f[0].detail).toContain("maksimum 6")
     expect(f[0].pointer).toBe("/edges")
-    expect(() => core.assertValidSpec(structuredClone(spec(4, true)) as never)).toThrow(/DATUM-25L/)
+    expect(() => core.assertValidSpec(structuredClone(s) as never)).toThrow(/DATUM-25L/)
   })
 
   test("4 kinds without a mark: pass, DATUM-25L listed as PASS", () => {
@@ -60,11 +72,10 @@ describe("AT-HT06 (N8-342): DATUM-25L line-style budget at spec level", () => {
     expect(run(spec(4, false)).some((i) => i.checkId === "DATUM-25L" && i.status === "PASS")).toBe(true)
   })
 
-  test("5 kinds without a mark: refused, limit 4", () => {
-    const f = budget(spec(5, false))
-    expect(f.length).toBe(1)
-    expect(f[0].detail).toContain("5 gaya garis")
-    expect(f[0].detail).toContain("maksimum 4")
+  // 1.3.3 row 57 (ST-6, INTENT): five kinds distinguished by pattern are what ST-6 allows; refused before (limit 4).
+  test("5 kinds without a mark: pass (1.3.3 row 57; was refused, limit 4)", () => {
+    expect(budget(spec(5, false))).toEqual([])
+    expect(run(spec(5, false)).some((i) => i.checkId === "DATUM-25L" && i.status === "PASS")).toBe(true)
   })
 
   test("3 kinds with a mark: pass, check not run (`ran` unchanged for specs within the lower limit)", () => {

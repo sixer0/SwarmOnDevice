@@ -67,7 +67,11 @@ async function withTimeout<T>(p: Promise<T>, ms: number, onTimeout: () => void):
 
 type Job<T> = (dbg: Debugger, wc: WebContents) => Promise<T>
 
-async function inWindow<T>(kind: WindowKind, width: number, height: number, html: string, job: Job<T>, deviceScaleFactor = 1): Promise<T> {
+// 1.3.4 (T-06): the window, its guards and its teardown live in `openRenderWindow`, which never sees the page HTML, so
+// no listener closure can keep a page alive; `inWindow` only holds `html` while the job runs. Teardown removes every
+// listener before destroying the window. Background: an app-wide context menu kept each render window's WebContents,
+// and through the old shared closure scope the 9-18 MB page of every job (heap snapshot 2026-11-18).
+function openRenderWindow(kind: WindowKind, width: number, height: number) {
   const win = new BrowserWindow({
     show: false,
     paintWhenInitiallyHidden: true,
@@ -80,18 +84,33 @@ async function inWindow<T>(kind: WindowKind, width: number, height: number, html
     webPreferences: renderWebPreferences(kind),
   })
   const wc = win.webContents
-  let ready = false
+  const state = { ready: false }
   wc.setWindowOpenHandler(() => ({ action: "deny" }))
   wc.on("will-navigate", (event) => event.preventDefault())
   wc.on("will-redirect", (event) => event.preventDefault())
   wc.on("will-frame-navigate", (event) => {
-    if (ready) event.preventDefault()
+    if (state.ready) event.preventDefault()
   })
   wc.setAudioMuted(true)
+  const close = () => {
+    try {
+      if (wc.debugger.isAttached()) wc.debugger.detach()
+    } catch {}
+    if (!wc.isDestroyed()) {
+      wc.setWindowOpenHandler(() => ({ action: "deny" }))
+      wc.removeAllListeners()
+    }
+    if (!win.isDestroyed()) win.destroy()
+  }
+  return { win, wc, state, close }
+}
+
+async function inWindow<T>(kind: WindowKind, width: number, height: number, html: string, job: Job<T>, deviceScaleFactor = 1): Promise<T> {
+  const { win, wc, state, close } = openRenderWindow(kind, width, height)
   const dbg = wc.debugger
   const run = async () => {
     await win.loadURL("about:blank")
-    ready = true
+    state.ready = true
     dbg.attach("1.3")
     await dbg.sendCommand("Page.enable")
     // Page script never runs, also in the check window where V8 stays on for Runtime.evaluate.
@@ -114,14 +133,9 @@ async function inWindow<T>(kind: WindowKind, width: number, height: number, html
     return job(dbg, wc)
   }
   try {
-    return await withTimeout(run(), JOB_TIMEOUT_MS, () => {
-      if (!win.isDestroyed()) win.destroy()
-    })
+    return await withTimeout(run(), JOB_TIMEOUT_MS, close)
   } finally {
-    try {
-      if (dbg.isAttached()) dbg.detach()
-    } catch {}
-    if (!win.isDestroyed()) win.destroy()
+    close()
   }
 }
 

@@ -66,6 +66,38 @@ function callKey(part: SessionV1.ToolPart) {
 
 export type Result = "compact" | "stop" | "continue"
 
+// MC-2: a turn that ends without doing work says why. The reason is stored in the assistant message's existing
+// `finish` string (no schema change); the provider's own reason stays on the `step-finish` part. `error` is left
+// unset: these turns are not failures of the run, and an error would change the loop result, the error event and the
+// "failed" lane. Every other `finish` value is untouched.
+/** @internal test seam */
+export const TURN_END_REASONS = ["text-tool-call", "tools-unavailable", "empty-step"] as const
+export type TurnEndReason = (typeof TURN_END_REASONS)[number]
+const TURN_END_LOG = "turn ended without work"
+
+export type TurnEnd =
+  | { reason: "text-tool-call" | "empty-step"; corrections: number }
+  | { reason: "tools-unavailable"; server: string; corrections: number }
+
+/** The value stored in `finish`: the reason, and for `tools-unavailable` the server after a colon. */
+/** @internal test seam */
+export function turnEndFinish(end: TurnEnd): string {
+  if (end.reason !== "tools-unavailable") return end.reason
+  const server = end.server.trim()
+  return server ? `${end.reason}:${server}` : end.reason
+}
+
+/** Reads a stored `finish`. Undefined for every value that is not one of the three end reasons. */
+/** @internal test seam */
+export function parseTurnEnd(finish: string | undefined): { reason: TurnEndReason; server?: string } | undefined {
+  if (!finish) return undefined
+  if (finish === "text-tool-call" || finish === "empty-step" || finish === "tools-unavailable") return { reason: finish }
+  const prefix = "tools-unavailable:"
+  if (finish.startsWith(prefix) && finish.length > prefix.length)
+    return { reason: "tools-unavailable", server: finish.slice(prefix.length) }
+  return undefined
+}
+
 export interface Handle {
   readonly message: SessionV1.Assistant
   readonly updateToolCall: (
@@ -82,6 +114,11 @@ export interface Handle {
     },
   ) => Effect.Effect<void>
   readonly process: (streamInput: LLM.StreamInput) => Effect.Effect<Result>
+  /**
+   * Ends the turn without work: stores the reason in `finish`, saves the message and writes one log line. Called by
+   * the session loop after `process` returned, never during a step. `error` is not set.
+   */
+  readonly endWithoutWork: (end: TurnEnd) => Effect.Effect<void>
 }
 
 type Input = {
@@ -513,6 +550,16 @@ const layer = Layer.effect(
             ctx.assistantMessage.finish = value.reason
             ctx.assistantMessage.cost += usage.cost
             ctx.assistantMessage.tokens = usage.tokens
+            // 1.3.3 row 113 (SB-2): one line per step so cache hits can be read from the log, not only the stored part.
+            yield* Effect.logInfo("step finish", {
+              "session.id": ctx.sessionID,
+              messageID: ctx.assistantMessage.id,
+              reason: value.reason,
+              "tokens.input": usage.tokens.input,
+              "tokens.output": usage.tokens.output,
+              "tokens.cache.read": usage.tokens.cache.read,
+              "tokens.cache.write": usage.tokens.cache.write,
+            })
             noteAttemptPart(
               yield* session.updatePart({
                 id: PartID.ascending(),
@@ -795,6 +842,19 @@ const layer = Layer.effect(
         })
       })
 
+      const endWithoutWork = Effect.fn("SessionProcessor.endWithoutWork")(function* (end: TurnEnd) {
+        ctx.assistantMessage.finish = turnEndFinish(end)
+        ctx.assistantMessage.time.completed ??= Date.now()
+        yield* session.updateMessage(ctx.assistantMessage)
+        yield* Effect.logWarning(TURN_END_LOG, {
+          "session.id": ctx.sessionID,
+          messageID: ctx.assistantMessage.id,
+          reason: end.reason,
+          ...(end.reason === "tools-unavailable" && end.server.trim() ? { server: end.server.trim() } : {}),
+          corrections: end.corrections,
+        })
+      })
+
       return {
         get message() {
           return ctx.assistantMessage
@@ -802,6 +862,7 @@ const layer = Layer.effect(
         updateToolCall,
         completeToolCall,
         process,
+        endWithoutWork,
       } satisfies Handle
     })
 

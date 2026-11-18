@@ -158,15 +158,16 @@ describe("schema and open", () => {
       const tables = db
         .all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'doc_block_fts_%' AND name NOT LIKE 'mission%' AND name <> 'output_verification' ORDER BY name")
         .map((r) => r.name)
-      expect(tables.length).toBe(20)
+      expect(tables.length).toBe(21) // 1.3.3 row 82: + revision_prune (0010)
       expect(tables).toContain("migration")
       expect(tables).toContain("doc_block_fts")
       const triggers = db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name NOT LIKE 'mission%' ORDER BY name").map((r) => r.name)
-      expect(triggers).toEqual(["doc_block_fts_ad", "doc_block_fts_ai", "doc_block_immutable", "revision_immutable", "template_version_immutable", "template_version_no_delete"])
+      // 1.3.3 row 82: 0010 adds revision_delete_guard, revision_prune_referenced, revision_prune_unmark; the 0001 triggers are unchanged
+      expect(triggers).toEqual(["doc_block_fts_ad", "doc_block_fts_ai", "doc_block_immutable", "revision_delete_guard", "revision_immutable", "revision_prune_referenced", "revision_prune_unmark", "template_version_immutable", "template_version_no_delete"])
       // row 64: 0002 adds columns + an index only, so the table and trigger lists above are unchanged
       // row 119a: 0003 adds only mission_* tables and triggers (asserted in mission-store.test.ts), filtered out above
       // row 149: 0004 adds only output_verification + 2 indexes, no trigger (asserted in output-verification.test.ts), filtered out above
-      expect(db.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((r) => r.id)).toEqual(["20261106000000_datum_studio_init", "20261106120000_datum_template_guard", "20261107000000_datum_mission", "20261107120000_datum_output_verification", "20261108000000_datum_mission_gsp_tiers", "20261108120000_datum_mission_autonomous_decision", "20261112000000_datum_mission_document_link", "20261114000000_datum_decision_provenance"]) // 1.2.8 row 45b: + 0008
+      expect(db.all<{ id: string }>("SELECT id FROM migration ORDER BY id").map((r) => r.id)).toEqual(["20261106000000_datum_studio_init", "20261106120000_datum_template_guard", "20261107000000_datum_mission", "20261107120000_datum_output_verification", "20261108000000_datum_mission_gsp_tiers", "20261108120000_datum_mission_autonomous_decision", "20261112000000_datum_mission_document_link", "20261114000000_datum_decision_provenance", "20261117000000_datum_mission_row_contract", "20261117120000_datum_revision_retention", "20261117180000_datum_purge_fk_indexes"]) // 1.2.8 row 45b: + 0008, 1.3.3 row 5: + 0009, 1.3.3 row 82: + 0010, 1.3.3 row 144: + 0011
       const meta = Object.fromEntries(db.all<{ key: string; value: string }>("SELECT key, value FROM store_meta").map((r) => [r.key, r.value]))
       expect(meta.schema_version).toBe(latestSchemaId())
       expect(meta.created_by_release).toBe(RELEASE)
@@ -185,11 +186,12 @@ describe("schema and open", () => {
     const again = new SqliteStudioStore()
     await again.open(join(RUN, "main"), { release: RELEASE })
     const db = openSqlite(join(RUN, "main", "datum-studio.sqlite"), { readonly: true })
-    expect(Number(db.get<{ n: number }>("SELECT count(*) AS n FROM migration")!.n)).toBe(8) // 1.2.6 row 86: + 0007, 1.2.8 row 45b: + 0008
+    expect(Number(db.get<{ n: number }>("SELECT count(*) AS n FROM migration")!.n)).toBe(11) // 1.2.6 row 86: + 0007, 1.2.8 row 45b: + 0008, 1.3.3 row 5: + 0009, 1.3.3 row 82: + 0010, 1.3.3 row 144: + 0011
     db.close()
     await again.close()
     await store.open(join(RUN, "main"), { release: RELEASE, log: (e) => logs.push(e), agentClock: clock })
-    expect(MIGRATIONS.map((m) => m.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(MIGRATIONS.map((m) => m.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) // 1.3.3 row 144: + 11
+    // 1.3.3 row 5 (decision C6 item e) held 0010 for row 82; row 82 took it and emptied the reservation (C13).
     expect(Object.keys(RESERVED_MIGRATIONS)).toEqual([])
   })
 

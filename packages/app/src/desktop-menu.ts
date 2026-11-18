@@ -10,6 +10,10 @@ export type DesktopMenuAction =
   | "app.installDatumStudio"
   | "app.recheckTools"
   | "app.relaunch"
+  // Office Add-in submenu (SD-RC-3, register rev 4 §3): handled in desktop main only, never via renderer IPC (IA-6).
+  | "app.officeAddinToggle"
+  | "app.officeAddinDisconnect"
+  | "app.officeAddinClearCache"
   | "edit.undo"
   | "edit.redo"
   | "edit.cut"
@@ -59,8 +63,14 @@ export type DesktopMenuItem = {
   accelerator?: Partial<Record<DesktopMenuPlatform, string>>
   // "updater": electron-updater gate. "patch": signed-patch menu gate
   // (PATCH_MENU_ENABLED, register 14.5-8), resolved by the desktop main process.
-  enabled?: "updater" | "patch"
+  // "officeAddinRunning": enabled only while the Office bridge is running (SD §13.1), resolved by desktop main.
+  enabled?: "updater" | "patch" | "officeAddinRunning"
   platforms?: DesktopMenuPlatform[]
+  // IA-3 (C13): optional fields, not a new DesktopMenuEntry member, so every existing reader still compiles.
+  // checked: checkbox item whose state desktop main resolves ("officeAddin" = the bridge state, SD §5.2).
+  checked?: "officeAddin"
+  // items: submenu children. Only on macOS-only entries; the Windows renderer does not draw submenus of items.
+  items?: DesktopMenuItem[]
 }
 
 export type DesktopMenuSeparator = {
@@ -98,6 +108,27 @@ export const DESKTOP_MENU: DesktopMenu[] = [
       { type: "item", labelKey: "desktop.menu.installDatumStudio", action: "app.installDatumStudio" },
       // SEC-05 / C9 (1.2.6 row 91): the person trigger of the tool-health re-check (may revive consent "manual" tools).
       { type: "item", labelKey: "desktop.menu.recheckTools", action: "app.recheckTools" },
+      // Office Add-in (SD-RC-3, SD §13.1): macOS-only submenu; Enable is a checkbox, unchecking it runs Disable.
+      {
+        type: "item",
+        labelKey: "desktop.menu.officeAddin",
+        platforms: ["macos"],
+        items: [
+          {
+            type: "item",
+            labelKey: "desktop.menu.officeAddin.enable",
+            action: "app.officeAddinToggle",
+            checked: "officeAddin",
+          },
+          {
+            type: "item",
+            labelKey: "desktop.menu.officeAddin.disconnect",
+            action: "app.officeAddinDisconnect",
+            enabled: "officeAddinRunning",
+          },
+          { type: "item", labelKey: "desktop.menu.officeAddin.clearCache", action: "app.officeAddinClearCache" },
+        ],
+      },
       { type: "item", labelKey: "desktop.menu.reloadWebview", action: "view.reload" },
       { type: "item", labelKey: "desktop.menu.restart", action: "app.relaunch" },
       { type: "item", labelKey: "desktop.menu.exportLogs", command: "logs.export" },

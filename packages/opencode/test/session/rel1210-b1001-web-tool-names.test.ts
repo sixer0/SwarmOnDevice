@@ -193,8 +193,10 @@ describe("B10-01 the installed-tools block names swarm-web_search and swarm-web_
             })
           yield* turn("first")
           yield* turn("second")
-          const systems = (yield* llm.hits).map((hit) => textOf(hit.body, "system"))
+          // SB-2 (row 112): the block is in turn 1's saved turn facts part; turn 2 repeats that message unchanged.
+          const systems = (yield* llm.hits).map((hit) => textOf(hit.body, "user"))
           expect(systems).toHaveLength(2)
+          expect(systems[1]!.split("<installed_tools>")).toHaveLength(2)
           const first = blockOf(systems[0]!)
           const second = blockOf(systems[1]!)
           expect(first).toBeDefined()

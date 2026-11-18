@@ -10,6 +10,7 @@ import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { PERSON_KEY, personCaller } from "./_attested-person.ts"
+import { giveProjectCopy } from "../mc8-deliverable-gate/_project-copy.ts"
 
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
@@ -172,6 +173,7 @@ describe("row 155: row done gate (guard on)", () => {
   test("B12-style unverified output: done refused OUTPUT_UNVERIFIED (NOT_CHECKED), also with a decision; deliverables read shows verified=false", async () => {
     docA = await deliverable("row-1-kajian", "Kajian row 155", "# Uji\n\nPengukuran titik uji dicatat tiap bulan.\n")
     await render(docA, ["html"])
+    await giveProjectCopy(store, docA) // 1.3.3 row 70 (MC-8): needs-review needs the project copy; this test is about the output gate
     await toReview("1")
     const refused = await setRow("1", "done")
     quote("row 1 done, unverified", { code: refused.code, message: refused.error?.message, details: refused.error?.details })
@@ -235,15 +237,18 @@ describe("row 155: row done gate (guard on)", () => {
 
   test("B12: deliverable created, never rendered -> refused NOT_RENDERED", async () => {
     docC = await deliverable("row-3-laporan", "Laporan row 3")
-    await toReview("3")
-    const r = await setRow("3", "done")
+    // 1.3.3 row 70 (MC-8): a never-rendered document has no project copy, so needs-review is now refused (this step
+    // succeeded before); the row goes running -> done with a note instead, and the output gate's refusal is unchanged.
+    expect(code(await setRow("3", "running"))).toBe("OK")
+    expect(code(await setRow("3", "needs-review"))).toBe("DELIVERABLE_NOT_IN_PROJECT")
+    const r = await call("studio_mission_update_row", { mission: M, rows: [{ id: "3", status: "done", note: "checked: render not made yet" }] })
     quote("row 3 done, not rendered", { code: r.code, details: r.error?.details })
     expect(code(r)).toBe("OUTPUT_UNVERIFIED")
     expect(r.error.details.deliverables[0]).toMatchObject({ documentId: docC, docKey: "row-3-laporan", final: false })
-    expect(r.error.details.deliverables[0].outputs).toContainEqual({ outputId: null, format: null, state: "unverified", reason: "NOT_RENDERED" })
+    expect(r.error.details.deliverables[0].outputs).toContainEqual({ outputId: null, format: null, state: "unverified", reason: "NOT_RENDERED", verified: false, missing: [{ kind: "file-missing", fix: "studio_render" }] }) // 1.3.3 row 67: + verified, missing
   })
 
-  test("B13: a verified DOCX alone has no layout witness -> refused NO_LAYOUT_WITNESS", async () => {
+  test("B13: a verified DOCX beside an unverified HTML -> refused for the HTML, not for a layout witness (1.3.3 row 66)", async () => {
     const d = await deliverable("row-4-memo", "Memo row 4", "# Memo\n\nIsi memo singkat.\n")
     await render(d, ["docx"])
     const set = await outputSet(d)
@@ -251,13 +256,19 @@ describe("row 155: row done gate (guard on)", () => {
     // Row 154: the studio_render wrapper adds the measured HTML (§6.1) and records it; with no render bridge in this
     // test its OVERLAP_CLIP is UNKNOWN, so the HTML stays unverified and only the DOCX is verified here.
     for (const o of set.outputs.filter((x) => x.format === "DOCX")) await verify(o.outputId, o.sha256, "verified", ["PASS"])
+    await giveProjectCopy(store, d) // 1.3.3 row 70 (MC-8): needs-review needs the project copy
     await toReview("4")
     const r = await setRow("4", "done")
     quote("row 4 done, docx only", { code: r.code, outputs: r.error?.details?.deliverables?.[0]?.outputs, set: set.outputs.map((o) => o.format) })
     expect(set.outputs.map((o) => o.format).sort()).toEqual(["DOCX", "HTML"])
     expect(set.outputs.find((o) => o.format === "HTML")!.state).toBe("unverified")
     expect(code(r)).toBe("OUTPUT_UNVERIFIED")
-    expect(r.error.details.deliverables[0].outputs).toContainEqual({ outputId: null, format: null, state: "unverified", reason: "NO_LAYOUT_WITNESS" })
+    // 1.3.3 row 66 (MC-5, U20): a layout witness is no longer a condition of closing, so the refusal has no
+    // document-level NO_LAYOUT_WITNESS entry; the row is refused because the HTML of this revision is not verified.
+    const outs = r.error.details.deliverables[0].outputs as S[]
+    expect(outs.map((o) => `${o.format}:${o.reason}`)).toEqual(["HTML:CHECK_UNKNOWN"])
+    expect(outs[0].verified).toBe(false)
+    expect(outs[0].missing.length).toBeGreaterThan(0)
   }, 60_000)
 })
 
@@ -266,6 +277,8 @@ describe("row 155: guard off (store reopened with missionGuard: false)", () => {
     await stop()
     await start(false)
     expect(store.missionGuardEnabled).toBe(false)
+    // 1.3.3 row 70: row 3 stayed running (B12); with the guard off needs-review has no project-copy check either.
+    expect(code(await setRow("3", "needs-review"))).toBe("OK")
     const r = await setRow("3", "done")
     quote("row 3 done, guard off", { code: code(r) })
     expect(code(r)).toBe("OK")

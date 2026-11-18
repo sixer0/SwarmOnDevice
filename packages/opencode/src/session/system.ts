@@ -308,6 +308,9 @@ export interface Interface {
   /** `focus`: the session's first user message, for `<suggested_skills>` (SK-g). Without a match the output is as before. */
   readonly skills: (agent: Agent.Info, focus?: SkillFocus) => Effect.Effect<string | undefined>
   readonly mcp: (agent: Agent.Info, permission?: PermissionV1.Ruleset) => Effect.Effect<string | undefined>
+  /** SB-2 (row 112): the `<installed_tools>` block, read fresh. It changes when a server connects or a tool is
+   *  installed, so it travels in the turn facts block (turn-facts.ts), never in the cached system prefix. */
+  readonly installed: () => Effect.Effect<string | undefined>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SystemPrompt") {}
@@ -325,18 +328,8 @@ const layer = Layer.effect(
         const references = yield* Effect.gen(function* () {
           return (yield* (yield* Reference.Service).list()).filter((reference) => reference.description !== undefined)
         }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))))
-        // Read fresh on every call: the prompt loop calls this once per person message, so a tool installed or
-        // removed mid-session shows from the next message on, and subagent sessions run the same loop.
-        const healthy = yield* InstalledTools.healthy()
-        const tools =
-          healthy.length === 0
-            ? undefined
-            : installedTools(
-                healthy,
-                Object.entries(yield* mcp.status())
-                  .filter(([, entry]) => entry.status === "connected")
-                  .map(([key]) => key),
-              )
+        // SB-2 (row 112): only facts that stay put for the session. The date and the installed tools change during a
+        // session; they are in the turn facts block (`installed()` below, turn-facts.ts), after the cached prefix.
         return [
           [
             `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
@@ -346,7 +339,6 @@ const layer = Layer.effect(
             `  Workspace root folder: ${ctx.worktree}`,
             `  Is directory a git repo: ${ctx.project.vcs === "git" ? "yes" : "no"}`,
             `  Platform: ${process.platform}`,
-            `  Today's date: ${new Date().toDateString()}`,
             `</env>`,
           ].join("\n"),
           references.length === 0
@@ -367,8 +359,20 @@ const layer = Layer.effect(
                   ]),
                 "</available_references>",
               ].join("\n"),
-          tools,
         ].filter((part): part is string => part !== undefined)
+      }),
+
+      installed: Effect.fn("SystemPrompt.installed")(function* () {
+        // Read fresh on every call: a tool installed or removed, or its MCP server connecting, shows from the next
+        // person message on, and subagent sessions run the same loop.
+        const healthy = yield* InstalledTools.healthy()
+        if (healthy.length === 0) return
+        return installedTools(
+          healthy,
+          Object.entries(yield* mcp.status())
+            .filter(([, entry]) => entry.status === "connected")
+            .map(([key]) => key),
+        )
       }),
 
       skills: Effect.fn("SystemPrompt.skills")(function* (agent: Agent.Info, focus?: SkillFocus) {

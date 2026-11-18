@@ -81,7 +81,7 @@ function unit(b: NormBlock, role: string, text: string): TextUnit {
 
 export function extractLayers(s: NormDocSnapshot): Layers {
   const layers: Layers = { prose: [], narrative: [], lists: [] };
-  for (const b of s.blocks) {
+  for (const b of Array.isArray(s.blocks) ? s.blocks : []) {
     const c = b.content;
     if (!isRecord(c)) continue;
     if (b.type === "paragraph") {

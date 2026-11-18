@@ -3,7 +3,7 @@
  * Markdown resmi `md/v1` -> `studio.chapter/v2` KONTEN-SAJA. HANYA mengubah: tidak menyimpan
  * revisi, berkas, maupun aset, dan tidak merender.
  *
- * Badan `{ markdown, chapterKey, title?, agentId?, target?, template?, meta?, slot? }`.
+ * Badan `{ markdown, chapterKey, title?, agentId?, target?, template?, meta?, slot?, baseRevisionNo? }`.
  *   200 `{ chapter, submission?, report: { importer, warnings, dropped, mapping }, validation }`;
  *   `submission` (amplop `studio.chapter/v2` siap POST R12) hanya bila `target` diberikan.
  * `?validate=1`: sesudah konversi, dry-run kiriman bab yang SAMA dengan R08 (`dryRunChapter`,
@@ -11,6 +11,9 @@
  * `dryRun` `{ ran, valid, issues, lint?, completenessPreview?, submitPreview? }`. Dihitung
  * pembatas laju R08 (ember sama, 429 `RATE_LIMITED`); isu galat layanan memakai pemeta R08 bersama
  * (`validate/_shared/error-issues.ts`), jadi `details` (mis. `overwrittenPids`) ikut (FIX-HR1, C2).
+ * Swarm 1.3.3 row 75 (ST-10): `baseRevisionNo` (the revision the caller read) goes into the dry run exactly as R12
+ * will receive it, so the dry run and the real submission judge the same base (overwrite guard and base check §9.2).
+ * It is not part of the returned `submission`; the caller adds it when it posts R12, as before.
  * FIX-HR1 (D-334 H-01): SETIAP panggilan dihitung ember impor sendiri (`_lib/import-rate.ts`)
  * sebelum badan dibaca; badan maks `MD_IMPORT_MAX_BODY_BYTES`; markdown dibatasi karakter, baris,
  * blok, dan lebar tabel -> 413 `PAYLOAD_TOO_LARGE` dengan `details.reason`.
@@ -41,7 +44,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const ROUTE = "/api/studio/import/markdown";
-const ALLOWED_FIELDS = new Set(["markdown", "chapterKey", "title", "agentId", "target", "template", "meta", "slot"]);
+const ALLOWED_FIELDS = new Set(["markdown", "chapterKey", "title", "agentId", "target", "template", "meta", "slot", "baseRevisionNo"]);
 /** Galat dry-run yang tetap HTTP (bukan `valid:false`), selaras R08. */
 const HARD_CODES = new Set(["UNAUTHORIZED", "FORBIDDEN", "PAYLOAD_TOO_LARGE", "JSON_MALFORMED"]);
 
@@ -60,6 +63,8 @@ interface ParsedBody {
   title?: string;
   agentId?: string;
   envelope?: MdEnvelopeOptions;
+  /** Row 75: base of the dry run (needs `target`). */
+  baseRevisionNo?: number;
 }
 
 /** Bentuk badan; isu berpointer (400 SCHEMA_INVALID). Isi amplop divalidasi skema v2 sesudah konversi. */
@@ -79,6 +84,13 @@ function parseBody(b: Record<string, unknown>): { ok: true; value: ParsedBody } 
   if (b.target === undefined && (b.template !== undefined || b.meta !== undefined || b.slot !== undefined)) {
     issues.push({ pointer: "/target", keyword: "required", message: "template, meta and slot belong to the submission envelope and need target" });
   }
+  if (b.baseRevisionNo !== undefined) {
+    if (typeof b.baseRevisionNo !== "number" || !Number.isInteger(b.baseRevisionNo) || b.baseRevisionNo < 1) {
+      issues.push({ pointer: "/baseRevisionNo", keyword: "type", message: "must be an integer >= 1" });
+    } else if (b.target === undefined) {
+      issues.push({ pointer: "/target", keyword: "required", message: "baseRevisionNo is the base of the dry-run submission and needs target" });
+    }
+  }
   if (issues.length > 0) return { ok: false, issues };
   const envelope: MdEnvelopeOptions | undefined = isRecord(b.target)
     ? {
@@ -96,15 +108,17 @@ function parseBody(b: Record<string, unknown>): { ok: true; value: ParsedBody } 
       ...(typeof b.title === "string" ? { title: b.title } : {}),
       ...(typeof b.agentId === "string" ? { agentId: b.agentId } : {}),
       ...(envelope ? { envelope } : {}),
+      ...(typeof b.baseRevisionNo === "number" ? { baseRevisionNo: b.baseRevisionNo } : {}),
     },
   };
 }
 
 /** Dry-run R08 (`dryRunChapter`) atas amplop hasil konversi; galat masukan 4xx -> `valid:false`. */
-async function dryRun(result: MarkdownImportResult, caller: StudioCaller, ctx: ReqCtx): Promise<DryRunOutcome> {
+async function dryRun(result: MarkdownImportResult, caller: StudioCaller, ctx: ReqCtx, baseRevisionNo?: number): Promise<DryRunOutcome> {
   if (!result.submission || !result.validation.valid) return { ran: false, valid: false, issues: result.validation.issues };
   try {
-    const dry = await dryRunChapter(caller, result.submission);
+    // Row 75: the dry run carries the caller's base, as the R12 submission will.
+    const dry = await dryRunChapter(caller, baseRevisionNo !== undefined ? { ...result.submission, baseRevisionNo } : result.submission);
     const res = dry.result;
     return {
       ran: true,
@@ -180,7 +194,7 @@ async function postImport(req: NextRequest, ctx: ReqCtx): Promise<Response> {
     }
 
     const out: MarkdownImportResult & { dryRun?: DryRunOutcome } = { ...result };
-    if (wantValidate) out.dryRun = await dryRun(result, caller, ctx);
+    if (wantValidate) out.dryRun = await dryRun(result, caller, ctx, p.baseRevisionNo);
     apiLog({
       ...ctx,
       level: "info",

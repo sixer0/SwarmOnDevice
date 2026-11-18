@@ -110,6 +110,7 @@ export const LINUX_SKILL_IMPORTS = ["datumbind", "datumcheck", "embed_fonts", "d
 // Row 123 (spec 114 §5.1, §5.4.2; register R2.8, R5.13, R5.14, R6.3, R6.4, R12.5): win32-x64 pins. Interpreter:
 // R5.13 / research 02_collection_python_cross.md:21. lxml and pillow win_amd64 (row 177, S115-03): the PyPI digests of
 // 02_collection_python_cross.md:55,57. The six pure wheels and the shim are the darwin entries, unchanged.
+/** @internal test seam */
 export const PYTHON_WIN = {
   version: "3.14.10",
   release: "20261026",
@@ -122,14 +123,17 @@ const WIN_NATIVE_WHEELS = {
   lxml: { name: "lxml", version: "6.1.3", file: "lxml-6.1.3-cp314-cp314-win_amd64.whl", size: 4073951, sha256: "66299564c046bc7e0cc5de5106601eae907e9fa5904cd68a323380a8502f7861", url: `${PYPI}/0f/bc/5811cc73cac05e324e05ba9b0924e1a163a317a167ede8a9c748b11db30a/lxml-6.1.3-cp314-cp314-win_amd64.whl` },
   pillow: { name: "pillow", version: "13.0.0", file: "pillow-13.0.0-cp314-cp314-win_amd64.whl", size: 7281830, sha256: "f7cbb7a64e7ec664775195e4f81923bc8a93d9451b963f844e59118f63147a7a", url: `${PYPI}/50/e2/7ad17747517e4c813dca78257d6bb593466f8231baf1384bc98d92745edb/pillow-13.0.0-cp314-cp314-win_amd64.whl` },
 } as const
+/** @internal test seam */
 export const WHEELS_WIN = WHEELS.map((w) => (w.name === "lxml" || w.name === "pillow" ? WIN_NATIVE_WHEELS[w.name] : w))
 const WIN_SITE = "python/Lib/site-packages"
 // site-packages -> Lib -> python -> datum-runtime -> resources: 4 levels on Windows (spec 114 §5.1, WP-PY-2).
+/** @internal test seam */
 export const WIN_PTH_LINE = "../../../../datum-house-style/scripts"
 // Removed on win32 (spec 114 §5.1): no pythonw, no Scripts/include/libs/tcl, no tkinter DLLs.
 const WIN_PRUNE_TOP = ["pythonw.exe", "Scripts", "include", "libs", "tcl"]
 const WIN_PRUNE_STDLIB = PRUNE_STDLIB.filter((n) => n !== "config-3.14-darwin")
 // Spec 114 §5.4.2 (L26, S115-02), exact text, CRLF (WP-SEC-2).
+/** @internal test seam */
 export const WIN_LAUNCHER = [
   "@echo off",
   "setlocal DisableDelayedExpansion",

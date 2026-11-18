@@ -250,17 +250,71 @@ export function assertFileWriteEnabled(enabled: boolean, what: string): void {
  * SEC-FIX L-2: folder unduhan dari argumen alat (`downloadDir`), divalidasi SEBELUM jaringan dan sebelum folder
  * dibuat: di dalam akar, bukan UNC/ADS/perangkat, dan bukan folder instruksi (`.claude`, `.git`, ...), baik
  * sebagai induk maupun sebagai nama folder itu sendiri. Satu pembantu untuk semua alat yang mengunduh.
+ *
+ * Swarm patch (1.3.3 row 69, MC-8 item 2): `raw` may be relative. A relative path is joined to `projectDir` (the
+ * mission's project folder, the same folder that receives the mandatory deliverable copy) and NEVER to the server's
+ * working directory; without a project the call is refused. The result must then pass every rule an absolute path
+ * passes (roots, lexical, instruction folders, realpath) AND its real path must stay inside the real project
+ * folder. An absolute `raw` takes exactly the pre-1.3.3 path: `projectDir` is not read for it.
+ * `downloadDir` is an extra convenience copy; it never replaces the project copy made after a verified render.
  */
-export function resolveDownloadDir(raw: string, roots: readonly string[], nfs: NodeFs): string {
+export function resolveDownloadDir(raw: string, roots: readonly string[], nfs: NodeFs, projectDir?: string | null): string {
+  if (isRelativeDownloadDir(raw)) return resolveProjectRelativeDir(raw, roots, nfs, projectDir);
   return resolveAllowedPath(raw, roots, "write-dir", nfs);
+}
+
+/**
+ * row 69: true when `raw` is to be read as project-relative. NUL, UNC and device forms are never "relative": they go
+ * to the absolute rules, which refuse them with the same text as before.
+ */
+export function isRelativeDownloadDir(raw: string): boolean {
+  if (raw.includes("\u0000") || /^[\\/]{2}/.test(raw) || /^\\\?\?\\/.test(raw)) return false;
+  return !path.isAbsolute(raw);
+}
+
+function outsideProject(resolved: string, project: string): McpToolError {
+  return new McpToolError("PATH_OUTSIDE_ROOTS", `path ${resolved} di luar folder proyek (${project}): downloadDir relatif harus tetap di dalam folder proyek, juga sesudah tautan (symlink/junction) diikuti`);
+}
+
+/** row 69: real path of `dir` must lie inside the real path of `project` (both may not exist yet). */
+function assertInsideProject(dir: string, project: string, nfs: NodeFs): void {
+  if (!isInside(realpathDeep(dir, nfs), realpathDeep(project, nfs))) throw outsideProject(dir, project);
+}
+
+/** row 69: lexical rules for a project-relative `downloadDir`, then the absolute rules on the joined path. */
+function resolveProjectRelativeDir(raw: string, roots: readonly string[], nfs: NodeFs, projectDir: string | null | undefined): string {
+  const shown = raw.slice(0, 200);
+  const bad = (why: string) => new McpToolError("PATH_INVALID", `downloadDir relatif "${shown}" ditolak: ${why}`);
+  if (raw.trim() === "") throw bad("path kosong");
+  if (raw.includes(":")) throw bad('memuat ":" (huruf drive atau aliran data); pakai path relatif biasa terhadap folder proyek, atau path absolut di dalam folder sesi');
+  if (!isWin && raw.includes("\\")) throw bad('memuat "\\"; pakai "/" sebagai pemisah');
+  const segs = raw.split(/[\\/]+/);
+  if (segs.some((s) => s === "..")) throw bad('segmen ".." tidak diterima; tulis path dari folder proyek ke bawah');
+  if (segs[0].startsWith("~")) throw bad('"~" (folder rumah) tidak diperluas; pakai path relatif terhadap folder proyek');
+  if (typeof projectDir !== "string" || projectDir.trim() === "") {
+    throw new McpToolError(
+      "PATH_INVALID",
+      `downloadDir relatif "${shown}" ditolak: panggilan ini tidak punya folder proyek (tidak ada misi dengan project.dir), dan path relatif tidak pernah dihitung dari folder kerja server. Kirim path absolut di dalam folder sesi, atau panggil dalam misi yang punya folder proyek`,
+    );
+  }
+  // The project folder itself must be a place an absolute downloadDir could name (inside the roots, real path too).
+  const project = resolveAllowedPath(projectDir, roots, "write-dir", nfs);
+  const resolved = resolveAllowedPath(path.join(project, raw), roots, "write-dir", nfs);
+  if (!isInside(resolved, project)) throw outsideProject(resolved, project);
+  assertInsideProject(resolved, project, nfs);
+  return resolved;
 }
 
 /**
  * SEC-FIX L-2: validasi ULANG folder unduhan tepat sebelum `mkdirp` (jeda jaringan di antaranya membuka jendela
  * penukaran junction), lalu buat foldernya. Gagal buat -> OUT_UNWRITABLE.
+ *
+ * row 69: `withinProject` (the project folder, given only when the caller's `downloadDir` was relative) repeats the
+ * project containment check here as well; absent or null = the pre-1.3.3 behaviour.
  */
-export function prepareDownloadDir(dir: string, roots: readonly string[], nfs: NodeFs): void {
-  resolveDownloadDir(dir, roots, nfs);
+export function prepareDownloadDir(dir: string, roots: readonly string[], nfs: NodeFs, withinProject?: string | null): void {
+  resolveAllowedPath(dir, roots, "write-dir", nfs);
+  if (typeof withinProject === "string" && withinProject !== "") assertInsideProject(dir, resolveAllowedPath(withinProject, roots, "write-dir", nfs), nfs);
   try {
     nfs.mkdirp(dir);
   } catch (e) {

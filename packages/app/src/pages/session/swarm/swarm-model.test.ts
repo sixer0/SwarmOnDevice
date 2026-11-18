@@ -335,6 +335,33 @@ describe("buildSwarm", () => {
     expect(model.totals.failed).toBe(1)
   })
 
+  test("the three turn-end reasons become three statuses, and every other finish stays Finished", () => {
+    const status = (finish: string | undefined, error?: unknown) => {
+      const lane = buildSwarm(
+        input(
+          tree(),
+          {
+            ...messages,
+            a: [user("u1", "a", 2000), assistant("m1", "a", "u1", 2100, { finish, ...(error ? { error } : {}) })],
+          },
+          parts(),
+        ),
+      ).lanes[1]!
+      return { status: lane.status, detail: lane.detail }
+    }
+    expect(status("text-tool-call")).toEqual({ status: "textCall", detail: undefined })
+    expect(status("empty-step")).toEqual({ status: "emptyStep", detail: undefined })
+    expect(status("tools-unavailable:datum-studio")).toEqual({ status: "noTools", detail: "datum-studio" })
+    expect(status("tools-unavailable:a:b")).toEqual({ status: "noTools", detail: "a:b" })
+    expect(status("tools-unavailable")).toEqual({ status: "noTools", detail: "" })
+    expect(status("stop").status).toBe("done")
+    expect(status("tool-calls").status).toBe("done")
+    expect(status(undefined).status).toBe("done")
+    // finish is read before error
+    expect(status("empty-step", { name: "APIError", data: { message: "x" } }).status).toBe("emptyStep")
+    expect(status("error", { name: "APIError", data: { message: "x" } }).status).toBe("failed")
+  })
+
   test("a lane the agent moved on from reports what it is doing, then the decision left over", () => {
     const moved = { id: "r", sessionID: "a", permission: "bash", patterns: [], metadata: {}, always: [], movedOnAt: 5 }
     const request = moved as unknown as PermissionRequest

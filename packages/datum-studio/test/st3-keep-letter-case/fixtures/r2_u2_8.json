@@ -1,0 +1,26 @@
+{
+  "caption": {"text": "Cabang yang cocok menyegel blok lewat TSA, cabang lain mencatat karantina."},
+  "source": {"text": "hal 183 Gambar 18.7; notasi UML 2.5.1 subset sequence"},
+  "spec": {
+    "family": "sequence",
+    "labels_verified": false,
+    "legend": [
+      "pesan subjek 10",
+      "kepala terbuka = balasan",
+      "waktu hanya ke bawah",
+      "lanjut ke Gambar 3.4"
+    ],
+    "nodes": [
+      {"class": {}, "id": "api", "label": ":EvidenceAPI", "sub": "C05/K1"},
+      {"class": {}, "id": "cl", "label": ":CustodyLedger", "sub": "C05/K3"},
+      {"class": {}, "id": "tsa", "label": ":BSrE TSA", "sub": "ext · RFC 3161"}
+    ],
+    "edges": [
+      {"from": "api", "kind": "accent", "label": "10 append SEALED", "to": "cl"},
+      {"from": "cl", "kind": "data", "label": "11 TSQ", "to": "tsa"},
+      {"from": "tsa", "kind": "control", "label": "12 TSR genTime", "to": "cl"},
+      {"from": "cl", "kind": "control", "label": "13 seq 48 213", "to": "api"},
+      {"from": "api", "kind": "control", "label": "15 QUARANTINED", "to": "cl"}
+    ]
+  }
+}

@@ -8,7 +8,8 @@
 import { McpToolError } from "./safety";
 import { tok, type ToolWarning } from "./tool-kit";
 import { cellOf, chapterOf, chartBlock, type ClientBlock, type ClientChart } from "./write-client";
-import { warnTableOverflow, type Cell } from "./write-content";
+import { warnTableOverflow, type Cell, type DiagramInput } from "./write-content";
+import { CHART_INTERVALS_DATA_KEYS, CHART_INTERVALS_KEY, FIGURE_WIDTH_KEY, isIntervalsChart } from "./write-figure-input";
 import { parseInline } from "../../../src/lib/studio/services/import/inline";
 import { normalize } from "./write-edit";
 import { findCell, findSection, findText, fold, notAppliedOf, spliceSpans, type MatchUnit, type NotApplied } from "./write-match";
@@ -228,6 +229,8 @@ export type ClientEditOp =
   | { after: string; insert: string; section?: string }
   | { cell: { section?: string; row: string; column: string }; value: string }
   | { figure: string; chart: Partial<ClientChart> }
+  // Swarm 1.3.3 row 77 (ST-10): the diagram block of studio_write, as a patch of the stored diagram.
+  | { figure: string; diagram: Rec }
   | { section: string; append: ClientBlock[] }
   | { section: string; addRow: Cell[][]; table?: number | string }
   | PositionEdit;
@@ -386,6 +389,14 @@ export function applyClientEdits(content: Rec, edits: readonly ClientEditOp[], w
       touch({ kind: "chapter", key: String(t.ch.key) });
       return;
     }
+    if ("figure" in e && "diagram" in e) {
+      const c = locateChart(content, e.figure, label, "diagram");
+      const next = diagramPatch(c.block, e.diagram, warn, label);
+      for (const k of Object.keys(c.block)) delete c.block[k];
+      Object.assign(c.block, next);
+      charts.push({ key: c.key, block: c.block, patch: next });
+      return;
+    }
     if ("figure" in e) {
       const c = locateChart(content, e.figure, label);
       const patch = chartPatch(c.block, e.chart, warn, label);
@@ -452,7 +463,8 @@ export function applyClientEdits(content: Rec, edits: readonly ClientEditOp[], w
   return { touched: [...touched.values()], charts, notApplied, errors };
 }
 
-function locateChart(content: Rec, figure: string, label: string): { key: string; block: Rec } {
+function locateChart(content: Rec, figure: string, label: string, type: "chart" | "diagram" = "chart"): { key: string; block: Rec } {
+  const what = type === "chart" ? "grafik" : "diagram";
   const nf = normalize(figure).text;
   const found: Array<{ key: string; block: Rec }> = [];
   const sections = isObj(content.sections) ? content.sections : {};
@@ -461,20 +473,63 @@ function locateChart(content: Rec, figure: string, label: string): { key: string
     const lists = [ch.intro, ...(Array.isArray(ch.sections) ? (ch.sections as Rec[]).map((s) => s.blocks) : [])];
     for (const l of lists) {
       for (const b of Array.isArray(l) ? (l as Rec[]) : []) {
-        if (b.type === "chart" && isObj(b.caption) && nf !== "" && normalize(inlineText(b.caption)).text.includes(nf)) found.push({ key: String(ch.key), block: b });
+        if (b.type === type && isObj(b.caption) && nf !== "" && normalize(inlineText(b.caption)).text.includes(nf)) found.push({ key: String(ch.key), block: b });
       }
     }
   }
   if (found.length === 1) return found[0];
-  throw new McpToolError(found.length === 0 ? "TEXT_NOT_FOUND" : "TEXT_AMBIGUOUS", `${label}: ${found.length === 0 ? "tidak ada grafik yang keterangannya memuat teks figure" : `${found.length} grafik cocok; perpanjang teks figure`}; tidak ada yang ditulis`, {
+  throw new McpToolError(found.length === 0 ? "TEXT_NOT_FOUND" : "TEXT_AMBIGUOUS", `${label}: ${found.length === 0 ? `tidak ada ${what} yang keterangannya memuat teks figure` : `${found.length} ${what} cocok; perpanjang teks figure`}; tidak ada yang ditulis`, {
     untrusted: true,
     details: { edit: label, figures: found.slice(0, 5).map((f) => ({ part: `bab ${f.key}`, caption: snip(inlineText(f.block.caption as Rec)) })) },
   });
 }
 
+/**
+ * Swarm 1.3.3 row 77 (ST-10): `{ figure, diagram }` = the diagram block of studio_write as a patch. The fields given
+ * replace the stored ones (`spec` and `artifactId` replace each other); the result goes through the same builder and
+ * v2 validator as a written diagram block, so a spec that studio_write refuses is refused here with the same text.
+ */
+function diagramPatch(block: Rec, edit: Rec, warn: (w: ToolWarning) => void, label: string): Rec {
+  const { type: _type, ...cur } = block;
+  if (edit.spec !== undefined) delete cur.artifactId;
+  if (edit.artifactId !== undefined) delete cur.spec;
+  // Swarm 1.3.3 row 169: through chapterOf, the entry studio_write itself uses, so diagramBlock stays file-local in
+  // write-client.ts (AC-A03.61). A refused spec throws there (default sink), so a returned chapter holds the one block.
+  const ch = chapterOf({ heading: "", blocks: [{ diagram: { ...cur, ...edit } as DiagramInput }] }, "", "", null, warn, label);
+  return (ch?.intro as Rec[] | undefined)?.[0] ?? {};
+}
+
+/** Row 77: an intervals (W-07) chart, stored or given, is merged field by field and rebuilt by the same builder. */
+function intervalsPatch(block: Rec, d: Rec, edit: Partial<ClientChart>, warn: (w: ToolWarning) => void, label: string): Rec {
+  const e = edit as Rec;
+  const stored = d.shape === "intervals";
+  const merged: Rec = {
+    [CHART_INTERVALS_KEY]: e[CHART_INTERVALS_KEY] ?? (stored ? d.items : undefined),
+    ...Object.fromEntries(CHART_INTERVALS_DATA_KEYS.map((k) => [k, e[k] ?? (stored ? d[k] : undefined)]).filter(([, v]) => v !== undefined)),
+    // Fields of the other form are passed on so the builder refuses the mix instead of leaving them out.
+    ...(edit.categories !== undefined ? { categories: edit.categories } : {}),
+    ...(edit.series !== undefined ? { series: edit.series } : {}),
+    ...(edit.type !== undefined ? { type: edit.type } : stored && typeof block.code === "string" ? { type: block.code } : {}),
+    caption: edit.caption ?? inlineText(isObj(block.caption) ? block.caption : {}),
+    source: edit.source ?? inlineText(isObj(block.source) ? block.source : {}),
+    ...(edit.unit !== undefined ? { unit: edit.unit } : typeof block.unit === "string" ? { unit: block.unit } : {}),
+    ...(e[FIGURE_WIDTH_KEY] !== undefined ? { [FIGURE_WIDTH_KEY]: e[FIGURE_WIDTH_KEY] } : {}),
+  };
+  const next = chartBlock(merged as unknown as ClientChart, null, warn, label, "grafik");
+  const patch: Rec = { code: next.code, data: next.data };
+  if (edit.caption !== undefined) patch.caption = next.caption;
+  if (edit.source !== undefined) patch.source = next.source;
+  if (next.unit !== undefined) patch.unit = next.unit;
+  if (next[FIGURE_WIDTH_KEY] !== undefined) patch[FIGURE_WIDTH_KEY] = next[FIGURE_WIDTH_KEY];
+  return patch;
+}
+
 /** Data grafik sekarang (categorical/series) digabung dengan suntingan, lalu kode/data disusun ulang mesin. */
 function chartPatch(block: Rec, edit: Partial<ClientChart>, warn: (w: ToolWarning) => void, label: string): Rec {
   const d = isObj(block.data) ? block.data : {};
+  // Row 77 (ST-10): the chart fields of studio_write are accepted here too: `intervals` (+ statusAt, timeUnit) and `width`.
+  const toCategories = edit.categories !== undefined && edit.series !== undefined && (edit as Rec)[CHART_INTERVALS_KEY] === undefined;
+  if (isIntervalsChart(edit) || (d.shape === "intervals" && !toCategories)) return intervalsPatch(block, d, edit, warn, label);
   let categories: Array<string | number> = [];
   let series: Array<{ name: string; values: Array<number | null> }> = [];
   const caption = inlineText(isObj(block.caption) ? block.caption : {});
@@ -485,7 +540,7 @@ function chartPatch(block: Rec, edit: Partial<ClientChart>, warn: (w: ToolWarnin
   } else if (d.shape === "series") {
     categories = Array.isArray(d.categories) ? (d.categories as string[]) : [];
     series = Array.isArray(d.series) ? (d.series as Array<{ name: string; values: Array<number | null> }>) : [];
-  } else throw new McpToolError("INVALID_ARGUMENT", `${label}: grafik berbentuk ${tok(d.shape, "(tidak dikenal)")}; hanya kategori x seri yang dapat disunting lewat studio_edit`);
+  } else if (!toCategories) throw new McpToolError("INVALID_ARGUMENT", `${label}: grafik berbentuk ${tok(d.shape, "(tidak dikenal)")}; lewat studio_edit hanya kategori x seri dan interval (W-07) yang dapat disunting sebagian. Kirim categories dan series lengkap, atau pakai studio_figure_revise`);
   // IMPL-W4 (smoke r5b RV-4, research/28 T-8): data baru dengan jumlah seri sekelas (multi-seri tetap multi-seri) TIDAK
   // memilih ulang kode grafik; batang bertumpuk K-01 tetap bertumpuk ("bentuk gambar tetap"), tidak jatuh ke P-03.
   const nextSeries = edit.series ?? series;
@@ -498,6 +553,7 @@ function chartPatch(block: Rec, edit: Partial<ClientChart>, warn: (w: ToolWarnin
     caption: edit.caption ?? caption,
     source: edit.source ?? inlineText(isObj(block.source) ? block.source : {}),
     ...(edit.unit !== undefined ? { unit: edit.unit } : typeof block.unit === "string" ? { unit: block.unit } : {}),
+    ...(edit.width !== undefined ? { width: edit.width } : {}),
   };
   // IMPL-W3 butir 10: sumber tidak dikarang; grafik tanpa sumber -> SOURCE_MISSING (hasil normal, 0 tulis).
   const next = chartBlock(merged, null, warn, label, "grafik");
@@ -505,5 +561,6 @@ function chartPatch(block: Rec, edit: Partial<ClientChart>, warn: (w: ToolWarnin
   if (edit.caption !== undefined) patch.caption = next.caption;
   if (edit.source !== undefined) patch.source = next.source;
   if (next.unit !== undefined) patch.unit = next.unit;
+  if (next.width !== undefined) patch.width = next.width;
   return patch;
 }

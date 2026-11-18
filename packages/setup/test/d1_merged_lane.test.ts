@@ -562,7 +562,7 @@ describe("6. Wiring after health produces mcp.graft plus the five texts in a thr
     const cfg = JSON.parse(readFileSync(configFilePath({ base: b }), "utf8"))
     expect(Object.keys(cfg.mcp).sort()).toEqual(["graft", "swarm-web"])
     expect(cfg.mcp.graft.command).toEqual([okLaunch().nodePath, okLaunch().cliPath, "mcp"]) // AC-W2 argv
-    expect(cfg.mcp.graft.env.DO_NOT_TRACK).toBe("1")
+    expect(cfg.mcp.graft.environment.DO_NOT_TRACK).toBe("1")
     expect(cfg.mcp.graft.enabled).toBe(true)
 
     const texts = renderSkillTexts()

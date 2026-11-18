@@ -26,6 +26,7 @@
  * (sistem terpisah) tetap ditolak `E-17/MULTI-BUS`, tidak pernah dibuang.
  */
 import type { DiagramBox, DiagramNode, DiagramSheet, LayoutResult, StudioDiagramV1 } from "../../../contract";
+import { DiagramDefect } from "../core/defect";
 import { baselineStepMm, diagramDefect, latticeOf, nodeGet, nodeSize, sheetHeight, snap, snapFloor, type Lattice } from "./geometry";
 
 export interface SldBus {
@@ -66,6 +67,36 @@ function specMultiBus(s: StudioDiagramV1): boolean {
  */
 export function sldRailWidth(L: Lattice): number {
   return snap(L.W, L.x) <= L.W + 1e-6 ? L.W : snapFloor(L.W, L.x);
+}
+
+/**
+ * Swarm 1.3.3 row 139 (ST-1, E3/E4 of row 36): the most branches one rail row holds at figure width `widthMm`: m
+ * branches of the 3-column floor of `placeBranchRow` plus m - 1 one-column gaps on the rail span (`sldRailWidth`).
+ * 128 mm (span 128): 3; 166 mm (span 160): 4. The number of the capacity refusal and of its advice.
+ */
+export function sldBranchCapacity(widthMm: number, latX: number): number {
+  const span = sldRailWidth({ x: latX, y: latX, top: 0, W: widthMm });
+  return Math.max(1, Math.floor((span / latX + 1 + 1e-9) / 4));
+}
+
+/** Row 139: the fullest rail row of `s` (rail id and its branch count), rows assigned as the layout assigns them. */
+export function sldBranchLoad(s: StudioDiagramV1): { bus: string; count: number } {
+  const buses = s.nodes.filter(isBus);
+  if (buses.length === 0) return { bus: "", count: 0 };
+  return [...assignBranches(s, buses)].reduce((a, [bus, g]) => (g.length > a.count ? { bus, count: g.length } : a), { bus: buses[0].id, count: 0 });
+}
+
+/**
+ * Row 139: capacity before placement. A rail row fuller than the span holds is refused (DATUM-37-sheet, measured in
+ * branches by build/capacity.ts), never placed with its last branch on the right edge.
+ */
+function assertBranchCapacity(bus: string, others: readonly DiagramNode[], L: Lattice): void {
+  const cap = sldBranchCapacity(L.W, L.x);
+  if (others.length <= cap) return;
+  throw new DiagramDefect(
+    `DATUM-37-sheet: rel ${bus} memuat ${others.length} cabang, maks ${cap} cabang per tingkat pada ${L.W} mm (rentang rel ${sldRailWidth(L).toFixed(1)} mm) (P8)`,
+    { checkId: "DATUM-37-sheet" },
+  );
 }
 
 /**
@@ -176,6 +207,7 @@ export function layoutSldDetail(s: StudioDiagramV1, sheet: DiagramSheet, options
     const b = buses[0];
     nodes[b.id] = { x: 0.0, y: L.top, w: railW, h: bh };
     const bus = { y: L.top + bh / 2.0, id: b.id };
+    assertBranchCapacity(b.id, s.nodes.filter((n) => !isBus(n)), L); // row 139
     placeBranchRow(nodes, s.nodes.filter((n) => !isBus(n)), L.top, bh, L, railW);
     return { result: { nodes, widthMm: L.W, heightMm: sheetHeight(L, Object.values(nodes)) }, bus, buses: [bus] };
   }
@@ -184,6 +216,7 @@ export function layoutSldDetail(s: StudioDiagramV1, sheet: DiagramSheet, options
   // tercatu): segmen [rel, baris cabang] ditumpuk; rel berikutnya mulai satu
   // langkah (2 baseline, di-snap) di bawah tepi bawah segmen sebelumnya.
   const groups = assignBranches(s, buses);
+  for (const b of buses) assertBranchCapacity(b.id, groups.get(b.id)!, L); // row 139
   const placed: SldBus[] = [];
   let top = L.top;
   for (const b of buses) {

@@ -25,7 +25,7 @@ import { autoFitChart } from "./autofit";
 import { applyChartIntent, attachFullLabels, capacityAdvice } from "./intent";
 import { CHART_LINT_OPTIONS, chartLinksAlongNodes, lintChartGeometry } from "./geometry";
 import { assertChartSpec, figureLabel, figureLimits, mergeReports } from "./guards";
-import { referenceHeightMm } from "./heights";
+import { contentHeightMm, overHeightDetail, referenceHeightMm } from "./heights";
 import { chartRendererFor, drawnChartDef } from "./lookup";
 import { resolveChartParams, runChartRenderer } from "./params";
 import { measure } from "./textfit";
@@ -111,14 +111,15 @@ export const DEFAULT_HEIGHT_RATIO = 0.5;
  * (`CHART_REFERENCE_HEIGHT_MM`, paritas CB1 (d)), lalu lebar x 0,5; ditambah pita
  * aparatus figure bila tinggi tidak diset spec.
  */
-export function estimateHeightMm(input: StudioChartInput): number {
+export function estimateHeightMm(input: StudioChartInput, tpl: ResolvedTemplate = EMPTY_CHART_TEMPLATE): number {
   const given: StudioChartV1 = toStudioChart(input);
   // FIG-03a: maksud analitis (mis. `topN`) mengubah jumlah kategori -> taksiran atas spec terapan.
   const spec = given.kind !== "composite" && given.intent !== undefined ? applyChartIntent(given, EMPTY_CHART_TEMPLATE).spec : given;
   if (spec.kind === "composite") return compositeHeightMm(spec);
   if (isCoreCode(spec.kind)) return coreHeightMm(spec, spec.kind);
   if (spec.heightMm !== undefined) return spec.heightMm;
-  const base = referenceHeightMm(spec.kind) ?? Math.round(spec.widthMm * DEFAULT_HEIGHT_RATIO * 10) / 10;
+  // Row 133: `contentHeightMm` = tinggi yang mengikuti jumlah baris (W-07 di atas batas baris acuan).
+  const base = contentHeightMm(spec, tpl) ?? referenceHeightMm(spec.kind) ?? Math.round(spec.widthMm * DEFAULT_HEIGHT_RATIO * 10) / 10;
   return base + figureFootMm(spec);
 }
 
@@ -150,10 +151,19 @@ function renderPreset(input: StudioChartV1, tpl: ResolvedTemplate, noAutoOrient 
     assertChartSpec(s, limits);
     const renderer = chartRendererFor(def);
     const resolved = resolveChartParams(s, def.code);
-    const h = heightMm ?? estimateHeightMm(resolved.spec);
+    const h = heightMm ?? estimateHeightMm(resolved.spec, tpl);
     if (h > limits.maxHeightMm + 1e-9) {
       // Swarm patch (row 158, U24 B): FIGURE_OVER_CAPACITY with the measured height and the limit.
       const n = categoryCount(resolved.spec);
+      // Row 133: a W-07 schedule over the row limit of the text block is refused with the split offer.
+      const own = overHeightDetail(resolved.spec, tpl, limits.maxHeightMm - figureFootMm(resolved.spec));
+      if (own) {
+        throw new ChartOverCapacity(`[DATUM-33] ${figureLabel(resolved.spec)} — perkiraan tinggi ${h.toFixed(0)} mm melampaui blok teks ${limits.maxHeightMm} mm`, {
+          checkId: "DATUM-33",
+          family: resolved.spec.kind,
+          ...own,
+        });
+      }
       throw new ChartOverCapacity(`[DATUM-33] ${figureLabel(resolved.spec)} — perkiraan tinggi ${h.toFixed(0)} mm melampaui blok teks ${limits.maxHeightMm} mm`, {
         checkId: "DATUM-33",
         family: resolved.spec.kind,
@@ -179,7 +189,7 @@ function renderPreset(input: StudioChartV1, tpl: ResolvedTemplate, noAutoOrient 
   }
   const fitted = autoFitChart(input, first.res, geo, {
     render: (s, h) => renderOnce(s, h),
-    estimate: (s) => estimateHeightMm(resolveChartParams(s, drawnChartDef(s.kind).code).spec),
+    estimate: (s) => estimateHeightMm(resolveChartParams(s, drawnChartDef(s.kind).code).spec, tpl),
     maxHeightMm: limits.maxHeightMm,
     noAutoOrient,
   });

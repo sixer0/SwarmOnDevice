@@ -22,17 +22,21 @@ import type { ChartLang } from "@/lib/studio/engine/chart/core/lang";
 import { buildDiagramSvgAuto } from "@/lib/studio/engine/diagram/elk";
 import { placeDiagram, type DiagramBuildOptions, type DiagramBuildReport } from "@/lib/studio/engine/diagram/build";
 import { routeLattice, viaFamily, type RouteLattice } from "@/lib/studio/engine/diagram/build/route";
+import { isCapacityReject } from "@/lib/studio/engine/diagram/build/capacity";
+import { reorderPlaced } from "@/lib/studio/engine/diagram/build/order";
+import { diagramFitActive, withDiagramFit, type DiagramFitState } from "@/lib/studio/engine/diagram/fit/state";
 import { Sheet } from "@/lib/studio/engine/diagram/core";
 import { resolveDiagramGrid } from "@/lib/studio/engine/diagram/core/grid";
 import { DIAGRAM_LAYOUTS } from "@/lib/studio/contract/dispatch";
 import { APPARATUS_TEXT, provenanceMarkLabelText } from "@/lib/studio/engine/front/texts";
-import { glyphSet, mapBlock, storedComposeContext } from "@/lib/studio/services/compose";
+import { glyphSet, mapBlock, storedComposeContext, type ComposeWarning } from "@/lib/studio/services/compose";
 import { templateForDoc } from "@/lib/studio/services/render/common";
-import { ArtifactSpecReader, chartSvg, diagramApparatusOptions, diagramSpecForBlock } from "@/lib/studio/services/render/figures";
+import { ArtifactSpecReader, LABELS_UNCHECKED_TEXT, LABELS_VERIFIED_CHECK, LABELS_VERIFIED_HUMAN_CHECK, chartSvg, diagramApparatusOptions, diagramLabelsUnchecked, diagramSpecForBlock } from "@/lib/studio/services/render/figures";
 import { capacityMessage, figureBytesIssues, figureCapacityIssuesFor, type CapacityIssue } from "@/lib/studio/services/render/figure-limits";
 import { renderVegaFigure, vegaCodeOf } from "@/lib/studio/services/render/vega-figure";
 import { figureFileName, inlineText } from "@/lib/studio/services/render/naming";
 import { rasterizeSvg } from "@/lib/studio/engine/browser";
+import { previewLintParity, type PreviewNotRun } from "./figure-preview-parity";
 
 export const FIGURE_TYPES: ReadonlySet<string> = new Set(["chart", "diagram"]);
 /** Batas isu yang dikembalikan (hasil kecil; jumlah penuh di `issueCount`). */
@@ -63,7 +67,15 @@ export interface PreviewIssue {
  */
 // Row 163b: VEGA_ENGINE = which Vega engine drew the chart (informative, not a layout issue).
 // Row 65c (C66 F-65b-1): LINK_ALONG_NODE is report-only (C24), so it is not a layout issue either (g04 layoutIssueCount 0).
-export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMITS_DEFAULT", "PARAM_ALIAS", "AUTO_FIT", "INTENT_APPLIED", "CAPACITY_ADAPT", "VEGA_ENGINE", "LINK_ALONG_NODE"]);
+// Swarm 1.3.3 row 60 (ST-9 item 2, U20): P1-labels_verified = the labels wait for a person; a state, not a layout issue.
+export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMITS_DEFAULT", "PARAM_ALIAS", "AUTO_FIT", "INTENT_APPLIED", "CAPACITY_ADAPT", "VEGA_ENGINE", "LINK_ALONG_NODE", LABELS_VERIFIED_CHECK]);
+
+/**
+ * Row 60 (ST-9 item 2): what the preview says, in place of the engine's draft note, when a diagram's `labels_verified`
+ * is not true. Nothing for the agent to fix and nothing the agent may set: a person raises the flag.
+ */
+const LABELS_UNCHECKED_PREVIEW_DETAIL = `${LABELS_UNCHECKED_TEXT.ID} (${LABELS_UNCHECKED_TEXT.EN}): bukan cacat; gambar berstatus draf sampai orang memeriksanya`;
+const LABELS_UNCHECKED_PREVIEW_SUGGEST = "tidak ada yang perlu diperbaiki agen; labels_verified ditetapkan orang, jangan mengirim labels_verified: true";
 
 /**
  * Swarm 1.2.6 row 73 (W-03, register N-020): class of a preview issue. A notice = the engine already adapted the
@@ -74,6 +86,13 @@ export const INFO_CODES: ReadonlySet<string> = new Set(["DATUM-36", "FIGURE_LIMI
 export const PREVIEW_ISSUE_CLASS: Readonly<Record<string, "notice" | "defect">> = {
   EDGE_LANES: "notice",
   LABEL_MOVED: "notice",
+  // Swarm 1.3.3 row 46 (ST-3.5): a label on a leader line is an engine adaptation like LABEL_MOVED: a notice, still returned.
+  LABEL_LEADER: "notice",
+  // Swarm 1.3.3 row 60 (request of row 42): the engine clamped a container label into its frame (fit path); an
+  // adaptation of the same family as LABEL_MOVED, with the engine's own suggest text.
+  ZONE_LABEL_CLAMP: "notice",
+  // Swarm 1.3.3 row 60 (ST-9 item 2, U20): labels not yet checked by a person is a state of a draft, never a defect.
+  [LABELS_VERIFIED_CHECK]: "notice",
   AUTO_FIT: "notice",
   VALUE_LABEL_MOVED: "notice",
   ELK_LAYOUT: "notice",
@@ -92,9 +111,11 @@ export const PREVIEW_ISSUE_CLASS: Readonly<Record<string, "notice" | "defect">> 
   // Swarm 1.2.10 row 65b (AC-B1002b, F-S1, N10-013): a chart connector running along a box is reported only; without
   // this entry the unknown REPORT code would default to "defect" (g04's legacy layout is frozen and cannot be fixed).
   LINK_ALONG_NODE: "notice",
+  // Swarm 1.3.3 row 141 (E5 of row 36): the fit re-routed rack connectors on lanes right of the rack body ("saran: tidak
+  // ada"); an adaptation like EDGE_LANES. A crossing or overlap the re-route leaves is its own GEOM_* line (a defect).
+  RACK_ROUTE: "notice",
   CAPTION_WRAP: "defect",
   CAPTION_TRUNCATED: "defect",
-  LABEL_LEADER: "defect",
   LABEL_DROPPED: "defect",
   TEXT_OUTSIDE: "defect",
   FLOW_SERIALISED: "defect",
@@ -159,6 +180,18 @@ export interface FigurePreview {
   notices: PreviewIssue[];
   /** Row 73 (W-03, N-022): issues of class defect (fix before delivery), capped like `issues`. */
   defects: PreviewIssue[];
+  /**
+   * Swarm 1.3.3 row 60 (ST-9 item 2; register 03 section 7): human checks still open for this figure, in the
+   * vocabulary of the mission row field `awaitingHumanCheck.checks` (`["labels_verified"]`). Present only when not
+   * empty (a diagram whose `labels_verified` is not true): the figure is a draft, and that is not a defect.
+   */
+  awaitingHumanCheck?: string[];
+  /**
+   * Swarm 1.3.3 row 65 (ST-7; register 03: `notRun` of the preview): the render's lint rules for this figure that the
+   * preview could not run (whole document, rendered pages, text scans), each "belum diperiksa" with its reason, in the
+   * shape of `LintReport.notRun`. The render's figure-scoped rules themselves run here (figure-preview-parity.ts).
+   */
+  notRun?: PreviewNotRun[];
   issueCount: number;
   /** Isu tanpa catatan informatif (`info: false`). */
   layoutIssueCount: number;
@@ -192,6 +225,20 @@ const fail = (code: ConstructorParameters<typeof StudioEngineError>[0], message:
   throw new StudioEngineError(code, message, details);
 };
 
+/**
+ * Row 65 (ST-7): the document a previewed block belongs to (tier, meta, enforcement of the render's lint), remembered
+ * by `findFigureBlock` and `composeInlineBlock` so `renderResolved` applies the same rules render applies without a
+ * change to the route's call. A block not found here (direct callers) uses `o.document`, else every rule in scope runs.
+ */
+const DOCUMENT_OF = new WeakMap<object, AnyNormSnapshot>();
+
+/**
+ * Swarm 1.3.3 row 156 (request 87 of row 56): the compose warnings of an inline block (`composeInlineBlock`), e.g.
+ * KEYROW_SUPERSEDED. `renderResolved` adds them as notices (REPORT, info), the same row the render reports for an
+ * artefact block (services/render/figures.ts); a document compose puts them in `ComposeResult.warnings`.
+ */
+const INLINE_WARNINGS = new WeakMap<object, ComposeWarning[]>();
+
 /** Blok snapshot untuk pid / alamat / label artefak; bukan figur -> 422 BLOCK_TYPE_NOT_ADMITTED. */
 export function findFigureBlock(snapshot: AnyNormSnapshot, t: FigureTarget): NormBlock & { pid?: string; slotKey?: string } {
   const blocks = snapshot.blocks as Array<NormBlock & { pid?: string; slotKey?: string }>;
@@ -203,6 +250,7 @@ export function findFigureBlock(snapshot: AnyNormSnapshot, t: FigureTarget): Nor
     return t.pid !== undefined ? fail("PID_NOT_FOUND", `Pid ${t.pid} tidak ada pada revisi ini`, { pid: t.pid }) : fail("ADDRESS_NOT_FOUND", "Address not found in revision", { address: t.address });
   }
   if (!FIGURE_TYPES.has(hit.type)) fail("BLOCK_TYPE_NOT_ADMITTED", `Blok ${hit.address ?? hit.blockId} berjenis ${hit.type}; pratinjau figur hanya untuk chart dan diagram`, { type: hit.type });
+  DOCUMENT_OF.set(hit, snapshot);
   return hit;
 }
 
@@ -219,13 +267,15 @@ export function composeInlineBlock(
   const doc: Rec = isRec(snapshot.doc) ? (snapshot.doc as unknown as Rec) : {};
   const meta: Rec = isRec(doc.meta) ? doc.meta : {};
   const pid = near?.pid ?? "preview";
+  const warnings: ComposeWarning[] = [];
   const content = mapBlock(block, pid, {
     glyphs: glyphSet(c.params["render.run.symbolGlyphs"]),
     params,
     classification: typeof meta.classification === "string" ? meta.classification : "",
     ...(near?.artifactLabel !== undefined ? { artifactLabel: near.artifactLabel } : {}),
+    warn: (w) => warnings.push(w),
   });
-  return {
+  const out = {
     blockId: pid,
     ...(near?.pid !== undefined ? { pid: near.pid } : {}),
     address: near?.address ?? null,
@@ -237,6 +287,9 @@ export function composeInlineBlock(
     contentSha256: "",
     ...(near?.artifactLabel !== undefined ? { artifactLabel: near.artifactLabel } : {}),
   };
+  DOCUMENT_OF.set(out, snapshot);
+  if (warnings.length > 0) INLINE_WARNINGS.set(out, warnings);
+  return out;
 }
 
 /** Templat efektif render (templat tersemat + override dokumen), sama dengan orkestrator render. */
@@ -295,6 +348,10 @@ function issuesOf(r: SvgResult): PreviewIssue[] {
       const hint = FIT_HINTS[i.checkId];
       const suggest = typeof s === "string" ? s.slice(0, DETAIL_MAX) : (hint ?? null);
       const suggestSource = typeof s === "string" ? "engine" : hint !== undefined ? "hint" : null;
+      // Row 60 (ST-9 item 2): the labels_verified state reads as one plain sentence, never as an engine gate note.
+      if (i.checkId === LABELS_VERIFIED_CHECK && i.status !== "FAIL") {
+        return { checkId: i.checkId, status: i.status, detail: LABELS_UNCHECKED_PREVIEW_DETAIL, suggest: LABELS_UNCHECKED_PREVIEW_SUGGEST, suggestSource: "hint" as const, info: true };
+      }
       return { checkId: i.checkId, status: i.status, detail: i.detail !== undefined ? i.detail.slice(0, DETAIL_MAX) : null, suggest, suggestSource, info: INFO_CODES.has(i.checkId) };
     });
 }
@@ -390,7 +447,7 @@ export function standaloneProvenance(spec: StudioDiagramV1, block: NormBlock, la
 export async function renderResolved(
   f: ResolvedFigure,
   tpl: ResolvedTemplate,
-  o: { inline: boolean; withSvg: boolean; lang?: ChartLang; standalone?: boolean; png?: boolean },
+  o: { inline: boolean; withSvg: boolean; lang?: ChartLang; standalone?: boolean; png?: boolean; document?: AnyNormSnapshot },
 ): Promise<FigurePreview> {
   // Row 165C (F56-3): stand-alone apparatus is a diagram mode (charts print their own apparatus already).
   if (o.standalone === true && f.type !== "diagram") fail("BLOCK_TYPE_NOT_ADMITTED", `Gambar mandiri hanya untuk diagram; blok ini ${f.type}`, { type: f.type });
@@ -419,10 +476,18 @@ export async function renderResolved(
     const provenance = solo ? standaloneProvenance(solo, f.block, o.lang) : undefined;
     r = await buildDiagramSvgAuto(solo ?? f.spec, { release: false, grid: figureGrid(tpl.params), ...(o.lang ? diagramApparatusOptions(o.lang) : {}), ...(provenance ? { provenance } : {}) });
     code = typeof f.spec.family === "string" ? f.spec.family : null;
-    lattice = figureLattice(solo ?? f.spec, tpl);
+    lattice = figureLattice(solo ?? f.spec, tpl, r);
   }
-  const issues = issuesOf(r);
-  const split = splitPreviewIssues(issues);
+  // Row 65 (ST-7): the render's lint rules for this figure, on the stored block and the SVG just built (width in use).
+  // A lint FAIL is a defect, any other row a notice (the render does not refuse on it). Independent of `lattice`.
+  const parity = previewLintParity({ block, spec: f.spec, svg: r, tpl, snapshot: o.document ?? DOCUMENT_OF.get(block) });
+  const lint: PreviewIssue[] = parity.issues.map((i) => ({ checkId: i.checkId, status: i.status, detail: i.detail !== undefined ? i.detail.slice(0, DETAIL_MAX) : null, suggest: null, suggestSource: null, info: i.status !== "FAIL" }));
+  // Row 156 (request 87): compose warnings of an inline block (KEYROW_SUPERSEDED) are notices, as at render (REPORT).
+  for (const w of INLINE_WARNINGS.get(block) ?? []) lint.push({ checkId: w.code, status: "REPORT", detail: w.message.slice(0, DETAIL_MAX), suggest: null, suggestSource: null, info: true });
+  const own = issuesOf(r);
+  const engine = splitPreviewIssues(own);
+  const issues = [...own, ...lint];
+  const split = { notices: [...engine.notices, ...lint.filter((i) => i.info)], defects: [...engine.defects, ...lint.filter((i) => !i.info)] };
   return {
     type: block.type as FigurePreview["type"],
     code,
@@ -434,9 +499,12 @@ export async function renderResolved(
     issues: issues.slice(0, PREVIEW_ISSUE_CAP),
     notices: split.notices.slice(0, PREVIEW_ISSUE_CAP),
     defects: split.defects.slice(0, PREVIEW_ISSUE_CAP),
+    // Row 60 (ST-9 item 2): the same rule as lint D09 and the render check (`diagramLabelsUnchecked`).
+    ...(f.type === "diagram" && diagramLabelsUnchecked(f.spec) ? { awaitingHumanCheck: [LABELS_VERIFIED_HUMAN_CHECK] } : {}),
     issueCount: issues.length,
     layoutIssueCount: issues.filter((i) => !i.info).length,
-    checksRun: r.report.checksRun.length,
+    checksRun: r.report.checksRun.length + parity.ran.length,
+    notRun: parity.notRun,
     data,
     rendered,
     ...(o.withSvg ? { svg: r.svg } : {}),
@@ -449,15 +517,57 @@ export async function renderResolved(
 }
 
 /**
- * Row 56b (VIS-6, N8-472): the lattice the router maps `via` on, from the first-render placement on the same sheet as the
- * build (template lattice column); undefined for families that place and route nodes themselves (D-V3). The figure was
- * just built from this spec, so the placement cannot fail here.
+ * Row 56b (VIS-6, N8-472): the lattice the router maps `via` on, from the placement on the same sheet as the build
+ * (template lattice column); undefined for families that place and route nodes themselves (D-V3).
+ *
+ * Swarm 1.3.3 row 138 (ST-1/ST-7, E1 + E7 of row 36): the first placement is NOT always the one the build drew. For
+ * graph and swimlane the build answers a DATUM-37 refusal of the first placement with the capacity layout
+ * (build/capacity.ts `capacityRetry`, notice CAPACITY_ADAPT); this step used to call the plain placement and threw
+ * that very refusal (bare BY_CONSTRUCTION_FAILED, no advice) for a figure the render prints. Now: the plain placement
+ * when it stands (unchanged for every other figure), else the capacity placement in the mode the build used, read
+ * from the build's own AUTO_FIT record. The build has already accepted the figure (a real over-capacity figure is
+ * refused by the build itself with FIGURE_OVER_CAPACITY, advice and split), so this step never refuses: a lattice it
+ * cannot reproduce is omitted.
  */
-function figureLattice(spec: StudioDiagramV1, tpl: ResolvedTemplate): RouteLattice | undefined {
+function figureLattice(spec: StudioDiagramV1, tpl: ResolvedTemplate, built: SvgResult): RouteLattice | undefined {
   if (!viaFamily(spec)) return undefined;
-  const sheet = new Sheet(Number(spec.width_mm), undefined, resolveDiagramGrid(figureGrid(tpl.params)).latticeXMm);
+  const latticeX = resolveDiagramGrid(figureGrid(tpl.params)).latticeXMm;
+  try {
+    return routeLattice(placedSheet(spec, latticeX));
+  } catch (e) {
+    if (!isCapacityReject(e, spec)) return undefined;
+    const mode = capacityModeOf(built);
+    if (!mode) return undefined;
+    const state: DiagramFitState = { notes: [], grow: mode.grow, numbered: true, capacity: true, capMode: mode.capMode, defects: {} };
+    try {
+      return routeLattice(withDiagramFit(state, () => placedSheet(spec, latticeX)));
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+/** Row 138: the placement step of the build's `buildOnce` (build/svg.ts): place, then reorder only while a fit runs. */
+function placedSheet(spec: StudioDiagramV1, latticeX: number): Sheet {
+  const sheet = new Sheet(Number(spec.width_mm), undefined, latticeX);
   placeDiagram(spec, sheet, DIAGRAM_LAYOUTS);
-  return routeLattice(sheet);
+  if (diagramFitActive()) reorderPlaced(spec, sheet);
+  return sheet;
+}
+
+/**
+ * Row 138: the capacity mode the build drew, from its AUTO_FIT line (`capacityRetry`: "render pertama ditolak ...;
+ * dicoba: time: 0"). The retry stops at the first clean mode and uses only a clean one, so the last mode tried is the
+ * one drawn. null when the figure did not take the capacity path.
+ */
+function capacityModeOf(built: SvgResult): { capMode: string; grow: boolean } | null {
+  const geometry = (built.report as { geometry?: unknown }).geometry;
+  const line = (Array.isArray(geometry) ? geometry : []).find((g): g is { detail: string } => isRec(g) && g.checkId === "AUTO_FIT" && typeof g.detail === "string" && g.detail.startsWith("render pertama ditolak"));
+  if (!line) return null;
+  const at = line.detail.lastIndexOf("dicoba: ");
+  const last = at < 0 ? "" : (line.detail.slice(at + "dicoba: ".length).split("; ").pop() ?? "");
+  const m = /^(\w+)(, tanpa tumbuh)?: 0$/.exec(last.trim());
+  return m ? { capMode: m[1], grow: m[2] === undefined } : null;
 }
 
 /** Row 165C (F56-3): number, title and DATUM file names (`Gambar 4.1 <Judul>.svg`, p.11-12) of a stand-alone figure. */
@@ -476,7 +586,7 @@ function standaloneInfo(spec: StudioDiagramV1, label: string | null, furniture?:
 export async function renderFigure(
   block: NormBlock & { pid?: string },
   tpl: ResolvedTemplate,
-  o: { inline: boolean; withSvg: boolean; reader?: ArtifactSpecReader; lang?: ChartLang },
+  o: { inline: boolean; withSvg: boolean; reader?: ArtifactSpecReader; lang?: ChartLang; document?: AnyNormSnapshot },
 ): Promise<FigurePreview> {
   const f = await resolveFigure(block, o.reader);
   const over = figureCapacityIssues(f);

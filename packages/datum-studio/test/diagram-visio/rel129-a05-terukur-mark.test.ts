@@ -195,7 +195,9 @@ describe("AC-A05 negative control: marks on other shapes keep their anchors", ()
   // Anchors at BASE d4282fcfd8 (text x, y of the mark glyph); only the circle branch changes.
   const KEEP: Array<[string, string, string, number, number]> = [
     ["dg_graph.json", "log (cylinder)", "◈", 138.14, 9.64],
-    ["dg_layered_good.json", "sensor (box)", "■", 138.14, 12.21],
+    // Swarm 1.3.3 row 47 (ST-3 item 7): `sensor` is alone on its tier and now has the default width (x 64..96, was
+    // 32..138.67); the mark keeps the same 0.53 mm inset from the right edge, so its x moves 138.14 -> 95.47. y unchanged.
+    ["dg_layered_good.json", "sensor (box)", "■", 95.47, 12.21],
     ["dg_sld_good.json", "load (box)", "◇", 116.8, 31.26],
   ]
   for (const [file, node, glyph, x, y] of KEEP) {

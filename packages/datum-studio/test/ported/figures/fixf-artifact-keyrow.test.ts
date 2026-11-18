@@ -59,19 +59,30 @@ describe('FIX-F C6: keyRowOnPage untuk diagram yang merujuk artefak', () => {
     const marked = diagramSpecForBlock(ART, { spec: { artifactId: 'art-1' }, keyRow: KEY });
     expect(marked.keyRowOnPage).toBe(true);
     expect(ART.keyRowOnPage).toBeUndefined();
-    expect(diagramSpecForBlock(ART, { spec: { artifactId: 'art-1' } })).toBe(ART);
+    // Swarm 1.3.3 row 45 (ST-3.6): re-pinned. Old form: a reference without `keyRow` returned the artefact spec as is
+    // (key drawn in the SVG). New form: the artefact's legend rows become the block key row of the build and the copy
+    // is marked; a reference to an artefact without key rows still returns the spec as is.
+    const noKey: Record<string, unknown> = { spec: { artifactId: 'art-1' } };
+    expect(diagramSpecForBlock(ART, noKey).keyRowOnPage).toBe(true);
+    expect(noKey.keyRow).toEqual({ runs: [{ t: 'KUNCI  ' }, { t: (ART.legend as string[]).join('  ·  ') }] });
+    expect(ART.keyRowOnPage).toBeUndefined();
+    const bare = { ...ART, legend: undefined } as StudioDiagramV1;
+    expect(diagramSpecForBlock(bare, { spec: { artifactId: 'art-1' } })).toBe(bare);
     // spec inline: tanda milik compose (D-288), tidak ditambah di sini
     expect(diagramSpecForBlock(ART, { spec: ART, keyRow: KEY })).toBe(ART);
   });
 
-  it('buildFigures: blok artefak dengan keyRow tidak menggambar baris KEY di SVG; tanpa keyRow tetap', async () => {
-    const [withKey, without] = await svgsOf([
-      block('b1', { spec: { artifactId: 'art-1' }, keyRow: KEY }),
-      block('b2', { spec: { artifactId: 'art-1' } }),
-    ]);
-    // row42 ADAPT A8 (C40, row 124b CP-35; services/render/figures.ts:178-182 diagramApparatusOptions): buildFigures labels the
-    // key row in the document language, so an ID document prints "KUNCI  " where the original printed "KEY  ".
-    expect(without).toContain('KUNCI  ');
+  // Swarm 1.3.3 row 45 (ST-3.6): re-pinned. Old form: the block without `keyRow` drew "KUNCI  <rows>" inside its SVG.
+  // New form: neither SVG draws a key; both blocks carry the artefact's rows as the page key row.
+  it('buildFigures: blok artefak tidak menggambar baris KEY di SVG; baris KUNCI halaman berasal dari legend artefak', async () => {
+    const b1 = block('b1', { spec: { artifactId: 'art-1' }, keyRow: KEY });
+    const b2 = block('b2', { spec: { artifactId: 'art-1' } });
+    const [withKey, without] = await svgsOf([b1, b2]);
+    const want = { runs: [{ t: 'KUNCI  ' }, { t: (ART.legend as string[]).join('  ·  ') }] };
+    expect((b1.content as { keyRow?: unknown }).keyRow).toEqual(want);
+    expect((b2.content as { keyRow?: unknown }).keyRow).toEqual(want);
+    expect(without).not.toContain('KUNCI  ');
+    expect(without).toBe(withKey);
     expect(withKey).not.toContain('KUNCI  ');
     expect(withKey).not.toContain('KEY  ');
     // sama dengan spec inline yang ditandai compose

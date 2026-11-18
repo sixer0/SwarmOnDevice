@@ -18,6 +18,8 @@ import type { MissionLog } from "./tool-result.ts"
 import { missionDocsExporter } from "./export/index.ts"
 import { renderVerifyWrapper, type RenderVerifyStore } from "../verify/render-wrapper.ts"
 import { figureQuotaWrappers } from "../figure-quota.ts"
+import { witnessListExtension, type WitnessListStore } from "../verify/witness-list.ts"
+import { libraryReadExtension, type LibraryReadStore } from "../library-read.ts"
 
 export { MISSION_TOOL_NAMES } from "./schemas.ts"
 export { missionDocsExporter } from "./export/index.ts"
@@ -29,6 +31,10 @@ export interface MissionExtensionOptions {
   log?: MissionLog
   /** Row 120: the /docs renderer of studio_mission_export. Default: the row 120 renderer (export/); null = none (EXPORT_NOT_AVAILABLE). */
   exporter?: MissionExporter | null
+  /** 1.3.3 row 100: STUDIO_LIBRARY_ROOT (start.ts reads it); absent = studio_library_read answers "not available". */
+  libraryRoot?: string | null
+  /** 1.3.3 row 100 / C33: STUDIO_SKILL_ROOTS (start.ts parses it): built-in skill name -> on-disk root. */
+  skillRoots?: Readonly<Record<string, string>> | null
 }
 
 /** The host extension list for the mission store of `store` (must be the installed store, as start.ts checks). */
@@ -46,5 +52,8 @@ export function missionHostExtension(store: object, opts: MissionExtensionOption
   // Row 154: + the studio_render wrapper (output verification report + records, spec 01_specs_output_verification.md §6).
   // Row 119d: + the create-path wrappers of studio_chapter_import_markdown / studio_chapter_submit / studio_slot_fill (same flag).
   // 1.2.8 row 34c (AC-HT18, D-H4): + the studio_document_get / studio_figure_preview wrappers (quota line N8-211).
-  return [...missionTools(installed, { log, ...(exporter ? { exporter } : {}) }), ...reportWrappers(installed, { log }), ...guardWriteWrappers(installed, { log }), renderVerifyWrapper(installed as unknown as RenderVerifyStore, { log }), ...figureQuotaWrappers({ log })]
+  // 1.3.3 row 100 for row 101: the matcher at create/start reads the same library root as studio_library_read (one source).
+  const tools = [...missionTools(installed, { log, ...(exporter ? { exporter } : {}), ...(opts.libraryRoot !== undefined ? { libraryRoot: opts.libraryRoot } : {}) }), ...reportWrappers(installed, { log }), ...guardWriteWrappers(installed, { log }), renderVerifyWrapper(installed as unknown as RenderVerifyStore, { log }), ...figureQuotaWrappers({ log }), witnessListExtension(installed as unknown as WitnessListStore, { log })] // 1.3.3 row 59: + studio_witness_list (a new tool, last of this group)
+  // 1.3.3 row 100 (KL-2): + studio_library_read, after studio_witness_list (records library reads on a running row).
+  return [...tools, libraryReadExtension(installed as unknown as LibraryReadStore, { log, root: opts.libraryRoot ?? null, skillRoots: opts.skillRoots ?? null })]
 }

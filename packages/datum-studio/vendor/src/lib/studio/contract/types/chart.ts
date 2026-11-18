@@ -119,7 +119,20 @@ export type ChartData =
   | { shape: "matrix"; rows: string[]; cols: string[]; values: number[][] }
   | {
       shape: "intervals";
-      items: Array<{ label: string; start: number | string; end: number | string; group?: string; milestone?: boolean }>;
+      /** Swarm 1.3.3 row 25 (ST-2, W-07): `float` >= 0 in axis units; `critical` bars take the accent. */
+      items: Array<{
+        label: string;
+        start: number | string;
+        end: number | string;
+        group?: string;
+        milestone?: boolean;
+        float?: number;
+        critical?: boolean;
+      }>;
+      /** Status line position, same kind (number or date text) as `start`/`end`. */
+      statusAt?: number | string;
+      /** Printed axis unit, 1..40 characters (for example `minggu`). */
+      timeUnit?: string;
     }
   | {
       shape: "graph";

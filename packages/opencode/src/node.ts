@@ -1,6 +1,7 @@
 export { Config } from "@/config/config"
 export { Server } from "./server/server"
 export { RunLease } from "./session/run-lease"
+export { ConsentCarry } from "./permission/consent-carry"
 export { bootstrap } from "./cli/bootstrap"
 export { Database } from "@opencode-ai/core/database/database"
 export { DesktopNonce } from "./server/desktop-nonce"

@@ -17,6 +17,7 @@ import { nudgeRoutes, offRules, routeRulesOf } from "./lanesroute";
 import { activeElkRoutes } from "../elk/routes";
 import { edgeConflicts, ENTRY_COLLISION_MM } from "../fit/lint";
 import { flowDirectionOf, flowRanks } from "../layout-a/flow";
+import { LONE_NODE_FAMILIES, tierKey, tierWidthMm } from "../layout-a/layered"; // Swarm 1.3.3 row 136
 import { isLabelBelow, labelBelowOutline } from "../fit/text";
 import { clearFirstRender, noteFirstRender } from "./autofit";
 // Swarm 1.2.9 row 25 (AC-A01): end placement lives in route-ends.ts, run shaping in route-shape.ts; the names this
@@ -171,6 +172,19 @@ function routePlacedEdges(s: StudioDiagramV1, sheet: Sheet): RoutedEdge[] {
 /** Row 57c (C123 item 3): a sideways offset below this (one vertical lattice step) between facing ends is aligned. */
 const JOG_ALIGN_MM = LATTICE_Y;
 
+/**
+ * Swarm 1.3.3 row 136 (ST-3 item 7): ids of the nodes that stand alone on their tier at less than the shared tier width
+ * (row 47 gave them the default node width; layered and topology only). A figure without such a node gets an empty set
+ * and is routed exactly as before.
+ */
+function narrowLoneNodes(s: StudioDiagramV1, sheet: Sheet): ReadonlySet<string> {
+  if (!LONE_NODE_FAMILIES.has(String(s.family))) return new Set();
+  const perTier = new Map<string, string[]>();
+  for (const n of s.nodes) perTier.set(tierKey(n), [...(perTier.get(tierKey(n)) ?? []), String(n.id)]);
+  const shared = tierWidthMm(1, sheet.widthMm, { x: sheet.colMm });
+  return new Set([...perTier.values()].filter((ids) => ids.length === 1 && (sheet.nodes.get(ids[0])?.w ?? shared) < shared - 1e-6).map((ids) => ids[0]));
+}
+
 /** The original `route_edges` body; `over` = side pair per edge index chosen by row 124 (CP-41). */
 function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<number, SidePair>): RoutedEdge[] {
   const edges = s.edges ?? [];
@@ -181,6 +195,7 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
   // `direction` (legacy) is untouched.
   const dir = flowDirectionOf(s as StudioDiagramV1 & { direction?: unknown });
   const rankOf = dir ? flowRanks(s).rankOf : undefined;
+  const narrowLone = narrowLoneNodes(s, sheet); // row 136
   // Row 56b (VIS-5): explicit sides win over the router's pair.
   const sidesOf0 = (e: DiagramEdge, i: number): SidePair => withSides(e, autoSides(e, i), nodeOf(sheet, e.from), nodeOf(sheet, e.to));
   // Row 56c (C75 (1), C101): a decision diamond connects at its four vertices, one end per vertex where the far node allows.
@@ -211,6 +226,14 @@ function routeWithSides(s: StudioDiagramV1, sheet: Sheet, over: ReadonlyMap<numb
         const gw = a.spec.shape?.startsWith("gateway_") === true || b.spec.shape?.startsWith("gateway_") === true;
         return annotationSides(gw ? belowSides(fixed, a, b) : fixed, a, b);
       }
+    }
+    // Swarm 1.3.3 row 136: a narrow lone node links to a node on another tier by its bottom or top, fanned across that
+    // side, and turns in the tier gap. `sideOf` goes by the centres: with a 32 mm hub over wide tiers the outer
+    // children lie more sideways than down, the link left by the hub's side and ran down a sibling's outline
+    // (GEOM_EDGE_ALONG). The stretched hub never met this: its centre-to-centre offsets stayed below the tier step.
+    if ((narrowLone.has(e.from) || narrowLone.has(e.to)) && a.spec.shape !== "bus" && b.spec.shape !== "bus") {
+      const down = b.y >= a.y + a.h - 1e-9;
+      if (down || b.y + b.h <= a.y + 1e-9) return annotationSides(belowSides(down ? ["bottom", "top"] : ["top", "bottom"], a, b), a, b);
     }
     const sa = sideOf(a, b);
     return annotationSides(belowSides([sa, OPP[sa]], a, b), a, b);

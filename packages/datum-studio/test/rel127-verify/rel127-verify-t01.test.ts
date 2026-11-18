@@ -18,7 +18,7 @@ const CH = { what: "caption uji", why: "uji regresi T-01", impact: "dokumen uji 
 const chapterSub = (documentId: string, blocks: unknown[]) => ({ $schema: "studio.chapter/v2", target: { documentId }, chapter: { key: "1", title: { text: "Uraian uji" }, sections: [{ title: { text: "Bagian uji" }, blocks }] } })
 const diagram = (caption: string) => ({
   type: "diagram",
-  spec: { family: "flow", labels_verified: true, nodes: [{ id: "a", label: "Gudang utama", class: { col: 0, row: 0 } }, { id: "b", label: "Pemeriksaan mutu", class: { col: 0, row: 1 } }, { id: "c", label: "Rak simpan", class: { col: 0, row: 2 } }], edges: [{ from: "a", to: "b", kind: "data", label: "kirim" }, { from: "b", to: "c", kind: "data", label: "lolos" }] },
+  spec: { family: "flow", labels_verified: false /* row 61 (U20): true from an agent is refused */, nodes: [{ id: "a", label: "Gudang utama", class: { col: 0, row: 0 } }, { id: "b", label: "Pemeriksaan mutu", class: { col: 0, row: 1 } }, { id: "c", label: "Rak simpan", class: { col: 0, row: 2 } }], edges: [{ from: "a", to: "b", kind: "data", label: "kirim" }, { from: "b", to: "c", kind: "data", label: "lolos" }] },
   caption: { text: caption },
   source: { text: "Uji sintetis." },
 })

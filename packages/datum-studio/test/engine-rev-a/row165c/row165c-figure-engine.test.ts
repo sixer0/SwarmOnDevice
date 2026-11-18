@@ -112,7 +112,7 @@ describe("F113-10 (CP-47): the hatch is vector lines, not a <pattern>", () => {
     expect(srv.fill).toBe("none");
     const box = { x0: +srv.x, y0: +srv.y, x1: +srv.x + +srv.width, y1: +srv.y + +srv.height };
     const lines = [...g![2].matchAll(/<line ([^>]*)\/>/g)].map((m) => attrs(m[1]));
-    expect(lines.length).toBeGreaterThan(40);
+    expect(lines.length).toBeGreaterThan(20); // Swarm 1.3.3 row 136: was > 40 on the 106.67 mm box; the lone hub `srv` is 32 mm wide (24 lines)
     for (const l of lines) {
       for (const [x, y] of [[+l.x1, +l.y1], [+l.x2, +l.y2]]) {
         expect(x).toBeGreaterThanOrEqual(box.x0 - 0.006);

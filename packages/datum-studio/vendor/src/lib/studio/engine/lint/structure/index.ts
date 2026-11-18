@@ -29,6 +29,9 @@ import type { AdaptReportV1, AnyNormSnapshot, CompletenessReportV2, LintIssue, R
 import { LINT_REGISTRY, type LintDef } from "../../../registry/lint";
 import { STRUCTURE_A_CHECKS } from "./checks-a";
 import { STALE_XREF_CHECK_ID, STRUCTURE_D_CHECKS, staleXrefs } from "./checks-d";
+import { STRUCTURE_CAPTION_CHECKS } from "./checks-caption";
+import { STRUCTURE_OFFPAGE_CHECKS } from "./checks-offpage";
+import { STRUCTURE_PLACEHOLDER_CHECKS } from "./checks-placeholder";
 import { INLINE_FORMAT_STRIPPED_ID, STRUCTURE_SLOT_CHECKS, inlineFormatStripped } from "./checks-slots";
 import { makeCtx, toIssues, type CheckOutcome, type StructCtx } from "./context";
 import { applyEnforcement, resolveEnforcement, safetyOverridesFrom } from "./enforcement";
@@ -69,6 +72,9 @@ export const STRUCTURE_CHECKS: Readonly<Record<string, (ctx: StructCtx) => Check
   ...STRUCTURE_A_CHECKS,
   ...STRUCTURE_D_CHECKS,
   ...STRUCTURE_SLOT_CHECKS,
+  ...STRUCTURE_PLACEHOLDER_CHECKS, // Swarm 1.3.3 row 52 (ST-5): PLACEHOLDER_UNFILLED
+  ...STRUCTURE_CAPTION_CHECKS, // Swarm 1.3.3 row 86 (ST-12): D23 caption evidence
+  ...STRUCTURE_OFFPAGE_CHECKS, // Swarm 1.3.3 row 137 (C20): OFFPAGE_UNPAIRED, row 50's pairing rule in document lint
 };
 
 /** Entri registri bermodul "structure" (urutan registri). */

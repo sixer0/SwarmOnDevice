@@ -233,7 +233,7 @@ describe("row 98: studio_asset_put (W-13, SEC-10, SEC-11, SEC-12)", () => {
   test("call shapes and result fields match the host tool", async () => {
     const { assetHostExtension, ASSET_TOOL_NAME } = await import("../../src/mcp-host/asset-tool")
     const ext = assetHostExtension() as unknown as { inputSchema: Schema; description: string }
-    expect(props(ext.inputSchema).sort()).toEqual(["dataBase64", "documentId", "path"])
+    expect(props(ext.inputSchema).sort()).toEqual(["dataBase64", "documentId", "path", "svg", "width"]) // 1.3.3 row 116 adds `svg` + `width` (framed SVG intake)
     expect(A).toContain(`\`\`\` ${ASSET_TOOL_NAME} { path } ${ASSET_TOOL_NAME} { dataBase64 } \`\`\``)
     const t = src("src/mcp-host/asset-tool.ts")
     expect(t).toContain("structuredContent: { ok: true, tool: ASSET_TOOL_NAME, sha256: s.sha256, ref, mime: s.mime, widthPx: s.widthPx, heightPx: s.heightPx, bytes: s.bytes, created: stored.created, metadata")

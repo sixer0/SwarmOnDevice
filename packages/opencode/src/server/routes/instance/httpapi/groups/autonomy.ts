@@ -64,6 +64,10 @@ export const ModeState = Schema.Struct({
   bypass: Schema.Boolean.annotate({
     description: "True only while a consented activation is live for this scope; a restart turns it off",
   }),
+  needsReconsent: Schema.optional(Schema.Boolean).annotate({
+    description:
+      "Mode on, consent absent: the mode was on before the app was reopened and the person has not answered since. Nothing runs autonomously until they consent again (on with bypassConsent) or decline (off)",
+  }),
 }).annotate({ identifier: "AutonomyMode" })
 
 // No session means the folder: what a draft shows, and what a new session in it starts from.
@@ -84,6 +88,9 @@ export const SessionState = Schema.Struct({
   externalChange: ExternalChange,
   bypass: Schema.Boolean.annotate({
     description: "True only while a consented activation is live for the session's root; a restart turns it off",
+  }),
+  needsReconsent: Schema.optional(Schema.Boolean).annotate({
+    description: "Mode on, consent absent for the session's root after a reopen; see AutonomyMode",
   }),
   open: Schema.Int,
   lines: Schema.Array(Autonomy.AuditLine.annotate({ identifier: "AutonomyAuditLine" })),

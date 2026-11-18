@@ -64,6 +64,8 @@ export async function openHostStore(root: string, opts: HostStoreOptions): Promi
   const { logFile, logOptions, ...open } = opts
   const store = new SqliteStudioStore()
   await store.open(root, { ...open, log: createStoreFileLogger(logFile, logOptions) })
+  // 1.3.4 (T-10): renders a previous process left running cannot finish any more; close them before the first job.
+  await store.failInterruptedRenderJobs()
   setStudioStore(store)
   return store
 }

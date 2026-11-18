@@ -1,0 +1,22 @@
+{
+  "caption": {"text": "UPS B dengan baterai kedua memberi umpan B ke rel rak yang terpisah."},
+  "source": {"text": "hal 88 Gambar 12.2; IEC 60617 DB; IEC 81346 designations; nilai contoh"},
+  "spec": {
+    "family": "layered",
+    "labels_verified": false,
+    "legend": ["subject: rel B", "outgoing feeder", "bypass perawatan", "IEC 60617 DB · IEC 81346"],
+    "nodes": [
+      {"class": {"tier": 1}, "id": "mdpb", "label": "dari WD1", "shape": "circle"},
+      {"class": {"tier": 2}, "id": "qa12", "label": "QA12", "shape": "box", "sub": "630 A", "symbol": "iec:breaker"},
+      {"class": {"tier": 3}, "id": "upsb", "label": "=E22-TB1", "shape": "box", "sub": "UPS B · GB1 LFP 10 min", "symbol": "iec:enclosure"},
+      {"class": {"tier": 4}, "id": "qa22", "label": "QA22 + QB4", "shape": "box", "sub": "QB4 bypass Kirk", "symbol": "iec:breaker"},
+      {"class": {"accent": true, "tier": 5}, "id": "busb", "label": "=E22-WD1", "shape": "box", "sub": "J04 J05 J07 J08 B1"}
+    ],
+    "edges": [
+      {"from": "mdpb", "kind": "data", "label": "630 A", "to": "qa12"},
+      {"from": "qa12", "kind": "data", "label": "0,4 kV", "to": "upsb"},
+      {"from": "upsb", "kind": "data", "label": "630 A", "to": "qa22"},
+      {"from": "qa22", "kind": "data", "label": "umpan B", "to": "busb"}
+    ]
+  }
+}

@@ -79,6 +79,11 @@ export type BridgeReply = ({ ok: true } & Record<string, unknown>) | { ok: false
  */
 export interface BridgeTransportOptions {
   timeoutMs?: number;
+  /**
+   * Swarm 1.3.3 row 20 (SB-1): exact limit of the socket read, WITHOUT `BRIDGE_READ_MARGIN_MS`.
+   * Only the handshake sets it: `hello` runs no page job, so no host-side op timer has to win first.
+   */
+  readTimeoutMs?: number;
 }
 /** One request -> one reply. The token is added by the transport, never by callers. */
 export type BridgeTransport = (req: BridgeRequest, opts?: BridgeTransportOptions) => Promise<BridgeReply>;
@@ -88,6 +93,17 @@ export type BridgeTransport = (req: BridgeRequest, opts?: BridgeTransportOptions
  * host-side op timer (or the bridge's own RENDER_TIMEOUT reply) decides, not the socket read.
  */
 export const BRIDGE_READ_MARGIN_MS = 45000;
+
+/**
+ * Swarm 1.3.3 row 20 (SB-1; register section 10): limit of the `hello` handshake, used by
+ * `bridgeHandshake` only and never added to `BRIDGE_READ_MARGIN_MS`. A bridge that accepts the
+ * connection and does not answer (Electron main frozen, hang trace 2026-11-17) used to hold the
+ * preflight for 30 000 + 45 000 ms and was then reported as "engine missing".
+ */
+/** @internal test seam */
+export const BRIDGE_HANDSHAKE_TIMEOUT_MS = 8000;
+/** Fixed text of the handshake timeout; the PDF preflight maps it to `PDF_BRIDGE_TIMEOUT` (preflight.ts). */
+const BRIDGE_HANDSHAKE_TIMEOUT_MESSAGE = "render bridge handshake timed out";
 
 /** What the bridge reports at the handshake (row 24 dispatch.ts EngineInfo + hello extras). */
 export interface BridgeInfo {
@@ -105,6 +121,9 @@ export interface BridgeInfo {
 /** Fixed page scripts Studio sends to `checkPage`; the host registers them in the bridge allow-list (row 24 scripts.ts). */
 export const STUDIO_BRIDGE_SCRIPTS: ReadonlyArray<{ name: string; text: string }> = [{ name: "studio.measure", text: MEASURE_SCRIPT }];
 
+/** Text of the socket read timeout (unchanged wording); `bridgeHandshake` recognises it by this constant. */
+const SOCKET_READ_TIMEOUT_MESSAGE = "render bridge did not answer in time";
+
 class BridgeTransportError extends Error {
   constructor(
     readonly kind: "not-configured" | "connect" | "protocol",
@@ -117,7 +136,7 @@ class BridgeTransportError extends Error {
 
 /** Default transport: one connection per request over the bridge Unix socket (row 24 socket-server.ts). */
 export const socketTransport: BridgeTransport = (req, opts) => {
-  const readTimeoutMs = (opts?.timeoutMs ?? STUDIO_CHROMIUM_TIMEOUT_MS) + BRIDGE_READ_MARGIN_MS;
+  const readTimeoutMs = opts?.readTimeoutMs ?? (opts?.timeoutMs ?? STUDIO_CHROMIUM_TIMEOUT_MS) + BRIDGE_READ_MARGIN_MS;
   const socketPath = process.env[RENDER_SOCKET_ENV]?.trim() ?? "";
   const token = process.env[RENDER_TOKEN_ENV]?.trim() ?? "";
   if (socketPath === "" || token === "" || !path.isAbsolute(socketPath)) {
@@ -135,7 +154,7 @@ export const socketTransport: BridgeTransport = (req, opts) => {
       else resolve(reply!);
     };
     const sock = net.createConnection({ path: socketPath });
-    sock.setTimeout(readTimeoutMs, () => done(new BridgeTransportError("protocol", "render bridge did not answer in time")));
+    sock.setTimeout(readTimeoutMs, () => done(new BridgeTransportError("protocol", SOCKET_READ_TIMEOUT_MESSAGE)));
     sock.on("error", (e) => done(new BridgeTransportError("connect", `render bridge socket error: ${(e as NodeJS.ErrnoException).code ?? e.message}`)));
     sock.on("connect", () => sock.write(`${JSON.stringify({ ...req, token })}\n`));
     sock.on("data", (b: Buffer) => {
@@ -221,12 +240,12 @@ export function logBrowser(level: RenderLogEntry["level"], message: string, extr
 const INPUT_CODES = new Set(["BAD_REQUEST", "PATH_REFUSED", "INPUT_TOO_LARGE", "SVG_INVALID", "LINE_TOO_LONG"]);
 
 /** Send one op to the bridge; map transport failures and bridge error codes to Studio errors. */
-export async function bridgeCall(op: string, req: BridgeRequest, timeoutMs?: number): Promise<Record<string, unknown>> {
+export async function bridgeCall(op: string, req: BridgeRequest, timeoutMs?: number, readTimeoutMs?: number): Promise<Record<string, unknown>> {
   const s = state();
   const transport = s.transport ?? socketTransport;
   let reply: BridgeReply;
   try {
-    reply = await transport(req, timeoutMs === undefined ? undefined : { timeoutMs });
+    reply = await transport(req, timeoutMs === undefined ? undefined : readTimeoutMs === undefined ? { timeoutMs } : { timeoutMs, readTimeoutMs });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     logBrowser("error", `render bridge ${req.op} failed: ${msg}`, { op, code: "BROWSER_UNAVAILABLE" });
@@ -256,9 +275,40 @@ export function judgeBridgeInfo(info: Partial<BridgeInfo> | null | undefined): s
 }
 
 /** Handshake (`hello`): the bridge must report the locked-down window, else BROWSER_UNAVAILABLE (SANDBOX_UNAVAILABLE). */
-export async function bridgeHandshake(): Promise<BridgeInfo> {
+/**
+ * Swarm 1.3.3 row 20 (SB-1): the handshake ends within `BRIDGE_HANDSHAKE_TIMEOUT_MS` whatever the
+ * transport does. Its own timer decides (an injected transport may ignore `readTimeoutMs`); the socket
+ * transport gets the same limit so its connection is closed at that moment too. A bridge that does not
+ * answer is reported as `render bridge handshake timed out`, never as "unavailable / not running".
+ * `opts.timeoutMs` exists for tests (short limit, no real seconds).
+ */
+export async function bridgeHandshake(opts?: { timeoutMs?: number }): Promise<BridgeInfo> {
   const op = "sandbox-check";
-  const r = (await bridgeCall(op, { op: "hello" })) as unknown as BridgeInfo;
+  const limit = opts?.timeoutMs ?? BRIDGE_HANDSHAKE_TIMEOUT_MS;
+  const TIMED_OUT = Symbol("handshake-timeout");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), limit);
+  });
+  const call = bridgeCall(op, { op: "hello" }, limit, limit);
+  // The socket read limit equals `limit`, so either the timer or the socket timeout may come first:
+  // both mean "connected or connecting, no answer in time" and get the same named cause.
+  const raced = await Promise.race([call, expiry])
+    .catch((e: unknown) => {
+      const cause = (e as { cause?: unknown } | null)?.cause;
+      if (cause instanceof BridgeTransportError && cause.message === SOCKET_READ_TIMEOUT_MESSAGE) return TIMED_OUT;
+      throw e;
+    })
+    .finally(() => clearTimeout(timer));
+  if (raced === TIMED_OUT) {
+    // The losing call may still reject later; it is already observed by the race, nothing is unhandled.
+    call.catch(() => {});
+    state().browser = null;
+    const text = `${BRIDGE_HANDSHAKE_TIMEOUT_MESSAGE} after ${limit} ms (the Swarm app did not answer)`;
+    logBrowser("error", text, { op, code: "BROWSER_UNAVAILABLE", durationMs: limit });
+    throw new StudioBrowserError("RENDER_FAILED", op, text);
+  }
+  const r = raced as unknown as BridgeInfo;
   const verdict = judgeBridgeInfo(r);
   if (verdict !== null) {
     logBrowser("error", `Render bridge sandbox check failed: ${verdict}`, { op, code: "BROWSER_UNAVAILABLE" });
@@ -419,6 +469,10 @@ function mmOf(v: string | number | undefined, fallback: number): number {
 
 const PX_PER_MM = 96 / 25.4;
 
+/** Swarm 1.3.3 row 132: name of the page file a `checkPage` request points at (inside the page's work folder). */
+/** @internal test seam */
+export const CHECK_PAGE_FILE = "check.html";
+
 /**
  * The subset of the Playwright `Page` API that index.ts calls. Content is held in memory until an
  * op needs it; files for the bridge go to a private 0700 work folder that is removed after the op.
@@ -465,17 +519,38 @@ export class BridgePage {
       }
       const arg = JSON.parse(expr.slice(MEASURE_SCRIPT.length + 1, -1)) as unknown;
       const { width, height } = this.opts.viewport;
-      const r = await bridgeCall(this.op, {
-        op: "checkPage",
-        html: this.html,
-        wMm: width / PX_PER_MM,
-        hMm: height / PX_PER_MM,
-        script: MEASURE_SCRIPT,
-        arg,
-        viewportWidth: width,
-        viewportHeight: height,
-      }, this.opts.timeoutMs);
-      return r.result;
+      // Swarm 1.3.3 row 132 (SB-1, F2 of the row 21 diagnosis): the page goes to the bridge as a file
+      // (`src`), never inline. An inline page made a multi-megabyte request line that the bridge socket
+      // copied chunk by chunk (1,030 MB allocated per 4 MiB request). The bridge has read `checkPage`
+      // pages from `src` since row 106 (protocol.ts "checkPage takes html or src"), with the same input
+      // cap and the same path policy as the `pdf` op below.
+      if (this.html === "") {
+        // The bridge refused an empty inline page (BAD_REQUEST); an empty file would be measured instead.
+        logBrowser("error", "render bridge checkPage refused: BAD_REQUEST (html must be a non-empty string)", { op: this.op, code: "BAD_REQUEST" });
+        throw new StudioBrowserError("INPUT_INVALID", this.op, "Render bridge refused the input (BAD_REQUEST)");
+      }
+      // Fixed name inside this page's private 0700 work folder: no caller value reaches the path.
+      // "wx" creates the file and fails on anything already there (a link included), so the bytes the
+      // bridge reads are the ones written here.
+      const src = this.file(CHECK_PAGE_FILE);
+      rmSync(src, { force: true });
+      writeFileSync(src, this.html, { mode: 0o600, flag: "wx" });
+      try {
+        const r = await bridgeCall(this.op, {
+          op: "checkPage",
+          src,
+          wMm: width / PX_PER_MM,
+          hMm: height / PX_PER_MM,
+          script: MEASURE_SCRIPT,
+          arg,
+          viewportWidth: width,
+          viewportHeight: height,
+        }, this.opts.timeoutMs);
+        return r.result;
+      } finally {
+        // Removed after success and after failure; withSandboxedPage removes the whole folder as well.
+        rmSync(src, { force: true });
+      }
     }
     throw new StudioBrowserError("RENDER_FAILED", this.op, "page script is not available through the render bridge");
   }

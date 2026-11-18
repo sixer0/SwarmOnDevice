@@ -172,6 +172,11 @@ export interface Finished {
   renderError: string | null;
   /** 1.2.7 N-10 (N7-144): galat render dari server (isi asal dokumen) -> hanya blok/medan tak tepercaya. */
   renderMessages?: Array<{ code: string; message: string }>;
+  /**
+   * Swarm 1.3.3 row 78 (ST-11): the caller asked for no render (`studio_edit`). `render` is then always null: the
+   * reply names no file, so a file made from an older revision is never shown as this revision's.
+   */
+  renderDeferred?: true;
 }
 
 /** 1.2.7 N-10: id cek di pesan galat render, mis. `(DT-10a)` / `(DATUM-25)`. */
@@ -193,13 +198,19 @@ function renderFailure(body: unknown): { renderError: string; renderMessages?: A
   };
 }
 
-/** R15 kelengkapan; COMPLETE -> R17 render docx + R10 HEAD verifikasi sha (satu panggilan alat = dokumen siap unduh). */
-export async function finishDoc(ctx: ToolContext, id: string, agentId: string | null): Promise<Finished> {
+/**
+ * R15 kelengkapan; COMPLETE -> R17 render docx + R10 HEAD verifikasi sha (satu panggilan alat = dokumen siap unduh).
+ * Swarm 1.3.3 row 78 (ST-11): `render: false` (jalur `studio_edit`) berhenti sesudah R15. Satu render dokumen penuh
+ * adalah satu job jembatan berukuran megabyte; sepuluh suntingan berurutan dulu = sepuluh job. Render kini satu kali
+ * per kelompok suntingan, lewat `studio_render` yang dipanggil agen (jalur itu juga yang diverifikasi gerbang baris).
+ */
+export async function finishDoc(ctx: ToolContext, id: string, agentId: string | null, o: { render: boolean } = { render: true }): Promise<Finished> {
   const c = await http(ctx, "GET", studioRoutePath("R15", { id }), "GET /api/studio/documents/{id}/completeness");
   const comp = isRecord(c.body) && isRecord(c.body.completeness) ? c.body.completeness : {};
   const status = typeof comp.status === "string" ? comp.status : "UNKNOWN";
   const completeness = { status: tok(status), missingRequired: Array.isArray(comp.missingRequired) ? comp.missingRequired.length : 0 };
   if (status !== "COMPLETE") return { completeness, render: null, renderError: null };
+  if (!o.render) return { completeness, render: null, renderError: null, renderDeferred: true };
   let reply;
   try {
     reply = await http(ctx, "POST", studioRoutePath("R17", { id }), "POST /api/studio/documents/{id}/render", { json: { scope: "document", formats: ["docx"], ...(agentId !== null ? { agentId } : {}) } });
@@ -237,16 +248,34 @@ export function verifyClient(ctx: ToolContext, id: string, f: Finished, o: { pri
  * `detail: true` menambah nextSteps.
  */
 export function clientOutput(tool: string, id: string, docNumber: string | null, rev: number | null, state: string, f: Finished, warnings: ToolWarning[], extra: Rec = {}, verify: Verified | null = null, detail = true): ToolOutput {
+  // Row 78 (ST-11): sunting yang menulis revisi baru tanpa render -> jawaban menyebut revisi itu belum dirender dan
+  // satu panggilan yang merendernya. Sunting yang tidak menulis apa pun tidak mengaku ada yang perlu dirender.
+  const deferred = f.renderDeferred === true && state !== "tidak berubah";
+  const renderCall = `studio_render { documentId: "${tok(id)}" }`;
   const nextSteps = [
     `studio_edit { documentId: "${tok(id)}", edits: [{ find, replace }] } untuk teks; { figure: "<teks keterangan>", chart: { categories?, series? } } untuk data grafik`,
-    ...(f.render ? [`studio_file_verify { fileId: "${tok(f.render.fileId)}", downloadDir } untuk mengunduh DOCX`] : ["lengkapi isi lalu studio_write lagi (render penuh hanya bila COMPLETE)"]),
+    ...(f.render
+      ? [`studio_file_verify { fileId: "${tok(f.render.fileId)}", downloadDir } untuk mengunduh DOCX`]
+      : f.renderDeferred === true
+        ? [`${renderCall} satu kali sesudah suntingan terakhir (studio_edit tidak merender)`]
+        : ["lengkapi isi lalu studio_write lagi (render penuh hanya bila COMPLETE)"]),
   ];
   const failed = f.render === null ? (f.renderMessages ?? []) : [];
   const verifyFields = verify !== null ? (detail ? ["verify.headings", "verify.captions", "verify.meta"] : ["verify.meta"]) : [];
   const flagged = [...(failed.length > 0 ? ["renderErrors"] : []), ...verifyFields];
   const lines = [
     `${tool}: dokumen klien ${tok(docNumber)} (documentId ${tok(id)}) rev ${tok(rev)} ${state}; kelengkapan ${f.completeness.status}${f.completeness.missingRequired > 0 ? ` (kurang ${f.completeness.missingRequired})` : ""}`,
-    ...(f.render && verify !== null && !detail ? [] : [f.render ? `berkas: ${tok(f.render.fileId)} DOCX sha256 ${f.render.sha256.slice(0, 16)} ${f.render.verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"}` : `berkas: tidak dirender${f.renderError ? ` (galat ${f.renderError})` : ""}`]),
+    ...(f.render && verify !== null && !detail
+      ? []
+      : [
+          f.render
+            ? `berkas: ${tok(f.render.fileId)} DOCX sha256 ${f.render.sha256.slice(0, 16)} ${f.render.verified ? "FILE_VERIFIED(sha256)" : "FILE_UNVERIFIED(sha256)"}`
+            : deferred
+              ? `berkas: rev ${tok(rev)} belum dirender (studio_edit tidak merender; berkas render yang sudah ada, bila ada, dibuat dari revisi lebih lama, bukan revisi ini). Sesudah suntingan terakhir, satu kali: ${renderCall}`
+              : f.renderDeferred === true
+                ? "berkas: tidak dirender (studio_edit tidak merender; tidak ada revisi baru)"
+                : `berkas: tidak dirender${f.renderError ? ` (galat ${f.renderError})` : ""}`,
+        ]),
     ...(failed.length > 0 ? [untrustedBlock(failed.map((e) => `${e.code}: ${e.message}`).join("\n"), { jenis: "galat-render", documentId: id })] : []),
     ...(verify !== null ? [verify.line, ...(verify.block !== null ? [verify.block] : [])] : []),
     ...(detail ? nextSteps.map((s) => `lanjut: ${s}`) : []),
@@ -261,6 +290,7 @@ export function clientOutput(tool: string, id: string, docNumber: string | null,
       completeness: f.completeness,
       render: compactRender(f.render, detail),
       ...(f.renderError ? { renderError: f.renderError } : {}),
+      ...(deferred ? { renderNeeded: { revisionNo: rev, reason: "EDIT_NOT_RENDERED", call: "studio_render" } } : {}),
       ...(failed.length > 0 ? { renderErrors: neutralizeDeep(failed) } : {}),
       ...(detail ? { nextSteps } : {}),
       ...extra,
@@ -558,7 +588,8 @@ export async function editClient(a: Args, ctx: ToolContext, id: string, docNumbe
     throw withProgress(e, { documentId: id, written: [...edited], notWritten: planned.filter((x) => !edited.includes(x)), revisionNo: lastRev }, "baca ulang lalu ulangi hanya suntingan untuk bagian di notWritten");
   }
   ctx.session.noteParts(id, edited.filter((w) => w.startsWith("slot ") || w.startsWith("bab ")).map((w) => [w, editRev.get(w) ?? null] as const));
-  const f = await finishDoc(ctx, id, agentId);
+  // Row 78 (ST-11): tanpa render; kelengkapan (R15) dan ringkasan tanpa-berkas (rev tersimpan, meta, lint figur) tetap.
+  const f = await finishDoc(ctx, id, agentId, { render: false });
   const metaEcho = applied !== null ? { meta: Object.fromEntries(["title", "number", "rev", "date", "author"].filter((k) => applied?.[k] !== undefined).map((k) => [k, tok(applied?.[k] ?? "", "(teks)")])) } : {};
   return clientOutput("studio_edit", id, docNumber, lastRev, mine > 0 ? "diperbarui" : "tidak berubah", f, warnings, { edited, basisRevisionNo: rev, ...metaEcho, ...na }, await verifyClient(ctx, id, f, { priorTitles, detail: bool(a, "detail") }), bool(a, "detail"));
 }

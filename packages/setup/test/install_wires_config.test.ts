@@ -58,7 +58,7 @@ describe("product path — a healthy-graft wire produces swarm.json:mcp.graft + 
         mcp: Record<string, { command?: string[]; env?: Record<string, string> }>
       }
       expect(cfg.mcp.graft?.command).toEqual([okLaunch().nodePath, okLaunch().cliPath, "mcp"])
-      expect(cfg.mcp.graft?.env?.DO_NOT_TRACK).toBe("1")
+      expect(cfg.mcp.graft?.environment?.DO_NOT_TRACK).toBe("1")
 
       // The skill files land beside the entry, byte-equal to the renderer (TEXT_TARGETS.graft gate = graft).
       expect(exists(join(configDir(b), TEXT_TARGETS.graft))).toBe(true)

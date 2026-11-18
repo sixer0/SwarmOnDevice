@@ -13,6 +13,15 @@ import { validateBlockV2, validateChapterV2 } from "../../vendor/src/lib/studio/
 import { validateV2Against } from "../../vendor/src/lib/studio/services/ingest/validate"
 import { naskahToBlockV2, type NaskahBlock } from "./naskah-map"
 
+// Swarm 1.3.3 row 61 (U20): over the host routes an agent write that carries labels_verified: true is refused
+// (LABELS_VERIFIED_PERSON_ONLY), so the route cases send the same block with the flag false.
+const agentBlock = (...a: Parameters<typeof naskahToBlockV2>): Record<string, unknown> => {
+  const b = naskahToBlockV2(...a)
+  const spec = b.spec as Record<string, unknown> | undefined
+  if (spec && spec.labels_verified === true) spec.labels_verified = false
+  return b
+}
+
 const PKG = path.resolve(import.meta.dir, "..", "..")
 const VENDOR = path.join(PKG, "vendor")
 const TEMPLATES = path.join(PKG, "templates")
@@ -181,7 +190,7 @@ describe("T-01 entry points over the host routes (flow F2 C 6/6)", () => {
   test("chapter submit (R12): every fixture is refused 400 SCHEMA_INVALID / CAPTION_TOKEN_DUPLICATE and writes nothing", async () => {
     for (const [name, n] of NASKAH) {
       const before = await current()
-      const r = await local("POST", "/api/studio/chapters", chapterBody(before, [naskahToBlockV2(n)]))
+      const r = await local("POST", "/api/studio/chapters", chapterBody(before, [agentBlock(n)]))
       expect({ name, status: r.status, code: r.body.code }).toEqual({ name, status: 400, code: "SCHEMA_INVALID" })
       const hit = tokenIssues(bodyIssues(r.body))
       expect(hit.length).toBe(1)
@@ -192,7 +201,7 @@ describe("T-01 entry points over the host routes (flow F2 C 6/6)", () => {
 
   test("chapter submit (R12) of the six token-free blocks is accepted", async () => {
     const before = await current()
-    const r = await local("POST", "/api/studio/chapters", chapterBody(before, NASKAH.map(([, n]) => naskahToBlockV2(n, stripped(n.caption)))))
+    const r = await local("POST", "/api/studio/chapters", chapterBody(before, NASKAH.map(([, n]) => agentBlock(n, stripped(n.caption)))))
     expect(r.status).toBe(201)
     expect(await current()).toBe(before + 1)
   })
@@ -205,7 +214,7 @@ describe("T-01 entry points over the host routes (flow F2 C 6/6)", () => {
     const route = `/api/studio/documents/${documentId}/paragraphs/${pid}`
     for (const [name, n] of NASKAH) {
       const base = await current()
-      const r = await local("PATCH", route, { op: "replace", baseRevisionNo: base, block: naskahToBlockV2(n), change: CHANGE })
+      const r = await local("PATCH", route, { op: "replace", baseRevisionNo: base, block: agentBlock(n), change: CHANGE })
       expect({ name, status: r.status, code: r.body.code }).toEqual({ name, status: 400, code: "SCHEMA_INVALID" })
       const hit = tokenIssues(bodyIssues(r.body))
       expect(hit.map((i) => i.pointer)).toEqual(["/block/caption"])
@@ -215,14 +224,14 @@ describe("T-01 entry points over the host routes (flow F2 C 6/6)", () => {
     // a caption the first block does not already carry (k3 without its token)
     const [, k3] = NASKAH[2]
     const base = await current()
-    const ok = await local("PATCH", route, { op: "replace", baseRevisionNo: base, block: naskahToBlockV2(k3, stripped(k3.caption)), change: CHANGE })
+    const ok = await local("PATCH", route, { op: "replace", baseRevisionNo: base, block: agentBlock(k3, stripped(k3.caption)), change: CHANGE })
     expect(ok.status).toBe(200)
     expect(await current()).toBe(base + 1)
   })
 
   test("page render is not gated: compose maps a stored token-led caption without refusing", async () => {
     const compose = await import(path.join(VENDOR, "src", "lib", "studio", "services", "compose", "index.ts"))
-    const block = naskahToBlockV2(NASKAH[0][1])
+    const block = agentBlock(NASKAH[0][1])
     expect(() => compose.mapBlock(structuredClone(block), "fig-diagram-11", { glyphs: compose.glyphSet(undefined), params: {}, classification: "TERBATAS", artifactLabel: "Gambar 1.1" })).not.toThrow()
   })
 })

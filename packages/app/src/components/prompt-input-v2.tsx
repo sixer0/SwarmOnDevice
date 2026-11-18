@@ -229,6 +229,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     onChanged: (on) => showToast(autonomousToast(language.t, on)),
     onFailed: () => showToast({ variant: "error", title: language.t("common.requestFailed") }),
     confirm: () => confirmAutonomyBypass(dialog),
+    reconsent: () => confirmAutonomyBypass(dialog, { reconsent: true }),
     language: () => reportLanguageOf(language.locale()),
   })
   const submission = createPromptSubmit({

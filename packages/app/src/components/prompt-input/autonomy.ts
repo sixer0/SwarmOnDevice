@@ -28,7 +28,7 @@ export const consentPayload = (language: ReportLanguage): AutonomousConsent => (
 })
 
 /** What the server said. `bypass` is left out by a server that does not report it, which reads as bypassed. */
-export type ModeView = { on: boolean; bypass?: boolean }
+export type ModeView = { on: boolean; bypass?: boolean; needsReconsent?: boolean }
 
 /** On, but approvals wait for the person again (after a server restart, say): the consent has to be given again. */
 export const notBypassed = (mode: ModeView) => mode.on && mode.bypass === false
@@ -64,7 +64,7 @@ export const followModeChanges = (event: Pick<DirectorySDK["event"], "on">, refr
 const REFRESH_DELAY = 250
 
 type Where = { client: Pick<DirectorySDK["client"], "autonomy">; sessionID: string | undefined }
-type Known = { where: Where; on: boolean; bypass?: boolean; open: number }
+type Known = { where: Where; on: boolean; bypass?: boolean; needsReconsent?: boolean; open: number }
 
 /** The composer's view of autonomous mode. The server holds the state; nothing here outlives a read of it. */
 export function createPromptAutonomy(input: {
@@ -76,6 +76,8 @@ export function createPromptAutonomy(input: {
   confirm: () => Promise<boolean>
   /** The language of the report the person gets when the mode goes off again. */
   language: () => ReportLanguage
+  /** Asked once per session and app run when autonomy was on before a restart (MC-7). Without it nothing is asked. */
+  reconsent?: () => Promise<boolean>
 }) {
   const where = createMemo<Where>(() => ({ client: input.sdk().client, sessionID: input.sessionID() }))
   const [state, control] = createResource<Known | undefined, Where>(where, (source, info) =>
@@ -104,6 +106,17 @@ export function createPromptAutonomy(input: {
     onCleanup(event.on("permission.replied", queueMoved))
     onCleanup(event.on("autonomy.blocked", queueMoved))
     onCleanup(followModeChanges(event, refresh))
+  })
+  // A session that was autonomous before a restart asks once; the answer (or a closed dialog) ends the state.
+  createEffect(() => {
+    const known = current()
+    if (!known || !input.reconsent || !claimReconsent(known)) return
+    void answerReconsent(known, {
+      reconsent: input.reconsent,
+      language: input.language,
+      onChanged: input.onChanged,
+      onFailed: input.onFailed,
+    }).then(() => control.refetch())
   })
   makeEventListener(window, AUTONOMY_CHANGED, () => refresh())
   makeEventListener(window, "focus", () => refresh())
@@ -135,6 +148,43 @@ export function createPromptAutonomy(input: {
   }
 }
 
+/** The scopes already asked in this run of the app: one prompt each, whatever the answer. */
+const asked = new Set<string>()
+/** True once per scope and app run, and only for a scope the server says needs consent again. */
+/** @internal test seam */
+export function claimReconsent(known: Pick<Known, "where" | "needsReconsent">) {
+  if (!known.needsReconsent) return false
+  const key = known.where.sessionID ?? "folder"
+  if (asked.has(key)) return false
+  asked.add(key)
+  return true
+}
+/** For tests: a new app run. */
+/** @internal test seam */
+export const forgetReconsentAsked = () => asked.clear()
+
+/**
+ * The one re-consent prompt (MC-7). A yes sends on with the consent; a no, Escape, a click outside or any other close
+ * sends off, so the mode never stays half on. Returns what was sent, or undefined when nothing was.
+ */
+/** @internal test seam */
+export async function answerReconsent(
+  known: Pick<Known, "where">,
+  input: {
+    reconsent: () => Promise<boolean>
+    language: () => ReportLanguage
+    onChanged: (on: boolean) => void
+    onFailed: () => void
+  },
+): Promise<"on" | "off"> {
+  const allowed = await input.reconsent().catch(() => false)
+  const body = allowed ? { on: true, ...consentPayload(input.language()) } : { on: false }
+  await known.where.client.autonomy
+    .modeUpdate({ ...body, sessionID: known.where.sessionID })
+    .then((response) => input.onChanged(response.data?.on ?? body.on), input.onFailed)
+  return allowed ? "on" : "off"
+}
+
 /** Sends what pressing the switch means (see `nextMode`). Returns false when the person said no and nothing was sent. */
 export async function flipMode(
   known: Pick<Known, "where" | "on" | "bypass">,
@@ -160,8 +210,24 @@ const bypassOf = (data: ModeView) => data.bypass
 async function read(where: Where): Promise<Known | undefined> {
   if (!where.sessionID) {
     const folder = await where.client.autonomy.mode()
-    return folder.data && { where, on: folder.data.on, bypass: folder.data.bypass, open: 0 }
+    return (
+      folder.data && {
+        where,
+        on: folder.data.on,
+        bypass: folder.data.bypass,
+        needsReconsent: folder.data.needsReconsent,
+        open: 0,
+      }
+    )
   }
   const session = await where.client.autonomy.session({ sessionID: where.sessionID })
-  return session.data && { where, on: session.data.on, bypass: bypassOf(session.data), open: session.data.open }
+  return (
+    session.data && {
+      where,
+      on: session.data.on,
+      bypass: bypassOf(session.data),
+      needsReconsent: session.data.needsReconsent,
+      open: session.data.open,
+    }
+  )
 }

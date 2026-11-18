@@ -5,6 +5,7 @@
  */
 import type {
   ControlSheetData,
+  ChapterV2,
   ControlSheetPayloadV2,
   CoverData,
   CoverPayloadV2,
@@ -25,17 +26,22 @@ import type {
 } from "../../contract";
 import {
   classificationMarkText,
+  colophonClassificationText,
   CONTROL_FIELD_LABELS,
   CONTROL_SHEET_COLUMN_LABELS,
+  CONTROL_SHEET_DRAFT_STATUS_TEXT,
   CONTROL_SHEET_STATUS_TEXT,
   controlSheetColumnHeads,
+  controlSheetDraftRemarkText,
   controlSheetLabelText,
   coverPreparerUnit,
   FRONT_PAYLOAD_LABELS,
+  templateMethodStatementText,
   wrapperLangOf,
   type ControlSheetTableKind,
   type WrapperLang,
 } from "../../engine/front/texts";
+import { diagramLabelsUnchecked, LABELS_UNCHECKED_TEXT } from "../../engine/lint/structure/checks-d";
 import { table, type BlockCtx } from "./blocks";
 import { mapInline, mapInlineOpt, type InlineCtx } from "./inline";
 
@@ -114,7 +120,16 @@ export function coverFront(payload: CoverPayloadV2 | undefined, meta: DocMeta, c
       }),
     };
   }
-  if (p.colophon) data.colophon = { type: "colophon", left: mapInline(p.colophon.left, ctx), right: mapInline(p.colophon.right, ctx) };
+  if (p.colophon) {
+    // Swarm 1.3.3 row 87 (ST-12, replay R12): a classification named in a written colophon is re-derived from the
+    // document field, so it equals the cover strip (`coverClassificationOf`, same fallback). One place for HTML,
+    // DOCX and PDF (via HTML): every renderer reads `data.colophon` from this snapshot.
+    const own = (v: Inline): Inline =>
+      "text" in v
+        ? { ...v, text: colophonClassificationText(v.text, meta, params ?? {}) }
+        : { ...v, runs: v.runs.map((r) => ("t" in r ? { ...r, t: colophonClassificationText(r.t, meta, params ?? {}) } : r)) };
+    data.colophon = { type: "colophon", left: own(mapInline(p.colophon.left, ctx)), right: own(mapInline(p.colophon.right, ctx)) };
+  }
   return { mode: "auto", data };
 }
 
@@ -123,7 +138,16 @@ export function coverFront(payload: CoverPayloadV2 | undefined, meta: DocMeta, c
  * dengan kicker bawaan ID diterjemahkan (`controlSheetLabelText`), label lain menang. Bawaan ID =
  * perilaku sebelum S14.
  */
-export function controlSheetFront(payload: ControlSheetPayloadV2 | undefined, slot: TemplateSlotDef, ctx: BlockCtx, language?: DocMeta["language"]): FrontPage {
+export function controlSheetFront(
+  payload: ControlSheetPayloadV2 | undefined,
+  slot: TemplateSlotDef,
+  ctx: BlockCtx,
+  language?: DocMeta["language"],
+  /** Swarm 1.3.3 row 63: number of figures with unchecked labels (`uncheckedFigureCount`); 0 or absent = sheet as before. */
+  uncheckedFigures = 0,
+  /** Swarm 1.3.3 row 150: the document's tier (`meta.tier`), for the template method statement the remark follows. */
+  tier?: DocMeta["tier"],
+): FrontPage {
   const p = payload ?? ({ type: "controlSheet" } as ControlSheetPayloadV2);
   const lang = wrapperLangOf({ language });
   const label = controlSheetLabelText(slot.label, lang);
@@ -136,7 +160,7 @@ export function controlSheetFront(payload: ControlSheetPayloadV2 | undefined, sl
   const rh = listOrTable<RevisionEntryV2>(
     p.revisionHistory,
     manual
-      ? (rows) => manualTable("revision", lang, rows.map((r, i) => [r.rev, r.date, r.by, r.what, revisionStatusText(i === rows.length - 1, lang)]))
+      ? (rows) => manualTable("revision", lang, rows.map((r, i) => [r.rev, r.date, r.by, r.what, revisionStatusText(i === rows.length - 1, lang, uncheckedFigures > 0)]))
       : (rows) => textTable(controlSheetColumnHeads("revision", lang), rows.map((r) => [r.rev, r.date, r.what, r.by]), ["id", "text", "text", "text"]),
     ctx,
   );
@@ -153,6 +177,14 @@ export function controlSheetFront(payload: ControlSheetPayloadV2 | undefined, sl
   );
   if (vc) data.verificationChain = vc;
   if (p.methodStatement) data.methodStatement = mapInline(p.methodStatement, ctx);
+  // Swarm 1.3.3 row 63 (ST-9 item 2): while a figure waits for a person to check its labels the sheet says so, once, in
+  // the one free-text place of the sheet (the method statement); nothing is printed otherwise.
+  // Row 150: the remark is added AFTER the method statement, never in its place: the author's text, else the template's
+  // (R-81 or the one built from the layers, which the renderers would print for a TERBIT/SERAH sheet without a statement).
+  if (uncheckedFigures > 0) {
+    const method = hasInlineText(data.methodStatement) ? data.methodStatement : ((m) => (m ? { text: m } : undefined))(templateMethodStatementText(ctx.params, tier === undefined ? undefined : { tier }, lang));
+    data.methodStatement = withDraftRemark(method, controlSheetDraftRemarkText(LABELS_UNCHECKED_TEXT[lang], uncheckedFigures, lang));
+  }
   const ds = listOrTable<DistributionEntryV2>(
     p.distribution,
     manual
@@ -207,8 +239,42 @@ function manualTable(kind: ControlSheetTableKind, lang: WrapperLang, rows: strin
  * sebelumnya = diganti. Tidak bercabang per tier: tabel teks hanya punya dua nilai dan slot lembar kendali hanya aktif
  * pada tier yang memuatnya (kerangka), jadi tier tidak mengubah teks STATUS.
  */
-function revisionStatusText(latest: boolean, lang: WrapperLang): string {
+function revisionStatusText(latest: boolean, lang: WrapperLang, draft = false): string {
+  if (latest && draft) return CONTROL_SHEET_DRAFT_STATUS_TEXT[lang];
   return CONTROL_SHEET_STATUS_TEXT[latest ? "current" : "superseded"][lang];
+}
+
+/** `remark` appended to the method statement (a new paragraph run after the author's text; alone when there is none). */
+function hasInlineText(v: Inline | undefined): v is Inline {
+  if (v === undefined) return false;
+  return "text" in v ? v.text.trim() !== "" : v.runs.some((r) => "t" in r && r.t.trim() !== "");
+}
+
+function withDraftRemark(existing: Inline | undefined, remark: string): Inline {
+  if (existing === undefined) return { text: remark };
+  if ("text" in existing) return existing.text.trim() === "" ? { text: remark } : { text: `${existing.text} ${remark}` };
+  return { runs: [...existing.runs, { t: ` ${remark}` }] };
+}
+
+/**
+ * Swarm 1.3.3 row 63: figures of the merged source whose labels no person has checked (diagram blocks with
+ * `labels_verified` not true; a block that only refers to an artefact has no flag here and counts, as in D09).
+ * Chapters of every slot, introductions and section blocks, as `collectSourcePids` walks them.
+ */
+export function uncheckedFigureCount(sections: Readonly<Record<string, unknown>> | undefined): number {
+  let n = 0;
+  const count = (b: { type?: string; spec?: unknown; artifactId?: unknown }): void => {
+    if (b.type !== "diagram") return;
+    if (b.spec === undefined && b.artifactId !== undefined) n++;
+    else if (diagramLabelsUnchecked(b.spec)) n++;
+  };
+  for (const payload of Object.values(sections ?? {})) {
+    for (const c of (payload as { chapters?: ChapterV2[] } | undefined)?.chapters ?? []) {
+      for (const b of c.intro ?? []) count(b as never);
+      for (const sec of c.sections ?? []) for (const b of sec.blocks ?? []) count(b as never);
+    }
+  }
+  return n;
 }
 
 export function signatureBlock(payload: SignaturePayloadV2, ctx: InlineCtx): SignatureBlock {

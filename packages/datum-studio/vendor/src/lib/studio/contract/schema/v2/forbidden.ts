@@ -118,6 +118,8 @@ export const DISPLAY_FIELDS_BY_LOCATION: Readonly<Record<string, DisplayFieldLoc
   "DF-62": { location: "RailLineV2", fields: ["label"], reason: "label rel = templat" },
   // DF-63..DF-69 (D-229): petunjuk tampilan chart v1 (D-227: domain sumbu, skala maks P-09,
   // warna, label arah/median) dan kelas lebar figur; lebar dan rupa figur diatur templat.
+  // Swarm 1.3.3 row 25 (ST-1): blok chart, diagram, dan image menerima `width` ("text" | "full"); NAMA `widthClass`
+  // tetap terlarang di blok (DF-66..DF-70 tidak berubah), begitu pula `widthMm`/`width_mm` (DF-21, DF-23).
   "DF-63": { location: "ChartV2", fields: CHART_DISPLAY_HINTS, reason: "sumbu, skala, warna, dan label grafik diatur templat" },
   "DF-64": { location: "ChartPanelV2", fields: CHART_DISPLAY_HINTS, reason: "sumbu, skala, warna, dan label panel diatur templat" },
   "DF-65": { location: "ChartDataV2", fields: CHART_DISPLAY_HINTS, reason: "data grafik hanya berisi nilai; rupa diatur templat" },

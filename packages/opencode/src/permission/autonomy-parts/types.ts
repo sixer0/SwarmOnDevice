@@ -15,7 +15,8 @@ export type CheckClass = Extract<Class, "P" | "D">
  */
 export const CHECK_CLASS: CheckClass = "P"
 
-export type RoutineCategory = "check" | "file-op" | "git-local"
+/** 1.3.3 row 108 (MC-7): "skill-script" runs a script Swarm ships inside a built-in skill (`skill-script.ts`). */
+export type RoutineCategory = "check" | "file-op" | "git-local" | "skill-script"
 /** What `routine` finds a command to be. "read" only looks at the folder, and is class A. */
 export type CommandKind = RoutineCategory | "read"
 /**

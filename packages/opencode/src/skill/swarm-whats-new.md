@@ -1,4 +1,4 @@
-# Swarm whats-new: agent briefs 1.2.0 to 1.3.1
+# Swarm whats-new: agent briefs 1.2.0 to 1.3.4
 
 What changed for you, the agent, per release, newest first: what you can do, must do, known limits. When this text
 and a tool's description or refusal disagree, the tool is right. Codes in capitals are refusal or gate codes.
@@ -16,7 +16,53 @@ and a tool's description or refusal disagree, the tool is right. Codes in capita
    or FAIL per item with evidence.
 5. Record: save the results as one `remember` note.
 
-## 1.3.1 (this build)
+## 1.3.4 (this build)
+Can:
+- Restart (Swarm menu) and the memory warning's Reopen keep running turns going: the turn goes on by itself once
+  the app is back. Autonomous consent is carried once over such a restart (two minutes at most); after a crash the
+  person is asked again.
+- Rendering no longer makes the app's memory grow; the memory warning watches the main heap as well as RSS.
+Must:
+- A tool cut off by a restart returns "[Swarm restarted while this tool was running...]": check its effect
+  (render status, files, mission row) first; run it again only if it did not finish.
+- A render cut off by a crash or restart is closed as FAILED with RENDER_INTERRUPTED when Studio starts: render
+  again; do not wait for RENDER_IN_PROGRESS to clear.
+- Never quit or restart Swarm yourself to free memory; tell the person.
+Limits: the first model step after a restart may take minutes when the model server is busy; not a hang. Quit
+still stops running turns.
+
+## 1.3.3
+Can:
+- `mission-control` is rewritten: status and row-field tables, tool names exactly as callable. A mission needs only
+  id, title, type and step titles (dryRun first). A refusal may carry `corrected`: complete arguments for the same tool.
+- A tool call written as text in your answer no longer ends the turn: Swarm inserts one correction; repeat it as a
+  real call. A turn that ends without work names its reason in Activity.
+- Each turn carries one context line (tokens used, limit, compaction threshold); after compaction read the mission first.
+- Diagrams and charts: `width` "text" (128 mm) or "full" (166 mm) per block; `offpage` nodes pair through
+  ref {figure, key}; schedule chart W-07 takes data shape `intervals` with statusAt and timeUnit; notes[] print;
+  six line kinds together; render returns each figure SVG path; `studio_witness_list` gives one PNG per figure page.
+- Bundled skills `gsp-diagram-standard` (reference pages read with `studio_library_read` at skill:<name>/<path>,
+  framing script) and `gsp-document-prose`. Read-only commands in the project and bundled skill scripts are routine.
+- The technical library (pustaka pengetahuan teknis GSP) has a structure and a trigger index; naming a domain is enough.
+Must:
+- A row whose output is a document reaches needs-review or done, and a review request names it, only when the
+  latest render is copied to deliverables/<mission-id>/ in the project folder (render copies it; else
+  DELIVERABLE_NOT_IN_PROJECT). Do not send downloadDir or copy by hand.
+- Rows matched to a library domain get a `knowledge` list; read one file with `studio_library_read` or send
+  knowledgeReason before done (KNOWLEDGE_NOT_CONSULTED). deliverables, knowledge, awaitingHumanCheck are read-only.
+- Never mark figure labels as checked yourself; that is refused (LABELS_VERIFIED_PERSON_ONLY). Ask the person with
+  `studio_mission_request_decision`; an unchecked figure closes its row with a waiting marker.
+- A leftover {{key}} is refused (PLACEHOLDER_UNFILLED); an unpaired offpage fails render (OFFPAGE_UNPAIRED).
+- Reader documents say "pustaka pengetahuan teknis GSP", never the internal library abbreviation.
+Limits: argument correction is partial; work reports are not copied to deliverables; Preview in Mission Control
+works only when the mission folder is the session folder; large figures (19 nodes, 4 zones) may keep routing
+defects; offpage labels read "ke"/"dari", not identical; no full-size single-line, rack, plan or AND/OR gate family.
+
+## 1.3.2
+Logging only, no behaviour change: each turn logs the offered tool set per MCP server, servers with zero tools,
+MCP failure causes and child stderr. New: Office add-in for Word and Excel, off until the person enables it.
+
+## 1.3.1
 Fixed: Open in Obsidian with Obsidian closed now registers the vault and opens the note (no "close Obsidian" refusal).
 The outcome messages name the configured vault folder. Nothing else changed for agents.
 
@@ -158,6 +204,10 @@ project; create the scratch project outside the Default Project, or in a folder 
 ask the person to open an empty scratch project. No probe writes into a skills folder or the vault. Nothing that
 moves missions, deletes, changes config or touches a real project without a separate yes. Each item: PASS or FAIL
 with tool output as evidence; on an unexpected success stop and tell the person, never clean up.
+- 1.3.4: nothing to probe; a restart is the person's, never yours.
+- 1.3.3: a dryRun mission from id, title, type and step titles is accepted; `studio_figure_preview` of a small
+  layered figure with width "full" reports 0 defects; the `skill` list shows `gsp-diagram-standard` and
+  `gsp-document-prose`.
 - 1.2.8: the `skill` list shows the built-ins named above; the person confirms Settings > Skills; `skill_draft` a
   throwaway skill and leave it unapproved; `studio_figure_preview` a small swimlane flow using route, glue, bend
   points, arrowheads, dash, weight, label position and line jumps reports 0 defects; skills-folder refusal: attempt

@@ -8,6 +8,7 @@ import type { DiagramFamily, DiagramNode, LayoutFn, LayoutResult, StudioDiagramV
 import { DiagramDefect, Sheet } from "../core";
 import { STROKE_PRIMARY } from "../core/tokens";
 import { setRouteRules } from "./lanesroute";
+import { assertTierLabels } from "../layout-a/layered";
 
 /** Medan lembar tambahan yang dikembalikan layout-b (swimlane/sequence) di atas `LayoutResult`. */
 interface LayoutExtras {
@@ -113,6 +114,7 @@ export function placeDiagram(s: StudioDiagramV1, sheet: Sheet, layouts: Readonly
   if (typeof fn !== "function") {
     throw new DiagramDefect(`family '${String(s.family)}' tidak punya mesin tata letak (P2)`, { checkId: "P1-family" });
   }
+  assertTierLabels(s); // Swarm 1.3.3 row 56 (ST-5): `tiers[]` is printed (layered, topology) or refused, never ignored
   const layout = fn(s, sheet) as LayoutResult & LayoutExtras;
 
   if (sheet.nodes.size === 0) {

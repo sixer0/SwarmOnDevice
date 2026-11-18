@@ -135,6 +135,16 @@ export interface LintReport {
   checks: LintIssue[];
   releaseStatus: "PASS" | "FAIL" | "NOT_RUN";
   banner: string;
+  /**
+   * Swarm 1.3.3 (baris 64, register 03 s7): aturan dan modul yang TIDAK dijalankan, satu sebab per butir.
+   * Opsional: laporan lama (`lint_report` tersimpan) tidak memuatnya. Penghasil: `services/render/lint.ts`.
+   */
+  notRun?: Array<{
+    id: string;
+    kind: "rule" | "module";
+    reason: string;
+    cause: "tier" | "not-applicable" | "human" | "staged" | "could-not-run";
+  }>;
 }
 
 // ── Tipe pendukung tanda tangan §8.2 ─────────────────────────────────────

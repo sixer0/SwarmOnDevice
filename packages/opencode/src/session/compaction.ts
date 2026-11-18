@@ -24,6 +24,8 @@ import { buildPrompt } from "@opencode-ai/core/session/compaction"
 import { SessionCompactionEvent } from "@opencode-ai/schema/session-compaction-event"
 import { LibraryRoot } from "@/skill/library-root"
 import { LIBRARY_SOURCE } from "@/tool/read"
+import { OfficeProfile } from "./office-profile"
+import { MissionBinding } from "./mission-binding"
 
 export const Event = SessionCompactionEvent
 
@@ -125,6 +127,29 @@ function carriesLibrary(message: SessionV1.WithParts) {
     if (part.tool === "read") return part.state.output.split("\n", 3)[2] === LIBRARY_SOURCE
     return part.tool === "grep" && part.state.output.split("\n", 1)[0] === LIBRARY_SOURCE
   })
+}
+
+// MC-6 item 1 / KL-2 item 3 (1.3.3 row 104, register section 4). A session bound to a mission keeps its mission facts
+// over a compaction in a block the summary model does not write, so they cannot be dropped or paraphrased, and the
+// auto-continue message opens with an instruction to read the mission before anything else. The binding is per session
+// id (row 9): a sub-agent session only has the one its own mission calls made. No binding: neither is added.
+
+/** The auto-continue message's first line for a mission-bound session. */
+function missionReadLine(binding: MissionBinding.MissionBinding) {
+  return `Read the mission state first: call datum-studio_studio_mission_get for mission ${binding.missionID} before any other step.`
+}
+
+/** The fixed `Mission state` block appended to the summary. The binding holds row ids only, not titles. */
+/** @internal test seam */
+export function missionStateBlock(binding: MissionBinding.MissionBinding) {
+  return [
+    "Mission state",
+    `- mission: ${binding.missionID}`,
+    `- running rows: ${binding.runningRows.join(", ") || "none"}`,
+    // An empty list may mean the binding never saw them (it learns locks from row updates and `get`), so it points back.
+    `- locks: ${binding.locks.join(", ") || "none recorded; read from mission"}`,
+    `- knowledge: ${binding.knowledge.map((item) => `row ${item.row} ${item.domain}, first file ${item.firstFile}`).join("; ") || "none recorded"}`,
+  ].join("\n")
 }
 
 function summaryText(message: SessionV1.WithParts) {
@@ -484,7 +509,10 @@ const layer = Layer.effect(
       })
       const result = yield* processor.process({
         user: userMessage,
-        agent,
+        // M6-01c (C64): an Office add-in session keeps the shipped compaction prompt, never a configured one.
+        agent: OfficeProfile.isOfficeSession(yield* session.get(input.sessionID).pipe(Effect.orDie))
+          ? OfficeProfile.agent(agent)
+          : agent,
         sessionID: input.sessionID,
         tools: {},
         system: [],
@@ -523,6 +551,20 @@ const layer = Layer.effect(
         yield* session.updatePart({
           ...compactionPart,
           tail_start_id: selected.tail_start_id,
+        })
+      }
+
+      // Read once: the summary block and the continue line describe the same moment.
+      const binding = MissionBinding.get(input.sessionID)
+      if (binding && result === "continue" && !processor.message.error) {
+        yield* session.updatePart({
+          id: PartID.ascending(),
+          messageID: processor.message.id,
+          sessionID: input.sessionID,
+          type: "text",
+          synthetic: true,
+          text: missionStateBlock(binding),
+          time: { start: Date.now(), end: Date.now() },
         })
       }
 
@@ -586,6 +628,7 @@ const layer = Layer.effect(
               model: userMessage.model,
             })
             const text =
+              (binding ? `${missionReadLine(binding)}\n\n` : "") +
               (input.overflow && input.messages.some((m) => m.parts.some((p) => p.type === "file" && MessageV2.isMedia(p.mime)))
                 ? "The previous request exceeded the provider's size limit due to large media attachments. The conversation was compacted and media files were removed from context. If the user was asking about attached images or files, explain that the attachments were too large to process and suggest they try again with smaller or fewer files.\n\n"
                 : "") +
