@@ -51,9 +51,9 @@ describe("about panel build date comes from the commit (1.3.1)", () => {
     const iso = execFileSync("git", ["log", "-1", "--format=%cs"], { cwd: root, encoding: "utf8" }).trim()
     expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string }
-    expect(pkg.version).toBe("1.3.3")
+    expect(pkg.version).toBe("1.3.4")
     const o = aboutPanelOptions({ name: "Swarm", version: pkg.version, buildDate: iso, locale: "id" })
-    expect(o.applicationVersion).toBe("1.3.3")
+    expect(o.applicationVersion).toBe("1.3.4")
     expect(o.copyright).toBe(`Diperbarui ${formatBuildDate(iso, "id")}`)
   })
 })

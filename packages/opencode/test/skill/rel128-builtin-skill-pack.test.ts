@@ -497,7 +497,8 @@ describe("swarm-whats-new", () => {
   // 1.3.0 row 86 (N10-186, AC-REN-WN, INTENT): 1.3.0 is this build; 1.2.10 was never released and has no section.
   // 1.3.1 row R1 (INTENT): the Obsidian hotfix brief is this build; 1.3.0 keeps its section.
   // 1.3.3 (owner standard 2026-11-18): 1.3.3 and 1.3.2 joined; the size cap follows check-whats-new.ts (16 KiB).
-  const VERSIONS = ["1.3.3", "1.3.2", "1.3.1", "1.3.0", "1.2.9", "1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
+  // 1.3.4: memory, restart resume and consent carry.
+  const VERSIONS = ["1.3.4", "1.3.3", "1.3.2", "1.3.1", "1.3.0", "1.2.9", "1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
 
   it.live("listed as a built-in with its description and English and Indonesian triggers", () =>
     provideTmpdirInstance(() =>

@@ -1,12 +1,13 @@
-# Changelog Swarm 1.1.0 sampai 1.3.3
+# Changelog Swarm 1.1.0 sampai 1.3.4
 
-Disusun 2026-11-13 (bagian 1.2.8 dan 1.2.9 ditambahkan 2026-11-14, bagian 1.3.0, 1.3.1 dan koreksi bagian lama 2026-11-15, bagian 1.3.2 2026-11-16, bagian 1.3.3 2026-11-18) dari catatan rilis, laporan akhir, log keputusan dan pesan commit tiap versi (sumber di akhir tiap bagian; path `docs/...` ada di folder kerja Swarm_OnDevice, di luar repo ini). Urutan terbaru di atas. "Diperbaiki" = cacat yang dibetulkan; "Baru" = fitur atau perilaku yang ditambahkan.
+Disusun 2026-11-13 (bagian 1.2.8 dan 1.2.9 ditambahkan 2026-11-14, bagian 1.3.0, 1.3.1 dan koreksi bagian lama 2026-11-15, bagian 1.3.2 2026-11-16, bagian 1.3.3 dan 1.3.4 2026-11-18) dari catatan rilis, laporan akhir, log keputusan dan pesan commit tiap versi (sumber di akhir tiap bagian; path `docs/...` ada di folder kerja Swarm_OnDevice, di luar repo ini). Urutan terbaru di atas. "Diperbaiki" = cacat yang dibetulkan; "Baru" = fitur atau perilaku yang ditambahkan.
 
 Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); nomor rilis Swarm dibaca dari `SwarmRelease`. Mulai 1.2.0 versi app ikut nomor rilis Swarm.
 
 | Versi | Tanggal | Cara rilis | Fokus |
 |---|---|---|---|
-| 1.3.3 | 2026-11-18 | Patch menu (direncanakan; belum dibangun) | 29 perbaikan: Mission Control (panggilan teks, alasan akhir giliran, deliverable di folder proyek), mesin diagram dan dokumen Studio, pustaka pengetahuan teknis GSP, kestabilan memori dan cache, tiga skill |
+| 1.3.4 | 2026-11-18 | Patch menu (dibangun; belum dipasang) | Kebocoran memori render, render yang terputus, Restart dan buka ulang memori melanjutkan kerja agen, brief whats-new untuk 1.3.2 sampai 1.3.4 |
+| 1.3.3 | 2026-11-18 | Patch menu | 29 perbaikan: Mission Control (panggilan teks, alasan akhir giliran, deliverable di folder proyek), mesin diagram dan dokumen Studio, pustaka pengetahuan teknis GSP, kestabilan memori dan cache, tiga skill |
 | 1.3.2 | 2026-11-16 | Patch menu dari 1.2.8 ke atas (satu berkas) | Kasatmata: alat yang di-offer tiap turn, sebab kegagalan dan matinya koneksi MCP, stderr anak lokal; tanpa perubahan perilaku pada jalur misi, MCP, dan tampilan; satu fitur baru opsional: add-in Office (mati sampai di-Enable) |
 | 1.3.1 | 2026-11-15 | Patch menu dari 1.2.0 sampai 1.3.0 (satu berkas) | Perbaikan cepat Obsidian: membuka graph saat Obsidian tertutup |
 | 1.3.0 | 2026-11-15 | Patch menu dari 1.2.0 sampai 1.2.9 (satu berkas) | Masalah pengguna 1.2.9 (Obsidian, memori proyek di sesi, drift misi, salinan memori ke vault), backlog 1.2.9, perbaikan keamanan proxy swarm-web dan inbox vault (S-6); 1.2.10 tidak dirilis |
@@ -25,6 +26,32 @@ Catatan penomoran: sampai 1.1.4 versi app dan CLI tetap 1.19.3 (warisan basis); 
 | 1.1.2 | 2026-11-05 | Patch menu (pertama) | Menu "Update from File…" |
 | 1.1.1 | 2026-11-04 | Installer | Mode otonom dengan persetujuan |
 | 1.1.0 | 2026-11-03 | Installer | Knowledge Library, pemasang tools, CLI `swarm` |
+
+---
+
+## 1.3.4 (2026-11-18)
+
+Rilis perbaikan dari uji diagram GSP pada 1.3.3 terpasang, dibangun di branch `release/1.3.4` dari `8ab639f506`. Fokusnya satu masalah: pada 18 November Swarm 1.3.3 dua kali berhenti karena memori proses utama habis saat lima sesi merender dokumen. Penyebabnya ditemukan, diperbaiki, dan diukur pada build uji; tiga masalah yang muncul di sekitar crash itu ikut diperbaiki.
+
+**Diperbaiki**
+1. Kebocoran memori render. Menu klik kanan dipasang untuk seluruh aplikasi dan tidak pernah melepas jendela yang sudah ditutup, sehingga setiap jendela render tersembunyi beserta HTML dokumennya (9 sampai 18 MB per render) tertahan di memori. Pada build 1.3.3 heap proses utama naik ke 1.090 MB sesudah 106 render dan crash di sekitar 3.800 MB. Menu kini dipasang per jendela dan dilepas saat jendela ditutup, dan jendela render dibongkar sampai habis sesudah tiap job. Dengan beban yang sama heap tinggal 46 MB sesudah 117 render dan 28 MB sesudah 325 render.
+2. Peringatan memori kini muncul tepat waktu. Pemantau dulu hanya membaca RSS, yang di macOS turun karena kompresi memori, sehingga tawaran buka ulang tidak pernah muncul sebelum crash. Kini ambang 2.700 MB dan 3.300 MB dibandingkan dengan nilai yang lebih besar antara RSS dan heap.
+3. Render yang terputus tidak lagi menyumbat. Job render yang sedang berjalan saat Swarm crash atau dibuka ulang dulu tetap berstatus RUNNING selamanya dan menolak render ulang revisi yang sama (RENDER_IN_PROGRESS). Saat Studio mulai, job seperti itu kini ditutup sebagai FAILED dengan kode RENDER_INTERRUPTED.
+
+**Baru**
+4. Restart dari menu Swarm dan tombol buka ulang pada peringatan memori kini melanjutkan kerja agen. Dulu keduanya menghentikan server dengan cara yang menandai giliran yang sedang berjalan sebagai dihentikan, sehingga sesi diam sampai diberi pesan. Kini server menyerahkan giliran itu ke proses berikutnya, yang melanjutkannya sendiri. Keluar lewat Quit tetap menghentikan giliran.
+5. Persetujuan mode otonom dibawa sekali melewati restart yang dimulai oleh orang (keputusan pemilik U4). Persetujuan disimpan di satu berkas yang hanya dapat dibaca pengguna, dibaca sekali lalu dihapus, ditolak bila umurnya lebih dari dua menit, dan hanya berlaku untuk lingkup sesi dan folder. Sesudah crash, orang tetap diminta menyetujui ulang seperti di 1.3.3.
+6. Brief whats-new untuk agen kini mencakup 1.3.2, 1.3.3, dan 1.3.4, dan build berhenti (gerbang WHATS-NEW) bila brief tidak punya bagian untuk versi yang dibangun atau CHANGELOG tidak punya judulnya. 1.3.3 terkirim dengan brief yang berhenti di 1.3.1.
+
+**Terbukti pada build uji**
+Restart di tengah lima render pada build `a8f57f5719`: proses baru hidup dalam dua detik, sesi melanjutkan sendiri tanpa permintaan izin, dua job yang terputus ditutup RENDER_INTERRUPTED, lalu kelima render ulang selesai SUCCEEDED dan giliran berakhir normal. Kedua basis data lolos `PRAGMA quick_check`.
+
+**Batasan yang diketahui**
+- Langkah model pertama sesudah restart bisa makan beberapa menit bila server model sedang sibuk (terukur 488 detik pada uji); itu antrean server, bukan macet.
+- Menyetujui draf skill yang menggantikan skill proyek yang sudah disetujui masih ditolak SKILL_CHANGED sampai skill lama dipindahkan (T-05); belum diperbaiki di rilis ini.
+- Patch 1.3.4 belum dipasang dan belum diuji pada sesi kerja penuh di mesin pemilik.
+
+Sumber: `docs/2026-11-18_swarm_1_3_3_uji_diagram/` (test/03_temuan.md T-06, T-07, T-10, T-12; leak/01_investigasi.md; test/01_log.md; decisions/decisions.md U1, U4); commit `77b78fc0e5`, `e7796e7dba`, `a795f0fd75`, `a8f57f5719`, `8ab639f506`.
 
 ---
 

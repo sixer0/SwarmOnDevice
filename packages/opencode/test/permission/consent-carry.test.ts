@@ -18,18 +18,18 @@ function put(body: unknown) {
 
 afterEach(() => {
   rmSync(file(), { force: true })
-  ConsentCarry.resetForTests()
+  ConsentCarry.clearForTests()
 })
 
 describe("ConsentCarry", () => {
   test("nothing consented: nothing written", () => {
-    ConsentCarry.resetForTests()
+    ConsentCarry.clearForTests()
     expect(ConsentCarry.write(NOW)).toBe(0)
     expect(existsSync(file())).toBe(false)
   })
 
   test("the mirror records set and delete, and write puts the live scopes in a 0600 file", () => {
-    ConsentCarry.resetForTests()
+    ConsentCarry.clearForTests()
     const map = new ConsentCarry.MirroredConsentMap<{ at: number; language: "en" | "id" }>()
     map.set("directory:/proj", { at: 1, language: "id" })
     map.set("session:ses_a", { at: 1, language: "en" })

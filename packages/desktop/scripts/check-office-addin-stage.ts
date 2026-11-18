@@ -48,6 +48,7 @@ export const MANIFEST_VERSIONS: readonly { release: string; version: string }[] 
   { release: "1.3.1", version: "1.0.0.0" },
   { release: "1.3.2", version: "1.0.0.1" },
   { release: "1.3.3", version: "1.0.0.2" },
+  { release: "1.3.4", version: "1.0.0.3" },
 ]
 
 type Paths = { desktop: string; addin: string }

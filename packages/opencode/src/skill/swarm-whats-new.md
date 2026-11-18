@@ -1,4 +1,4 @@
-# Swarm whats-new: agent briefs 1.2.0 to 1.3.3
+# Swarm whats-new: agent briefs 1.2.0 to 1.3.4
 
 What changed for you, the agent, per release, newest first: what you can do, must do, known limits. When this text
 and a tool's description or refusal disagree, the tool is right. Codes in capitals are refusal or gate codes.
@@ -16,7 +16,22 @@ and a tool's description or refusal disagree, the tool is right. Codes in capita
    or FAIL per item with evidence.
 5. Record: save the results as one `remember` note.
 
-## 1.3.3 (this build)
+## 1.3.4 (this build)
+Can:
+- Restart (Swarm menu) and the memory warning's Reopen keep running turns going: the turn goes on by itself once
+  the app is back. Autonomous consent is carried once over such a restart (two minutes at most); after a crash the
+  person is asked again.
+- Rendering no longer makes the app's memory grow; the memory warning watches the main heap as well as RSS.
+Must:
+- A tool cut off by a restart returns "[Swarm restarted while this tool was running...]": check its effect
+  (render status, files, mission row) first; run it again only if it did not finish.
+- A render cut off by a crash or restart is closed as FAILED with RENDER_INTERRUPTED when Studio starts: render
+  again; do not wait for RENDER_IN_PROGRESS to clear.
+- Never quit or restart Swarm yourself to free memory; tell the person.
+Limits: the first model step after a restart may take minutes when the model server is busy; not a hang. Quit
+still stops running turns.
+
+## 1.3.3
 Can:
 - `mission-control` is rewritten: status and row-field tables, tool names exactly as callable. A mission needs only
   id, title, type and step titles (dryRun first). A refusal may carry `corrected`: complete arguments for the same tool.
@@ -189,6 +204,7 @@ project; create the scratch project outside the Default Project, or in a folder 
 ask the person to open an empty scratch project. No probe writes into a skills folder or the vault. Nothing that
 moves missions, deletes, changes config or touches a real project without a separate yes. Each item: PASS or FAIL
 with tool output as evidence; on an unexpected success stop and tell the person, never clean up.
+- 1.3.4: nothing to probe; a restart is the person's, never yours.
 - 1.3.3: a dryRun mission from id, title, type and step titles is accepted; `studio_figure_preview` of a small
   layered figure with width "full" reports 0 defects; the `skill` list shows `gsp-diagram-standard` and
   `gsp-document-prose`.

@@ -22,7 +22,7 @@ describe("U-MAN-01 manifest values equal register 6.2", () => {
   test("identity", () => {
     expect(app.getAttribute("xsi:type")).toBe("TaskPaneApp")
     expect(one("Id").textContent).toBe("b25aaa4e-a1e7-46ef-bba0-0139b2a424b9")
-    expect(one("Version").textContent).toBe("1.0.0.2")
+    expect(one("Version").textContent).toBe("1.0.0.3")
     expect(one("ProviderName").textContent).toBe("PT GSP")
     expect(one("DefaultLocale").textContent).toBe("en-US")
   })

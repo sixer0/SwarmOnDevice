@@ -29,7 +29,8 @@ const P4_LINE =
 const OWNER_LINE = "- An owner message (from: owner) from a session the app has not attested is refused (SESSION_NOT_ATTESTED)"
 
 describe("swarm-whats-new 1.3.0 brief (N10-185)", () => {
-  test("1.3.3 is this build; 1.3.1, 1.3.0 and 1.2.9 are not; 1.2.10 has no heading; the title names 1.3.3", () => {
+  // 1.3.4 (release guard WHATS-NEW): 1.3.4 is this build; 1.3.3 keeps its section without the marker.
+  test("1.3.4 is this build; 1.3.3, 1.3.1, 1.3.0 and 1.2.9 are not; 1.2.10 has no heading; the title names 1.3.4", () => {
     expect(v130.length).toBeGreaterThan(200)
     expect(text).toContain("\n## 1.3.0\n")
     expect(text).toContain("\n## 1.2.9\n")
@@ -38,7 +39,9 @@ describe("swarm-whats-new 1.3.0 brief (N10-185)", () => {
     expect(text).not.toMatch(/\n## 1\.2\.10\b/)
     expect(text).toContain("\n## 1.3.1\n")
     expect(text).not.toContain("## 1.3.1 (this build)")
-    expect(text.split("\n")[0]).toBe("# Swarm whats-new: agent briefs 1.2.0 to 1.3.3")
+    expect(text).toContain("\n## 1.3.4 (this build)\n")
+    expect(text).toContain("\n## 1.3.3\n")
+    expect(text.split("\n")[0]).toBe("# Swarm whats-new: agent briefs 1.2.0 to 1.3.4")
     expect(text.match(/\(this build\)/g)?.length).toBe(1)
   })
 

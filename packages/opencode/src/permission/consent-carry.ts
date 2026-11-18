@@ -73,7 +73,7 @@ export function take(now = Date.now(), alive: (pid: number) => boolean = isAlive
 }
 
 /** @internal test seam */
-export function resetForTests() {
+export function clearForTests() {
   live.clear()
 }
 

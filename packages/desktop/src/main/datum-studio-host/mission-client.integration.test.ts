@@ -269,7 +269,7 @@ describe("row 127: mission bridge against the real host", () => {
 
 describe("C125: STUDIO_RELEASE 1.3.3 over a 1.2.0 store", () => {
   test("STUDIO_RELEASE follows the app release", () => {
-    expect(STUDIO_RELEASE).toBe("1.3.3")
+    expect(STUDIO_RELEASE).toBe("1.3.4")
   })
 
   test("builtin templates still list and load; no TEMPLATE_BUILTIN_* line; pinned versions unchanged", async () => {

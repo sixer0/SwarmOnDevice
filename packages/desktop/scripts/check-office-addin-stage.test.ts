@@ -145,9 +145,9 @@ describe("C26(b) hashed assets and manifest Version policy", () => {
     expect(checkVersionPolicy("1.0.0", "1.3.1", [{ release: "1.3.1", version: "1.0.0" }]).join()).toContain("not four-part")
   })
 
-  test("the shipped table, the real manifest and the real desktop release agree (MRG-2: 1.3.3 -> 1.0.0.2)", async () => {
+  test("the shipped table, the real manifest and the real desktop release agree (MRG-2: 1.3.4 -> 1.0.0.3)", async () => {
     const pkg = (await Bun.file(join(import.meta.dir, "..", "package.json")).json()) as { version: string }
-    expect(MANIFEST_VERSIONS.at(-1)).toEqual({ release: "1.3.3", version: "1.0.0.2" })
+    expect(MANIFEST_VERSIONS.at(-1)).toEqual({ release: "1.3.4", version: "1.0.0.3" })
     expect(checkVersionPolicy(REAL_MANIFEST.match(/<Version>([^<]*)<\/Version>/)?.[1], pkg.version)).toEqual([])
   })
 
