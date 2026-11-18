@@ -29,6 +29,7 @@ type Listener = {
 const parentPort = getParentPort()
 let listener: Listener | undefined
 let runLease: { handOver: () => number } | undefined
+let consentCarry: { write: () => number } | undefined
 
 parentPort.on("message", (event) => {
   const command = parseSidecarCommand(event.data)
@@ -50,7 +51,9 @@ async function start(command: StartCommand) {
     // Row 38b (SEC-06): DesktopNonce.set with the start message's nonce runs before Server.listen (sidecar-start.ts).
     listener = await listenWithNonce(command, await import("virtual:opencode-server"))
     // 1.3.4 (T-12): the same (cached) module instance; its RunLease holds this process's leases for a hand-over.
-    runLease = (await import("virtual:opencode-server")).RunLease
+    const server = await import("virtual:opencode-server")
+    runLease = server.RunLease
+    consentCarry = server.ConsentCarry
     parentPort.postMessage({ type: "ready" })
   } catch (error) {
     parentPort.postMessage({ type: "error", error: serializeError(error) })
@@ -73,10 +76,13 @@ async function stop() {
 // through the crash-recovery path (SessionResume), each open tool call marked as interrupted for the model to check.
 function handOver() {
   let runs = 0
+  let scopes = 0
   try {
     runs = runLease?.handOver() ?? 0
+    // Owner U4: this restart was started by the person, so the consent they gave is carried once (2 minutes, 0600 file).
+    scopes = consentCarry?.write() ?? 0
   } finally {
-    console.log(`sidecar hand-over for restart: ${runs} running turn(s) left to resume`)
+    console.log(`sidecar hand-over for restart: ${runs} running turn(s) left to resume, ${scopes} consented scope(s) carried`)
     listener = undefined
     parentPort.postMessage({ type: "stopped" })
     setImmediate(() => process.exit(75))

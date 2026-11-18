@@ -16,6 +16,7 @@ import {
 } from "node:fs"
 import { createHash } from "node:crypto"
 import path from "node:path"
+import { ConsentCarry } from "./consent-carry"
 import { Cause, Clock, Context, Deferred, Effect, Layer, Option, Schema, Scope } from "effect"
 import { and, desc, eq, gt, inArray, lte, sql } from "drizzle-orm"
 import { Database } from "@opencode-ai/core/database/database"
@@ -891,11 +892,20 @@ export const layer = Layer.effect(
     let lastIdle = 0
     // 1.1.1 (S1.2, S1.40): the consent per scope, keyed `session:<root>` or `directory:<folder>`, and the consented runs
     // per root. Memory only, never written and never read back from a file (AU-23): a restart starts with neither.
-    const bypass = new Map<string, Bypass>()
+    // 1.3.4 (T-12): mirrored so a hand-over restart the person started can carry it once (ConsentCarry, owner U4).
+    const bypass = new ConsentCarry.MirroredConsentMap<Bypass>()
     const runs = new Map<string, { root: SessionID; directory: string; since: number; language: ReportLanguage }>()
     let runEnded: ((run: EndedRun) => Effect.Effect<void>) | undefined
 
     const started = yield* Clock.currentTimeMillis
+    // 1.3.4 (T-12, owner U4): a restart the person started themselves (menu Restart, memory Reopen) carries the consent
+    // they had given, once. Only scopes still on in the mode file and waiting on a re-consent are restored.
+    const carried = ConsentCarry.take(started).filter((scope) => reopened.has(scope.key))
+    for (const scope of carried) {
+      bypass.set(scope.key, { at: started, language: scope.language })
+      reopened.delete(scope.key)
+    }
+    if (carried.length) yield* Effect.logInfo("autonomous consent carried over a person-started restart", { scopes: carried.length })
     yield* Effect.try({ try: () => sweepAudit(started), catch: String }).pipe(
       // A folder that is not there yet has nothing old in it.
       Effect.catch((error) =>

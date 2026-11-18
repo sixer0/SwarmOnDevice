@@ -22,6 +22,9 @@ describe("T-12 restart with resume", () => {
     expect(sidecar).toMatch(/if \(command\.resume\) handOver\(\)\s*else void stop\(\)/)
     expect(sidecar).toContain("runLease?.handOver()")
     expect(sidecar).toContain("process.exit(75)")
+    // owner U4: the consent the person gave is carried once, written before the exit
+    expect(sidecar).toContain("scopes = consentCarry?.write() ?? 0")
+    expect(sidecar.indexOf("consentCarry?.write()")).toBeLessThan(sidecar.indexOf("process.exit(75)"))
     expect(sidecar).toMatch(/async function stop\(\)[\s\S]*await listener\?\.stop\(\)[\s\S]*process\.exit\(0\)/)
   })
 
