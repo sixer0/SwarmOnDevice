@@ -496,7 +496,8 @@ describe("swarm-whats-new", () => {
   }
   // 1.3.0 row 86 (N10-186, AC-REN-WN, INTENT): 1.3.0 is this build; 1.2.10 was never released and has no section.
   // 1.3.1 row R1 (INTENT): the Obsidian hotfix brief is this build; 1.3.0 keeps its section.
-  const VERSIONS = ["1.3.1", "1.3.0", "1.2.9", "1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
+  // 1.3.3 (owner standard 2026-11-18): 1.3.3 and 1.3.2 joined; the size cap follows check-whats-new.ts (16 KiB).
+  const VERSIONS = ["1.3.3", "1.3.2", "1.3.1", "1.3.0", "1.2.9", "1.2.8", "1.2.7", "1.2.6", "1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0"]
 
   it.live("listed as a built-in with its description and English and Indonesian triggers", () =>
     provideTmpdirInstance(() =>
@@ -538,9 +539,9 @@ describe("swarm-whats-new", () => {
     ),
   )
 
-  test("text: built-in shape, at most 12 KB, one section per version newest first, nothing classified", () => {
+  test("text: built-in shape, at most 16 KB, one section per version newest first, nothing classified", () => {
     expectBuiltinShape(text)
-    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(12 * 1024)
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(16 * 1024)
     const at = VERSIONS.map((version) => text.indexOf(`\n## ${version}`))
     for (const [index, position] of at.entries()) expect(position > 0 ? VERSIONS[index] : `missing ${VERSIONS[index]}`).toBe(VERSIONS[index]!)
     expect(at).toEqual([...at].sort((a, b) => a - b))
@@ -641,6 +642,10 @@ describe("swarm-whats-new", () => {
         [...readOptional(PACKAGES, "datum-studio", "vendor", "scripts", "studio", "mcp", file).matchAll(/"(studio_[a-z_]+)"/g)].map((m) => m[1]!),
       ),
       ...[...readOptional(PACKAGES, "datum-studio", "src", "mcp-host", "asset-tool.ts").matchAll(/"(studio_[a-z_]+)"/g)].map((m) => m[1]!),
+      // 1.3.3 (KL-2, ST-9): host tools defined as constants outside the vendor tool files.
+      ...[["library-read.ts"], ["verify", "witness-list.ts"]].flatMap((parts) =>
+        [...readOptional(PACKAGES, "datum-studio", "src", "mcp-host", ...parts).matchAll(/"(studio_[a-z_]+)"/g)].map((m) => m[1]!),
+      ),
     ])
     // The task tool defines its id in a constant (src/tool/task.ts), so the Tool.define scan does not see it.
     const taskId = /const id = "([a-z_]+)"/.exec(read(SRC, "tool", "task.ts"))?.[1]

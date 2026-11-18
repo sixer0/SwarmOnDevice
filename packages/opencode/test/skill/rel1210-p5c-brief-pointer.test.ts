@@ -20,7 +20,8 @@ const between = (from: string, to: string) => {
 }
 // 1.3.1 row R1 (INTENT): 1.3.1 (Obsidian hotfix) is this build; the 1.3.0 section keeps its content, without the marker.
 const v130 = between("1.3.0\n", "1.2.9")
-const v131 = between("1.3.1 (this build)", "1.3.0")
+// 1.3.3 (owner standard 2026-11-18, release guard WHATS-NEW): 1.3.3 is this build; 1.3.1 keeps its section.
+const v131 = between("1.3.1\n", "1.3.0")
 
 const POINTER = "- Diagram rules (engine in DATUM Studio, `direction` opt-in, fit codes): skill `diagram-flow`."
 const P4_LINE =
@@ -28,14 +29,16 @@ const P4_LINE =
 const OWNER_LINE = "- An owner message (from: owner) from a session the app has not attested is refused (SESSION_NOT_ATTESTED)"
 
 describe("swarm-whats-new 1.3.0 brief (N10-185)", () => {
-  test("1.3.1 is this build; 1.3.0 and 1.2.9 are not; 1.2.10 has no heading; the title names 1.3.1", () => {
+  test("1.3.3 is this build; 1.3.1, 1.3.0 and 1.2.9 are not; 1.2.10 has no heading; the title names 1.3.3", () => {
     expect(v130.length).toBeGreaterThan(200)
     expect(text).toContain("\n## 1.3.0\n")
     expect(text).toContain("\n## 1.2.9\n")
     expect(text).not.toContain("## 1.3.0 (this build)")
     expect(text).not.toContain("## 1.2.9 (this build)")
     expect(text).not.toMatch(/\n## 1\.2\.10\b/)
-    expect(text.split("\n")[0]).toBe("# Swarm whats-new: agent briefs 1.2.0 to 1.3.1")
+    expect(text).toContain("\n## 1.3.1\n")
+    expect(text).not.toContain("## 1.3.1 (this build)")
+    expect(text.split("\n")[0]).toBe("# Swarm whats-new: agent briefs 1.2.0 to 1.3.3")
     expect(text.match(/\(this build\)/g)?.length).toBe(1)
   })
 
@@ -75,8 +78,9 @@ describe("swarm-whats-new 1.3.0 brief (N10-185)", () => {
     expect(named.filter((name) => !studio.has(name))).toEqual([])
   })
 
-  test("the file is at most 12,288 bytes", () => {
-    expect(Buffer.byteLength(text, "utf8")).toBeLessThanOrEqual(12_288)
+  // 1.3.3 (owner standard 2026-11-18): 16 KiB, the cap of script/swarm/check-whats-new.ts (was 12,288 bytes).
+  test("the file is at most 16,384 bytes", () => {
+    expect(Buffer.byteLength(text, "utf8")).toBeLessThanOrEqual(16_384)
   })
 
   test("the 1.3.0 section carries the device-only memory, owner-message and vault inbox lines", () => {
