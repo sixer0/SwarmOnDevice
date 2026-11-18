@@ -10,6 +10,7 @@ import path from "node:path"
 // that are still on in the mode file and waiting on a re-consent. The file is stale after CARRY_MAX_AGE_MS, and is
 // ignored when the process that wrote it is still alive or is this one.
 
+/** @internal test seam */
 export const CARRY_MAX_AGE_MS = 120_000
 const FILE = "consent-carry.json"
 const file = () => path.join(Global.Path.state, "autonomy", FILE)
