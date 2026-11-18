@@ -14,7 +14,8 @@ export type StartCommand = {
   desktopNonce?: string
 }
 
-export type StopCommand = { type: "stop" }
+/** 1.3.4 (T-12): `resume` asks the sidecar to hand its running work to the next launch instead of stopping it. */
+export type StopCommand = { type: "stop"; resume?: true }
 export type SidecarCommand = StartCommand | StopCommand
 
 export function buildStartMessage(input: Omit<StartCommand, "type">): StartCommand {
@@ -31,7 +32,7 @@ export function buildStartMessage(input: Omit<StartCommand, "type">): StartComma
 export function parseSidecarCommand(value: unknown): SidecarCommand | undefined {
   if (!value || typeof value !== "object") return
   const command = value as Partial<StartCommand | StopCommand>
-  if (command.type === "stop") return { type: "stop" }
+  if (command.type === "stop") return (command as Partial<StopCommand>).resume === true ? { type: "stop", resume: true } : { type: "stop" }
   if (command.type !== "start") return
   if (typeof command.hostname !== "string") return
   if (typeof command.port !== "number") return
@@ -59,7 +60,7 @@ type ListenOptions = {
 /** The parts of `virtual:opencode-server` the start uses. */
 export type ServerModule<L> = {
   DesktopNonce: { set: (nonce: string | undefined) => void }
-  RunLease: { host: () => void }
+  RunLease: { host: () => void; handOver: () => number }
   Server: { listen: (options: ListenOptions) => Promise<L> }
 }
 

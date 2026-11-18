@@ -112,11 +112,11 @@ function emitDeepLinks(urls: string[]) {
   if (win) sendDeepLinks(win, urls)
 }
 
-async function killSidecar() {
+async function killSidecar(options?: { resume?: boolean }) {
   if (!server) return
   const current = server
   server = null
-  await current.stop()
+  await current.stop(options)
 }
 
 function ensureLoopbackNoProxy() {
@@ -181,22 +181,25 @@ const main = Effect.gen(function* () {
   )
   // M7-05: the Office add-in controller (loadOfficeAddin below); its bridge stop runs beside the sidecar stop (IM-09).
   const officeAddin: { loading?: Promise<OfficeAddinController>; controller?: OfficeAddinController } = {}
-  const stopSidecars = async () => {
+  const stopSidecars = async (options?: { resume?: boolean }) => {
     await Promise.all([
-      killSidecar(),
+      killSidecar(options),
       officeAddin.loading
         ?.then((controller) => controller.shutdown())
         .catch((error) => logger.error("office add-in shutdown failed", error)),
     ])
     wslServers.stopAll()
   }
-  const relaunch = () => {
+  const relaunch = (options?: { resume?: boolean }) => {
     setAppQuitting()
-    void stopSidecars().finally(() => {
+    void stopSidecars(options).finally(() => {
       app.relaunch()
       app.quit()
     })
   }
+  // 1.3.4 (T-12): the person chose Restart in the menu or accepted the memory reopen. The running agent turns carry on
+  // after the relaunch (the sidecar hands its run leases over) instead of being stopped and left idle.
+  const relaunchAndResume = () => relaunch({ resume: true })
   // The app's normal quit, without app.relaunch (also H4 of the patch handoff: the wrapper relaunches after the applier).
   const quit = () => {
     setAppQuitting()
@@ -385,7 +388,7 @@ const main = Effect.gen(function* () {
     },
     readMemory: () => process.memoryUsage(),
     showMessageBox: (options) => patchMessageBox(patchWindow(), options),
-    relaunch,
+    relaunch: relaunchAndResume,
     log: writeLog,
     locale: () => memoryWatchLocale,
   })
@@ -440,7 +443,7 @@ const main = Effect.gen(function* () {
         binDir: join(homedir(), ".local", "bin"),
         pathEnv: () => shellEnv?.PATH ?? process.env.PATH,
       })().catch((error) => logger.error("install DATUM Studio for Claude failed", error)),
-    relaunch,
+    relaunch: relaunchAndResume,
     updateFromFile: () => void updateFromFile().catch((error) => logger.error("update from file failed", error)),
     undoLastUpdate: () => void undoLastUpdate().catch((error) => logger.error("undo last update failed", error)),
     // SEC-05 / C9: person trigger; may revive consent "manual" tools (an agent's recheck.json cannot).

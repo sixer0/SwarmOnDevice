@@ -49,7 +49,7 @@ describe("SD-AC-2 off: no controller import, no fork, no office-addin/ folder", 
       '  if (process.platform === "darwin" && SIDECAR_VERSION !== "v2" && getStore().get(OFFICE_ADDIN_ENABLED_KEY) === true) {\n    void loadOfficeAddin()\n      .then((controller) => controller.launch())',
     )
     expect(source).toContain("void loadOfficeAddin()\n      .then((controller) => controller.menuHandlers()[name]())")
-    const stop = source.slice(source.indexOf("const stopSidecars = async () => {"), source.indexOf("const relaunch = () => {"))
+    const stop = source.slice(source.indexOf("const stopSidecars = async (options?: { resume?: boolean }) => {"), source.indexOf("const relaunch = (options?: { resume?: boolean }) => {")) // 1.3.4 T-12 signatures
     expect(stop).toContain("officeAddin.loading\n        ?.then((controller) => controller.shutdown())")
     expect(stop).not.toContain("loadOfficeAddin")
     expect(stop).toContain("await Promise.all([")
